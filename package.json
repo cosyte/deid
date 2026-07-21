@@ -41,6 +41,16 @@
         "default": "./dist/index.cjs"
       }
     },
+    "./hl7": {
+      "import": {
+        "types": "./dist/hl7/index.d.ts",
+        "default": "./dist/hl7/index.mjs"
+      },
+      "require": {
+        "types": "./dist/hl7/index.d.cts",
+        "default": "./dist/hl7/index.cjs"
+      }
+    },
     "./package.json": "./package.json"
   },
   "files": [
@@ -49,6 +59,14 @@
     "LICENSE",
     "CHANGELOG.md"
   ],
+  "peerDependencies": {
+    "@cosyte/hl7": ">=0.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@cosyte/hl7": {
+      "optional": true
+    }
+  },
   "sideEffects": false,
   "publishConfig": {
     "access": "public",
@@ -69,7 +87,7 @@
     "test:coverage": "vitest run --coverage",
     "clean": "rm -rf dist coverage",
     "pack:docs": "bash scripts/build-docs-artifacts.sh",
-    "attw": "attw --pack .",
+    "attw": "attw --pack . --profile node16",
     "release": "changeset publish",
     "prepublishOnly": "pnpm clean && pnpm typecheck && pnpm lint && pnpm test && pnpm build && pnpm attw",
     "prepare": "command -v simple-git-hooks >/dev/null 2>&1 && simple-git-hooks || true"
@@ -81,6 +99,7 @@
     "@arethetypeswrong/cli": "0.18.4",
     "@changesets/cli": "2.31.0",
     "@cosyte/eslint-config": "^0.0.4",
+    "@cosyte/hl7": "file:vendor/cosyte-hl7-0.0.1.tgz",
     "@cosyte/prettier-config": "^0.0.2",
     "@cosyte/test-utils": "^0.0.1",
     "@cosyte/tsconfig": "^0.0.2",

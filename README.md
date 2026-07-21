@@ -17,9 +17,8 @@ but **inverts the reflex** — where a parser is liberal on input, a de-identifi
 > always the consumer's.
 
 > **Status:** pre-alpha (`0.0.x`), not yet published to npm. This release ships the **format-agnostic
-> core** — the policy engine, the five transforms, the 18-category Safe Harbor model, the fail-closed
-> rule, and the value-free manifest, tested against a generic locus model. Per-format adapters
-> (HL7 v2, C-CDA, FHIR, X12, NCPDP, DICOM) land in subsequent phases.
+> core** plus the first format binding — the **HL7 v2 adapter** (`@cosyte/deid/hl7`). The remaining
+> per-format adapters (C-CDA, FHIR, X12, NCPDP, DICOM) land in subsequent phases.
 
 ## Install
 
@@ -66,6 +65,45 @@ deidentify(
 );
 // The MRN becomes a consistent, non-reversible surrogate; the key never appears in the output or manifest.
 ```
+
+## De-identify an HL7 v2 message
+
+The `@cosyte/deid/hl7` adapter locates PHI **structurally** in the parsed [`@cosyte/hl7`](https://github.com/cosyte/hl7)
+model — never by regex over the raw bytes — and returns a transformed `Hl7Message` plus the value-free
+manifest. `@cosyte/hl7` is an **optional peer dependency**: install it alongside `@cosyte/deid` to use
+this subpath; the core stays dependency-free.
+
+```bash
+npm install @cosyte/deid @cosyte/hl7
+```
+
+```ts
+import { parseHL7 } from "@cosyte/hl7";
+import { deidentifyHl7 } from "@cosyte/deid/hl7";
+import { createDeidContext } from "@cosyte/deid";
+
+const context = createDeidContext({ key: process.env.DEID_KEY! });
+const { document, manifest } = deidentifyHl7(parseHL7(rawMessage), { context });
+
+document.toString(); // spec-clean, de-identified HL7 wire
+// PID-5 (name), NK1/GT1/IN1/IN2 relatives, SSN, phone → removed; MRN/account → consistent surrogate;
+// DOB → year; address → safe 3-digit ZIP. OBX-5/NTE free text and Z-segments fail closed (blocked).
+// Structured clinical OBX values, units, codes, and statuses survive untouched.
+```
+
+**What it covers.** The structured PHI loci of **PID** (patient) and **NK1 / GT1 / IN1 / IN2**
+(relatives / guarantor / insured), typed by the `@cosyte/hl7` model. **Fail closed** everywhere else: a
+recognized segment is retained **only** if it is on an explicit clinical/administrative retain-list —
+so a known patient-identity segment absent from the map (e.g. **MRG** prior name + MRN on a merge, **FAM**,
+**ACC**) is blocked, never passed through — and Z-segments / structure unknown to the parser are blocked.
+**OBX-5** is retained only when OBX-2 positively types it as a structured clinical value (numeric /
+coded / date); narrative (`TX`/`FT`), ambiguous String (`ST`), and any empty/unknown OBX-2 fail closed,
+as do **NTE-3** comments. Structured clinical values, units, codes, and statuses survive untouched.
+
+**Known limitations (this release).** Free text is block-only (no scrub); within **retained** clinical /
+visit segments, patient-related _dates_ (OBR/DG1/PV1 timestamps), _visit identifiers_ (PV1-19), and
+_provider_ names (PV1-7/8, OBR-16) are a deferred later phase; the address generalization keeps only the
+Safe Harbor 3-digit ZIP.
 
 ## The design in five pieces
 

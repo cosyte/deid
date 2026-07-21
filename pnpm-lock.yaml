@@ -1,7 +1,7 @@
 lockfileVersion: '9.0'
 
 settings:
-  autoInstallPeers: true
+  autoInstallPeers: false
   excludeLinksFromLockfile: false
 
 importers:
@@ -17,6 +17,9 @@ importers:
       '@cosyte/eslint-config':
         specifier: ^0.0.4
         version: 0.0.4(eslint@10.5.0)(typescript@5.9.3)
+      '@cosyte/hl7':
+        specifier: file:vendor/cosyte-hl7-0.0.1.tgz
+        version: file:vendor/cosyte-hl7-0.0.1.tgz
       '@cosyte/prettier-config':
         specifier: ^0.0.2
         version: 0.0.2
@@ -172,6 +175,11 @@ packages:
     peerDependencies:
       eslint: ^9.0.0 || ^10.0.0
       typescript: '>=5.0.0'
+
+  '@cosyte/hl7@file:vendor/cosyte-hl7-0.0.1.tgz':
+    resolution: {integrity: sha512-wVBIKj6Wk+hQtQYFk7JP3WhMkoynPWJ0ah/n3Jg1sHDe0/yjaivLffwpByg8ukgos0Go2INh16JPgdwAIxXBWg==, tarball: file:vendor/cosyte-hl7-0.0.1.tgz}
+    version: 0.0.1
+    engines: {node: '>=22.0.0'}
 
   '@cosyte/prettier-config@0.0.2':
     resolution: {integrity: sha512-nmplXQKNq5DZ+Su/tCUF6m9UJ9MOArhw5NG0X9yqi6B5zvxmVXtKMAX1N2bKkqpKhZqyQOR9ALGYVpTx022R/g==}
@@ -2143,6 +2151,8 @@ snapshots:
       typescript-eslint: 8.65.0(eslint@10.5.0)(typescript@5.9.3)
     transitivePeerDependencies:
       - supports-color
+
+  '@cosyte/hl7@file:vendor/cosyte-hl7-0.0.1.tgz': {}
 
   '@cosyte/prettier-config@0.0.2': {}
 

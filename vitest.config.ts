@@ -8,7 +8,7 @@ import { cosyteVitest } from "@cosyte/vitest-config";
  * `loci/` dir once formats are wired).
  */
 export default cosyteVitest({
-  coverageDirs: ["transforms"],
+  coverageDirs: ["transforms", "hl7"],
   test: {
     globals: false,
     environment: "node",
