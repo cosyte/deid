@@ -14,6 +14,44 @@ its public history at `0.0.x`, per the cosyte version ladder (`0.0.x` until firs
 
 ### Added
 
+- **DEID-3 — the C-CDA de-identification adapter (`@cosyte/deid/ccda`).** The C-CDA binding of the core:
+  it locates PHI **structurally** in a parsed `@cosyte/ccda` document (never by regex over the XML) and
+  returns a transformed `CcdaDocument` plus the value-free manifest.
+  - `deidentifyCcda(doc, { policy?, context? })` — the top-level entry; plus `extractCcdaLoci`,
+    `applyCcda`, the cited `CCDA_LOCUS_MAP`, `isRetainedCcdaElement`, `CCDA_ENVELOPE_ELEMENTS`, and
+    `categoryForIdRoot` (id `root` OID → Safe Harbor category).
+  - **Structured locus map** over the CDA **header participations** — `recordTarget/patientRole` (+ nested
+    `guardian`) and `author` / `dataEnterer` / `informant` / `authenticator` / `legalAuthenticator` /
+    `participant` / `custodian` / `documentationOf` / `componentOf` (relatives / providers / contacts —
+    Safe Harbor removes relatives'/employers'/household members' identifiers): person `name`/`telecom`
+    removed; person-role `id` pseudonymized (SSN-rooted id removed, assigning `root` retained); `addr` →
+    safe 3-digit ZIP (`000` for restricted prefixes); `birthTime` and participation/encounter dates →
+    year. Dosing-period `effectiveTime` (`PIVL_TS`/`EIVL_TS`) is never treated as a date.
+  - **Fail closed** everywhere else via a **positive allow-list**: a recognized coded/structural element
+    (`CCDA_CODED_ELEMENTS`) is retained but still **descended into** (so a `<name>`/free text nested under
+    a coded element cannot ride through), and any stray direct character text on such an element is
+    blocked; every value-bearing element that is neither mapped PHI nor on the allow-list blocks (an
+    open-ended `endsWith("Code")` would have leaked an unknown vendor `*Code`). Section narrative `<text>`
+    at any depth (section- and entry-level) and the unstructured `nonXMLBody` block; foreign / `sdtc`
+    elements block. The document `id`/`code`/`title` envelope is retained (like HL7's MSH), and the
+    clinical `structuredBody` entries are **retained untouched** (the over-scrub guard) — a body `<name>`
+    is a drug/material name, never a person.
+  - `@cosyte/ccda` is an **optional peer dependency** consumed only from the `/ccda` subpath (vendored as a
+    packed tarball for dev/test, matching the `mllp`→`hl7` pattern). The adapter reaches the CDA DOM only
+    through `@cosyte/ccda`'s XXE-hardened `parseSecureXml` and re-serializes the node the parser hands
+    back — it never imports the XML substrate (`@xmldom/xmldom`, the parser's own ratified dependency)
+    directly, so `@cosyte/deid` declares no third-party runtime dependency of its own.
+  - Accuracy gates as tests: the **leak test** (zero surviving sentinels across the header participations
+    and the section narrative, including adversarial `sdtc`/vendor placements) and the **over-scrub test**
+    (coded clinical values, units, statuses, drug name, and dosing period byte-identical), plus a
+    fail-safe property (arbitrary synthetic tokens never leak into the output or the manifest).
+  - The `phi-scan` gate gains **C-CDA structured, header-element detection** — every header person-name /
+    address element and `birthTime` is checked against the synthetic allow-list, scoped to the header so a
+    clinical-body drug `<name>` is not a false positive.
+  - **Known limitations:** narrative is block-only (no NLP scrub yet); within the retained clinical body,
+    entry service dates, entry ids, in-entry performer names, and family-history relative demographics are
+    a deferred later phase (mirroring the HL7 adapter's retained-clinical-segment boundary).
+
 - **DEID-2 — the HL7 v2 de-identification adapter (`@cosyte/deid/hl7`).** The first end-to-end format
   binding of the core: it locates PHI **structurally** in the parsed `@cosyte/hl7` model (never by regex
   over raw bytes) and returns a transformed `Hl7Message` plus the value-free manifest.

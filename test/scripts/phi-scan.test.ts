@@ -118,6 +118,41 @@ describe("phi-scan deid gate: HL7 v2 structured field-level detection", () => {
   });
 });
 
+describe("phi-scan deid gate: C-CDA structured header detection", () => {
+  it("catches a real-looking name / DOB in a C-CDA header not declared synthetic (exit 1)", () => {
+    const r = scan(
+      "real.xml",
+      '<ClinicalDocument xmlns="urn:hl7-org:v3"><recordTarget><patientRole><patient>' +
+        '<name><given>John</given><family>Smith</family></name><birthTime value="19800101"/>' +
+        "</patient></patientRole></recordTarget></ClinicalDocument>\n",
+    );
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toMatch(/<given> value="John"/);
+    expect(r.stderr).toMatch(/<family> value="Smith"/);
+    expect(r.stderr).toMatch(/birthTime@value value="19800101"/);
+  });
+
+  it("does not flag a clinical-body <name> (a drug/material name, not a person)", () => {
+    const r = scan(
+      "drug.xml",
+      '<ClinicalDocument xmlns="urn:hl7-org:v3"><component><structuredBody><section>' +
+        "<manufacturedMaterial><name>Lisinopril</name></manufacturedMaterial>" +
+        "</section></structuredBody></component></ClinicalDocument>\n",
+    );
+    expect(r.code, `stderr: ${r.stderr}`).toBe(0);
+  });
+
+  it("passes an all-synthetic C-CDA header whose tokens are allow-listed (exit 0)", () => {
+    const r = scan(
+      "synthetic.xml",
+      '<ClinicalDocument xmlns="urn:hl7-org:v3"><recordTarget><patientRole><patient>' +
+        '<name><given>ZZPATGIVEN</given><family>ZZPATFAMILY</family></name><birthTime value="19900215"/>' +
+        "</patient></patientRole></recordTarget></ClinicalDocument>\n",
+    );
+    expect(r.code, `stderr: ${r.stderr}`).toBe(0);
+  });
+});
+
 describe("phi-scan starter: the override-log gate", () => {
   it("rejects --allow-fixture without a matching override entry (exit 2)", () => {
     const clean = join(dir, "override-me.txt");

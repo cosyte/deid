@@ -4,12 +4,18 @@ import { cosyteTsup } from "@cosyte/tsup-config";
  * tsup build for @cosyte/deid — dual ESM + CJS + `.d.ts` from the shared @cosyte/tsup-config standard
  * (ES2023, Node platform, `.mjs`/`.cjs` out-extensions). Matches the `exports` map in package.json.
  *
- * Two entries (the package's two public subpaths): the format-agnostic core (`.`) and the HL7 v2
- * adapter (`./hl7`). `@cosyte/hl7` is an **optional peer dep** consumed only from the `/hl7` subpath
- * and is marked `external` so it is never bundled — a consumer who only de-identifies HL7 installs it
- * alongside `@cosyte/deid`; the core stays dependency-free.
+ * Three entries (the package's public subpaths): the format-agnostic core (`.`), the HL7 v2 adapter
+ * (`./hl7`), and the C-CDA adapter (`./ccda`). Each parser is an **optional peer dep** consumed only
+ * from its own subpath and marked `external` so it is never bundled — a consumer who only de-identifies
+ * one format installs just that parser; the core stays third-party-dep-free. `@xmldom/xmldom` is the
+ * C-CDA parser's own ratified XML substrate (ccda ADR 0001); the `/ccda` adapter uses only the DOM
+ * objects `@cosyte/ccda` hands back (never a direct runtime import), and it is external here too.
  */
 export default cosyteTsup({
-  entry: { index: "src/index.ts", "hl7/index": "src/hl7/index.ts" },
-  external: ["@cosyte/hl7"],
+  entry: {
+    index: "src/index.ts",
+    "hl7/index": "src/hl7/index.ts",
+    "ccda/index": "src/ccda/index.ts",
+  },
+  external: ["@cosyte/hl7", "@cosyte/ccda", "@xmldom/xmldom"],
 });

@@ -1,0 +1,166 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- synthetic: true — every identifier below is a ZZ-tagged fictional token; never real PHI. -->
+<ClinicalDocument xmlns="urn:hl7-org:v3" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:sdtc="urn:hl7-org:sdtc">
+  <realmCode code="US"/>
+  <typeId root="2.16.840.1.113883.1.3" extension="POCD_HD000040"/>
+  <templateId root="2.16.840.1.113883.10.20.22.1.1" extension="2015-08-01"/>
+  <templateId root="2.16.840.1.113883.10.20.22.1.2" extension="2015-08-01"/>
+  <id root="2.16.840.1.113883.19.5.99999.1" extension="DOC-0001"/>
+  <code code="34133-9" codeSystem="2.16.840.1.113883.6.1" displayName="Summarization of Episode Note"/>
+  <title>Continuity of Care Document</title>
+  <effectiveTime value="20200102103000-0500"/>
+  <confidentialityCode code="N" codeSystem="2.16.840.1.113883.5.25"/>
+  <languageCode code="en-US"/>
+  <setId root="2.16.840.1.113883.19.5.99999.19" extension="SET-0001"/>
+  <versionNumber value="1"/>
+  <recordTarget>
+    <patientRole>
+      <id root="2.16.840.1.113883.19.5" extension="ZZMRNCCDA1"/>
+      <id root="2.16.840.1.113883.4.1" extension="ZZSSNCCDA1"/>
+      <addr use="HP">
+        <streetAddressLine>ZZCCDASTREET</streetAddressLine>
+        <city>ZZCCDACITY</city>
+        <county>ZZCOUNTY</county>
+        <state>MA</state>
+        <postalCode>90210</postalCode>
+        <country>US</country>
+      </addr>
+      <telecom use="HP" value="tel:+1-555-000-1111"/>
+      <patient>
+        <name use="L">
+          <given>ZZPATGIVEN</given>
+          <family>ZZPATFAMILY</family>
+        </name>
+        <administrativeGenderCode code="F" codeSystem="2.16.840.1.113883.5.1"/>
+        <birthTime value="19900215"/>
+        <maritalStatusCode code="M" codeSystem="2.16.840.1.113883.5.2"/>
+        <raceCode code="2106-3" codeSystem="2.16.840.1.113883.6.238"/>
+        <guardian>
+          <addr>
+            <streetAddressLine>ZZGUARDSTREET</streetAddressLine>
+            <city>ZZGUARDCITY</city>
+            <state>NH</state>
+            <postalCode>03601</postalCode>
+          </addr>
+          <telecom value="tel:+1-555-000-2222"/>
+          <guardianPerson>
+            <name>
+              <given>ZZGUARDGIVEN</given>
+              <family>ZZGUARDFAMILY</family>
+            </name>
+          </guardianPerson>
+        </guardian>
+        <sdtc:patientID>ZZSDTCLEAK</sdtc:patientID>
+        <vendorNote>ZZVENDORLEAK</vendorNote>
+      </patient>
+    </patientRole>
+  </recordTarget>
+  <author>
+    <time value="20200102103000-0500"/>
+    <assignedAuthor>
+      <id root="2.16.840.1.113883.4.6" extension="ZZAUTHORNPI"/>
+      <addr>
+        <streetAddressLine>ZZAUTHSTREET</streetAddressLine>
+        <city>ZZAUTHCITY</city>
+        <state>DC</state>
+        <postalCode>20500</postalCode>
+      </addr>
+      <telecom value="tel:+1-555-000-3333"/>
+      <assignedPerson>
+        <name>
+          <given>ZZAUTHGIVEN</given>
+          <family>ZZAUTHFAMILY</family>
+        </name>
+      </assignedPerson>
+      <representedOrganization>
+        <name>ZZAUTHORG</name>
+        <telecom value="tel:+1-555-000-4444"/>
+      </representedOrganization>
+    </assignedAuthor>
+  </author>
+  <informant>
+    <relatedEntity classCode="PRS">
+      <code code="SPS" codeSystem="2.16.840.1.113883.5.111"/>
+      <relatedPerson>
+        <name>
+          <given>ZZINFGIVEN</given>
+          <family>ZZINFFAMILY</family>
+        </name>
+      </relatedPerson>
+    </relatedEntity>
+  </informant>
+  <custodian>
+    <assignedCustodian>
+      <representedCustodianOrganization>
+        <id root="2.16.840.1.113883.19.5.99999.1393"/>
+        <name>ZZCUSTODIANORG</name>
+        <telecom value="tel:+1-555-000-5555"/>
+        <addr>
+          <streetAddressLine>ZZCUSTODIANSTREET</streetAddressLine>
+          <city>ZZCUSTODIANCITY</city>
+          <state>MA</state>
+          <postalCode>02101</postalCode>
+        </addr>
+      </representedCustodianOrganization>
+    </assignedCustodian>
+  </custodian>
+  <componentOf>
+    <encompassingEncounter>
+      <id root="2.16.840.1.113883.19.5.99999.19" extension="ZZENCOUNTERID"/>
+      <effectiveTime>
+        <low value="20200102"/>
+        <high value="20200103"/>
+      </effectiveTime>
+    </encompassingEncounter>
+  </componentOf>
+  <component>
+    <structuredBody>
+      <component>
+        <section>
+          <templateId root="2.16.840.1.113883.10.20.22.2.3.1" extension="2015-08-01"/>
+          <code code="30954-2" codeSystem="2.16.840.1.113883.6.1" displayName="Results"/>
+          <title>Results</title>
+          <text>Sodium 140 mmol/L drawn for ZZNARRATIVEPHI on 02 Jan 2020.</text>
+          <entry>
+            <organizer classCode="BATTERY" moodCode="EVN">
+              <statusCode code="completed"/>
+              <component>
+                <observation classCode="OBS" moodCode="EVN">
+                  <templateId root="2.16.840.1.113883.10.20.22.4.2" extension="2015-08-01"/>
+                  <code code="2951-2" codeSystem="2.16.840.1.113883.6.1" displayName="Sodium"/>
+                  <statusCode code="completed"/>
+                  <effectiveTime value="20190505"/>
+                  <value xsi:type="PQ" value="140" unit="mmol/L"/>
+                </observation>
+              </component>
+            </organizer>
+          </entry>
+        </section>
+      </component>
+      <component>
+        <section>
+          <templateId root="2.16.840.1.113883.10.20.22.2.1.1" extension="2015-08-01"/>
+          <code code="10160-0" codeSystem="2.16.840.1.113883.6.1" displayName="Medications"/>
+          <title>Medications</title>
+          <text>ZZDRUGNAME 10 mg once daily.</text>
+          <entry>
+            <substanceAdministration classCode="SBADM" moodCode="EVN">
+              <statusCode code="active"/>
+              <effectiveTime xsi:type="PIVL_TS" institutionSpecified="true" operator="A">
+                <period value="24" unit="h"/>
+              </effectiveTime>
+              <consumable>
+                <manufacturedProduct>
+                  <manufacturedMaterial>
+                    <code code="314076" codeSystem="2.16.840.1.113883.6.88" displayName="Lisinopril 10 MG"/>
+                    <name>ZZDRUGNAME</name>
+                  </manufacturedMaterial>
+                </manufacturedProduct>
+              </consumable>
+            </substanceAdministration>
+          </entry>
+        </section>
+      </component>
+    </structuredBody>
+  </component>
+</ClinicalDocument>
