@@ -29,7 +29,8 @@
         "guides-ncpdp",
         "guides-dicom",
         "guides-longitudinal",
-        "guides-freetext"
+        "guides-freetext",
+        "guides-expert-determination"
       ]
     },
     {

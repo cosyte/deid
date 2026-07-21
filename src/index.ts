@@ -20,30 +20,8 @@
  * @packageDocumentation
  */
 
-/**
- * The label the library applies to its output. Deliberately **not** "de-identified" / "HIPAA-compliant"
- * — the certification is always the consumer's.
- *
- * @example
- * ```ts
- * import { OUTPUT_LABEL } from "@cosyte/deid";
- *
- * OUTPUT_LABEL; // => "Safe-Harbor-transformed per the configured policy"
- * ```
- */
-export const OUTPUT_LABEL = "Safe-Harbor-transformed per the configured policy";
-
-/**
- * Library version string, synced with `package.json#version` at release time.
- *
- * @example
- * ```ts
- * import { VERSION } from "@cosyte/deid";
- *
- * typeof VERSION; // => "string"
- * ```
- */
-export const VERSION = "0.0.0";
+// ── The output label + version (own module, so internal modules read them without an index cycle).
+export { OUTPUT_LABEL, VERSION } from "./labels.js";
 
 // ── The Safe Harbor category model (45 CFR §164.514(b)(2)(i)(A)–(R)).
 export {
@@ -115,3 +93,18 @@ export {
   type FreeTextRedactionRequest,
   type FreeTextRedactionResult,
 } from "./redactor.js";
+
+// ── The Expert-Determination *support* report (DEID-9) — supports a determination, never renders one.
+export {
+  EXPERT_DETERMINATION_DISCLAIMER,
+  buildExpertDeterminationSupportReport,
+  formatExpertDeterminationSupportReport,
+  type ExpertDeterminationSupportReport,
+  type ExpertDeterminationReportOptions,
+  type CategoryCoverage,
+  type DispositionSummary,
+  type RetainedQuasiIdentifier,
+  type QuasiIdentifierClassInput,
+  type QuasiIdentifierStatistics,
+  type ReportDisposition,
+} from "./report.js";

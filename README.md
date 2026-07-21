@@ -21,7 +21,9 @@ but **inverts the reflex** — where a parser is liberal on input, a de-identifi
 > (`@cosyte/deid/ccda`), the **FHIR R4 adapter** (`@cosyte/deid/fhir`), the **X12 EDI adapter**
 > (`@cosyte/deid/x12`), the **NCPDP Telecom adapter** (`@cosyte/deid/ncpdp`), and the **DICOM adapter**
 > (`@cosyte/deid/dicom`), plus the **longitudinal layer** — the corpus registry (`createDeidRegistry`)
-> for cross-document consistency and the formalized key contract. NCPDP SCRIPT lands in a subsequent phase.
+> for cross-document consistency and the formalized key contract, and the **Expert-Determination support
+> report** (`buildExpertDeterminationSupportReport`) that structures the manifest for a statistician
+> **without ever rendering a determination**. NCPDP SCRIPT lands in a subsequent phase.
 
 ## Install
 
@@ -355,6 +357,31 @@ re-scan it for residual PHI, and "no findings" from a BYO redactor is **not** an
 redactor's completeness is the consumer's responsibility (Expert-Determination territory). The structural
 PHI removal the adapters perform, and the clinical over-scrub guard, are **unchanged** — the redactor
 handles the free _prose_ only.
+
+## Expert-Determination support — never certification
+
+HIPAA has two routes to de-identification: **Safe Harbor** (mechanical — implemented here) and **Expert
+Determination** (§164.514(b)(1) — a qualified statistician's risk judgment). `@cosyte/deid` **supports**
+the latter and **never renders** it. `buildExpertDeterminationSupportReport(manifest)` structures the
+value-free manifest into what an expert reasons about — per-locus dispositions, coverage across all 18
+categories, and the **retained-quasi-identifier inventory** (year-only dates, safe 3-digit ZIP prefixes,
+exact ages ≤ 89) — and hands it over.
+
+```ts
+import { buildExpertDeterminationSupportReport } from "@cosyte/deid";
+
+const { manifest } = deidentifyHl7(parseHL7(raw), { context });
+const report = buildExpertDeterminationSupportReport(manifest, { policy: "safe-harbor" });
+report.determination; // => null — the library never renders one
+```
+
+**The hard boundary.** The report **never** says the output "is de-identified", **never** computes or
+fabricates a re-identification **risk score**, and reaches no conclusion — `determination` is always
+`null` and a prominent disclaimer leads. It is value-free (loci / categories / dispositions / counts,
+never a value). The one quasi-identifier statistic it can surface — the smallest equivalence-class size,
+a **k-anonymity indicator** — is computed **only** over class sizes _you_ supply (the library has no view
+of quasi-identifier values) and is stamped a descriptive input, never a verdict.
+`formatExpertDeterminationSupportReport(report)` renders the same facts as Markdown for a statistician.
 
 ## The design in five pieces
 

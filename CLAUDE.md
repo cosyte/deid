@@ -18,7 +18,7 @@ never rendered.
 
 ## Status
 
-- **DEID-1…DEID-7 shipped.** Pre-alpha `0.0.x`, not yet published to npm. `src/` carries the
+- **DEID-1…DEID-9 shipped.** Pre-alpha `0.0.x`, not yet published to npm. `src/` carries the
   format-agnostic core (DEID-1: the policy engine `deidentify` / `SAFE_HARBOR_POLICY` /
   `defineDeidPolicy`, the five `node:crypto`-backed transforms, the 18-category Safe Harbor model, the
   fail-closed rule, the value-free manifest) plus **five per-format adapters** on the core's generic locus
@@ -31,7 +31,12 @@ never rendered.
   over all six adapters: the corpus registry (`createDeidRegistry`) for cross-document consistency
   (same patient → same offset/dates, same id → same pseudonym, corpus-wide), the formalized key
   contract (consumer-supplied key, fail-closed `DEID_NO_KEY`, rotation = intentional linkage breakage),
-  and the `DEID_POLICY_INVALID` label guard (date-shift may not wear the `safe-harbor` label).
+  and the `DEID_POLICY_INVALID` label guard (date-shift may not wear the `safe-harbor` label). **DEID-9**
+  adds the **Expert-Determination _support_ report** (`buildExpertDeterminationSupportReport` /
+  `formatExpertDeterminationSupportReport`): a value-free structuring of the manifest — per-locus
+  disposition, 18-category coverage, the retained-quasi-identifier inventory, and an _optional,
+  caller-supplied_ k-anonymity indicator — that **supports** a HIPAA §164.514(b)(1) Expert Determination
+  and **renders none** (`determination: null`, a prominent disclaimer, no fabricated risk score).
   **Third-party runtime deps: zero (`node:crypto` only).**
 
 ## Tech Stack (the shared `@cosyte/*` standard)
