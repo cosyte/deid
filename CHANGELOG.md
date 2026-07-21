@@ -14,6 +14,49 @@ its public history at `0.0.x`, per the cosyte version ladder (`0.0.x` until firs
 
 ### Added
 
+- **DEID-4 — the FHIR R4 de-identification adapter (`@cosyte/deid/fhir`).** The FHIR binding of the core:
+  it locates PHI **structurally** in a parsed `@cosyte/fhir` resource (never by regex over the JSON) and
+  returns a transformed resource model plus the value-free manifest.
+  - `deidentifyFhir(resource, { policy?, context? })` and the convenience `deidentifyFhirJson(json, …)` —
+    the top-level entries; plus `extractFhirLoci`, `applyFhir`, the cited `PERSON_RESOURCE_TYPES`,
+    `FHIR_DEMOGRAPHIC_ELEMENTS`, `RECOGNIZED_PERSON_ELEMENTS`, `categoryForIdentifierSystem` (identifier
+    `system` → Safe Harbor category), and `isFhirDateValue` (the date/over-scrub knife-edge).
+  - **Role-split locus map.** FHIR is a graph of typed resources, so the map splits by role. **Person
+    resources** — `Patient` / `RelatedPerson` / `Practitioner` / `Person` (+ the nested `Patient.contact`
+    relative — Safe Harbor removes relatives'/employers'/household members' identifiers): `name` /
+    `telecom` / `photo` removed; `address` → safe 3-digit ZIP (`000` for restricted prefixes), finer
+    geography dropped; `birthDate` and every date → year. **Universal vectors on every resource:**
+    `identifier` pseudonymized by `system` (keyed HMAC; a US-SSN system removed, `system` retained);
+    PHI-bearing dates → year; narrative `text.div` blocked at any depth; `extension` / `modifierExtension`
+    values blocked; a `Reference.display` person label blocked (a `Coding.display` coded term retained —
+    the two told apart structurally). **Contained resources and `Bundle` entries** are walked, re-deriving
+    each resource's role at its own `resourceType`.
+  - **Fail closed** on the frontier: a bare unrecognized string at a person resource top level is blocked
+    (an open-ended allow-list can never satisfy category (R)); a `display` that is **not** on a `Coding`
+    (identified positively by a `code`/`system` sibling) is a Reference person-label and is blocked —
+    including a **display-only** (`{ display }`) or type+display reference that names no target;
+    every extension value — a complex `valueAddress` / `valueHumanName` / `valueIdentifier`, a nested
+    extension, or a primitive-level `_`-sibling extension (the applier strips these) — is dropped; and
+    **free-text prose** (`note` Annotations, `contentString`, an uncoded `valueString`) is blocked, the
+    FHIR analogue of the HL7 adapter's OBX-5-`ST` / NTE fail-closed default. Clinical resources
+    (`Observation` structured values, codes, units, statuses, reference ranges) are **retained untouched**
+    (the over-scrub guard), and reference **wiring** (`Reference.reference` pointers) is preserved so
+    linkage survives.
+  - `@cosyte/fhir` is an **optional peer dependency** consumed only from the `/fhir` subpath (vendored as a
+    packed tarball for dev/test, matching the `mllp`→`hl7` pattern). The adapter reaches FHIR data only
+    through `@cosyte/fhir`'s exported model and `parseResource`/`serializeResource` codec — never a direct
+    third-party import — and rebuilds the immutable model into a fresh tree (the input is never mutated),
+    so `@cosyte/deid` declares no third-party runtime dependency of its own.
+  - Accuracy gates as tests: the **leak test** (zero surviving sentinels across person resources, the
+    universal vectors, the nested `contact`, extensions, and a contained resource) and the **over-scrub
+    test** (clinical values / codes / units / statuses and reference wiring survive), plus a fail-safe
+    property (arbitrary synthetic tokens never leak into the output or the manifest).
+  - **Known limitations:** extension values are block-only (no profile-aware retention yet); reference
+    wiring and resource logical `id`s are preserved structurally (coordinated cross-corpus id
+    pseudonymization is a later phase); free-text **prose** loci fail closed, but a semantic (NLP)
+    narrative scrub, `contentAttachment` binary content, and person names embedded in non-person
+    resources (`Organization.contact.name`, `Location.address`) remain out of scope.
+
 - **DEID-3 — the C-CDA de-identification adapter (`@cosyte/deid/ccda`).** The C-CDA binding of the core:
   it locates PHI **structurally** in a parsed `@cosyte/ccda` document (never by regex over the XML) and
   returns a transformed `CcdaDocument` plus the value-free manifest.
