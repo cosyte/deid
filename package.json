@@ -1,14 +1,16 @@
 {
   "name": "@cosyte/deid",
   "version": "0.0.0",
-  "description": "De-identification parser, serializer, and builder for Node.js and TypeScript — lenient on parse, spec-clean on emit.",
+  "description": "Healthcare de-identification for Node.js and TypeScript — a HIPAA Safe Harbor policy engine that fails closed and emits a value-free manifest.",
   "keywords": [
     "deid",
-    "parser",
+    "de-identification",
+    "hipaa",
+    "safe-harbor",
+    "phi",
     "healthcare",
     "interoperability",
-    "typescript",
-    "serializer"
+    "typescript"
   ],
   "homepage": "https://github.com/cosyte/deid#readme",
   "bugs": {

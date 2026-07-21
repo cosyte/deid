@@ -2,23 +2,28 @@
 
 ## Project
 
-**`@cosyte/deid`** — a developer-focused De-identification parser + utility library for Node.js/TypeScript,
-published under the Cosyte brand. Open-source (MIT). One of the sibling `@cosyte/*` healthcare-standard
-parsers that **mirror each other's API** — `@cosyte/hl7` is the reference; this repo deliberately
-copies its shape.
+**`@cosyte/deid`** — a developer-focused healthcare **de-identification** library for Node.js/TypeScript,
+published under the Cosyte brand. Open-source (MIT). It is a **consumer** of the `@cosyte/*` parsers,
+**not a parser sibling**: it borrows the archetype's disciplines (typed diagnostics, immutable output,
+the policy/profile system) but **inverts the reflex** — a parser is liberal on input (Postel's Law); a
+de-identifier is conservative and **fails closed**.
 
-**North star (the archetype):** a developer can parse a real-world, vendor-quirky De-identification message
-and pull useful fields out in one line — without reading the spec. Liberal on parse (quirks become
-warnings), conservative on emit (always spec-clean). See `documentation/conventions.md` →
-"The standard parser archetype" in the meta-repo for the full contract this repo must satisfy:
-Postel's Law, the tiered tolerance model, stable warning codes, zero runtime deps, dual ESM + CJS,
-immutability + explicit mutation, and the profile system.
+**North star:** a developer holds a parsed healthcare document full of PHI and calls
+`deidentify(model, { policy: "safe-harbor" })`, getting back a Safe-Harbor-transformed model plus a
+**value-free manifest** — without reading 45 CFR §164.514, without hand-writing a scrubber, and without
+ever being handed a document that silently still contains a name/DOB/MRN, or one whose clinical values
+were destroyed. The governing honesty line: output is **"Safe-Harbor-transformed per the configured
+policy,"** never "de-identified" / "HIPAA-compliant"; Expert Determination is supported (later phases),
+never rendered.
 
 ## Status
 
-- **Scaffolded from the shared `@cosyte/*` parser template.** Pre-alpha `0.0.x`, not yet published to
-  npm. `src/index.ts` carries archetype **stubs** (`parseDeid`, `WARNING_CODES`, `FATAL_CODES`)
-  — the real parser lands in subsequent phases.
+- **DEID-1 shipped: the format-agnostic de-id core.** Pre-alpha `0.0.x`, not yet published to npm.
+  `src/` carries the policy engine (`deidentify`, `SAFE_HARBOR_POLICY`, `defineDeidPolicy`), the five
+  transforms (redact / generalize / date-shift / pseudonymize / keyed-hash, `node:crypto`-backed), the
+  18-category Safe Harbor model, the fail-closed rule, and the value-free manifest — tested against a
+  **generic locus model**. Per-format locus maps (HL7 v2, C-CDA, FHIR, X12, NCPDP, DICOM) are the next
+  phases (DEID-2…DEID-6). **Third-party runtime deps: zero (`node:crypto` only).**
 
 ## Tech Stack (the shared `@cosyte/*` standard)
 
@@ -49,10 +54,12 @@ a summary.
 - Immutable by default. Mutation only via explicit methods.
 - No `console.*` in library code. Throw typed errors or return results.
 - Short, testable functions over big parsing blobs.
-- Postel's Law: parser is liberal (lenient default + warnings), serializer is conservative (always
-  emits spec-clean output).
-- Fatal errors only for unrecoverable structural corruption (Tier-3 codes). Everything else is a
-  warning with a stable code + positional context.
+- **Inverted Postel's Law: fail CLOSED.** Unlike a parser, the de-id reflex is conservative — an
+  unrecognized structure / un-locatable identifier / uncertain field is **blocked or removed**, never
+  passed through as safe. Clinical values are the mirror guard: retained untouched (no over-scrub).
+- Fatal errors only for the sanctioned fatal set (`EMPTY_INPUT`, `DEID_NO_KEY`). A keyed transform
+  **never** silently falls back to unkeyed. Everything else is a value-free manifest disposition with a
+  stable `DEID_*` code + locus (never a value, never the key, never the date-shift offset).
 - Coverage: per-directory >= 90% (lines/branches/functions/statements), enforced by
   `pnpm test:coverage`.
 

@@ -3,12 +3,12 @@ import { cosyteVitest } from "@cosyte/vitest-config";
 /**
  * Vitest config for @cosyte/deid from the shared @cosyte/vitest-config standard.
  *
- * Per-directory >= 90 coverage gates on the core dir(s). Add directories to `coverageDirs` as the
- * parser grows (e.g. "model", "serialize", "helpers", "builder") — mirror @cosyte/hl7's layout once
- * the corresponding source lands.
+ * Per-directory >= 90 coverage gate on the transforms dir (the crypto-backed units) on top of the
+ * global >= 90 gate over all of `src/`. Add directories here as the library grows (e.g. a per-format
+ * `loci/` dir once formats are wired).
  */
 export default cosyteVitest({
-  coverageDirs: ["parser"],
+  coverageDirs: ["transforms"],
   test: {
     globals: false,
     environment: "node",
