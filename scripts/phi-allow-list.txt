@@ -108,7 +108,24 @@ NAME ZZCONTENTPHI
 NAME ZZPATNARRATIVE
 NAME ZZVENDORMAIDEN
 
-# --- Synthetic dates of birth / death (HL7 YYYYMMDD) ---
+# --- Synthetic X12 005010 person/member tokens (test/fixtures/x12) ---
+# Subscriber + patient NM1 person names, member ids, and REF-qualified identifiers, all
+# obviously-synthetic ZZ-tagged tokens (or the never-issued 9xx SSN block). Checked structurally by the
+# X12 NM1 (patient-entity) / DMG / REF detector. Provider-entity NM1 names are not checked (retained).
+NAME ZZSUBLAST
+NAME ZZSUBFIRST
+NAME ZZPATLAST
+NAME ZZPATFIRST
+
+# --- Synthetic NCPDP Telecom patient/cardholder/prescriber tokens (test/fixtures/ncpdp) ---
+# Patient + cardholder names, street/city, and identifiers. Checked structurally by the NCPDP Telecom
+# field-id detector (field ids are globally unique in the standard).
+NAME ZZCARDFIRST
+NAME ZZCARDLAST
+NAME ZZPTSTREET
+NAME ZZPTCITY
+
+# --- Synthetic dates of birth / death (HL7 / X12 / NCPDP YYYYMMDD) ---
 DOB 19900215
 DOB 20211130
 DOB 19850302
@@ -149,3 +166,18 @@ ID 5550000004
 ID 5550000005
 ID 5550000006
 ID 5550000010
+
+# --- Synthetic X12 005010 identifiers (test/fixtures/x12) ---
+ID ZZMEMBERX12
+ID ZZPATMEMBER
+ID ZZACCTX12
+ID 900000201
+
+# --- Synthetic NCPDP Telecom identifiers (test/fixtures/ncpdp) ---
+ID 5550000301
+ID ZZPATIENTID
+ID ZZCARDHOLDER
+ID ZZGROUP01
+ID ZZPRESCRIBERID
+ID ZZOTHERCARDID
+ID ZZOTHERGROUP

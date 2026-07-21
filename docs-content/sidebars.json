@@ -20,7 +20,7 @@
     {
       "type": "category",
       "label": "Guides",
-      "items": ["guides-overview", "guides-hl7", "guides-ccda", "guides-fhir"]
+      "items": ["guides-overview", "guides-hl7", "guides-ccda", "guides-fhir", "guides-x12", "guides-ncpdp"]
     },
     {
       "type": "category",

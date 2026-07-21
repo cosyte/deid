@@ -153,6 +153,63 @@ describe("phi-scan deid gate: C-CDA structured header detection", () => {
   });
 });
 
+// A valid 106-byte ISA header (element sep `*`, component `:`, segment terminator `~`) for X12 tests.
+const ISA =
+  "ISA*00*          *00*          *ZZ*A              *ZZ*B              *260615*0930*^*00501*000000002*0*P*:~";
+// NCPDP Telecom control-char framing.
+const FS = "\x1c";
+const RS = "\x1e";
+
+describe("phi-scan deid gate: X12 structured element-level detection", () => {
+  it("catches a real-looking patient NM1 name / id, DMG DOB, and REF SSN (exit 1)", () => {
+    const body =
+      "GS*HC*A*B*20260615*0930*2*X*005010X222A2~ST*837*0002~" +
+      "NM1*IL*1*SMITH*JOHN****MI*REALMEMBER9~DMG*D8*19800101*M~REF*SY*123456789~" +
+      "SE*4*0002~GE*1*2~IEA*1*000000002~";
+    const r = scan("real.edi", ISA + body);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toMatch(/NM1-03 value="SMITH"/);
+    expect(r.stderr).toMatch(/NM1-09 value="REALMEMBER9"/);
+    expect(r.stderr).toMatch(/DMG-02 value="19800101"/);
+    expect(r.stderr).toMatch(/REF-02 value="123456789"/);
+  });
+
+  it("does NOT flag a provider-entity NM1 name (retained, not the individual's PHI)", () => {
+    const body =
+      "GS*HC*A*B*20260615*0930*2*X*005010X222A2~ST*837*0002~" +
+      "NM1*85*2*BILLING PROVIDER LLC*****XX*1999999999~SE*3*0002~GE*1*2~IEA*1*000000002~";
+    const r = scan("provider.edi", ISA + body);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(0);
+  });
+
+  it("passes an all-synthetic X12 interchange whose tokens are allow-listed (exit 0)", () => {
+    const body =
+      "GS*HC*A*B*20260615*0930*2*X*005010X222A2~ST*837*0002~" +
+      "NM1*IL*1*ZZSUBLAST*ZZSUBFIRST****MI*ZZMEMBERX12~DMG*D8*19850302*M~REF*SY*900000201~" +
+      "SE*4*0002~GE*1*2~IEA*1*000000002~";
+    const r = scan("synthetic.edi", ISA + body);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(0);
+  });
+});
+
+describe("phi-scan deid gate: NCPDP Telecom structured field-id detection", () => {
+  it("catches a real-looking patient name / DOB / id in Telecom PHI fields (exit 1)", () => {
+    const header = "999999D0B1".padEnd(56, " ");
+    const body = `AM01${FS}CBSMITH${FS}CAJOHN${FS}C419800101${FS}CYREALPTID9`;
+    const r = scan("real.ncpdp", header + RS + body);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toMatch(/segment=CB value="SMITH"/);
+    expect(r.stderr).toMatch(/segment=C4 value="19800101"/);
+  });
+
+  it("does NOT flag a clinical NDC / quantity field (over-scrub guard)", () => {
+    const header = "999999D0B1".padEnd(56, " ");
+    const body = `AM07${FS}D700071015527${FS}E730000`;
+    const r = scan("clinical.ncpdp", header + RS + body);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(0);
+  });
+});
+
 describe("phi-scan starter: the override-log gate", () => {
   it("rejects --allow-fixture without a matching override entry (exit 2)", () => {
     const clean = join(dir, "override-me.txt");

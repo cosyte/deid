@@ -43,7 +43,13 @@ Every action is recorded value-free. Watch for `DEID_LOCUS_BLOCKED` / `DEID_FREE
 fail-closed decisions) and `DEID_RESIDUAL_RETAINED` (a kept year or safe 3-digit ZIP) — the residuals
 you surface to a human for the §164.514(b)(2)(ii) actual-knowledge test.
 
+## Per-format guides
+
+- [De-identifying HL7 v2](guides-hl7), [C-CDA](guides-ccda), [FHIR](guides-fhir),
+  [X12 EDI](guides-x12), and [NCPDP Telecom](guides-ncpdp).
+
 ## Planned guides
 
-- De-identify a real HL7 v2 message end-to-end (Phase 2).
+- De-identify a DICOM study (orchestrating the parser's PS3.15 Annex E pass).
+- NCPDP SCRIPT (ePrescribing) once a full-fidelity parser surface exists.
 - Cross-document longitudinal consistency with date-shift + pseudonymization (Phase 7).
