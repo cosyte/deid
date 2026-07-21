@@ -72,6 +72,17 @@ export {
   type TransformName,
 } from "./policy.js";
 
+// ── Policy profiles: named, reusable presets + the widen-never-narrow contract (DEID-10).
+export {
+  SAFE_HARBOR_PROFILE,
+  LIMITED_DATA_SET_PROFILE,
+  defineDeidProfile,
+  profileOptions,
+  type DeidProfile,
+  type DeidProfileSpec,
+  type DeidStandard,
+} from "./profile.js";
+
 // ── The generic locus model.
 export {
   type LocusKind,

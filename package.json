@@ -157,6 +157,7 @@
     "test:coverage": "vitest run --coverage",
     "clean": "rm -rf dist coverage",
     "pack:docs": "bash scripts/build-docs-artifacts.sh",
+    "smoke": "node scripts/smoke.mjs",
     "attw": "attw --pack . --profile node16",
     "release": "changeset publish",
     "prepublishOnly": "pnpm clean && pnpm typecheck && pnpm lint && pnpm test && pnpm build && pnpm attw",

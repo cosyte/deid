@@ -26,6 +26,14 @@ export default cosyteTsup({
     "ncpdp/index": "src/ncpdp/index.ts",
     "dicom/index": "src/dicom/index.ts",
   },
+  // Emit the shared core (context, transforms, engine, manifest, …) as ONE common chunk that every
+  // entry imports, instead of inlining a private copy into each built subpath. Without this, each
+  // subpath carried its own module-private `DeidContext` `WeakMap` registry, so a context created via
+  // the root entry (`createDeidContext`) and used with a per-format `deidentify*` from another subpath
+  // resolved to a *different* registry → a fail-closed `DEID_NO_KEY` throw. It never leaked (it failed
+  // closed), but it broke the documented "one context, any subpath" DX. Splitting shares the single
+  // registry across all seven entries. (tsup implements splitting for BOTH the esm and cjs outputs.)
+  splitting: true,
   external: [
     "@cosyte/hl7",
     "@cosyte/ccda",

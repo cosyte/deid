@@ -17,8 +17,10 @@ describe("code surface stability", () => {
   it("fatal codes are stable", () => {
     expect(sortedCodeSet(FATAL_CODES)).toMatchInlineSnapshot(`
       [
+        "DEID_CONTEXT_INVALID",
         "DEID_NO_KEY",
         "DEID_POLICY_INVALID",
+        "DEID_PROFILE_INVALID",
         "EMPTY_INPUT",
       ]
     `);
