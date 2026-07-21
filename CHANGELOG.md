@@ -14,23 +14,50 @@ its public history at `0.0.x`, per the cosyte version ladder (`0.0.x` until firs
 
 ### Added
 
-- Project scaffold from the shared `@cosyte/*` parser template: the canonical toolchain (TypeScript
-  ES2023 + strict rigor via `@cosyte/tsconfig`, ESLint 10 + type-checked `typescript-eslint` via
-  `@cosyte/eslint-config`, Prettier via `@cosyte/prettier-config`, Vitest 4 + v8 coverage via
-  `@cosyte/vitest-config`, dual ESM + CJS build via `tsup` + `@cosyte/tsup-config`, `attw` publish
-  gate), thin callers of the reusable `cosyte/.github` CI/release workflows, Changesets on the
-  `0.0.x` ladder, and the property-based conformance harness from `@cosyte/test-utils`.
-- `VERSION` export plus the archetype stubs (`parseDeid`, `WARNING_CODES`, `FATAL_CODES`) — to
-  be filled in by subsequent phases.
+- **DEID-1 — the format-agnostic de-identification core.** The foundation every format plugs into,
+  tested against a generic locus model (no parser wired yet):
+  - **Policy engine** — `deidentify(model, { policy, context })`, the built-in `SAFE_HARBOR_POLICY`,
+    and `defineDeidPolicy()` (deviate from the safe default, never forget a category).
+  - **The five transforms** (`node:crypto`-backed) — `redact`; `generalizeDate` (→ year),
+    `generalizeZip` (→ initial 3 digits, or `000` for the cited ≤20,000-population prefixes),
+    `generalizeAge` (→ `90+` for ages over 89); deterministic per-patient `dateShift`
+    (interval-preserving; the offset never leaks); keyed-HMAC-SHA-256 `pseudonymize`; keyed `keyedHash`.
+    `unkeyedHash` is exported only to demonstrate the reversibility hazard and is non-conforming.
+  - **The 18 HIPAA Safe Harbor categories** (`SAFE_HARBOR_CATEGORIES`, `SAFE_HARBOR_CATEGORY_META`) —
+    45 CFR §164.514(b)(2)(i)(A)–(R), including the open-ended catch-all (R).
+  - **The fail-closed rule** — an unrecognized structure / un-locatable identifier / uncertain field /
+    free-text locus is blocked, never passed through; clinical loci are retained untouched (over-scrub
+    guard).
+  - **The value-free manifest** — `DeidManifestEntry` (category + transform + locus + count +
+    disposition + code); never a value, never the HMAC key, never the date-shift offset.
+  - **The self-redacting `DeidContext`** — the consumer's key lives in a module-private `WeakMap` and
+    redacts through every stringify channel.
+  - Stable code registries `FATAL_CODES` (`EMPTY_INPUT`, `DEID_NO_KEY`) and `DEID_DISPOSITION_CODES`;
+    the cited `RESTRICTED_ZIP3` list (HHS 2012 guidance / 2000 Census); the `OUTPUT_LABEL`
+    ("Safe-Harbor-transformed per the configured policy").
+- Mandatory accuracy gates as tests: the ZIP-`000` threshold, the age-`90+` aggregation, the
+  unsalted-hash-reversibility proof (keyed HMAC is not reversible without the key), date-shift interval
+  preservation, and the offset/key-never-leak assertion.
 
 ### Changed
+
+- Replaced the parser-template scaffold stubs (`parseDeid`, `WARNING_CODES`) with the de-identification
+  engine surface. `@cosyte/deid` is a de-identifier, not a parser — the public API and docs reflect the
+  inverted (fail-closed) reflex.
 
 ### Deprecated
 
 ### Removed
 
+- The archetype parser stubs `parseDeid` / `ParsedDeid` / `WARNING_CODES` and the `round-trip` property
+  scaffold — not applicable to a de-identifier.
+
 ### Fixed
 
 ### Security
+
+- Pseudonymization/keyed-hash are **keyed** (HMAC-SHA-256) by design: an unsalted hash of an identifier
+  is re-identifiable (§164.514(c)). The engine never falls back to an unkeyed transform; the key and the
+  per-patient date-shift offset never appear in the output or manifest.
 
 [Unreleased]: https://github.com/cosyte/deid/commits/main

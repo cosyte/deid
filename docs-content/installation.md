@@ -6,8 +6,10 @@ sidebar_position: 1
 
 # Installation
 
-`@cosyte/deid` is a zero-dependency TypeScript package for Node.js. It ships dual **ESM + CJS** builds with
-per-condition type declarations, so it works from either module system without configuration.
+`@cosyte/deid` is a TypeScript library for Node.js with **zero third-party runtime dependencies**
+(every cryptographic primitive comes from Node's built-in `node:crypto`). It ships dual **ESM + CJS**
+builds with per-condition type declarations, so it works from either module system without
+configuration.
 
 > **Status:** pre-alpha (`0.0.x`), not yet published to npm. The command below is the shape it will
 > take at first publish; until then, consume it from source or a workspace link.
@@ -25,12 +27,12 @@ npm install @cosyte/deid
 
 ## Smoke test
 
-Confirm the package resolves and its version symbol is present:
+Confirm the package resolves and its output label is the honest one:
 
 ```ts
-import { VERSION } from "@cosyte/deid";
+import { OUTPUT_LABEL } from "@cosyte/deid";
 
-console.log(VERSION);
+console.log(OUTPUT_LABEL); // "Safe-Harbor-transformed per the configured policy"
 ```
 
-If that prints a version string, the install is good — head to the [Quickstart](./quickstart).
+Head to the [Quickstart](./quickstart) to de-identify a model.

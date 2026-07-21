@@ -1,151 +1,107 @@
 /**
- * Public entry point for the `@cosyte/deid` package.
+ * Public entry point for `@cosyte/deid` — a healthcare **de-identification** engine.
  *
- * This is the **archetype scaffold** for a cosyte standard parser (see the meta-repo's
- * `documentation/conventions.md` → "The standard parser archetype"). The real parser, model,
- * serializer, helpers, and profile system are populated in subsequent phases; these stubs keep the
- * module resolvable and typed so the build/typecheck/lint/test pipeline verifies end-to-end, and
- * they pin the public shape every sibling `@cosyte/*` parser shares.
+ * `@cosyte/deid` is **not** a parser. It is a consumer-tier library: it applies a HIPAA-grounded
+ * de-identification **policy** (Safe Harbor by default) to a structurally-located model of a healthcare
+ * document and returns a transformed model plus a **value-free manifest** of what it acted on. It
+ * borrows the parser archetype's disciplines (typed diagnostics, immutable output, a policy/profile
+ * system) but **inverts the parser's reflex**: it **fails closed** — an unrecognized structure or an
+ * un-locatable identifier is blocked, never passed through as safe.
+ *
+ * **Honesty line (governs the whole library).** Results are **"Safe-Harbor-transformed per the
+ * configured policy"** — never "de-identified" and never "HIPAA-compliant". Safe Harbor is implemented
+ * mechanically; the §164.514(b)(2)(ii) actual-knowledge condition is the consumer's; Expert
+ * Determination (§164.514(b)(1)) is *supported* by later phases, never *rendered* or certified here.
+ *
+ * This phase ships the **format-agnostic core**: the policy engine, the five transforms, the 18-category
+ * Safe Harbor model, the fail-closed rule, and the value-free manifest — tested against a generic locus
+ * model. Per-format locus maps (HL7 v2, C-CDA, FHIR, X12, NCPDP, DICOM) arrive in later phases.
+ *
+ * @packageDocumentation
  */
 
 /**
- * Library version string, synced with `package.json#version` at build time by downstream phases.
- * Exported now so consumers (and the type-check pipeline) have at least one symbol to resolve
- * through the `exports` map.
+ * The label the library applies to its output. Deliberately **not** "de-identified" / "HIPAA-compliant"
+ * — the certification is always the consumer's.
+ *
+ * @example
+ * ```ts
+ * import { OUTPUT_LABEL } from "@cosyte/deid";
+ *
+ * OUTPUT_LABEL; // => "Safe-Harbor-transformed per the configured policy"
+ * ```
+ */
+export const OUTPUT_LABEL = "Safe-Harbor-transformed per the configured policy";
+
+/**
+ * Library version string, synced with `package.json#version` at release time.
  *
  * @example
  * ```ts
  * import { VERSION } from "@cosyte/deid";
- * console.log(VERSION);
+ *
+ * typeof VERSION; // => "string"
  * ```
  */
 export const VERSION = "0.0.0";
 
-/**
- * The result of parsing a De-identification payload.
- *
- * Mirrors the cosyte parser archetype: a parsed value plus the **warnings** the lenient parser
- * recovered from (Tier-2 deviations). The real model — an immutable document with dot-path access,
- * named helpers, and a spec-clean serializer — lands in subsequent phases; for now this captures the
- * minimal lenient-parse contract.
- */
-export interface ParsedDeid {
-  /** The parsed in-memory representation. A structural stub until the real model lands. */
-  readonly value: Record<string, unknown>;
-  /** Tier-2 deviations recovered during a lenient parse — stable code + position, never thrown. */
-  readonly warnings: readonly DeidWarning[];
-}
+// ── The Safe Harbor category model (45 CFR §164.514(b)(2)(i)(A)–(R)).
+export {
+  SAFE_HARBOR_CATEGORIES,
+  SAFE_HARBOR_CATEGORY_META,
+  type SafeHarborCategory,
+} from "./categories.js";
 
-/**
- * A single Tier-2 tolerance warning.
- *
- * Warnings carry a **stable** {@link WarningCode} plus positional context so consumers can branch on
- * `w.code === WARNING_CODES.SOME_CODE` without the code churning — renaming a code is a breaking
- * change. The serializer never emits these; they describe what the lenient parser tolerated.
- */
-export interface DeidWarning {
-  /** The stable warning code. One of the values in {@link WARNING_CODES}. */
-  readonly code: WarningCode;
-  /** Human-readable detail for logs (never contains PHI). */
-  readonly message: string;
-  /** Positional context (offset/segment/element — refined as the parser grows). */
-  readonly position?: { readonly offset: number };
-}
+// ── Stable code registries + the fatal error type.
+export {
+  FATAL_CODES,
+  DEID_DISPOSITION_CODES,
+  DeidError,
+  type FatalCode,
+  type DeidDispositionCode,
+} from "./codes.js";
 
-/**
- * Options for {@link parseDeid}.
- *
- * The parser is **lenient by default** (Postel's Law): vendor quirks become {@link DeidWarning}s
- * rather than failures. Set `strict` to escalate every Tier-2 deviation to a thrown error.
- */
-export interface ParseDeidOptions {
-  /** When `true`, escalate every Tier-2 deviation to a thrown error instead of a warning. */
-  readonly strict?: boolean;
-}
+// ── The cited restricted-ZIP list (Safe Harbor §164.514(b)(2)(i)(B)).
+export { RESTRICTED_ZIP3, RESTRICTED_ZIP3_SOURCE } from "./restricted-zip.js";
 
-/**
- * Parse a De-identification payload into a {@link ParsedDeid}.
- *
- * **Lenient by default** — real-world, vendor-quirky input parses rather than throws, emitting
- * {@link DeidWarning}s instead (Postel's Law). The complementary serializer (added in a later
- * phase) always emits spec-clean output. Only unrecoverable structural corruption throws (a Tier-3
- * {@link FatalCode}).
- *
- * @param raw - The raw De-identification payload (`string` for now; `Buffer`/`Uint8Array` support is added
- *   alongside the real parser).
- * @param options - Parse options; see {@link ParseDeidOptions}. Lenient unless `strict` is set.
- * @returns The parsed value plus any recovered Tier-2 warnings.
- * @throws Only on a Tier-3 {@link FatalCode} (unrecoverable structural corruption), or — once
- *   implemented — on any Tier-2 deviation when `options.strict` is `true`.
- * @example
- * ```ts
- * import { parseDeid } from "@cosyte/deid";
- *
- * const { value, warnings } = parseDeid(raw);
- * for (const w of warnings) console.warn(w.code, w.position);
- * ```
- */
-export function parseDeid(raw: string, options: ParseDeidOptions = {}): ParsedDeid {
-  // Archetype stub: the real lenient tokenizer/model lands in subsequent phases. The signature and
-  // return shape are the load-bearing contract here (mirrored across the sibling @cosyte/* parsers).
-  void raw;
-  void options;
-  return { value: {}, warnings: [] };
-}
+// ── The context holding the consumer's key material (self-redacting; never leaks).
+export { createDeidContext, DeidContext, type DeidContextSpec } from "./context.js";
 
-/**
- * Stable **Tier-2 warning code** registry — the lenient parser's recoverable deviations.
- *
- * Each code is its own value (`key === value`) so the set survives `Object.values(...)` into a
- * snapshot tripwire (see `@cosyte/test-utils`' `sortedCodeSet`). These codes are part of the public
- * contract: consumers branch on them, so renaming or removing one is a **breaking change**. Real
- * codes are added here as the parser grows; this placeholder keeps the shape resolvable.
- *
- * @example
- * ```ts
- * import { WARNING_CODES } from "@cosyte/deid";
- *
- * if (warning.code === WARNING_CODES.EXAMPLE_TOLERATED_DEVIATION) {
- *   // handle the tolerated deviation
- * }
- * ```
- */
-export const WARNING_CODES = {
-  /** Placeholder Tier-2 code — replace with the parser's real recoverable-deviation codes. */
-  EXAMPLE_TOLERATED_DEVIATION: "EXAMPLE_TOLERATED_DEVIATION",
-} as const;
+// ── The five transforms.
+export {
+  redact,
+  generalizeDate,
+  generalizeZip,
+  generalizeAge,
+  dateShift,
+  pseudonymize,
+  keyedHash,
+  unkeyedHash,
+  type GeneralizeOutcome,
+} from "./transforms/index.js";
 
-/**
- * A value from {@link WARNING_CODES} — the type consumers narrow `warning.code` against.
- */
-export type WarningCode = (typeof WARNING_CODES)[keyof typeof WARNING_CODES];
+// ── The policy engine.
+export {
+  SAFE_HARBOR_POLICY,
+  defineDeidPolicy,
+  resolvePolicy,
+  KEYED_TRANSFORMS,
+  type DeidPolicy,
+  type DeidPolicySpec,
+  type TransformName,
+} from "./policy.js";
 
-/**
- * Stable **Tier-3 fatal code** registry — unrecoverable structural corruption.
- *
- * Tier-3 codes are **always thrown**, even in lenient mode: they mark input the parser cannot
- * recover into a structured result. Like {@link WARNING_CODES} these are `key === value` and part of
- * the public contract. Real codes are added as the parser grows; this placeholder keeps the shape
- * resolvable.
- *
- * @example
- * ```ts
- * import { FATAL_CODES } from "@cosyte/deid";
- *
- * try {
- *   parseDeid(raw);
- * } catch (err) {
- *   // err carries a code from FATAL_CODES
- *   void FATAL_CODES.EXAMPLE_UNRECOVERABLE;
- * }
- * ```
- */
-export const FATAL_CODES = {
-  /** Placeholder Tier-3 code — replace with the parser's real unrecoverable-corruption codes. */
-  EXAMPLE_UNRECOVERABLE: "EXAMPLE_UNRECOVERABLE",
-} as const;
+// ── The generic locus model.
+export {
+  type LocusKind,
+  type GenericLocus,
+  type LocusModel,
+  type TransformedLocus,
+  type DeidDocument,
+} from "./locus.js";
 
-/**
- * A value from {@link FATAL_CODES} — the type carried by a thrown fatal error.
- */
-export type FatalCode = (typeof FATAL_CODES)[keyof typeof FATAL_CODES];
+// ── The value-free manifest.
+export { type DeidManifestEntry, type DeidResult } from "./manifest.js";
+
+// ── The engine.
+export { deidentify, type DeidOptions } from "./deidentify.js";
