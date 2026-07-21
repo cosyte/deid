@@ -280,6 +280,49 @@ describe("deidentifyFhir — fail closed on narrative, extensions, and unknown s
     expect(manifest.some((m) => m.code === D.DEID_FREETEXT_BLOCKED)).toBe(true);
   });
 
+  it("redacts free-text loci IN PLACE with a BYO redactor (§Phase 8): note Annotation + valueString", () => {
+    const json = JSON.stringify({
+      resourceType: "Observation",
+      status: "final",
+      code: { coding: [{ system: "http://loinc.org", code: "2951-2" }] },
+      note: [{ text: "ZZNOTEPROSE reviewed", authorString: "ZZNOTEAUTH" }],
+      valueString: "ZZVALUESTRINGPROSE follow-up",
+    });
+    // The consumer supplies the detector; the library bundles none. Scrub the seeded sentinels.
+    const redactor = ({ text }: { text: string }) => ({ text: text.replace(/ZZ\w+/g, "[X]") });
+    const { json: out, manifest } = deidentifyFhirJson(json, { context: ctx, redactor });
+    // Redacted prose is written back in place, not dropped — the document carries the redactor's output.
+    expect(out).toContain("[X]");
+    // Every seeded sentinel is gone from the wire (including the Annotation author folded into the unit).
+    expect(out).not.toContain("ZZNOTEPROSE");
+    expect(out).not.toContain("ZZNOTEAUTH");
+    expect(out).not.toContain("ZZVALUESTRINGPROSE");
+    // The composite note is rebuilt as a valid text-only Annotation (author/time dropped, not leaked).
+    expect(out).not.toContain("authorString");
+    // Manifest matches the document: recorded as consumer-asserted, not blocked.
+    const redacted = manifest.filter((m) => m.code === D.DEID_FREETEXT_CONSUMER_REDACTED);
+    expect(redacted.length).toBeGreaterThan(0);
+    expect(
+      redacted.every((m) => m.transform === "byo-redact" && m.disposition === "transformed"),
+    ).toBe(true);
+    expect(out).toContain("2951-2"); // over-scrub guard: the code survives untouched
+  });
+
+  it("does NOT route a pseudonymized NAME through the free-text write-back (custom policy, no redactor)", () => {
+    // NAMES shares the `drop` edit with free text. A custom policy that pseudonymizes NAMES yields a
+    // non-null surrogate at a name locus; it must still DROP (kind !== freetext), never be written as an
+    // Annotation-shaped node. Guards the refuter's residual.
+    const policy = defineDeidPolicy({ name: "custom", transforms: { [C.NAMES]: "pseudonymize" } });
+    const json = JSON.stringify({
+      resourceType: "Patient",
+      name: [{ family: "ZZNAMEFAMILY", given: ["ZZNAMEGIVEN"] }],
+    });
+    const { json: out } = deidentifyFhirJson(json, { context: ctx, policy });
+    expect(out).not.toContain("ZZNAMEFAMILY");
+    expect(out).not.toContain("ZZNAMEGIVEN");
+    expect(out).not.toContain('"text"'); // the surrogate was not written as a free-text Annotation
+  });
+
   it("retains a structured valueQuantity result while blocking an uncoded valueString", () => {
     const structured = deidentifyFhirJson(
       JSON.stringify({

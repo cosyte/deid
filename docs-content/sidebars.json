@@ -28,7 +28,8 @@
         "guides-x12",
         "guides-ncpdp",
         "guides-dicom",
-        "guides-longitudinal"
+        "guides-longitudinal",
+        "guides-freetext"
       ]
     },
     {

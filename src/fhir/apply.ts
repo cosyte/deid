@@ -8,10 +8,13 @@
  *
  * Each coordinate names the exact node to rewrite and how:
  *
- * - `drop` — the node is omitted (a redacted `name`/`telecom`/`photo`, a blocked extension value, a
- *   blocked `Reference.display`, a blocked narrative `div`, a blocked unknown person string, a redacted
- *   SSN `Identifier.value`). A dropped property vanishes from its complex; a dropped list item from its
- *   list; a list that empties is dropped in turn.
+ * - `drop` — with a `null` value the node is omitted (a redacted `name`/`telecom`/`photo`, a blocked
+ *   extension value, a blocked `Reference.display`, a blocked narrative `div`, a blocked unknown person
+ *   string, a redacted SSN `Identifier.value`). A dropped property vanishes from its complex; a dropped
+ *   list item from its list; a list that empties is dropped in turn. With a **non-null** value the locus
+ *   is a **BYO-redacted free-text** locus (§Phase 8) — the redacted prose is written back in place
+ *   (a `contentString`/`valueString` primitive stays a primitive; a `note` Annotation/array becomes a
+ *   `text`-only Annotation, dropping author/time).
  * - `set-primitive` — the primitive's value becomes the transformed string (a generalized date, a
  *   pseudonymized `Identifier.value`); a `null` result degrades to a drop.
  * - `address` — the `Address` complex is rebuilt to `state` + `country` + the generalized 3-digit
@@ -40,7 +43,7 @@ import {
   type FhirProperty,
 } from "@cosyte/fhir";
 
-import type { TransformedLocus } from "../locus.js";
+import type { LocusKind, TransformedLocus } from "../locus.js";
 import type { FhirCoord, FhirEditKind } from "./extract.js";
 
 /** Sentinel returned by {@link rebuildNode} when a node is removed (dropped from its parent). @internal */
@@ -50,9 +53,10 @@ type Rebuilt = FhirNode | typeof REMOVE;
 /** Address components at or above state level, permitted under Safe Harbor and retained. @internal */
 const KEEP_ADDRESS_PARTS: ReadonlySet<string> = new Set(["state", "country"]);
 
-/** One resolved edit: how to rewrite a node, and the engine's transformed value for it. */
+/** One resolved edit: how to rewrite a node, the locus kind, and the engine's transformed value. */
 interface Edit {
   readonly edit: FhirEditKind;
+  readonly kind: LocusKind;
   readonly value: string | null;
 }
 
@@ -76,11 +80,36 @@ function rebuildAddress(node: FhirComplex, zip: string | null): Rebuilt {
   return props.length === 0 ? REMOVE : complex(props);
 }
 
+/** An `Annotation` reduced to its redacted `text` only — author / time (potential PHI) are dropped. */
+function textAnnotation(value: string): FhirComplex {
+  return complex([{ name: "text", value: primitive(value) }]);
+}
+
+/**
+ * Write a BYO-redacted free-text value (DEID-8) back in place, faithful to the node's kind — a redacted
+ * string primitive (`contentString` / `valueString`) stays a primitive; a `note` Annotation (complex)
+ * or a `note` array (list) becomes a `text`-only Annotation carrying the redacted prose. Reached only
+ * for a `freetext` locus with a non-null value (the caller gates on `kind`), so a name/telecom locus
+ * that a custom policy pseudonymized — which shares the `drop` edit — is never routed through here; it
+ * drops as before.
+ */
+function writeFreeText(node: FhirNode, value: string): Rebuilt {
+  if (isPrimitive(node)) return primitive(value);
+  if (isList(node)) return list([textAnnotation(value)]);
+  return textAnnotation(value);
+}
+
 /** Apply the resolved edit for a node the map named. */
 function applyEdit(node: FhirNode, edit: Edit): Rebuilt {
   switch (edit.edit) {
     case "drop":
-      return REMOVE;
+      // A BYO-redacted free-text locus (§Phase 8) with a non-null value → write the redacted prose back
+      // in place. Gated on `kind`, so a name/telecom locus a custom policy pseudonymized (which shares
+      // the `drop` edit) still drops rather than being written through the free-text path. Every other
+      // case — a removed/blocked locus, or a null value — omits the node.
+      return edit.kind === "freetext" && edit.value !== null
+        ? writeFreeText(node, edit.value)
+        : REMOVE;
     case "set-primitive":
       return edit.value === null ? REMOVE : primitive(edit.value);
     case "address":
@@ -144,7 +173,7 @@ export function applyFhir(
     const coord = coords[i];
     const t = transformed[i];
     if (coord === undefined || t === undefined) continue;
-    edits.set(coord.node, { edit: coord.edit, value: t.value });
+    edits.set(coord.node, { edit: coord.edit, kind: t.kind, value: t.value });
   }
   const rebuilt = rebuildNode(resource, edits);
   // The root resource never rebuilds to REMOVE (its `resourceType` property is retained), but guard so a

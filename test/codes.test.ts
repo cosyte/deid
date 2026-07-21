@@ -33,6 +33,7 @@ describe("code surface stability", () => {
         "DEID_CATEGORY_PSEUDONYMIZED",
         "DEID_CATEGORY_REMOVED",
         "DEID_FREETEXT_BLOCKED",
+        "DEID_FREETEXT_CONSUMER_REDACTED",
         "DEID_LOCUS_BLOCKED",
         "DEID_RESIDUAL_RETAINED",
       ]

@@ -103,7 +103,8 @@ so a known patient-identity segment absent from the map (e.g. **MRG** prior name
 coded / date); narrative (`TX`/`FT`), ambiguous String (`ST`), and any empty/unknown OBX-2 fail closed,
 as do **NTE-3** comments. Structured clinical values, units, codes, and statuses survive untouched.
 
-**Known limitations (this release).** Free text is block-only (no scrub); within **retained** clinical /
+**Known limitations (this release).** Free text is block-by-default (no built-in scrub; opt-in BYO
+redaction — see [Free text](#free-text--block-by-default--byo-redaction)); within **retained** clinical /
 visit segments, patient-related _dates_ (OBR/DG1/PV1 timestamps), _visit identifiers_ (PV1-19), and
 _provider_ names (PV1-7/8, OBR-16) are a deferred later phase; the address generalization keeps only the
 Safe Harbor 3-digit ZIP.
@@ -145,7 +146,8 @@ mapped PHI nor recognized coded structure is blocked; foreign / `sdtc` elements 
 `structuredBody` entries are **retained untouched** (the over-scrub guard) — a `<name>` there is a drug
 or material name, not a person.
 
-**Known limitations (this release).** Narrative is block-only (no scrub); within the **retained**
+**Known limitations (this release).** Narrative is block-by-default (no built-in scrub; opt-in BYO
+redaction — see [Free text](#free-text--block-by-default--byo-redaction)); within the **retained**
 clinical body, entry service _dates_, entry _ids_, in-entry _performer_ names, and _family-history_
 relative demographics are a deferred later phase (mirroring the HL7 adapter's boundary); the document
 `id`/`code`/`title` envelope is retained (like HL7's MSH).
@@ -202,8 +204,9 @@ that is not on a `Coding` is treated as a Reference person-label and blocked —
 `us-core-*` demographic extension is dropped, deferred to a later policy-profiles phase). Reference
 _wiring_ (`Reference.reference` pointers, resource logical `id`s) is preserved structurally; coordinated
 pseudonymization of resource ids across a corpus is the longitudinal phase. Free-text **prose** loci
-(`note`, `contentString`, uncoded `valueString`) fail closed by default; a semantic (NLP) narrative
-scrub, `contentAttachment` binary content, and person names embedded in non-person resources
+(`note`, `contentString`, uncoded `valueString`) fail closed by default, or run through an opt-in BYO
+redactor (see [Free text](#free-text--block-by-default--byo-redaction)); a **built-in** semantic (NLP)
+narrative scrub, `contentAttachment` binary content, and person names embedded in non-person resources
 (`Organization.contact.name`, `Location.address`) remain out of scope for this release.
 
 ## De-identify an X12 EDI interchange
@@ -322,6 +325,36 @@ key un-links a corpus from records made under the old one. The library holds no 
 Date-shift retains dates in shifted form, so it is Expert-Determination-supporting, **not** Safe Harbor
 — and the library rejects any date-shifting policy that claims the `safe-harbor` label
 (`DEID_POLICY_INVALID`).
+
+## Free text — block-by-default + BYO redaction
+
+Narrative loci (HL7 `OBX-5` / `NTE`, C-CDA section `<text>`, FHIR `note` / `div`, X12 `MSG` / `NTE`,
+NCPDP free text) can carry any of the 18 categories in prose, with no structural handle on where. The
+default is **fail-closed**: with no redactor, every free-text locus is **blocked** (value withheld). The
+library ships **no** NLP model and **no** built-in regex scrub — a naive pass over clinical prose is a
+false-safety hazard.
+
+To redact free text rather than block it, **bring your own redactor** — a function wrapping your regex /
+pattern engine or clinical-NER de-id model. The engine invokes it at each free-text locus and writes its
+output back in place, recording the locus as **consumer-asserted** (`DEID_FREETEXT_CONSUMER_REDACTED`).
+
+```ts
+import { deidentifyHl7 } from "@cosyte/deid/hl7";
+import { type FreeTextRedactor } from "@cosyte/deid";
+
+const redactor: FreeTextRedactor = ({ text }) => ({ text: myNerModel.scrub(text) });
+const { document } = deidentifyHl7(parseHL7(raw), { context, redactor });
+```
+
+**The fail-closed contract holds regardless of the redactor.** No redactor → block; the redactor throws
+→ block; the redactor returns nothing → block; the redactor returns `{ text }` → written back in place.
+A redactor is never allowed to leak free text through on failure.
+
+**The honesty boundary.** A returned redaction is trusted as consumer-asserted — the engine does **not**
+re-scan it for residual PHI, and "no findings" from a BYO redactor is **not** an attestation. A BYO
+redactor's completeness is the consumer's responsibility (Expert-Determination territory). The structural
+PHI removal the adapters perform, and the clinical over-scrub guard, are **unchanged** — the redactor
+handles the free _prose_ only.
 
 ## The design in five pieces
 

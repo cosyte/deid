@@ -268,6 +268,30 @@ describe("deidentifyHl7 — fail closed on free text and unknown structure", () 
     expect(manifest.find((m) => m.locus === "NTE-3")?.code).toBe(D.DEID_FREETEXT_BLOCKED);
   });
 
+  it("redacts OBX-5 / NTE-3 free text in place with a BYO redactor (consumer-asserted, §Phase 8)", () => {
+    const msg = parseHL7(
+      "MSH|^~\\&|A|B|C|D|20200101||ORU^R01|M1|P|2.5\r" +
+        "OBX|1|NM|2951-2^Sodium^LN|1|140|mmol/L|135-145|N|||F\r" +
+        "OBX|2|TX|1234-5^Note^LN|1|Specimen from ZZLEAKNAME reviewed|||||F\r" +
+        "NTE|1||comment naming ZZLEAKNTE",
+    );
+    // A consumer-supplied redactor that scrubs the seeded sentinels. The library bundles none.
+    const redactor = ({ text }: { text: string }) => ({ text: text.replace(/ZZLEAK\w+/g, "[X]") });
+    const { document, manifest } = deidentifyHl7(msg, { context: ctx, redactor });
+    // Free text redacted IN PLACE (not blocked) and recorded as consumer-asserted.
+    expect(document.get("OBX[1].5")).toBe("Specimen from [X] reviewed");
+    expect(document.get("NTE.3")).toBe("comment naming [X]");
+    expect(
+      manifest
+        .filter((m) => m.code === D.DEID_FREETEXT_CONSUMER_REDACTED)
+        .every((m) => m.transform === "byo-redact" && m.disposition === "transformed"),
+    ).toBe(true);
+    // Leak test on the BYO path: no seeded sentinel survives in the serialized wire.
+    expect(document.toString()).not.toMatch(/ZZLEAK/);
+    // Over-scrub unchanged: the structured numeric OBX-5 survives byte-identical.
+    expect(document.get("OBX[0].5")).toBe("140");
+  });
+
   it("fails closed on every populated field of a Z-segment (unknown structure)", () => {
     const msg = parseHL7("MSH|^~\\&|A|B|C|D|20200101||ADT^A01|M1|P|2.5\rZPI|ZZKEEP1|ZZKEEP2");
     const { document, manifest } = deidentifyHl7(msg, { context: ctx });

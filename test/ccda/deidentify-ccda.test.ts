@@ -175,6 +175,41 @@ describe("deidentifyCcda — fail closed on narrative and unknown structure", ()
     expect(narrative.every((m) => m.locus.endsWith("text"))).toBe(true);
   });
 
+  it("redacts section narrative <text> IN PLACE with a BYO redactor (§Phase 8), not just blocks it", () => {
+    // The consumer supplies the detector; the library bundles none. Scrub the seeded sentinel.
+    const redactor = ({ text }: { text: string }) => ({
+      text: text.replace(/ZZNARRATIVEPHI/g, "[REDACTED]"),
+    });
+    const { document, manifest } = deidentifyCcda(parseCcda(loadFixture("ccd")), {
+      context: ctx,
+      redactor,
+    });
+    const wire = document.toString();
+    // Redacted narrative is written back in place — the redactor's prose is in the output document…
+    expect(wire).toContain("[REDACTED]");
+    // …and the manifest records it as consumer-asserted, not blocked, and matches the document.
+    const redacted = manifest.filter((m) => m.code === D.DEID_FREETEXT_CONSUMER_REDACTED);
+    expect(redacted.length).toBeGreaterThan(0);
+    expect(
+      redacted.every((m) => m.transform === "byo-redact" && m.disposition === "transformed"),
+    ).toBe(true);
+    // Leak test on the BYO path: no seeded sentinel survives; structured clinical values still survive.
+    expect(wire).not.toContain("ZZNARRATIVEPHI");
+    expect(wire).toContain("140"); // the coded sodium value in the structured body is untouched
+  });
+
+  it("does NOT route a pseudonymized NAME through the narrative write-back (custom policy, no redactor)", () => {
+    // <name> shares the `clear-element` edit with narrative <text>. A NAMES-pseudonymizing policy yields
+    // a non-null surrogate at the name locus; it must still EMPTY the element (kind !== freetext), never
+    // write the surrogate as flat text into <name>. Guards the refuter's residual.
+    const policy = defineDeidPolicy({ name: "custom", transforms: { [C.NAMES]: "pseudonymize" } });
+    const { document } = deidentifyCcda(parseCcda(loadFixture("ccd")), { context: ctx, policy });
+    const patient = document.getPatient();
+    expect(patient?.name?.family).toBeUndefined();
+    expect(patient?.name?.given).toBeUndefined();
+    expect(document.toString()).not.toContain("ZZPATFAMILY");
+  });
+
   it("fails closed on an unknown vendor element whose name ends in 'Code' (positive allow-list)", () => {
     // A blocklist (`endsWith('Code')`) would silently retain this; the allow-list blocks it.
     const xml = `<?xml version="1.0"?><ClinicalDocument xmlns="urn:hl7-org:v3">

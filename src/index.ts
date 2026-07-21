@@ -108,3 +108,10 @@ export { type DeidManifestEntry, type DeidResult } from "./manifest.js";
 
 // ── The engine.
 export { deidentify, type DeidOptions } from "./deidentify.js";
+
+// ── The BYO free-text redaction interface (DEID-8) — the library ships the interface, never a detector.
+export {
+  type FreeTextRedactor,
+  type FreeTextRedactionRequest,
+  type FreeTextRedactionResult,
+} from "./redactor.js";
