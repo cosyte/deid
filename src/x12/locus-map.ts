@@ -355,6 +355,33 @@ export const X12_UNIVERSAL_SEGMENT_RULES: Readonly<Record<string, readonly X12El
   });
 
 /**
+ * The X12 segments carrying **free-form human message text** and the 1-indexed element(s) that hold it —
+ * blocked by default (roadmap §4.5), the exact inverse of a naive scrub and the analogue of the HL7
+ * adapter's `OBX-5`/`NTE` fail-closed default and the NCPDP adapter's `544-FY`/`504-F4`/`526-FQ` blocks.
+ * Free text can carry any of the 18 categories in prose (a name, a DOB, an MRN in a note), so it is
+ * removed, never passed through. The segment's other (coded) elements are retained (the over-scrub
+ * guard) — only the free-text element is blocked.
+ *
+ * - `MSG-01` — Message Text (271/278 free-form message).
+ * - `III-04` — Free-Form Message Text (eligibility/benefit Information segment; `III-01..03` are codes).
+ * - `K3-01`  — File Information (free-form record).
+ * - `NTE-02` — Description (a claim note; `NTE-01` is a coded note-reference).
+ *
+ * @example
+ * ```ts
+ * import { X12_FREE_TEXT_ELEMENTS } from "@cosyte/deid/x12";
+ *
+ * X12_FREE_TEXT_ELEMENTS.MSG; // => [1]
+ * ```
+ */
+export const X12_FREE_TEXT_ELEMENTS: Readonly<Record<string, readonly number[]>> = Object.freeze({
+  MSG: [1],
+  III: [4],
+  K3: [1],
+  NTE: [2],
+});
+
+/**
  * The **geographic** segments (`N3` address lines, `N4` city/state/ZIP) whose *unmapped* elements must
  * **fail closed** — unlike the demographic segments (`DMG`/`PER`), a geographic segment can carry an
  * un-enumerated location identifier (`N4-06` Location Identifier could be a county / geocode). So for
@@ -444,6 +471,8 @@ export const X12_RETAIN_SEGMENTS: ReadonlySet<string> = new Set<string>([
   "QTY", // Quantity
   "LQ", // Industry Code (remark codes)
   "LX", // Transaction Set Line Number
+  // (MSG / III / K3 / NTE are NOT retained wholesale — their free-text element is blocked, see
+  // X12_FREE_TEXT_ELEMENTS; the coded elements are retained by that handler.)
   // Diagnosis / procedure / clinical codes
   "HI", // Health Care Diagnosis / procedure codes
   "SV1", // Professional Service
@@ -460,7 +489,6 @@ export const X12_RETAIN_SEGMENTS: ReadonlySet<string> = new Set<string>([
   "HCP", // Health Care Pricing
   "CN1", // Contract Information
   "PS1", // Purchased Service
-  "K3", // File Information
   "MEA", // Measurements
   "PWK", // Paperwork
   "LIN", // Item Identification (NDC drug code)
@@ -470,8 +498,6 @@ export const X12_RETAIN_SEGMENTS: ReadonlySet<string> = new Set<string>([
   // Eligibility / benefit (271)
   "EB", // Eligibility or Benefit Information (coded)
   "EQ", // Eligibility or Benefit Inquiry
-  "III", // Information (coded)
-  "MSG", // Message Text (retained; free-text handled below only where flagged)
   "TRN", // Trace (reassociation trace — payer/provider control, not patient-derived)
   "AAA", // Request Validation
   "INS", // Insured Benefit (relationship / maintenance codes)

@@ -59,6 +59,7 @@ implicit, so the map keys off each **segment id** plus two **qualifier classifie
 | **`PER`**                                                       | contact name + communication numbers **removed**                                                                   |
 | **`REF`**                                                       | patient / member / group / SSN identifier removed or **pseudonymized**; recognized admin/provider reference retained; **unknown qualifier fails closed** |
 | **`CLM-01` / `CLP-01`**                                         | patient account number **pseudonymized** to a consistent surrogate                                                  |
+| **Free text** (`MSG-01`, `III-04`, `K3-01`, `NTE-02`)           | **fails closed** — blocked (coded siblings retained), never scrubbed by a naive pass                                |
 | **Clinical / financial** (`HI`, `SV*`, `SVC`, `AMT`, `CAS`, …)   | **retained untouched** — diagnosis / procedure / revenue codes, amounts, quantities survive byte-identical          |
 | Any **unmapped / unknown** segment                              | **fails closed** — every element blocked                                                                            |
 

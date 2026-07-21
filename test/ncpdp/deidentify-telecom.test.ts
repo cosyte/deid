@@ -61,6 +61,7 @@ const SENTINELS = [
   "ZZALTPATID", // an alternate patient id (Patient segment, unmapped)
   "ZZMEDIGAP", // 359-2A Medigap ID (Insurance segment, unmapped)
   "ZZPRESCRIBERNAME", // Prescriber name (Prescriber segment, unmapped → blocked, provider identity)
+  "ZZFQPHI", // 526-FQ Additional Message Information free text — blocked (was retained)
 ];
 
 /** Synthetic clinical / financial values that MUST survive byte-identical. */
@@ -121,13 +122,22 @@ describe("NCPDP Telecom structured + fail-closed behavior", () => {
     expect(telecom).not.toContain("ZZMEDIGAP");
   });
 
-  it("retains recognized non-identifier fields inside PHI segments (gender, person code, COB amount)", () => {
+  it("retains recognized non-identifier fields inside PHI segments (gender, pregnancy, person code, COB amount)", () => {
     const { telecom } = deidentifyTelecomString(loadRaw(), { context: ctx });
     const tx = parseTelecom(telecom);
     expect(fieldValue(findSegment(tx.segments, "01"), "C5")).toBe("M"); // gender retained
+    expect(fieldValue(findSegment(tx.segments, "01"), "2C")).toBe("2"); // pregnancy indicator retained (335-2C)
     expect(fieldValue(findSegment(tx.segments, "04"), "C3")).toBe("01"); // person code retained
     expect(fieldValue(findSegment(tx.segments, "05"), "DV")).toBe("1000"); // COB monetary amount retained
     expect(fieldValue(findSegment(tx.segments, "05"), "7C")).toBe("PAYERID99"); // payer id retained
+  });
+
+  it("blocks the FQ additional-message free-text field (fails closed)", () => {
+    const { telecom, manifest } = deidentifyTelecomString(loadRaw(), { context: ctx });
+    expect(telecom).not.toContain("ZZFQPHI");
+    expect(manifest.some((e) => e.locus === "08/FQ" && e.code === D.DEID_FREETEXT_BLOCKED)).toBe(
+      true,
+    );
   });
 
   it("pseudonymizes the patient / cardholder / group identifiers to non-reversible surrogates", () => {

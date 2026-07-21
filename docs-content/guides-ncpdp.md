@@ -53,7 +53,7 @@ standard, so the map keys off the field id directly.
 | **Prescriber (`03`)**                    | prescriber id (`DB`) **removed** (the roadmap scopes prescriber identifiers for NCPDP)                          |
 | **Coordination of Benefits (`05`)**      | other-payer cardholder (`NU`) + group (`MJ`) ids **pseudonymized**; other-payer date (`E8`) → year             |
 | **Header**                               | Date of Service → year                                                                                        |
-| **Free text** (`544-FY`, `504-F4`)       | **fails closed** — blocked, never scrubbed by a naive pass                                                     |
+| **Free text** (`544-FY`, `504-F4`, `526-FQ`) | **fails closed** — blocked, never scrubbed by a naive pass                                                 |
 | **Clinical / financial** (`07`/`08`/`10`/`11`/`12`/`13`) | **retained untouched** — NDC drug codes, quantities, days-supply, pricing, DUR reason codes           |
 | Any **unmapped / unknown** segment       | **fails closed** — every field blocked                                                                        |
 

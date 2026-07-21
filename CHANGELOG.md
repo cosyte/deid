@@ -43,6 +43,8 @@ its public history at `0.0.x`, per the cosyte version ladder (`0.0.x` until firs
     `@cosyte/x12` serializer is
     byte-faithful, so a segment the map does not touch keeps its **verbatim** raw — diagnosis / procedure /
     revenue codes, monetary amounts, and quantities survive the over-scrub test byte-identical.
+    **Free-form message text fails closed:** `MSG-01`, `III-04`, `K3-01`, and `NTE-02` are blocked (their
+    coded siblings retained) — the X12 analogue of the HL7 `OBX-5`/`NTE` and NCPDP `FY`/`F4`/`FQ` blocks.
   - **NCPDP (`@cosyte/deid/ncpdp`).** `deidentifyTelecom(tx, …)` / `deidentifyTelecomString(raw, …)`; plus
     `extractTelecomLoci`, `applyTelecom`, the cited `TELECOM_LOCUS_MAP` / `TELECOM_FREE_TEXT_FIELDS` /
     `TELECOM_RETAIN_SEGMENTS`. Telecom vD.0: Patient (`01`) name / phone removed, street / city removed,
@@ -51,11 +53,12 @@ its public history at `0.0.x`, per the cosyte version ladder (`0.0.x` until firs
     identifiers for NCPDP — a deliberate asymmetry with the X12 provider-retention stance); Coordination of
     Benefits (`05`) other-payer cardholder / group ids pseudonymized, other-payer date → year; header Date
     of Service → year. Fail closed inside a PHI segment too: a free-text field (`544-FY` DUR, `504-F4`
-    message), an **unmapped field in a Patient / Prescriber / Insurance / COB segment** (a `350-HN` patient
-    e-mail, a `359-2A` Medigap id — anything not on the explicit per-segment non-identifier retain list),
-    and any unknown segment are all **blocked**; the clinical / financial segments (NDC, quantities,
-    days-supply, pricing, DUR codes) and the recognized non-identifier fields (gender, state, person code,
-    other-payer amounts) are retained.
+    message, `526-FQ` additional message information), an **unmapped field in a Patient / Prescriber /
+    Insurance / COB segment** (a `350-HN` patient e-mail, a `359-2A` Medigap id — anything not on the
+    explicit per-segment non-identifier retain list), and any unknown segment are all **blocked**; the
+    clinical / financial segments (NDC, quantities, days-supply, pricing, DUR codes) and the recognized
+    non-identifier fields (gender, state, `335-2C` pregnancy indicator, person code, other-payer amounts)
+    are retained.
   - **NCPDP SCRIPT is deferred** (a documented non-goal of this phase): `@cosyte/ncpdp`'s SCRIPT surface
     cannot be de-identified faithfully through its public API — `serializeScript` emits only the modeled
     fields (a round-trip drops unmodeled XML) and the SCRIPT `Patient` model has no address / phone /

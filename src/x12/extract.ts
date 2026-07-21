@@ -24,6 +24,7 @@ import { SAFE_HARBOR_CATEGORIES, type SafeHarborCategory } from "../categories.j
 import type { GenericLocus } from "../locus.js";
 import {
   X12_ACCOUNT_SEGMENTS,
+  X12_FREE_TEXT_ELEMENTS,
   X12_GEO_RETAIN_ELEMENTS,
   X12_GEO_SEGMENTS,
   X12_RETAIN_SEGMENTS,
@@ -272,6 +273,32 @@ function handleGeoSegment(
   }
 }
 
+/**
+ * Block the free-text element(s) of a message segment (`MSG` / `III` / `K3` / `NTE`) — free text can
+ * carry any of the 18 categories in prose, so it fails closed (never a naive scrub). The segment's other
+ * (coded) elements are retained (the over-scrub guard).
+ */
+function handleFreeTextSegment(
+  out: X12Extraction,
+  seg: X12Segment,
+  pos: SegPos,
+  elements: readonly number[],
+): void {
+  for (const n of elements) {
+    if (!has(seg, n)) continue;
+    push(
+      out,
+      {
+        path: path(pos, n),
+        kind: "freetext",
+        category: SAFE_HARBOR_CATEGORIES.OTHER_UNIQUE_ID,
+        value: el(seg, n),
+      },
+      coord(pos, [n]),
+    );
+  }
+}
+
 /** Fail closed on an unknown segment: block every populated element (unrecognized structure). */
 function handleUnknown(out: X12Extraction, seg: X12Segment, pos: SegPos): void {
   for (let n = 1; n < seg.elements.length; n += 1) blockElement(out, seg, pos, n);
@@ -294,6 +321,11 @@ function handleSegment(out: X12Extraction, seg: X12Segment, pos: SegPos): void {
   }
   if (X12_ACCOUNT_SEGMENTS.has(id)) {
     handleAccount(out, seg, pos);
+    return;
+  }
+  const freeText = X12_FREE_TEXT_ELEMENTS[id];
+  if (freeText !== undefined) {
+    handleFreeTextSegment(out, seg, pos, freeText);
     return;
   }
   const universal = X12_UNIVERSAL_SEGMENT_RULES[id];

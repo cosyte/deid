@@ -154,8 +154,7 @@ export const TELECOM_SEGMENT_RETAIN_FIELDS: Readonly<Record<string, ReadonlySet<
       "C6", // 306-C6 Patient Relationship Code
       "C7", // 307-C7 Place of Service
       "CX", // 331-CX Patient ID Qualifier (the type code for the pseudonymized CY — metadata)
-      "1C", // 384-4X-adjacent smoker / non-smoker code family
-      "1D", // pregnancy indicator
+      "2C", // 335-2C Pregnancy Indicator (a coded clinical flag, not an identifier)
       "4X", // 384-4X Patient Residence (a coded residence type, not an address)
     ]),
     // Prescriber (03): the id qualifier only; the prescriber id (DB) is removed and any name/telecom
@@ -186,8 +185,8 @@ export const TELECOM_SEGMENT_RETAIN_FIELDS: Readonly<Record<string, ReadonlySet<
 /**
  * NCPDP Telecom **free-text** field ids that carry human prose and therefore any of the 18 categories —
  * blocked by default (roadmap §4.5), never scrubbed by a naive pass, wherever they appear (including
- * inside an otherwise-retained clinical / response segment). `544-FY` is the DUR free-text message and
- * `504-F4` is the response Message field.
+ * inside an otherwise-retained clinical / response segment). `544-FY` is the DUR free-text message,
+ * `504-F4` is the response Message field, and `526-FQ` is the response Additional Message Information.
  *
  * @example
  * ```ts
@@ -196,7 +195,7 @@ export const TELECOM_SEGMENT_RETAIN_FIELDS: Readonly<Record<string, ReadonlySet<
  * TELECOM_FREE_TEXT_FIELDS.has("FY"); // => true (DUR free text — fails closed)
  * ```
  */
-export const TELECOM_FREE_TEXT_FIELDS: ReadonlySet<string> = new Set<string>(["FY", "F4"]);
+export const TELECOM_FREE_TEXT_FIELDS: ReadonlySet<string> = new Set<string>(["FY", "F4", "FQ"]);
 
 /**
  * The recognized **clinical / financial / pharmacy** Telecom segments retained (passed through

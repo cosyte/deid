@@ -64,6 +64,10 @@ const SENTINELS = [
   "ZZCHAMPUSID", // REF*1H CHAMPUS/TRICARE beneficiary id — reclassified as PHI, pseudonymized away
   "ZZPOLICY777", // SBR-03 insured group/policy number — pseudonymized (was silently retained)
   "ZZGROUPNAME", // SBR-04 insured group name — removed (employer/plan name)
+  "ZZNTEPHI", // NTE-02 note free text — blocked (was unhandled)
+  "ZZMSGPHI", // MSG-01 message free text — blocked (was retained wholesale)
+  "ZZIIIPHI", // III-04 free-form message text — blocked (III codes retained)
+  "ZZK3PHI", // K3-01 file information free text — blocked
   // Provider address / submitter contact are universally scrubbed (a safe over-reach, never a leak).
   "PROVIDER RD",
   "PROVCITY",
@@ -175,6 +179,19 @@ describe("X12 fail-closed + manifest + immutability", () => {
     const { x12, manifest } = deidentifyX12String(load("837p"), { context: ctx });
     expect(x12).toContain("ZZZ*~"); // the unknown segment's value is cleared
     expect(manifest.some((e) => e.locus.includes("ZZZ") && e.disposition === "blocked")).toBe(true);
+  });
+
+  it("blocks free-text message segments (MSG/III/K3/NTE) but retains their coded elements", () => {
+    const { x12, manifest } = deidentifyX12String(load("837p"), { context: ctx });
+    // The free-text values are gone; the coded siblings survive.
+    expect(x12).toContain("MSG*~"); // MSG-01 message text blocked
+    expect(x12).toContain("III*ZZ*21**~"); // III-01/02 codes retained, III-04 blocked
+    expect(x12).toContain("NTE*ADD*~"); // NTE-01 note code retained, NTE-02 blocked
+    expect(x12).toContain("K3*~"); // K3-01 blocked
+    // Recorded as fail-closed free-text blocks.
+    const freetext = manifest.filter((e) => e.code === D.DEID_FREETEXT_BLOCKED);
+    expect(freetext.some((e) => e.locus.includes("MSG"))).toBe(true);
+    expect(freetext.some((e) => e.locus.includes("NTE"))).toBe(true);
   });
 
   it("emits a value-free manifest (no sentinel value ever appears in a locus or elsewhere)", () => {
