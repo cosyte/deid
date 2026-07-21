@@ -14,6 +14,9 @@ importers:
       '@changesets/cli':
         specifier: 2.31.0
         version: 2.31.0(@types/node@22.20.1)
+      '@cosyte/ccda':
+        specifier: file:vendor/cosyte-ccda-0.0.1.tgz
+        version: file:vendor/cosyte-ccda-0.0.1.tgz
       '@cosyte/eslint-config':
         specifier: ^0.0.4
         version: 0.0.4(eslint@10.5.0)(typescript@5.9.3)
@@ -41,6 +44,9 @@ importers:
       '@vitest/coverage-v8':
         specifier: 4.1.4
         version: 4.1.4(vitest@4.1.4)
+      '@xmldom/xmldom':
+        specifier: 0.9.10
+        version: 0.9.10
       eslint:
         specifier: 10.5.0
         version: 10.5.0
@@ -169,6 +175,11 @@ packages:
   '@colors/colors@1.5.0':
     resolution: {integrity: sha512-ooWCrlZP11i8GImSjTHYHLkvFDP48nS4+204nGb1RiX/WXYHmJA2III9/e2DWVabCESdW7hBAEzHRqUn9OUVvQ==}
     engines: {node: '>=0.1.90'}
+
+  '@cosyte/ccda@file:vendor/cosyte-ccda-0.0.1.tgz':
+    resolution: {integrity: sha512-uH7A0/ySsTkPnYjAXT2kGV6ITTWt+djcO97i2SBQZpTwAhAJtQ1TjM5fNi+fIvtEde5VQyGlmDnUo5v2KhIq3g==, tarball: file:vendor/cosyte-ccda-0.0.1.tgz}
+    version: 0.0.1
+    engines: {node: '>=22.0.0'}
 
   '@cosyte/eslint-config@0.0.4':
     resolution: {integrity: sha512-CHQheUswQqC90jYlS4EsFn4jg3T2pjlf8Wgr9xX930MJ6yOAHpN2kuQ4FvmUfOPk1s3xv0CzbZ267gHogvwTPg==}
@@ -880,6 +891,10 @@ packages:
 
   '@vitest/utils@4.1.4':
     resolution: {integrity: sha512-13QMT+eysM5uVGa1rG4kegGYNp6cnQcsTc67ELFbhNLQO+vgsygtYJx2khvdt4gVQqSSpC/KT5FZZxUpP3Oatw==}
+
+  '@xmldom/xmldom@0.9.10':
+    resolution: {integrity: sha512-A9gOqLdi6cV4ibazAjcQufGj0B1y/vDqYrcuP6d/6x8P27gRS8643Dj9o1dEKtB6O7fwxb2FgBmJS2mX7gpvdw==}
+    engines: {node: '>=14.6'}
 
   acorn-jsx@5.3.2:
     resolution: {integrity: sha512-rq9s+JNhf0IChjtDXxllJ7g41oZk5SlXtp0LHwyA5cejwn7vKmKp4pPri6YEePv2PU65sAsegbXtIinmDFDXgQ==}
@@ -2141,6 +2156,10 @@ snapshots:
   '@colors/colors@1.5.0':
     optional: true
 
+  '@cosyte/ccda@file:vendor/cosyte-ccda-0.0.1.tgz':
+    dependencies:
+      '@xmldom/xmldom': 0.9.10
+
   '@cosyte/eslint-config@0.0.4(eslint@10.5.0)(typescript@5.9.3)':
     dependencies:
       '@eslint/js': 10.0.1(eslint@10.5.0)
@@ -2686,6 +2705,8 @@ snapshots:
       '@vitest/pretty-format': 4.1.4
       convert-source-map: 2.0.0
       tinyrainbow: 3.1.0
+
+  '@xmldom/xmldom@0.9.10': {}
 
   acorn-jsx@5.3.2(acorn@8.17.0):
     dependencies:

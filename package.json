@@ -51,6 +51,16 @@
         "default": "./dist/hl7/index.cjs"
       }
     },
+    "./ccda": {
+      "import": {
+        "types": "./dist/ccda/index.d.ts",
+        "default": "./dist/ccda/index.mjs"
+      },
+      "require": {
+        "types": "./dist/ccda/index.d.cts",
+        "default": "./dist/ccda/index.cjs"
+      }
+    },
     "./package.json": "./package.json"
   },
   "files": [
@@ -60,10 +70,14 @@
     "CHANGELOG.md"
   ],
   "peerDependencies": {
-    "@cosyte/hl7": ">=0.0.0"
+    "@cosyte/hl7": ">=0.0.0",
+    "@cosyte/ccda": ">=0.0.0"
   },
   "peerDependenciesMeta": {
     "@cosyte/hl7": {
+      "optional": true
+    },
+    "@cosyte/ccda": {
       "optional": true
     }
   },
@@ -98,6 +112,7 @@
   "devDependencies": {
     "@arethetypeswrong/cli": "0.18.4",
     "@changesets/cli": "2.31.0",
+    "@cosyte/ccda": "file:vendor/cosyte-ccda-0.0.1.tgz",
     "@cosyte/eslint-config": "^0.0.4",
     "@cosyte/hl7": "file:vendor/cosyte-hl7-0.0.1.tgz",
     "@cosyte/prettier-config": "^0.0.2",
@@ -107,6 +122,7 @@
     "@cosyte/vitest-config": "^0.0.2",
     "@types/node": "^22.0.0",
     "@vitest/coverage-v8": "4.1.4",
+    "@xmldom/xmldom": "0.9.10",
     "eslint": "10.5.0",
     "fast-check": "3.23.2",
     "prettier": "3.8.3",

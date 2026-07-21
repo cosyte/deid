@@ -17,8 +17,9 @@ but **inverts the reflex** — where a parser is liberal on input, a de-identifi
 > always the consumer's.
 
 > **Status:** pre-alpha (`0.0.x`), not yet published to npm. This release ships the **format-agnostic
-> core** plus the first format binding — the **HL7 v2 adapter** (`@cosyte/deid/hl7`). The remaining
-> per-format adapters (C-CDA, FHIR, X12, NCPDP, DICOM) land in subsequent phases.
+> core** plus two format bindings — the **HL7 v2 adapter** (`@cosyte/deid/hl7`) and the **C-CDA adapter**
+> (`@cosyte/deid/ccda`). The remaining per-format adapters (FHIR, X12, NCPDP, DICOM) land in subsequent
+> phases.
 
 ## Install
 
@@ -104,6 +105,48 @@ as do **NTE-3** comments. Structured clinical values, units, codes, and statuses
 visit segments, patient-related _dates_ (OBR/DG1/PV1 timestamps), _visit identifiers_ (PV1-19), and
 _provider_ names (PV1-7/8, OBR-16) are a deferred later phase; the address generalization keeps only the
 Safe Harbor 3-digit ZIP.
+
+## De-identify a C-CDA document
+
+The `@cosyte/deid/ccda` adapter locates PHI **structurally** in a parsed [`@cosyte/ccda`](https://github.com/cosyte/ccda)
+document — a `<name>` under `recordTarget/patientRole/patient` is the patient's name because the CDA
+standard says so — and returns a transformed `CcdaDocument` plus the value-free manifest. `@cosyte/ccda`
+is an **optional peer dependency**; the adapter reaches the CDA DOM only through its hardened
+`parseSecureXml` and re-serializes the node it hands back, so the core stays third-party-dependency-free.
+
+```bash
+npm install @cosyte/deid @cosyte/ccda
+```
+
+```ts
+import { parseCcda } from "@cosyte/ccda";
+import { deidentifyCcda } from "@cosyte/deid/ccda";
+import { createDeidContext } from "@cosyte/deid";
+
+const context = createDeidContext({ key: process.env.DEID_KEY! });
+const { document, manifest } = deidentifyCcda(parseCcda(xml), { context });
+
+document.toString(); // spec-clean, de-identified C-CDA XML
+// recordTarget/guardian/author/informant/custodian names, telecom, ids, addresses, birthTime, and
+// participation/encounter dates → transformed; section narrative <text> and unknown elements fail
+// closed. Coded clinical entries — codes, values, units, statuses, dosing periods — survive untouched.
+```
+
+**What it covers.** The structured PHI loci of the CDA **header participations** — `recordTarget`
+(patient) + nested `guardian`, and `author` / `dataEnterer` / `informant` / `authenticator` /
+`legalAuthenticator` / `participant` / `custodian` / `documentationOf` / `componentOf` (relatives /
+providers / contacts). Person `<name>` / `<telecom>` removed; person-role `<id>` pseudonymized (SSN-rooted
+id removed, assigning root retained); `<addr>` reduced to the safe 3-digit ZIP; `<birthTime>` and
+participation / encounter dates generalized to year. **Fail closed** everywhere else: section narrative
+`<text>` blocks and the unstructured `nonXMLBody` are blocked; a value-bearing element that is neither
+mapped PHI nor recognized coded structure is blocked; foreign / `sdtc` elements are blocked. The clinical
+`structuredBody` entries are **retained untouched** (the over-scrub guard) — a `<name>` there is a drug
+or material name, not a person.
+
+**Known limitations (this release).** Narrative is block-only (no scrub); within the **retained**
+clinical body, entry service _dates_, entry _ids_, in-entry _performer_ names, and _family-history_
+relative demographics are a deferred later phase (mirroring the HL7 adapter's boundary); the document
+`id`/`code`/`title` envelope is retained (like HL7's MSH).
 
 ## The design in five pieces
 

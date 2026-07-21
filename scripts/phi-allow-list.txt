@@ -57,6 +57,29 @@ NAME ZZLABGIVEN
 NAME ZZLABSTREET
 NAME ZZLABCITY
 
+# --- Synthetic C-CDA header person-name / street / city / county tokens (test/fixtures/ccda) ---
+# Patient + guardian + author + informant person names, organization names, and address parts. All
+# obviously-synthetic ZZ-tagged tokens — checked structurally by the C-CDA header detector.
+NAME ZZPATGIVEN
+NAME ZZPATFAMILY
+NAME ZZGUARDGIVEN
+NAME ZZGUARDFAMILY
+NAME ZZAUTHGIVEN
+NAME ZZAUTHFAMILY
+NAME ZZINFGIVEN
+NAME ZZINFFAMILY
+NAME ZZAUTHORG
+NAME ZZCUSTODIANORG
+NAME ZZCCDASTREET
+NAME ZZCCDACITY
+NAME ZZCOUNTY
+NAME ZZGUARDSTREET
+NAME ZZGUARDCITY
+NAME ZZAUTHSTREET
+NAME ZZAUTHCITY
+NAME ZZCUSTODIANSTREET
+NAME ZZCUSTODIANCITY
+
 # --- Synthetic dates of birth / death (HL7 YYYYMMDD) ---
 DOB 19900215
 DOB 20211130

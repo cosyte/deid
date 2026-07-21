@@ -19,13 +19,17 @@
  *     HL7 v2 STRUCTURED (`scanHl7Structured`): every PID/NK1/GT1/IN1/IN2 PHI
  *       field (names, DOB, SSN, MRN/member id, street/city, phone) is checked
  *       against the synthetic allow-list — a real value there is a HARD HIT.
+ *     C-CDA STRUCTURED (`scanCcdaStructured`): every header person-name / address
+ *       element (given/family/prefix/suffix/name/street/city/county) and
+ *       `birthTime` is checked against the allow-list — a real value there is a
+ *       HARD HIT. Scoped to the header (a body `<name>` can be a drug name).
  *
  *   ⚠  Still-open gaps (do NOT treat green as "no PHI" for these): HL7 free text
- *      (OBX-5 / NTE-3 narrative) is covered only by the FLOOR; and the other
- *      consumer formats (C-CDA / FHIR / X12 / NCPDP / DICOM) have NO structured
- *      detector yet — add one with each format's phase (roadmap §7, the eventual
- *      union scanner). Add positive tests proving each new detector CATCHES real
- *      names / DOBs / ids.
+ *      (OBX-5 / NTE-3 narrative), C-CDA narrative `<text>` blocks and `<id>`
+ *      extensions, and the other consumer formats (FHIR / X12 / NCPDP / DICOM)
+ *      have NO structured detector yet — add one with each format's phase
+ *      (roadmap §7, the eventual union scanner). Add positive tests proving each
+ *      new detector CATCHES real names / DOBs / ids.
  *
  *   Worked examples of structured, format-aware detection live in the sibling
  *   parsers — read one before you start:
@@ -479,6 +483,69 @@ function scanHl7Structured(path: string, content: string, allow: AllowList, hits
 }
 
 // ---------------------------------------------------------------------------
+// C-CDA structured, header-element PHI detection (the deid-specific gate, DEID-3)
+// ---------------------------------------------------------------------------
+
+// C-CDA header person-PHI elements whose *text* must be a declared-synthetic token. Scoped to the
+// document header (everything before the clinical body) because a `<name>` there is always a person or
+// organization name — a `<name>` inside the clinical body can be a drug / material name, so scanning it
+// would false-positive on legitimate clinical content. Mirrors src/ccda/locus-map.ts (the person loci).
+// (Person-role `<id>` extensions are intentionally NOT checked structurally: a regex cannot tell a
+// patient MRN from a `templateId` / `typeId` / document-envelope id without the parser, so ids are
+// covered by the SSN floor + the synthetic-fixture discipline, like HL7 free text.)
+const CCDA_HEADER_TEXT_ELEMENTS: readonly string[] = [
+  "given",
+  "family",
+  "prefix",
+  "suffix",
+  "name",
+  "streetAddressLine",
+  "city",
+  "county",
+];
+
+/**
+ * Structured C-CDA PHI scan: within the document **header** (before `<structuredBody>` /
+ * `<nonXMLBody>`), check each person-name / address-part element's text — and each `birthTime@value` —
+ * against the synthetic allow-list. Anything not positively declared synthetic is a hit. Pure string
+ * scanning — no parser dependency (matches every sibling scanner).
+ */
+function scanCcdaStructured(path: string, content: string, allow: AllowList, hits: Hit[]): void {
+  if (!content.includes("urn:hl7-org:v3")) return; // not a C-CDA / CDA R2 document
+  // Cut to the header: person `<name>`/`<addr>` before the body are unambiguously person PHI.
+  const bodyAt = content.search(/<(?:\w+:)?structuredBody[\s>]/);
+  const nonXmlAt = content.search(/<(?:\w+:)?nonXMLBody[\s>]/);
+  let end = content.length;
+  if (bodyAt >= 0) end = Math.min(end, bodyAt);
+  if (nonXmlAt >= 0) end = Math.min(end, nonXmlAt);
+  const header = content.slice(0, end);
+  const allowed = syntheticTokens(allow);
+
+  const check = (value: string, locator: string): void => {
+    const v = value.trim();
+    if (v.length === 0) return;
+    if (!allowed.has(v.toUpperCase())) {
+      hits.push({
+        path,
+        segment: locator,
+        value: v,
+        reason: "C-CDA header PHI element value not declared synthetic in the allow-list",
+      });
+    }
+  };
+
+  for (const el of CCDA_HEADER_TEXT_ELEMENTS) {
+    // Only the element's DIRECT text (`[^<]*`) — an element with child elements (a `<name>` wrapping
+    // `<given>`/`<family>`) yields empty/whitespace here and is checked via those children instead.
+    const re = new RegExp(`<(?:\\w+:)?${el}\\b[^>]*>([^<]*)</(?:\\w+:)?${el}>`, "g");
+    for (const m of header.matchAll(re)) check(m[1] ?? "", `<${el}>`);
+  }
+  for (const m of header.matchAll(/<(?:\w+:)?birthTime\b[^>]*\bvalue="([^"]*)"/g)) {
+    check(m[1] ?? "", "birthTime@value");
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Dispatch
 // ---------------------------------------------------------------------------
 
@@ -505,6 +572,13 @@ function scanTarget(target: Target, allow: AllowList, hits: Hit[]): void {
   // floor above (SSN/email) plus the synthetic-fixture discipline; per-format C-CDA/FHIR/X12/NCPDP/DICOM
   // detectors land with their phases (roadmap §7 — the eventual union scanner).
   scanHl7Structured(target.path, text, allow, hits);
+
+  // The deid-specific C-CDA gate (DEID-3): structured, header-element PHI detection. Runs on any CDA R2
+  // document (HL7 v3 namespace) among src JSDoc snippets and test/fixtures — checks every header
+  // person-name / address-part element and birthTime against the synthetic allow-list. A real name /
+  // DOB in a C-CDA header is a hard hit. (Narrative body text and ids are the known gaps, covered by
+  // the floor + synthetic discipline, per the union-scanner roadmap.)
+  scanCcdaStructured(target.path, text, allow, hits);
 }
 
 // ---------------------------------------------------------------------------
