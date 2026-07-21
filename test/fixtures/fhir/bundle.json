@@ -1,0 +1,145 @@
+{
+  "resourceType": "Bundle",
+  "type": "collection",
+  "entry": [
+    {
+      "fullUrl": "urn:uuid:patient-1",
+      "resource": {
+        "resourceType": "Patient",
+        "id": "pat1",
+        "text": {
+          "status": "generated",
+          "div": "<div xmlns=\"http://www.w3.org/1999/xhtml\">Patient ZZPATNARRATIVE seen on service</div>"
+        },
+        "identifier": [
+          { "system": "http://hospital.example/mrn", "value": "ZZMRNFHIR1" },
+          { "system": "http://hl7.org/fhir/sid/us-ssn", "value": "ZZSSNFHIR1" }
+        ],
+        "active": true,
+        "name": [{ "family": "ZZPATFAMILY", "given": ["ZZPATGIVEN"] }],
+        "telecom": [{ "system": "phone", "value": "555-000-1111", "use": "home" }],
+        "gender": "female",
+        "birthDate": "1990-02-15",
+        "deceasedDateTime": "2021-06-30",
+        "address": [
+          {
+            "line": ["ZZPATSTREET"],
+            "city": "ZZPATCITY",
+            "district": "ZZPATCOUNTY",
+            "state": "MA",
+            "postalCode": "90210"
+          }
+        ],
+        "maritalStatus": {
+          "coding": [
+            { "system": "http://terminology.hl7.org/CodeSystem/v3-MaritalStatus", "code": "M", "display": "Married" }
+          ]
+        },
+        "photo": [{ "contentType": "image/jpeg", "data": "ZZPATPHOTO" }],
+        "contact": [
+          {
+            "relationship": [
+              { "coding": [{ "system": "http://terminology.hl7.org/CodeSystem/v2-0131", "code": "N" }] }
+            ],
+            "name": { "family": "ZZCONTACTREL", "given": ["ZZCONTACTGIVEN"] },
+            "telecom": [{ "system": "phone", "value": "555-000-2222" }],
+            "address": { "line": ["ZZCONTACTSTREET"], "state": "NH", "postalCode": "03601" }
+          }
+        ],
+        "communication": [
+          { "language": { "coding": [{ "system": "urn:ietf:bcp:47", "code": "en-US", "display": "English" }] } }
+        ],
+        "extension": [
+          { "url": "http://hospital.example/local-mrn", "valueString": "ZZEXTMRN" },
+          {
+            "url": "http://hospital.example/nested",
+            "extension": [{ "url": "inner", "valueString": "ZZNESTEDEXTPHI" }]
+          }
+        ],
+        "vendorMotherMaidenName": "ZZVENDORMAIDEN"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:practitioner-1",
+      "resource": {
+        "resourceType": "Practitioner",
+        "id": "prac1",
+        "identifier": [{ "system": "http://hl7.org/fhir/sid/us-npi", "value": "ZZNPI1" }],
+        "name": [{ "family": "ZZDOCFAMILY", "given": ["ZZDOCGIVEN"], "prefix": ["Dr"] }],
+        "telecom": [{ "system": "phone", "value": "555-000-3333" }],
+        "address": [{ "line": ["ZZDOCSTREET"], "city": "ZZDOCCITY", "state": "MA", "postalCode": "02139" }],
+        "gender": "male",
+        "qualification": [
+          {
+            "code": {
+              "coding": [{ "system": "http://terminology.hl7.org/CodeSystem/v2-0360", "code": "MD", "display": "Doctor of Medicine" }]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:related-1",
+      "resource": {
+        "resourceType": "RelatedPerson",
+        "id": "rel1",
+        "patient": { "reference": "Patient/pat1" },
+        "relationship": [
+          { "coding": [{ "system": "http://terminology.hl7.org/CodeSystem/v3-RoleCode", "code": "MTH" }] }
+        ],
+        "name": [{ "family": "ZZRELFAMILY", "given": ["ZZRELGIVEN"] }],
+        "telecom": [{ "system": "email", "value": "zzrel@example.com" }],
+        "birthDate": "1965-11-20"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:observation-1",
+      "resource": {
+        "resourceType": "Observation",
+        "id": "obs1",
+        "status": "final",
+        "category": [
+          { "coding": [{ "system": "http://terminology.hl7.org/CodeSystem/observation-category", "code": "laboratory" }] }
+        ],
+        "code": { "coding": [{ "system": "http://loinc.org", "code": "2951-2", "display": "Sodium [Moles/volume] in Serum or Plasma" }] },
+        "subject": { "reference": "Patient/pat1", "display": "ZZREFDISPLAYNAME" },
+        "performer": [{ "reference": "Practitioner/prac1" }, { "display": "ZZPERFORMERONLYDISPLAY" }],
+        "effectiveDateTime": "2019-03-14T09:32:00Z",
+        "issued": "2019-03-14T10:00:00Z",
+        "identifier": [{ "system": "http://hospital.example/accession", "value": "ZZACCESSION1" }],
+        "note": [{ "text": "ZZOBSNOTEPHI — patient called about results", "authorString": "ZZNOTEAUTHOR" }],
+        "valueQuantity": { "value": 140, "unit": "mmol/L", "system": "http://unitsofmeasure.org", "code": "mmol/L" },
+        "referenceRange": [{ "low": { "value": 135, "unit": "mmol/L" }, "high": { "value": 145, "unit": "mmol/L" } }]
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:communication-1",
+      "resource": {
+        "resourceType": "Communication",
+        "id": "comm1",
+        "status": "completed",
+        "subject": { "type": "Patient", "display": "ZZCOMMSUBJECTDISPLAY" },
+        "payload": [{ "contentString": "ZZCONTENTPHI — please call the patient at 555-000-7777" }]
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:encounter-1",
+      "resource": {
+        "resourceType": "Encounter",
+        "id": "enc1",
+        "status": "finished",
+        "class": { "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode", "code": "AMB" },
+        "subject": { "reference": "Patient/pat1" },
+        "period": { "start": "2019-03-14T08:00:00Z", "end": "2019-03-14T12:00:00Z" },
+        "contained": [
+          {
+            "resourceType": "RelatedPerson",
+            "id": "containedRel",
+            "name": [{ "family": "ZZCONTAINEDREL" }],
+            "telecom": [{ "system": "phone", "value": "555-000-4444" }]
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -17,9 +17,9 @@ but **inverts the reflex** — where a parser is liberal on input, a de-identifi
 > always the consumer's.
 
 > **Status:** pre-alpha (`0.0.x`), not yet published to npm. This release ships the **format-agnostic
-> core** plus two format bindings — the **HL7 v2 adapter** (`@cosyte/deid/hl7`) and the **C-CDA adapter**
-> (`@cosyte/deid/ccda`). The remaining per-format adapters (FHIR, X12, NCPDP, DICOM) land in subsequent
-> phases.
+> core** plus three format bindings — the **HL7 v2 adapter** (`@cosyte/deid/hl7`), the **C-CDA adapter**
+> (`@cosyte/deid/ccda`), and the **FHIR R4 adapter** (`@cosyte/deid/fhir`). The remaining per-format
+> adapters (X12, NCPDP, DICOM) land in subsequent phases.
 
 ## Install
 
@@ -147,6 +147,62 @@ or material name, not a person.
 clinical body, entry service _dates_, entry _ids_, in-entry _performer_ names, and _family-history_
 relative demographics are a deferred later phase (mirroring the HL7 adapter's boundary); the document
 `id`/`code`/`title` envelope is retained (like HL7's MSH).
+
+## De-identify a FHIR R4 resource
+
+The `@cosyte/deid/fhir` adapter locates PHI **structurally** in a parsed [`@cosyte/fhir`](https://github.com/cosyte/fhir)
+resource — a `name` under a `Patient` is the patient's name because FHIR says so — and returns a
+transformed resource model plus the value-free manifest. `@cosyte/fhir` is an **optional peer
+dependency**; the adapter reaches FHIR data only through its exported model and `parseResource` /
+`serializeResource` codec, so the core stays third-party-dependency-free.
+
+```bash
+npm install @cosyte/deid @cosyte/fhir
+```
+
+```ts
+import { parseResource, serializeResource } from "@cosyte/fhir";
+import { deidentifyFhir } from "@cosyte/deid/fhir";
+import { createDeidContext } from "@cosyte/deid";
+
+const context = createDeidContext({ key: process.env.DEID_KEY! });
+const { resource } = parseResource(json);
+const { document, manifest } = deidentifyFhir(resource, { context });
+
+serializeResource(document); // spec-clean, de-identified FHIR JSON
+// Patient/RelatedPerson/Practitioner/Person names, telecom, photo → removed; address → safe 3-digit ZIP;
+// birthDate + every date → year; identifiers pseudonymized by system (a US-SSN identifier removed).
+// Narrative text.div, extension values, and Reference.display fail closed; contained resources and
+// Bundle entries are walked. Clinical resources — Observation values, codes, units, statuses — survive.
+```
+
+FHIR is a **graph of typed resources**, so the map splits by role:
+
+| Scope                                                                                                     | Loci                                                                               | Transform                                                                                                                                  |
+| --------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Person resources** (`Patient` / `RelatedPerson` / `Practitioner` / `Person` + nested `Patient.contact`) | `name`, `telecom`, `photo`, `address`, `birthDate`, dates                          | name/telecom/photo **removed**; `address` → safe **3-digit ZIP** (or `000`); dates → **year**                                              |
+| **Every resource (universal PHI vectors)**                                                                | `identifier`, dates, narrative `text.div`, `extension` values, `Reference.display` | identifier → **surrogate** by `system` (US-SSN **removed**); dates → **year**; narrative / extension values / reference labels **blocked** |
+| **Clinical resources** (`Observation`, `Condition`, …)                                                    | codes, values, units, statuses, reference wiring                                   | **retained untouched** (the over-scrub guard)                                                                                              |
+
+A `Reference.display` (a person label) is blocked; a `Coding.display` (a coded term like `Sodium`) is
+retained — the two are told apart structurally. Contained resources and `Bundle` entries are walked, with
+each resource's role re-derived at its own `resourceType`.
+
+**Fail closed** governs the person sweep and the frontier: a bare unrecognized string at a person
+resource's top level is blocked (an allow-list can never satisfy Safe Harbor category (R)); a `display`
+that is not on a `Coding` is treated as a Reference person-label and blocked — including a display-only
+(`{ display }`) or type+display reference that names no target; every extension value — a complex
+`valueAddress` / `valueHumanName`, a `modifierExtension`, a nested extension, or a primitive-level
+`_`-sibling extension — is dropped; and free-text loci (`note` Annotations, `contentString`, an uncoded
+`valueString`) are blocked (the FHIR analogue of the HL7 adapter's OBX-5-`ST` / NTE fail-closed default).
+
+**Known limitations (this release).** Extension values are block-only (no profile-aware retention — a
+`us-core-*` demographic extension is dropped, deferred to a later policy-profiles phase). Reference
+_wiring_ (`Reference.reference` pointers, resource logical `id`s) is preserved structurally; coordinated
+pseudonymization of resource ids across a corpus is the longitudinal phase. Free-text **prose** loci
+(`note`, `contentString`, uncoded `valueString`) fail closed by default; a semantic (NLP) narrative
+scrub, `contentAttachment` binary content, and person names embedded in non-person resources
+(`Organization.contact.name`, `Location.address`) remain out of scope for this release.
 
 ## The design in five pieces
 
