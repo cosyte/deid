@@ -562,7 +562,17 @@ function scanCcdaStructured(path: string, content: string, allow: AllowList, hit
 const X12_PATIENT_ENTITY_CODES = new Set<string>(["IL", "QC", "03", "QD", "GD", "74", "S1", "S3"]);
 // REF-01 qualifiers whose REF-02 value is a patient identifier (SSN / member / subscriber / group /
 // medical record). Mirrors src/x12/locus-map.ts REF_PHI_QUALIFIERS.
-const X12_REF_PHI_QUALIFIERS = new Set<string>(["SY", "1W", "0F", "1L", "IG", "EA", "23", "6P"]);
+const X12_REF_PHI_QUALIFIERS = new Set<string>([
+  "SY",
+  "1W",
+  "0F",
+  "1L",
+  "IG",
+  "EA",
+  "23",
+  "6P",
+  "1H",
+]);
 
 /**
  * Structured X12 PHI scan: detect the ISA envelope, read its element separator (fixed byte 3) and

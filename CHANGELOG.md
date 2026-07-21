@@ -32,8 +32,11 @@ its public history at `0.0.x`, per the cosyte version ladder (`0.0.x` until firs
     street + city removed, ZIP → safe 3-digit, state retained; `DMG-02` DOB → year; `PER` name + telecom
     removed; `DTP-03`/`DTM-02` dates → year; **`REF`** qualifier-classified (patient / member / subscriber
     / group / medical-record identifier removed or pseudonymized; recognized administrative / provider
-    reference retained; **unknown REF qualifier fails closed** — the "unusual REF qualifier" category (R)
-    frontier); `CLM-01`/`CLP-01` patient account number pseudonymized. The `@cosyte/x12` serializer is
+    reference retained — including `REF*1H` CHAMPUS/TRICARE beneficiary ids reclassified as the
+    individual's PHI; **unknown REF qualifier fails closed** — the "unusual REF qualifier" category (R)
+    frontier); a geographic `N3`/`N4` segment also **fails closed on any unmapped element** (a `N4-06`
+    location identifier is blocked; only state + country are retained); `CLM-01`/`CLP-01` patient account
+    number pseudonymized. The `@cosyte/x12` serializer is
     byte-faithful, so a segment the map does not touch keeps its **verbatim** raw — diagnosis / procedure /
     revenue codes, monetary amounts, and quantities survive the over-scrub test byte-identical.
   - **NCPDP (`@cosyte/deid/ncpdp`).** `deidentifyTelecom(tx, …)` / `deidentifyTelecomString(raw, …)`; plus
@@ -43,9 +46,12 @@ its public history at `0.0.x`, per the cosyte version ladder (`0.0.x` until firs
     pseudonymized, cardholder name removed; Prescriber (`03`) id removed (the roadmap scopes prescriber
     identifiers for NCPDP — a deliberate asymmetry with the X12 provider-retention stance); Coordination of
     Benefits (`05`) other-payer cardholder / group ids pseudonymized, other-payer date → year; header Date
-    of Service → year. A free-text field (`544-FY` DUR, `504-F4` message) and any unmapped / unknown
-    segment **fail closed**; the clinical / financial segments (NDC, quantities, days-supply, pricing, DUR
-    codes) are retained.
+    of Service → year. Fail closed inside a PHI segment too: a free-text field (`544-FY` DUR, `504-F4`
+    message), an **unmapped field in a Patient / Prescriber / Insurance / COB segment** (a `350-HN` patient
+    e-mail, a `359-2A` Medigap id — anything not on the explicit per-segment non-identifier retain list),
+    and any unknown segment are all **blocked**; the clinical / financial segments (NDC, quantities,
+    days-supply, pricing, DUR codes) and the recognized non-identifier fields (gender, state, person code,
+    other-payer amounts) are retained.
   - **NCPDP SCRIPT is deferred** (a documented non-goal of this phase): `@cosyte/ncpdp`'s SCRIPT surface
     cannot be de-identified faithfully through its public API — `serializeScript` emits only the modeled
     fields (a round-trip drops unmodeled XML) and the SCRIPT `Patient` model has no address / phone /

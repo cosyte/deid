@@ -56,6 +56,11 @@ const SENTINELS = [
   "ZZDURPHI",
   "ZZUNKNOWNSEG",
   "20260115", // header Date of Service → generalized to 2026
+  // Unmapped identifier fields INSIDE PHI segments — must fail closed, not ride through:
+  "ZZPATEMAIL", // 350-HN Patient E-Mail (Patient segment, unmapped)
+  "ZZALTPATID", // an alternate patient id (Patient segment, unmapped)
+  "ZZMEDIGAP", // 359-2A Medigap ID (Insurance segment, unmapped)
+  "ZZPRESCRIBERNAME", // Prescriber name (Prescriber segment, unmapped → blocked, provider identity)
 ];
 
 /** Synthetic clinical / financial values that MUST survive byte-identical. */
@@ -103,6 +108,26 @@ describe("NCPDP Telecom structured + fail-closed behavior", () => {
   it("blocks an unknown segment field-by-field (fails closed)", () => {
     const { manifest } = deidentifyTelecomString(loadRaw(), { context: ctx });
     expect(manifest.some((e) => e.locus === "99/ZZ" && e.disposition === "blocked")).toBe(true);
+  });
+
+  it("fails closed on an UNMAPPED identifier field inside a PHI segment (the DEID-5 leak fix)", () => {
+    const { telecom, manifest } = deidentifyTelecomString(loadRaw(), { context: ctx });
+    // A Patient e-mail (HN), an alternate patient id (CW), and a Medigap id (2A) are not in the scrub
+    // map — before the fix they rode through; now each is blocked.
+    for (const [locus] of [["01/HN"], ["01/CW"], ["04/2A"]]) {
+      expect(manifest.some((e) => e.locus === locus && e.disposition === "blocked")).toBe(true);
+    }
+    expect(telecom).not.toContain("ZZPATEMAIL");
+    expect(telecom).not.toContain("ZZMEDIGAP");
+  });
+
+  it("retains recognized non-identifier fields inside PHI segments (gender, person code, COB amount)", () => {
+    const { telecom } = deidentifyTelecomString(loadRaw(), { context: ctx });
+    const tx = parseTelecom(telecom);
+    expect(fieldValue(findSegment(tx.segments, "01"), "C5")).toBe("M"); // gender retained
+    expect(fieldValue(findSegment(tx.segments, "04"), "C3")).toBe("01"); // person code retained
+    expect(fieldValue(findSegment(tx.segments, "05"), "DV")).toBe("1000"); // COB monetary amount retained
+    expect(fieldValue(findSegment(tx.segments, "05"), "7C")).toBe("PAYERID99"); // payer id retained
   });
 
   it("pseudonymizes the patient / cardholder / group identifiers to non-reversible surrogates", () => {

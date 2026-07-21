@@ -133,6 +133,7 @@ export function deidentifyTelecomString(raw: string, options: DeidOptions = {}):
 
 export {
   TELECOM_LOCUS_MAP,
+  TELECOM_SEGMENT_RETAIN_FIELDS,
   TELECOM_FREE_TEXT_FIELDS,
   TELECOM_RETAIN_SEGMENTS,
   type TelecomFieldMode,

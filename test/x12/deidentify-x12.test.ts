@@ -60,6 +60,8 @@ const SENTINELS = [
   "ZZUNKNOWNREF",
   "ZZWEIRDPHI",
   "20260601",
+  "ZZLOCID", // N4-06 location identifier — an unmapped geographic element, fails closed
+  "ZZCHAMPUSID", // REF*1H CHAMPUS/TRICARE beneficiary id — reclassified as PHI, pseudonymized away
   // Provider address / submitter contact are universally scrubbed (a safe over-reach, never a leak).
   "PROVIDER RD",
   "PROVCITY",
@@ -127,6 +129,23 @@ describe("X12 structured behavior", () => {
     });
     expect(classifyRefQualifier("F8")).toEqual({ kind: "retain" });
     expect(classifyRefQualifier("ZZ")).toEqual({ kind: "block" });
+    // REF*1H (CHAMPUS/TRICARE beneficiary id) is the individual's — PHI, not a retained admin reference
+    // (the DEID-5 refuter finding).
+    expect(classifyRefQualifier("1H")).toEqual({
+      kind: "phi",
+      category: C.HEALTH_PLAN_BENEFICIARY,
+    });
+  });
+
+  it("fails closed on an unmapped geographic element (N4-06 location identifier)", () => {
+    const raw = wrap("N4*CITYNAME*OH*44101*US*CY*SECRETLOCID~");
+    const { x12, manifest } = deidentifyX12String(raw, { context: ctx });
+    expect(x12).not.toContain("SECRETLOCID"); // N4-06 blocked
+    expect(x12).not.toContain("CITYNAME"); // N4-01 city blocked
+    expect(x12).toContain("OH"); // N4-02 state retained
+    expect(manifest.some((e) => e.locus.endsWith("N4[0]-6") && e.disposition === "blocked")).toBe(
+      true,
+    );
   });
 
   it("pseudonymizes the CLM-01 patient account number consistently but not reversibly", () => {

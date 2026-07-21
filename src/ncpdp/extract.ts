@@ -25,6 +25,7 @@ import {
   TELECOM_FREE_TEXT_FIELDS,
   TELECOM_LOCUS_MAP,
   TELECOM_RETAIN_SEGMENTS,
+  TELECOM_SEGMENT_RETAIN_FIELDS,
   type TelecomFieldRule,
 } from "./locus-map.js";
 
@@ -123,6 +124,7 @@ export function extractTelecomLoci(tx: TelecomTransaction): TelecomExtraction {
     const fieldMap = TELECOM_LOCUS_MAP[segId];
     const isMapped = fieldMap !== undefined;
     const isRetained = TELECOM_RETAIN_SEGMENTS.has(segId);
+    const retainFields = TELECOM_SEGMENT_RETAIN_FIELDS[segId];
 
     seg.fields.forEach((field, fieldIndex) => {
       if (field.value.length === 0) return;
@@ -143,10 +145,19 @@ export function extractTelecomLoci(tx: TelecomTransaction): TelecomExtraction {
         return;
       }
 
-      if (isMapped) {
+      if (isMapped && fieldMap !== undefined) {
         const rule = fieldMap[field.id];
-        if (rule !== undefined) emitRule(out, segId, field.id, field.value, rule, coord);
-        return; // a non-mapped field in a PHI segment is a recognized non-identifier — retained
+        if (rule !== undefined) {
+          emitRule(out, segId, field.id, field.value, rule, coord);
+          return;
+        }
+        // Fail closed INSIDE a PHI segment: a populated field that is neither scrubbed nor on the
+        // segment's explicit non-identifier retain list is a candidate identifier (Safe Harbor (R)) —
+        // blocked, never passed through. This closes the "unmapped identifier field" leak: a Patient
+        // e-mail (350-HN), a Medigap id (359-2A), or any un-enumerated id cannot ride through in the clear.
+        if (retainFields !== undefined && retainFields.has(field.id)) return; // recognized non-identifier
+        blockField(out, segId, field.id, field.value, coord);
+        return;
       }
       if (isRetained) return; // recognized clinical / financial segment — retained untouched
       blockField(out, segId, field.id, field.value, coord); // unknown segment → fail closed

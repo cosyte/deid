@@ -219,6 +219,7 @@ const REF_PHI_QUALIFIERS: Readonly<Record<string, SafeHarborCategory>> = {
   EA: C.MRN, // Medical Record Identification Number
   "23": C.ACCOUNT, // Client Number
   "6P": C.HEALTH_PLAN_BENEFICIARY, // Group Number
+  "1H": C.HEALTH_PLAN_BENEFICIARY, // CHAMPUS/TRICARE Identification Number — the individual's beneficiary id
 };
 
 /**
@@ -249,7 +250,6 @@ const REF_RETAIN_QUALIFIERS: ReadonlySet<string> = new Set<string>([
   "1B", // Blue Shield Provider Number
   "1C", // Medicare Provider Number
   "1D", // Medicaid Provider Number
-  "1H", // CHAMPUS Identification Number
   "FY", // Claim Office Number
   "PQ", // Payee Identification
   "RB", // Rate Code Number
@@ -335,6 +335,37 @@ export const X12_UNIVERSAL_SEGMENT_RULES: Readonly<Record<string, readonly X12El
       { element: 2, mode: "date", category: C.DATES }, // DTM-02 Date → year
     ],
   });
+
+/**
+ * The **geographic** segments (`N3` address lines, `N4` city/state/ZIP) whose *unmapped* elements must
+ * **fail closed** — unlike the demographic segments (`DMG`/`PER`), a geographic segment can carry an
+ * un-enumerated location identifier (`N4-06` Location Identifier could be a county / geocode). So for
+ * these segments the extractor blocks any populated element that is neither a mapped rule nor on the
+ * per-segment {@link X12_GEO_RETAIN_ELEMENTS} safe list — rather than retaining it. `N3` retains nothing
+ * (both lines are removed); `N4` retains only the state and country (the Safe Harbor geographic level
+ * that is kept), so the city, ZIP, and any finer location identifier are handled or blocked.
+ */
+export const X12_GEO_SEGMENTS: ReadonlySet<string> = new Set<string>(["N3", "N4"]);
+
+/**
+ * The `N3` / `N4` element positions that are recognized **non-identifying** geography and are retained:
+ * `N4-02` (state) and `N4-04` (country). Every other populated element of a geographic segment is either
+ * a mapped rule (city removed, ZIP generalized) or an unmapped element that **fails closed** (blocked).
+ *
+ * @example
+ * ```ts
+ * import { X12_GEO_RETAIN_ELEMENTS } from "@cosyte/deid/x12";
+ *
+ * X12_GEO_RETAIN_ELEMENTS.N4?.has(2); // => true  (state — retained)
+ * X12_GEO_RETAIN_ELEMENTS.N4?.has(6); // => false (a location identifier — blocked)
+ * ```
+ */
+export const X12_GEO_RETAIN_ELEMENTS: Readonly<Record<string, ReadonlySet<number>>> = Object.freeze(
+  {
+    N3: new Set<number>(),
+    N4: new Set<number>([2, 4]),
+  },
+);
 
 /**
  * Segments whose `-01` element is a **patient account / control number** (Safe Harbor category (J)),

@@ -121,6 +121,69 @@ export const TELECOM_LOCUS_MAP: Readonly<
 });
 
 /**
+ * The **recognized non-identifier fields** retained within each mapped PHI segment — the positive
+ * complement to {@link TELECOM_LOCUS_MAP} that closes the fail-closed frontier *inside* a PHI segment.
+ *
+ * A Patient / Prescriber / Insurance / COB segment carries many fields; the scrub map names only the
+ * identifiers it transforms. Without this list an **unmapped** field in one of those segments would ride
+ * through untouched — and the NCPDP standard defines identifier fields the scrub map does not enumerate
+ * (e.g. `350-HN` Patient E-Mail, `359-2A` Medigap ID, a `990-MA`-style alternate id). So the extractor
+ * treats a populated field in a PHI segment that is **neither** scrubbed **nor** on this retain list as a
+ * candidate identifier and **blocks it** (Safe Harbor category (R)). This list therefore enumerates only
+ * the fields that are positively **non-identifying** — coded demographics (gender, state, relationship,
+ * place of service, smoker/pregnancy indicators, id-type qualifiers), non-patient payer references, and
+ * monetary amounts / counts — so removing anything else can never destroy a clinical/financial value.
+ *
+ * Grounded in the NCPDP Telecommunication Standard vD.0 segment field lists and the sibling
+ * `@cosyte/ncpdp` `FIELD_NAMES` registry.
+ *
+ * @example
+ * ```ts
+ * import { TELECOM_SEGMENT_RETAIN_FIELDS } from "@cosyte/deid/ncpdp";
+ *
+ * TELECOM_SEGMENT_RETAIN_FIELDS["01"]?.has("C5"); // => true  (gender — retained)
+ * TELECOM_SEGMENT_RETAIN_FIELDS["01"]?.has("HN"); // => false (patient email — blocked)
+ * ```
+ */
+export const TELECOM_SEGMENT_RETAIN_FIELDS: Readonly<Record<string, ReadonlySet<string>>> =
+  Object.freeze({
+    // Patient (01): coded demographics / clinical indicators — never an identifier.
+    "01": new Set<string>([
+      "C5", // 305-C5 Patient Gender Code
+      "CO", // 324-CO Patient State/Province (the Safe Harbor geographic level that is retained)
+      "C6", // 306-C6 Patient Relationship Code
+      "C7", // 307-C7 Place of Service
+      "CX", // 331-CX Patient ID Qualifier (the type code for the pseudonymized CY — metadata)
+      "1C", // 384-4X-adjacent smoker / non-smoker code family
+      "1D", // pregnancy indicator
+      "4X", // 384-4X Patient Residence (a coded residence type, not an address)
+    ]),
+    // Prescriber (03): the id qualifier only; the prescriber id (DB) is removed and any name/telecom
+    // field falls through to a fail-closed block (provider identity is not clinical data).
+    "03": new Set<string>(["EZ"]), // 466-EZ Prescriber ID Qualifier
+    // Insurance (04): the relationship + eligibility codes (not identifiers).
+    "04": new Set<string>([
+      "C3", // 303-C3 Person Code (01/02/03 relationship indicator)
+      "CE", // 309-CE Eligibility Clarification Code
+    ]),
+    // Coordination of Benefits (05): non-patient payer references, qualifiers, counts, and monetary
+    // amounts — the financial/administrative fields that must survive; the patient's other-payer
+    // cardholder (NU) and group (MJ) ids and the other-payer date (E8) are scrubbed by the map.
+    "05": new Set<string>([
+      "4C", // Coordination Of Benefits / Other Payments Count
+      "5C", // Other Payer Coverage Type
+      "6C", // Other Payer ID Qualifier
+      "7C", // Other Payer ID (a payer identifier, not the patient's)
+      "HC", // Other Payer Amount Paid Qualifier
+      "DV", // Other Payer Amount Paid (monetary)
+      "6E", // Other Payer-Patient Responsibility Amount Qualifier
+      "7E", // Other Payer-Patient Responsibility Amount (monetary)
+      "NT", // Other Payer ID Count
+      "MH", // Other Payer Processor Control Number (plan routing, not the patient)
+    ]),
+  });
+
+/**
  * NCPDP Telecom **free-text** field ids that carry human prose and therefore any of the 18 categories —
  * blocked by default (roadmap §4.5), never scrubbed by a naive pass, wherever they appear (including
  * inside an otherwise-retained clinical / response segment). `544-FY` is the DUR free-text message and

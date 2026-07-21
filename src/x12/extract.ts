@@ -24,6 +24,8 @@ import { SAFE_HARBOR_CATEGORIES, type SafeHarborCategory } from "../categories.j
 import type { GenericLocus } from "../locus.js";
 import {
   X12_ACCOUNT_SEGMENTS,
+  X12_GEO_RETAIN_ELEMENTS,
+  X12_GEO_SEGMENTS,
   X12_RETAIN_SEGMENTS,
   X12_UNIVERSAL_SEGMENT_RULES,
   categoryForNm1IdQualifier,
@@ -213,6 +215,32 @@ function handleAccount(out: X12Extraction, seg: X12Segment, pos: SegPos): void {
   emitId(out, seg, pos, 1, SAFE_HARBOR_CATEGORIES.ACCOUNT);
 }
 
+/**
+ * Handle a **geographic** segment (`N3` / `N4`) with a fail-closed sweep: every populated element is
+ * either applied by its mapped rule (city removed, ZIP generalized), retained if on the segment's
+ * non-identifier safe list (`N4-02` state, `N4-04` country), or **blocked** — so an un-enumerated
+ * location identifier (`N4-06`) can never ride through in the clear.
+ */
+function handleGeoSegment(
+  out: X12Extraction,
+  seg: X12Segment,
+  pos: SegPos,
+  rules: readonly X12ElementRule[],
+): void {
+  const ruleByElement = new Map<number, X12ElementRule>();
+  for (const rule of rules) ruleByElement.set(rule.element, rule);
+  const retain = X12_GEO_RETAIN_ELEMENTS[seg.id] ?? new Set<number>();
+  for (let n = 1; n < seg.elements.length; n += 1) {
+    if (!has(seg, n)) continue;
+    const rule = ruleByElement.get(n);
+    if (rule !== undefined) {
+      emitRule(out, seg, pos, rule);
+    } else if (!retain.has(n)) {
+      blockElement(out, seg, pos, n); // unmapped geographic element → fail closed
+    }
+  }
+}
+
 /** Fail closed on an unknown segment: block every populated element (unrecognized structure). */
 function handleUnknown(out: X12Extraction, seg: X12Segment, pos: SegPos): void {
   for (let n = 1; n < seg.elements.length; n += 1) blockElement(out, seg, pos, n);
@@ -235,6 +263,13 @@ function handleSegment(out: X12Extraction, seg: X12Segment, pos: SegPos): void {
   }
   const universal = X12_UNIVERSAL_SEGMENT_RULES[id];
   if (universal !== undefined) {
+    // Geographic segments fail closed on unmapped elements (a location identifier could leak); the
+    // demographic segments (DMG/PER/DTP/DTM) carry only non-identifier codes in their unmapped
+    // positions and retain them (the over-scrub guard), matching the HL7 adapter.
+    if (X12_GEO_SEGMENTS.has(id)) {
+      handleGeoSegment(out, seg, pos, universal);
+      return;
+    }
     for (const rule of universal) emitRule(out, seg, pos, rule);
     return;
   }
