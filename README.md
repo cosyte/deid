@@ -383,6 +383,50 @@ a **k-anonymity indicator** — is computed **only** over class sizes _you_ supp
 of quasi-identifier values) and is stamped a descriptive input, never a verdict.
 `formatExpertDeterminationSupportReport(report)` renders the same facts as Markdown for a statistician.
 
+## Policy profiles — reusable presets, widen-never-narrow
+
+Two named presets ship, and `defineDeidProfile()` derives a per-site profile that can only ever
+**tighten** the base — never loosen it.
+
+```ts
+import {
+  SAFE_HARBOR_PROFILE,
+  LIMITED_DATA_SET_PROFILE,
+  defineDeidProfile,
+  profileOptions,
+  SAFE_HARBOR_CATEGORIES,
+  createDeidContext,
+} from "@cosyte/deid";
+
+// The fail-closed default (dates → year, the (R) catch-all blocked).
+SAFE_HARBOR_PROFILE.standard; // => "safe-harbor"
+
+// A longitudinal research preset: dates are DATE-SHIFTED, not generalized. Deliberately less
+// protective than Safe Harbor → NOT labelled "safe-harbor", requires a keyed per-patient context, and
+// is NOT a certified de-identification (nor, on its own, a §164.514(e) Limited Data Set — that needs a
+// Data Use Agreement, which is yours).
+LIMITED_DATA_SET_PROFILE.requiresContext; // => true
+
+// A per-site profile may only move a category to an equal-or-STRONGER transform; a weakening override
+// is a fatal DEID_PROFILE_INVALID.
+const strict = defineDeidProfile({
+  name: "site-strict",
+  transforms: { [SAFE_HARBOR_CATEGORIES.MRN]: "redact" }, // pseudonymize → redact (stronger): OK
+});
+
+const ctx = createDeidContext({ key: process.env.DEID_KEY! });
+const opts = profileOptions(strict, ctx); // pass straight to any adapter
+```
+
+## Known limitations & honesty
+
+`@cosyte/deid` **transforms per a policy and evidences what it did — it never certifies**. Read
+[`docs-content/limitations.md`](docs-content/limitations.md) before relying on it for anything that
+leaves your control: the fail-closed posture, structured-core-only (free text is block-by-default),
+**DICOM metadata-only** (burned-in pixels flagged, not cleaned), **NCPDP SCRIPT deferred**, the BYO
+free-text redactor is the consumer's responsibility, and the Expert-Determination report **makes no
+determination**.
+
 ## The design in five pieces
 
 - **Policy engine** — `safe-harbor` built in; `defineDeidPolicy()` to deviate deliberately.

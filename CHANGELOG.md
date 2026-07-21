@@ -14,6 +14,50 @@ its public history at `0.0.x`, per the cosyte version ladder (`0.0.x` until firs
 
 ### Added
 
+- **DEID-10 — release hardening (roadmap §Phase 10): policy profiles, a non-vacuous leak/over-scrub
+  corpus + pipeline fuzz, a publish dry-run, and the honesty docs.** The final roadmap phase; the six
+  format adapters, the longitudinal layer, the free-text BYO interface, and the ED report are unchanged.
+  - **Policy profiles.** `SAFE_HARBOR_PROFILE` (the fail-closed default) and `LIMITED_DATA_SET_PROFILE`
+    (a longitudinal research preset that **date-shifts** dates instead of generalizing — deliberately
+    **less** protective, so it is **not** labelled `safe-harbor`, **requires** a keyed per-patient
+    context, and is **not** a certified de-identification nor, on its own, a HIPAA §164.514(e) Limited
+    Data Set). `defineDeidProfile()` derives a per-site profile under a fail-closed **widen-never-narrow**
+    contract — a category may only move to an equal-or-**stronger** transform; a weakening override is a
+    fatal `DEID_PROFILE_INVALID`. `profileOptions()` composes a profile into adapter `DeidOptions`. New
+    public surface: `SAFE_HARBOR_PROFILE`, `LIMITED_DATA_SET_PROFILE`, `defineDeidProfile`,
+    `profileOptions`, and the types `DeidProfile`, `DeidProfileSpec`, `DeidStandard`.
+  - **Consolidated leak/over-scrub corpus + pipeline fuzz, gating CI (`test/corpus/`).** One suite runs
+    the zero-leak and clinical-survivor gates across **all six** formats, proven **non-vacuous** two
+    ways: every sentinel is asserted present in the _original_ wire (pre-condition), and a sentinel
+    re-injected into a de-identified wire is _caught_ by the same sweep (tamper). Adds a pipeline fuzz —
+    truncated fixtures never leak a full seeded sentinel; arbitrary byte-flips always terminate with a
+    string or a bounded rejection (never a hang/OOM).
+  - **Publish dry-run / release-shape smoke (`pnpm smoke`).** Loads **every** published subpath
+    (`.`/`hl7`/`ccda`/`fhir`/`x12`/`ncpdp`/`dicom`) from the built `dist/` in **both** ESM and CJS,
+    verifies each headline export, and asserts no leak — a CI gate after `build`, alongside `attw`.
+  - **The tsup shared-core chunk fix (`splitting: true`).** Each built subpath previously inlined its own
+    copy of the core, so a `DeidContext` created via the root entry and used with a per-format
+    `deidentify*` resolved to a _different_ module-private `WeakMap` registry → a fail-closed
+    `DEID_NO_KEY` throw (it never leaked, but broke the documented "one context, any subpath" DX).
+    Splitting emits the core (context, transforms, engine, manifest) as **one** shared chunk imported by
+    every entry, so a single `DeidContext` registry is shared across all seven subpaths in ESM and CJS.
+  - **Two date-shift fixes.** (1) ISO-datetime shifting is now **timezone-independent**: only the
+    calendar-date portion is shifted (UTC math) and the time-of-day + zone travel through verbatim, so
+    the same input yields the same output on every host regardless of `TZ` (the old path parsed a
+    zoneless datetime as _local_ time and re-emitted UTC). (2) A `maxShiftDays` that floors to **0** now
+    **fails closed** with the new fatal `DEID_CONTEXT_INVALID` — a zero-bound shift pins every offset to
+    0, silently emitting the original real dates (a no-op shift is a leak).
+  - **Honesty docs.** A new `docs-content/limitations.md` (the Known Limitations / honesty page) leads
+    with _transforms per policy, never certifies; Safe Harbor implemented, Expert Determination supported
+    not rendered; structured core only, free text block-by-default; DICOM metadata-only, pixel hazard
+    flagged; NCPDP SCRIPT deferred; the ED report makes no determination; the LDS profile is not
+    certified_ — wired into the docs sidebar.
+  - **Fatal codes (additions-only):** `DEID_CONTEXT_INVALID`, `DEID_PROFILE_INVALID`. The stable code
+    stability snapshot is updated deliberately.
+  - **Founder-gated tail:** the actual `npm publish` and the public-repo flip (`PUB-FLIP`) remain the two
+    standing human stops — this phase proves the package is release-shaped (dry-run only), it does not
+    publish or flip.
+
 - **DEID-9 — Expert-Determination _support_ report (never certification).** A new value-free reporting
   layer over the manifest every adapter emits (roadmap §Phase 9). `buildExpertDeterminationSupportReport`
   structures one manifest (or a corpus of manifests) into the facts a statistician reasons about for a

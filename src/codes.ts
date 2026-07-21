@@ -38,6 +38,24 @@ export const FATAL_CODES = {
    * dates under a Safe Harbor claim. (Roadmap §Phase 7; the fatal set is additions-only — §Phase 1.)
    */
   DEID_POLICY_INVALID: "DEID_POLICY_INVALID",
+  /**
+   * A {@link DeidContext} was configured with an invalid parameter that would silently weaken
+   * de-identification — most importantly a `maxShiftDays` that floors to **0**, which pins **every**
+   * per-patient date-shift offset to zero, so a `date-shift` policy would emit the **original real
+   * dates** under a research label. A no-op shift is a leak, so the engine rejects the degenerate
+   * configuration at construction rather than silently shipping unshifted dates. (Additions-only fatal
+   * — §Phase 1; §Phase 10 release hardening.)
+   */
+  DEID_CONTEXT_INVALID: "DEID_CONTEXT_INVALID",
+  /**
+   * A {@link DeidProfile} spec violates the **widen-never-narrow** contract: a per-site profile derived
+   * from a base profile may only move a category to an **equal-or-stronger** transform (more removal,
+   * never less), and may never re-weaken a category the base scrubs. A profile that would *reduce* the
+   * de-identification strength of any category is rejected, so a site preset can only ever tighten — not
+   * quietly loosen — the base standard's protection. (Additions-only fatal — §Phase 10 release
+   * hardening; roadmap §Phase 10 policy profiles.)
+   */
+  DEID_PROFILE_INVALID: "DEID_PROFILE_INVALID",
 } as const;
 
 /**

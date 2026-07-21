@@ -18,26 +18,36 @@ never rendered.
 
 ## Status
 
-- **DEID-1…DEID-9 shipped.** Pre-alpha `0.0.x`, not yet published to npm. `src/` carries the
-  format-agnostic core (DEID-1: the policy engine `deidentify` / `SAFE_HARBOR_POLICY` /
-  `defineDeidPolicy`, the five `node:crypto`-backed transforms, the 18-category Safe Harbor model, the
-  fail-closed rule, the value-free manifest) plus **five per-format adapters** on the core's generic locus
-  model: **HL7 v2** (`@cosyte/deid/hl7`, DEID-2), **C-CDA** (`@cosyte/deid/ccda`, DEID-3), **FHIR R4**
-  (`@cosyte/deid/fhir`, DEID-4), and — DEID-5 — **X12 EDI** (`@cosyte/deid/x12`) and **NCPDP Telecom**
-  (`@cosyte/deid/ncpdp`). Each format's parser is an **optional peer dep** consumed only from its subpath
-  (vendored `pnpm pack` tarballs pre PUB-FLIP). **Remaining:** DICOM orchestration (DEID-6) and NCPDP
-  SCRIPT (deferred — its lossy serialize + address-less `Patient` model block a faithful structural
-  de-id through the current parser surface). **DEID-7** adds the format-agnostic **longitudinal layer**
-  over all six adapters: the corpus registry (`createDeidRegistry`) for cross-document consistency
-  (same patient → same offset/dates, same id → same pseudonym, corpus-wide), the formalized key
-  contract (consumer-supplied key, fail-closed `DEID_NO_KEY`, rotation = intentional linkage breakage),
-  and the `DEID_POLICY_INVALID` label guard (date-shift may not wear the `safe-harbor` label). **DEID-9**
-  adds the **Expert-Determination _support_ report** (`buildExpertDeterminationSupportReport` /
-  `formatExpertDeterminationSupportReport`): a value-free structuring of the manifest — per-locus
-  disposition, 18-category coverage, the retained-quasi-identifier inventory, and an _optional,
-  caller-supplied_ k-anonymity indicator — that **supports** a HIPAA §164.514(b)(1) Expert Determination
-  and **renders none** (`determination: null`, a prominent disclaimer, no fabricated risk score).
-  **Third-party runtime deps: zero (`node:crypto` only).**
+- **DEID-1…DEID-10 shipped — the roadmap is complete.** Pre-alpha `0.0.x`, not yet published to npm.
+  `src/` carries the format-agnostic core (DEID-1: the policy engine `deidentify` / `SAFE_HARBOR_POLICY`
+  / `defineDeidPolicy`, the five `node:crypto`-backed transforms, the 18-category Safe Harbor model, the
+  fail-closed rule, the value-free manifest) plus **all six per-format adapters** on the core's generic
+  locus model: **HL7 v2** (`@cosyte/deid/hl7`, DEID-2), **C-CDA** (`@cosyte/deid/ccda`, DEID-3),
+  **FHIR R4** (`@cosyte/deid/fhir`, DEID-4), **X12 EDI** (`@cosyte/deid/x12`) and **NCPDP Telecom**
+  (`@cosyte/deid/ncpdp`) (DEID-5), and **DICOM** (`@cosyte/deid/dicom`, DEID-6 — the one adapter that
+  **delegates** to `@cosyte/dicom`'s PS3.15 Annex E pass, metadata-only, burned-in pixels flagged not
+  cleaned). Each format's parser is an **optional peer dep** consumed only from its subpath (vendored
+  `pnpm pack` tarballs pre PUB-FLIP). **NCPDP SCRIPT remains deferred** — its lossy serialize +
+  address-less `Patient` model block a faithful structural de-id through the current parser surface.
+  **DEID-7** adds the format-agnostic **longitudinal layer** over all six adapters: the corpus registry
+  (`createDeidRegistry`) for cross-document consistency, the formalized key contract (consumer-supplied
+  key, fail-closed `DEID_NO_KEY`, rotation = intentional linkage breakage), and the `DEID_POLICY_INVALID`
+  label guard (date-shift may not wear the `safe-harbor` label). **DEID-8** adds the free-text BYO
+  redaction interface (block-by-default; a consumer redactor is consumer-asserted, never re-verified).
+  **DEID-9** adds the **Expert-Determination _support_ report** (`buildExpertDeterminationSupportReport`
+  / `formatExpertDeterminationSupportReport`): a value-free structuring of the manifest that **supports**
+  a HIPAA §164.514(b)(1) Expert Determination and **renders none** (`determination: null`, a prominent
+  disclaimer, no fabricated risk score). **DEID-10** is release hardening: **policy profiles**
+  (`SAFE_HARBOR_PROFILE`, `LIMITED_DATA_SET_PROFILE`, `defineDeidProfile` under a fail-closed
+  **widen-never-narrow** contract, `profileOptions`); a **consolidated leak/over-scrub corpus + pipeline
+  fuzz** gating CI across all six formats, proven **non-vacuous** (sentinels present pre-de-id + a
+  re-injected sentinel is caught); a **release smoke** (`pnpm smoke`) that loads every subpath in ESM+CJS
+  against the built `dist/`; a `docs-content/limitations.md` **honesty doc**; the **tsup shared-core
+  chunk fix** (`splitting: true`, so one `DeidContext` registry is shared across subpaths — mixing
+  `createDeidContext` with a per-format `deidentify*` no longer throws a fail-closed `DEID_NO_KEY`); and
+  two date-shift fixes (timezone-independent ISO-datetime shifting; `maxShiftDays: 0` now fails closed
+  with `DEID_CONTEXT_INVALID`). **Third-party runtime deps: zero (`node:crypto` only).** The two standing
+  human gates remain: `npm publish` and the public-repo flip (**`PUB-FLIP`**).
 
 ## Tech Stack (the shared `@cosyte/*` standard)
 
