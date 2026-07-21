@@ -79,6 +79,15 @@ export const DEID_DISPOSITION_CODES = {
   /** Fail-closed: a free-text locus was blocked by default (no naive regex scrub). */
   DEID_FREETEXT_BLOCKED: "DEID_FREETEXT_BLOCKED",
   /**
+   * A free-text locus was redacted **by a consumer-supplied BYO redactor** (roadmap §Phase 8), not by
+   * the library. The library ships **no** NLP/PHI-detection engine; it orchestrates the consumer's
+   * redactor at free-text loci and records the outcome here. This code is **consumer-asserted, never a
+   * library guarantee**: "no findings" from a BYO redactor is not an attestation, and a redactor's
+   * completeness is the consumer's responsibility (Expert-Determination territory — §2.2). The
+   * structural PHI removal the format adapters perform is unaffected — this covers only the free *prose*.
+   */
+  DEID_FREETEXT_CONSUMER_REDACTED: "DEID_FREETEXT_CONSUMER_REDACTED",
+  /**
    * A generalization retained a coarse residual (a kept year, a retained safe 3-digit ZIP prefix).
    * Surfaced so a human can apply the §164.514(b)(2)(ii) actual-knowledge test with the facts present.
    */

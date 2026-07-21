@@ -6,7 +6,8 @@
  * index-aligned (both preserve extraction order).
  *
  * Removal is clean: a redacted name / blocked narrative becomes an empty element (`<name/>`,
- * `<text/>`); a redacted telecom loses its `@value`; a generalized date keeps only its year; a
+ * `<text/>`) — while a **BYO-redacted** narrative (§Phase 8) keeps the redactor's prose as the element's
+ * text; a redacted telecom loses its `@value`; a generalized date keeps only its year; a
  * pseudonymized id replaces only the id value (the assigning-authority `root` retained); a generalized
  * address keeps only the Safe Harbor 3-digit ZIP (state / country retained) and drops every finer
  * geographic child. Elements the extractor did not touch — the clinical `structuredBody` entries — are
@@ -116,7 +117,12 @@ export function applyCcda(
     const { node } = coord;
     switch (coord.edit) {
       case "clear-element":
-        removeAllChildren(node);
+        // A BYO-redacted narrative (DEID-8, `kind === "freetext"`) with a non-null value → write the
+        // redacted prose back in place. Gated on `kind`, so a name locus a custom policy pseudonymized
+        // (which shares `clear-element`) still empties rather than writing a surrogate as flat text. A
+        // removed name or a blocked narrative (null value) empties the element.
+        if (t.kind === "freetext" && t.value !== null) setElementText(node, t.value);
+        else removeAllChildren(node);
         break;
       case "clear-telecom":
         node.removeAttribute("value");

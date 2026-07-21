@@ -26,6 +26,7 @@ import { type DeidContext } from "./context.js";
 import type { DeidDocument, GenericLocus, TransformedLocus } from "./locus.js";
 import { ManifestBuilder, type DeidManifestEntry, type DeidResult } from "./manifest.js";
 import { resolvePolicy, type DeidPolicy, type TransformName } from "./policy.js";
+import type { FreeTextRedactor } from "./redactor.js";
 import {
   dateShift,
   generalizeAge,
@@ -51,6 +52,16 @@ export interface DeidOptions {
   readonly policy?: DeidPolicy | "safe-harbor";
   /** The context carrying the consumer's key, required only when the policy uses a keyed transform. */
   readonly context?: DeidContext;
+  /**
+   * A **consumer-supplied** free-text redactor (roadmap §Phase 8). When present, the engine invokes it
+   * at each free-text locus instead of blocking, and records its output as **consumer-asserted**
+   * (`DEID_FREETEXT_CONSUMER_REDACTED`). The library bundles **no** redactor. **Fail-closed contract:**
+   * when this is omitted — or when the redactor throws or returns nothing — the free-text locus is
+   * **blocked** (the safe default), never emitted un-redacted. A returned redaction is trusted as the
+   * consumer's; the engine does not re-verify it and does not touch the structural PHI the adapters
+   * remove. See {@link FreeTextRedactor}.
+   */
+  readonly redactor?: FreeTextRedactor;
 }
 
 /** The internal per-locus outcome: the transformed value/disposition and the manifest entry (if any). */
@@ -184,10 +195,70 @@ function applyTransform(
           code: DEID_DISPOSITION_CODES.DEID_CATEGORY_HASHED,
         },
       };
+    case "byo-redact":
     case "block":
     default:
+      // `byo-redact` is not a category transform — free-text redaction is driven by the `redactor`
+      // option, not the policy map. If a policy assigns it (or `block`, or anything unknown) to a
+      // category, fail closed (block).
       return blocked(locus.path, category, DEID_DISPOSITION_CODES.DEID_LOCUS_BLOCKED);
   }
+}
+
+/**
+ * Coerce an arbitrary redactor return into the redacted prose, or `null` to fail closed. A valid result
+ * is an object carrying a string `text` (an empty string is a valid "all prose removed" redaction);
+ * everything else — `null`, `undefined`, a non-object, or a missing/non-string `text` — is treated as
+ * "the redactor returned nothing" and fails closed.
+ */
+function redactedProse(result: unknown): string | null {
+  if (result === null || result === undefined || typeof result !== "object") {
+    return null;
+  }
+  const text: unknown = (result as { text?: unknown }).text;
+  return typeof text === "string" ? text : null;
+}
+
+/**
+ * Handle a free-text locus. **Fail closed** by default: with no consumer redactor the prose is blocked.
+ * With a BYO redactor (roadmap §Phase 8), invoke it and treat a returned redaction as *consumer-asserted*
+ * — but still fail closed if it throws or returns nothing, so a redactor failure never leaks free text.
+ */
+function handleFreeText(locus: GenericLocus, redactor: FreeTextRedactor | undefined): LocusOutcome {
+  const category = locus.category ?? SAFE_HARBOR_CATEGORIES.OTHER_UNIQUE_ID;
+  if (redactor === undefined) {
+    return blocked(locus.path, category, DEID_DISPOSITION_CODES.DEID_FREETEXT_BLOCKED);
+  }
+  let prose: string | null;
+  try {
+    // Everything that touches the redactor's return — the call AND reading `.text` off it — is inside
+    // the try, so even a throwing getter / hostile Proxy fails closed rather than crashing the pass.
+    prose = redactedProse(
+      redactor({
+        text: locus.value,
+        locus: locus.path,
+        ...(locus.category !== undefined ? { category: locus.category } : {}),
+      }),
+    );
+  } catch {
+    // Fail closed: a throwing redactor never passes the free text through.
+    return blocked(locus.path, category, DEID_DISPOSITION_CODES.DEID_FREETEXT_BLOCKED);
+  }
+  if (prose === null) {
+    // Fail closed: the redactor returned nothing usable.
+    return blocked(locus.path, category, DEID_DISPOSITION_CODES.DEID_FREETEXT_BLOCKED);
+  }
+  return {
+    value: prose,
+    disposition: "transformed",
+    manifest: {
+      category,
+      transform: "byo-redact",
+      locus: locus.path,
+      disposition: "transformed",
+      code: DEID_DISPOSITION_CODES.DEID_FREETEXT_CONSUMER_REDACTED,
+    },
+  };
 }
 
 /** Resolve a single locus to its outcome, applying the fail-closed rule. */
@@ -195,18 +266,16 @@ function handleLocus(
   locus: GenericLocus,
   policy: DeidPolicy,
   context: DeidContext | undefined,
+  redactor: FreeTextRedactor | undefined,
 ): LocusOutcome {
   // Over-scrub guard: a clinical value is not an identifier — retain it untouched.
   if (locus.kind === "clinical") {
     return { value: locus.value, disposition: "retained" };
   }
-  // Fail closed: free text can carry any of the 18 categories in prose — block by default, never scrub.
+  // Free text can carry any of the 18 categories in prose. Block by default; a BYO redactor (§Phase 8)
+  // may redact it in place, consumer-asserted — but a redactor failure still fails closed.
   if (locus.kind === "freetext") {
-    return blocked(
-      locus.path,
-      locus.category ?? SAFE_HARBOR_CATEGORIES.OTHER_UNIQUE_ID,
-      DEID_DISPOSITION_CODES.DEID_FREETEXT_BLOCKED,
-    );
+    return handleFreeText(locus, redactor);
   }
   // Fail closed: an unrecognized structure or an unclassified PHI-bearing locus is category (R).
   if (locus.category === undefined || locus.kind === "unknown") {
@@ -257,7 +326,7 @@ export function deidentify(
   const loci: TransformedLocus[] = [];
 
   for (const locus of inputLoci) {
-    const outcome = handleLocus(locus, policy, options.context);
+    const outcome = handleLocus(locus, policy, options.context, options.redactor);
     loci.push(
       Object.freeze({
         path: locus.path,

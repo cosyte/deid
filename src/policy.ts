@@ -18,6 +18,13 @@ const SAFE_HARBOR_LABEL = "safe-harbor";
  * (withhold the value); `generalize` selects the correct generalization from the locus kind (date /
  * ZIP / age).
  *
+ * `byo-redact` is **not** a policy-assignable Safe Harbor transform and **not** something the library
+ * performs — it is the manifest marker the engine records when a **consumer-supplied free-text
+ * redactor** (roadmap §Phase 8) redacts a free-text locus. The library bundles no redactor; the
+ * consumer brings the detector. Assigning `byo-redact` to a category in a policy has no effect beyond
+ * the fail-closed default (the engine blocks it), because free-text redaction is driven by the
+ * `redactor` option, not by the per-category policy map.
+ *
  * @example
  * ```ts
  * import { type TransformName } from "@cosyte/deid";
@@ -31,7 +38,8 @@ export type TransformName =
   | "date-shift"
   | "pseudonymize"
   | "hash"
-  | "block";
+  | "block"
+  | "byo-redact";
 
 /** The transforms that require the consumer's key (and, for `date-shift`, a per-patient scope). */
 export const KEYED_TRANSFORMS: ReadonlySet<TransformName> = new Set([

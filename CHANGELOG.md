@@ -14,6 +14,29 @@ its public history at `0.0.x`, per the cosyte version ladder (`0.0.x` until firs
 
 ### Added
 
+- **DEID-8 — free-text / narrative BYO redaction.** The known-hard concern, scoped honestly (roadmap
+  §Phase 8). Free-text loci (HL7 `OBX-5` / `NTE`, C-CDA section `<text>`, FHIR `note` / `div`, X12 `MSG`
+  / `NTE`, NCPDP free text) keep their **fail-closed default** (blocked, never emitted) and gain an
+  **optional BYO redaction interface** so a consumer can redact prose in place instead of blocking it.
+  - **BYO only — the library bundles no detector.** `DeidOptions.redactor` takes a consumer-supplied
+    `FreeTextRedactor` (a function wrapping their regex/pattern engine or clinical-NER de-id model). The
+    library ships **no** NLP model and **no** built-in regex scrub — a naive pass over clinical prose is
+    a false-safety hazard — exactly the posture of the parsers' BYO profiles and terminology adapter.
+  - **The fail-closed contract holds regardless of the redactor.** No redactor → block; the redactor
+    throws → block; the redactor returns nothing (`null` / `undefined` / no string `text`) → block; the
+    redactor returns `{ text }` → that prose is written back in place. A redactor is **never** allowed to
+    leak free text through on failure.
+  - **Consumer-asserted, surfaced as such.** A BYO-redacted locus is recorded with the new `byo-redact`
+    transform and the new **additions-only** disposition code `DEID_FREETEXT_CONSUMER_REDACTED`. The
+    engine does **not** re-scan the returned prose for residual PHI, and "no findings" from a BYO redactor
+    is **not** an attestation — completeness is the consumer's responsibility (Expert-Determination
+    territory). New types: `FreeTextRedactor`, `FreeTextRedactionRequest`, `FreeTextRedactionResult`.
+  - **Structural guarantees unchanged.** The redactor handles the free _prose_ only. The structural PHI
+    removal the six adapters perform and the clinical over-scrub guard are untouched; the manifest stays
+    **value-free** on the redacted path (no input value, no redacted output, ever in the audit). The
+    redactor flows through every text-format adapter (`hl7` / `ccda` / `fhir` / `x12` / `ncpdp`) via
+    `DeidOptions`; DICOM's delegated PS3.15 metadata path is unaffected.
+
 - **DEID-7 — the longitudinal layer: cross-document consistency + the key contract.** A format-agnostic
   layer over the six shipped adapters that keeps a longitudinal record **linkable** after de-identification.
   - **The corpus registry (`createDeidRegistry` / `DeidRegistry`).** `registry.forPatient(patientKey)`
