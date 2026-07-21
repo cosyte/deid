@@ -35,8 +35,12 @@ its public history at `0.0.x`, per the cosyte version ladder (`0.0.x` until firs
     reference retained — including `REF*1H` CHAMPUS/TRICARE beneficiary ids reclassified as the
     individual's PHI; **unknown REF qualifier fails closed** — the "unusual REF qualifier" category (R)
     frontier); a geographic `N3`/`N4` segment also **fails closed on any unmapped element** (a `N4-06`
-    location identifier is blocked; only state + country are retained); `CLM-01`/`CLP-01` patient account
-    number pseudonymized. The `@cosyte/x12` serializer is
+    location identifier is blocked; only state + country are retained); `SBR-03` insured group/policy
+    number **pseudonymized** and `SBR-04` group name **removed** (the same health-plan-beneficiary
+    identifier `REF*1L`/`REF*6P` carry — previously retained wholesale); `N1` party identification
+    **entity-classified** like `NM1` (recognized payer/provider org retained; a patient-side or unknown
+    party's name + id scrubbed / blocked); `CLM-01`/`CLP-01` patient account number pseudonymized. The
+    `@cosyte/x12` serializer is
     byte-faithful, so a segment the map does not touch keeps its **verbatim** raw — diagnosis / procedure /
     revenue codes, monetary amounts, and quantities survive the over-scrub test byte-identical.
   - **NCPDP (`@cosyte/deid/ncpdp`).** `deidentifyTelecom(tx, …)` / `deidentifyTelecomString(raw, …)`; plus

@@ -116,6 +116,7 @@ NAME ZZSUBLAST
 NAME ZZSUBFIRST
 NAME ZZPATLAST
 NAME ZZPATFIRST
+NAME ZZGROUPNAME
 
 # --- Synthetic NCPDP Telecom patient/cardholder/prescriber tokens (test/fixtures/ncpdp) ---
 # Patient + cardholder names, street/city, and identifiers. Checked structurally by the NCPDP Telecom
@@ -174,6 +175,7 @@ ID ZZACCTX12
 ID 900000201
 ID ZZCHAMPUSID
 ID ZZLOCID
+ID ZZPOLICY777
 
 # --- Synthetic NCPDP Telecom identifiers (test/fixtures/ncpdp) ---
 ID 5550000301

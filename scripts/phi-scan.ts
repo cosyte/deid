@@ -615,6 +615,14 @@ function scanX12Structured(path: string, content: string, allow: AllowList, hits
       check(els[3] ?? "", "NM1-03"); // last / org name
       check(els[4] ?? "", "NM1-04"); // first name
       check(els[9] ?? "", "NM1-09"); // identifier
+    } else if (id === "N1") {
+      const entity = (els[1] ?? "").toUpperCase();
+      if (!X12_PATIENT_ENTITY_CODES.has(entity)) continue; // recognized org party retained — not checked
+      check(els[2] ?? "", "N1-02"); // patient-side party name
+      check(els[4] ?? "", "N1-04"); // patient-side party identifier
+    } else if (id === "SBR") {
+      check(els[3] ?? "", "SBR-03"); // insured group / policy number
+      check(els[4] ?? "", "SBR-04"); // insured group name
     } else if (id === "DMG") {
       check(els[2] ?? "", "DMG-02"); // date of birth
     } else if (id === "REF") {

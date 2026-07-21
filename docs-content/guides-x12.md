@@ -52,7 +52,9 @@ implicit, so the map keys off each **segment id** plus two **qualifier classifie
 | **`NM1`** — subscriber / patient / dependent (`IL` / `QC` / `03`) | name (`NM1-03..07`) **removed**; id (`NM1-09`) routed by the `NM1-08` qualifier — SSN **removed**, member **pseudonymized** |
 | **`NM1`** — recognized provider / organization (`85` / `82` / …)  | **retained** — provider identity is not the individual's PHI (mirrors the HL7 adapter's provider retention)          |
 | **`NM1`** — unknown entity code                                  | **fails closed** — name and id blocked (an unrecognized entity could be the patient)                                |
-| **`N3` / `N4`**                                                 | street + city **removed**; ZIP → safe 3-digit; state retained                                                       |
+| **`N1`** (payer / provider org)                                 | **retained**; a patient-side or **unknown** party's name + id scrubbed / **fail closed** (same classification as `NM1`) |
+| **`SBR`** (subscriber)                                          | `SBR-03` group / policy number **pseudonymized**, `SBR-04` group name **removed**; relationship codes retained       |
+| **`N3` / `N4`**                                                 | street + city **removed**; ZIP → safe 3-digit; state retained; an unmapped element (`N4-06` location id) **fails closed** |
 | **`DMG-02`**, **`DTP-03`**, **`DTM-02`**                        | dates → **year**                                                                                                    |
 | **`PER`**                                                       | contact name + communication numbers **removed**                                                                   |
 | **`REF`**                                                       | patient / member / group / SSN identifier removed or **pseudonymized**; recognized admin/provider reference retained; **unknown qualifier fails closed** |

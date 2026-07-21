@@ -120,10 +120,7 @@ function emitRule(out: X12Extraction, seg: X12Segment, pos: SegPos, rule: X12Ele
     blockElement(out, seg, pos, rule.element);
     return;
   }
-  if (rule.category === undefined) {
-    blockElement(out, seg, pos, rule.element); // a direct rule with no category → fail closed
-    return;
-  }
+  // rule.category is required for every non-block mode (the discriminated union guarantees it).
   const kind: GenericLocus["kind"] =
     rule.mode === "date" ? "date" : rule.mode === "zip" ? "zip" : "identifier";
   push(
@@ -198,6 +195,40 @@ function handleNm1(out: X12Extraction, seg: X12Segment, pos: SegPos): void {
   }
 }
 
+/**
+ * Handle an `N1` (Party Identification) with the same entity classification as `NM1`: a recognized
+ * provider / organization party is retained (payer / payee / provider org identity is not the
+ * individual's PHI); a patient-side individual party has its name (`N1-02`) removed and its identifier
+ * (`N1-04`) routed by the `N1-03` qualifier; an unknown entity code **fails closed** (name + id blocked).
+ * `N1` shares the entity-identifier-code (element 98) and identification-code-qualifier (element 66)
+ * semantics with `NM1`, so the classifiers are reused.
+ */
+function handleN1(out: X12Extraction, seg: X12Segment, pos: SegPos): void {
+  const disposition = classifyNm1Entity(el(seg, 1));
+  if (disposition === "provider") return; // recognized org / payer / provider party — retained
+
+  if (has(seg, 2)) {
+    if (disposition === "patient") {
+      push(
+        out,
+        {
+          path: path(pos, 2),
+          kind: "identifier",
+          category: SAFE_HARBOR_CATEGORIES.NAMES,
+          value: el(seg, 2),
+        },
+        coord(pos, [2]),
+      );
+    } else {
+      blockElement(out, seg, pos, 2); // unknown entity → fail closed
+    }
+  }
+  if (has(seg, 4)) {
+    const category = disposition === "patient" ? categoryForNm1IdQualifier(el(seg, 3)) : undefined;
+    emitId(out, seg, pos, 4, category);
+  }
+}
+
 /** Handle a `REF`: `REF-02` routed by the `REF-01` qualifier (phi → scrub, retain, unknown → block). */
 function handleRef(out: X12Extraction, seg: X12Segment, pos: SegPos): void {
   if (!has(seg, 2)) return;
@@ -251,6 +282,10 @@ function handleSegment(out: X12Extraction, seg: X12Segment, pos: SegPos): void {
   const id = seg.id;
   if (id === "NM1") {
     handleNm1(out, seg, pos);
+    return;
+  }
+  if (id === "N1") {
+    handleN1(out, seg, pos);
     return;
   }
   if (id === "REF") {

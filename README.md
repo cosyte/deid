@@ -222,17 +222,18 @@ const { x12, manifest } = deidentifyX12(parseX12(raw), { context });
 // `x12` is the de-identified interchange; `manifest` is the value-free audit.
 ```
 
-| Locus                                                        | Handling                                                                                                                                      |
-| ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| **`NM1`** (subscriber / patient / dependent)                 | name (`03–07`) **removed**; id (`09`) routed by the `08` qualifier — SSN **removed**, member **pseudonymized**                                |
-| **`NM1`** (recognized provider / organization)               | **retained** (provider identity is not the individual's PHI, mirroring the HL7 adapter)                                                       |
-| **`NM1`** (unknown entity code)                              | **fails closed** — name + id blocked                                                                                                          |
-| **`N3` / `N4`**                                              | street + city **removed**, ZIP → safe 3-digit, state retained                                                                                 |
-| **`DMG-02`**, **`DTP-03`**, **`DTM-02`**                     | dates → **year**                                                                                                                              |
-| **`PER`**                                                    | contact name + communication numbers **removed**                                                                                              |
-| **`REF`**                                                    | patient / member / group / SSN identifier removed or **pseudonymized**; admin/provider reference retained; **unknown qualifier fails closed** |
-| **`CLM-01` / `CLP-01`**                                      | patient account number **pseudonymized**                                                                                                      |
-| **Clinical / financial** (`HI`, `SV*`, `SVC`, `AMT`, `CAS`…) | **retained untouched** — diagnosis / procedure codes, amounts, quantities survive byte-identical                                              |
+| Locus                                                        | Handling                                                                                                                                         |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **`NM1`** (subscriber / patient / dependent)                 | name (`03–07`) **removed**; id (`09`) routed by the `08` qualifier — SSN **removed**, member **pseudonymized**                                   |
+| **`NM1`** (recognized provider / organization)               | **retained** (provider identity is not the individual's PHI, mirroring the HL7 adapter)                                                          |
+| **`NM1`** (unknown entity code)                              | **fails closed** — name + id blocked                                                                                                             |
+| **`N1` / `SBR`**                                             | `N1` payer/provider org retained (patient-side/unknown party fails closed); `SBR-03` group/policy **pseudonymized**, `SBR-04` group name removed |
+| **`N3` / `N4`**                                              | street + city **removed**, ZIP → safe 3-digit, state retained (unmapped `N4-06` location id fails closed)                                        |
+| **`DMG-02`**, **`DTP-03`**, **`DTM-02`**                     | dates → **year**                                                                                                                                 |
+| **`PER`**                                                    | contact name + communication numbers **removed**                                                                                                 |
+| **`REF`**                                                    | patient / member / group / SSN identifier removed or **pseudonymized**; admin/provider reference retained; **unknown qualifier fails closed**    |
+| **`CLM-01` / `CLP-01`**                                      | patient account number **pseudonymized**                                                                                                         |
+| **Clinical / financial** (`HI`, `SV*`, `SVC`, `AMT`, `CAS`…) | **retained untouched** — diagnosis / procedure codes, amounts, quantities survive byte-identical                                                 |
 
 ## De-identify an NCPDP Telecom transaction
 

@@ -29,12 +29,9 @@ type SegmentEdits = Map<number, string>;
 /** Rebuild one segment's raw text from its decoded elements with the collected edits applied. */
 function rebuildSegmentRaw(seg: X12Segment, edits: SegmentEdits, elementSep: string): string {
   const elements = seg.elements.slice();
-  for (const [index, value] of edits) {
-    // Guard against an out-of-range index (a coord can only reference an element the extractor read).
-    if (index >= 0 && index < elements.length) {
-      elements[index] = value;
-    }
-  }
+  // A coord only ever references an element the extractor read from this same segment, so every index is
+  // in range against `seg.elements.slice()`; the assignment is always valid.
+  for (const [index, value] of edits) elements[index] = value;
   return elements.join(elementSep);
 }
 

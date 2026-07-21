@@ -56,17 +56,26 @@ export type X12ElementMode = "redact" | "date" | "zip" | "id" | "block";
 
 /**
  * A mapped PHI-bearing element within a segment: the 1-indexed element position and how to handle it.
- * A `category` is carried for the direct modes; `id` mode resolves its category dynamically at
- * extraction time from the routing qualifier, so it omits a static category.
+ * A discriminated union on {@link X12ElementMode} — a `block` rule carries **no** category (it fails
+ * closed as (R)); every other mode **requires** its Safe Harbor category, so the extractor never has to
+ * guard a missing category at a non-block locus.
  */
-export interface X12ElementRule {
-  /** 1-based X12 element position (e.g. `3` for `NM1-03`). */
-  readonly element: number;
-  /** How to extract and rewrite the element. */
-  readonly mode: X12ElementMode;
-  /** The Safe Harbor category, for the direct modes (`redact` / `date` / `zip`). */
-  readonly category?: SafeHarborCategory;
-}
+export type X12ElementRule =
+  | {
+      /** 1-based X12 element position (e.g. `1` for `N3-01`). */
+      readonly element: number;
+      /** Fail-closed removal — no category (recorded as (R)). */
+      readonly mode: "block";
+      readonly category?: undefined;
+    }
+  | {
+      /** 1-based X12 element position (e.g. `3` for `NM1-03`). */
+      readonly element: number;
+      /** A category-driven transform (redact / date / zip / id). */
+      readonly mode: Exclude<X12ElementMode, "block">;
+      /** The Safe Harbor category driving the transform. */
+      readonly category: SafeHarborCategory;
+    };
 
 /**
  * The **provider / organization** `NM1-01` entity-identifier codes whose name and identifiers are
@@ -298,6 +307,11 @@ export function classifyRefQualifier(qualifier: string): RefDisposition {
  * - `DTP` — Date or Time Period: `DTP-03` date value generalized to year (a date of the individual's
  *   care under §164.514(b)(2)(i)(C)); qualifier / format retained.
  * - `DTM` — Date/Time Reference (835): `DTM-02` date value generalized to year.
+ * - `SBR` — Subscriber Information: `SBR-03` Insured Group or Policy Number **pseudonymized** (a health
+ *   plan beneficiary number — the same identifier `REF*1L` / `REF*6P` / NCPDP `301-C1` carry; when
+ *   `SBR-02 = 18` the subscriber *is* the patient), `SBR-04` Insured Group Name **removed** (an employer /
+ *   group name — Safe Harbor removes the individual's employer). The relationship / filing codes
+ *   (`SBR-01/02/05/09`) are retained.
  *
  * @example
  * ```ts
@@ -308,6 +322,10 @@ export function classifyRefQualifier(qualifier: string): RefDisposition {
  */
 export const X12_UNIVERSAL_SEGMENT_RULES: Readonly<Record<string, readonly X12ElementRule[]>> =
   Object.freeze({
+    SBR: [
+      { element: 3, mode: "id", category: C.HEALTH_PLAN_BENEFICIARY }, // SBR-03 Group / Policy Number
+      { element: 4, mode: "redact", category: C.NAMES }, // SBR-04 Insured Group Name (employer/plan)
+    ],
     N3: [
       // Street lines are geographic PHI with no clean structured generalization — removed (fail closed,
       // category (R)), never generalized: a street number ("100 MAIN ST") would survive a ZIP-style
@@ -419,7 +437,6 @@ export const X12_RETAIN_SEGMENTS: ReadonlySet<string> = new Set<string>([
   "HL",
   // Claim structure / financial (CLM/CLP are handled by X12_ACCOUNT_SEGMENTS, not retained wholesale)
   "AMT",
-  "SBR", // Subscriber Information (relationship / group name codes, no direct identifier value)
   "PAT", // Patient Information (relationship / weight / date-qualifier — dates handled via DTP)
   "CAS", // Claim/Line Adjustment (group + reason codes + amounts)
   "MOA", // Outpatient Adjudication remarks (codes/amounts)
@@ -466,7 +483,6 @@ export const X12_RETAIN_SEGMENTS: ReadonlySet<string> = new Set<string>([
   "ENT", // Entity
   "RMR", // Remittance Advice Accounts Receivable Open Item Reference
   "ADX", // Adjustment
-  "N1", // Party Identification (organization name — payer/provider org, not the individual)
   // 999 / TA1 acknowledgements (structurally PHI-free)
   "AK1",
   "AK2",

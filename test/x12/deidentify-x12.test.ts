@@ -62,6 +62,8 @@ const SENTINELS = [
   "20260601",
   "ZZLOCID", // N4-06 location identifier — an unmapped geographic element, fails closed
   "ZZCHAMPUSID", // REF*1H CHAMPUS/TRICARE beneficiary id — reclassified as PHI, pseudonymized away
+  "ZZPOLICY777", // SBR-03 insured group/policy number — pseudonymized (was silently retained)
+  "ZZGROUPNAME", // SBR-04 insured group name — removed (employer/plan name)
   // Provider address / submitter contact are universally scrubbed (a safe over-reach, never a leak).
   "PROVIDER RD",
   "PROVCITY",
@@ -84,6 +86,8 @@ const SURVIVORS = [
   "2026", // service date generalized to year
   "1985", // DOB generalized to year
   "2021",
+  "COMMERCIALPAYER", // N1*PR payer org name — retained (org identity, not the individual)
+  "PAYERID12345", // N1*PR payer id — retained
 ];
 
 describe("X12 de-identification — leak + over-scrub gates", () => {
@@ -244,5 +248,38 @@ describe("X12 edge cases (branch coverage of the fail-closed frontier)", () => {
     const raw = wrap("CLM**100.00***11:B:1~");
     const { manifest } = deidentifyX12String(raw, { context: ctx });
     expect(manifest.some((e) => e.locus.includes("CLM"))).toBe(false);
+  });
+
+  it("scrubs the SBR insured group/policy number and group name (was a silent retained leak)", () => {
+    const raw = wrap("SBR*P*18*POLICY-SECRET*ACME GROUP*****CI~");
+    const { x12, manifest } = deidentifyX12String(raw, { context: ctx });
+    expect(x12).not.toContain("POLICY-SECRET"); // SBR-03 pseudonymized
+    expect(x12).not.toContain("ACME GROUP"); // SBR-04 removed
+    expect(x12).toContain("SBR*P*18*"); // relationship codes retained
+    expect(
+      manifest.some(
+        (e) => e.locus.endsWith("SBR[0]-3") && e.category === C.HEALTH_PLAN_BENEFICIARY,
+      ),
+    ).toBe(true);
+  });
+
+  it("entity-classifies N1: recognized org retained, patient-side scrubbed, unknown fails closed", () => {
+    // Recognized payer org — retained wholesale.
+    const org = deidentifyX12String(wrap("N1*PR*ACME PAYER*PI*PID999~"), { context: ctx });
+    expect(org.x12).toContain("ACME PAYER");
+    expect(org.x12).toContain("PID999");
+    // Unknown entity code — name and id fail closed (blocked).
+    const unknown = deidentifyX12String(wrap("N1*ZQ*MYSTERY PARTY*XX*SECRETNPI~"), {
+      context: ctx,
+    });
+    expect(unknown.x12).not.toContain("MYSTERY PARTY");
+    expect(unknown.x12).not.toContain("SECRETNPI");
+    // Patient-side party — name removed, id (N1-04) routed by the N1-03 qualifier and pseudonymized.
+    const patient = deidentifyX12String(wrap("N1*IL*PATIENT PARTY*MI*PATMEMBER~"), {
+      context: ctx,
+    });
+    expect(patient.x12).not.toContain("PATIENT PARTY"); // N1-02 name removed
+    expect(patient.x12).not.toContain("PATMEMBER"); // N1-04 member id pseudonymized
+    expect(patient.manifest.some((e) => e.locus.endsWith("N1[0]-2"))).toBe(true);
   });
 });
