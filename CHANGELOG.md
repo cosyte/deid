@@ -14,6 +14,35 @@ its public history at `0.0.x`, per the cosyte version ladder (`0.0.x` until firs
 
 ### Added
 
+- **DEID-6 — the DICOM de-identification adapter (`@cosyte/deid/dicom`).** The one adapter that
+  **delegates rather than reimplements**: `@cosyte/dicom` already ships the PS3.15 **Annex E**
+  de-identification (the Basic Application Level Confidentiality Profile), so this adapter **orchestrates**
+  that pass under the unified policy and **folds its value-free report into the unified manifest** — it
+  never re-does Annex E. `@cosyte/dicom` is an **optional peer dep** (vendored `pnpm pack` tarball at a
+  pinned commit pre PUB-FLIP), consumed only from this subpath, so the core stays third-party-dep-free.
+  - **API.** `deidentifyDicom(dataset, { policy?, uidMap?, uidRoot? })` returns the fresh de-identified
+    `Dataset`, the value-free manifest, the warnings, and the honest `metadataOnly: true` stance; the
+    convenience `deidentifyDicomBuffer(bytes, …)` parses → de-identifies → re-serializes in one call. No
+    key context is needed (Annex E dummying and content-derived UID remapping do not consume the
+    pseudonymization key).
+  - **What it does (the full Basic Profile, fail-closed default).** Patient Name/ID/Birth Date, Other
+    Patient IDs, institution, referring/performing physicians, dates, accession and device identifiers
+    **removed**; **Study/Series/SOP Instance UIDs consistently remapped** (`U`) so study/series/image
+    relationships survive; **private tags removed** (kept only when a known-safe retain list names them —
+    empty by default); Modality, image geometry, coded technique and **pixel bytes retained untouched**
+    (the over-scrub guard); `Patient Identity Removed = YES` + a policy-named De-identification Method
+    inserted. The input dataset is never mutated.
+  - **The burned-in-pixel hazard — flagged, never cleaned.** This is a **metadata-only** de-identifier:
+    it cannot inspect or clean pixels, so recognizable text **burned into the image** (Safe Harbor
+    category Q) is not removed. When Pixel Data may carry burned-in annotation the result sets
+    `burnedInAnnotationHazard === true` and carries `DICOM_BURNED_IN_ANNOTATION_NOT_REMOVED` — such output
+    is **not** safe to release on metadata alone. Pixel cleaning is a future `@cosyte/dicom-pixel`.
+  - **Value-free manifest.** Each acted-on tag is folded into a `DeidManifestEntry` carrying the Safe
+    Harbor category, the transform, the locus (`(gggg,eeee) Keyword`, with any sequence context path), the
+    disposition and the code — **never** a decoded value. The category is a coarse audit label that **falls
+    closed to (R)** for anything it cannot positively classify; the source→replacement UID map is never
+    surfaced (it is a re-linking vector). Leak, over-scrub, consistent-UID, immutability and fuzz tests
+    cover the boundary. **The structured-format core is now feature-complete across all six formats.**
 - **DEID-5 — the X12 EDI and NCPDP Telecom de-identification adapters (`@cosyte/deid/x12`,
   `@cosyte/deid/ncpdp`).** Two structured-EDI bindings of the core: each locates PHI **structurally** in a
   parsed `@cosyte/x12` / `@cosyte/ncpdp` model (never by regex over the bytes) and returns the

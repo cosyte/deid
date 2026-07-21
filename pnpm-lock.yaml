@@ -17,6 +17,9 @@ importers:
       '@cosyte/ccda':
         specifier: file:vendor/cosyte-ccda-0.0.1.tgz
         version: file:vendor/cosyte-ccda-0.0.1.tgz
+      '@cosyte/dicom':
+        specifier: file:vendor/cosyte-dicom-0.0.1.tgz
+        version: file:vendor/cosyte-dicom-0.0.1.tgz
       '@cosyte/eslint-config':
         specifier: ^0.0.4
         version: 0.0.4(eslint@10.5.0)(typescript@5.9.3)
@@ -187,6 +190,11 @@ packages:
 
   '@cosyte/ccda@file:vendor/cosyte-ccda-0.0.1.tgz':
     resolution: {integrity: sha512-uH7A0/ySsTkPnYjAXT2kGV6ITTWt+djcO97i2SBQZpTwAhAJtQ1TjM5fNi+fIvtEde5VQyGlmDnUo5v2KhIq3g==, tarball: file:vendor/cosyte-ccda-0.0.1.tgz}
+    version: 0.0.1
+    engines: {node: '>=22.0.0'}
+
+  '@cosyte/dicom@file:vendor/cosyte-dicom-0.0.1.tgz':
+    resolution: {integrity: sha512-zVbPqiVTOW8Yh3P5d1zA//a7n4y556SI7YbY8fakyC049RPwmjYmXRdrkxhDz345wW2+CjaKPsSkJfUIn+S5bg==, tarball: file:vendor/cosyte-dicom-0.0.1.tgz}
     version: 0.0.1
     engines: {node: '>=22.0.0'}
 
@@ -2210,6 +2218,8 @@ snapshots:
   '@cosyte/ccda@file:vendor/cosyte-ccda-0.0.1.tgz':
     dependencies:
       '@xmldom/xmldom': 0.9.10
+
+  '@cosyte/dicom@file:vendor/cosyte-dicom-0.0.1.tgz': {}
 
   '@cosyte/eslint-config@0.0.4(eslint@10.5.0)(typescript@5.9.3)':
     dependencies:

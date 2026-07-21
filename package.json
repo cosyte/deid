@@ -91,6 +91,16 @@
         "default": "./dist/ncpdp/index.cjs"
       }
     },
+    "./dicom": {
+      "import": {
+        "types": "./dist/dicom/index.d.ts",
+        "default": "./dist/dicom/index.mjs"
+      },
+      "require": {
+        "types": "./dist/dicom/index.d.cts",
+        "default": "./dist/dicom/index.cjs"
+      }
+    },
     "./package.json": "./package.json"
   },
   "files": [
@@ -104,7 +114,8 @@
     "@cosyte/ccda": ">=0.0.0",
     "@cosyte/fhir": ">=0.0.0",
     "@cosyte/x12": ">=0.0.0",
-    "@cosyte/ncpdp": ">=0.0.0"
+    "@cosyte/ncpdp": ">=0.0.0",
+    "@cosyte/dicom": ">=0.0.0"
   },
   "peerDependenciesMeta": {
     "@cosyte/hl7": {
@@ -120,6 +131,9 @@
       "optional": true
     },
     "@cosyte/ncpdp": {
+      "optional": true
+    },
+    "@cosyte/dicom": {
       "optional": true
     }
   },
@@ -155,6 +169,7 @@
     "@arethetypeswrong/cli": "0.18.4",
     "@changesets/cli": "2.31.0",
     "@cosyte/ccda": "file:vendor/cosyte-ccda-0.0.1.tgz",
+    "@cosyte/dicom": "file:vendor/cosyte-dicom-0.0.1.tgz",
     "@cosyte/eslint-config": "^0.0.4",
     "@cosyte/fhir": "file:vendor/cosyte-fhir-0.0.0.tgz",
     "@cosyte/hl7": "file:vendor/cosyte-hl7-0.0.1.tgz",
