@@ -504,11 +504,12 @@ export const X12_RETAIN_SEGMENTS: ReadonlySet<string> = new Set<string>([
   "HD", // Health Coverage (coverage codes)
   "DSB", // Disability Information
   "REL", // Relationship
-  // 820 premium
-  "BPR", // Beginning Segment for Payment Order/Remittance (bank/amount)
-  "ENT", // Entity
-  "RMR", // Remittance Advice Accounts Receivable Open Item Reference
-  "ADX", // Adjustment
+  // 835 payment order (bank routing / amounts — not the patient)
+  "BPR", // Beginning Segment for Payment Order/Remittance
+  // NOTE: the 820-premium-specific segments (ENT / RMR / ADX) and the 834 enrollment segments are
+  // deliberately NOT retained. This slice scopes 837 / 835 / 270-271 (they never appear there), so if an
+  // out-of-scope 820 / 834 interchange is fed in, those individual-detail segments — which can carry a
+  // subscriber/member identifier — fail closed (blocked) rather than riding through wholesale.
   // 999 / TA1 acknowledgements (structurally PHI-free)
   "AK1",
   "AK2",
