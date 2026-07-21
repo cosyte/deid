@@ -17,9 +17,10 @@ but **inverts the reflex** — where a parser is liberal on input, a de-identifi
 > always the consumer's.
 
 > **Status:** pre-alpha (`0.0.x`), not yet published to npm. This release ships the **format-agnostic
-> core** plus three format bindings — the **HL7 v2 adapter** (`@cosyte/deid/hl7`), the **C-CDA adapter**
-> (`@cosyte/deid/ccda`), and the **FHIR R4 adapter** (`@cosyte/deid/fhir`). The remaining per-format
-> adapters (X12, NCPDP, DICOM) land in subsequent phases.
+> core** plus five format bindings — the **HL7 v2 adapter** (`@cosyte/deid/hl7`), the **C-CDA adapter**
+> (`@cosyte/deid/ccda`), the **FHIR R4 adapter** (`@cosyte/deid/fhir`), the **X12 EDI adapter**
+> (`@cosyte/deid/x12`), and the **NCPDP Telecom adapter** (`@cosyte/deid/ncpdp`). The DICOM adapter and
+> NCPDP SCRIPT land in subsequent phases.
 
 ## Install
 
@@ -203,6 +204,63 @@ pseudonymization of resource ids across a corpus is the longitudinal phase. Free
 (`note`, `contentString`, uncoded `valueString`) fail closed by default; a semantic (NLP) narrative
 scrub, `contentAttachment` binary content, and person names embedded in non-person resources
 (`Organization.contact.name`, `Location.address`) remain out of scope for this release.
+
+## De-identify an X12 EDI interchange
+
+The `@cosyte/deid/x12` adapter locates PHI **structurally** in a parsed [`@cosyte/x12`](https://github.com/cosyte/x12)
+interchange (HIPAA 005010 — 837 claims, 835 remittance, 270/271 eligibility, …). `@cosyte/x12` is an
+**optional peer dependency**; the adapter reaches EDI data only through its exported model and re-emits
+with its byte-faithful `serializeX12`.
+
+```ts
+import { parseX12 } from "@cosyte/x12";
+import { deidentifyX12 } from "@cosyte/deid/x12";
+import { createDeidContext } from "@cosyte/deid";
+
+const context = createDeidContext({ key: process.env.DEID_KEY! });
+const { x12, manifest } = deidentifyX12(parseX12(raw), { context });
+// `x12` is the de-identified interchange; `manifest` is the value-free audit.
+```
+
+| Locus                                                        | Handling                                                                                                                                         |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **`NM1`** (subscriber / patient / dependent)                 | name (`03–07`) **removed**; id (`09`) routed by the `08` qualifier — SSN **removed**, member **pseudonymized**                                   |
+| **`NM1`** (recognized provider / organization)               | **retained** (provider identity is not the individual's PHI, mirroring the HL7 adapter)                                                          |
+| **`NM1`** (unknown entity code)                              | **fails closed** — name + id blocked                                                                                                             |
+| **`N1` / `SBR`**                                             | `N1` payer/provider org retained (patient-side/unknown party fails closed); `SBR-03` group/policy **pseudonymized**, `SBR-04` group name removed |
+| **`N3` / `N4`**                                              | street + city **removed**, ZIP → safe 3-digit, state retained (unmapped `N4-06` location id fails closed)                                        |
+| **`DMG-02`**, **`DTP-03`**, **`DTM-02`**                     | dates → **year**                                                                                                                                 |
+| **`PER`**                                                    | contact name + communication numbers **removed**                                                                                                 |
+| **`REF`**                                                    | patient / member / group / SSN identifier removed or **pseudonymized**; admin/provider reference retained; **unknown qualifier fails closed**    |
+| **`CLM-01` / `CLP-01`**                                      | patient account number **pseudonymized**                                                                                                         |
+| **Clinical / financial** (`HI`, `SV*`, `SVC`, `AMT`, `CAS`…) | **retained untouched** — diagnosis / procedure codes, amounts, quantities survive byte-identical                                                 |
+
+## De-identify an NCPDP Telecom transaction
+
+The `@cosyte/deid/ncpdp` adapter locates PHI **structurally** in a parsed [`@cosyte/ncpdp`](https://github.com/cosyte/ncpdp)
+Telecommunication (vD.0) transaction. `@cosyte/ncpdp` is an **optional peer dependency**.
+
+```ts
+import { parseTelecom } from "@cosyte/ncpdp/telecom";
+import { deidentifyTelecom } from "@cosyte/deid/ncpdp";
+import { createDeidContext } from "@cosyte/deid";
+
+const context = createDeidContext({ key: process.env.DEID_KEY! });
+const { telecom, manifest } = deidentifyTelecom(parseTelecom(raw), { context });
+```
+
+The Patient (`01`), Insurance (`04`), and Coordination-of-Benefits (`05`) segments and the header Date of
+Service carry the individual's identity: name / phone / street / city **removed**, ZIP → 3-digit, DOB and
+dates → year, patient / cardholder / group ids **pseudonymized**. The Prescriber (`03`) id is **removed**
+(the roadmap scopes prescriber identifiers for NCPDP — a deliberate asymmetry with the X12 adapter's
+provider-retention stance). A free-text field (`544-FY` DUR, `504-F4` message) and any unmapped / unknown
+segment **fail closed**; the clinical / financial segments (NDC drug codes, quantities, days-supply,
+pricing, DUR codes) are retained untouched.
+
+**NCPDP SCRIPT (ePrescribing XML) is deferred** — its parser's `serializeScript` emits only modeled
+fields (a round-trip drops unmodeled XML) and its `Patient` model has no address / phone / patient-id
+field, so a faithful structural de-id is not achievable through the current public surface. Shipping a
+partial pass would be a false-safety hazard, which the fail-closed posture forbids.
 
 ## The design in five pieces
 

@@ -71,6 +71,26 @@
         "default": "./dist/fhir/index.cjs"
       }
     },
+    "./x12": {
+      "import": {
+        "types": "./dist/x12/index.d.ts",
+        "default": "./dist/x12/index.mjs"
+      },
+      "require": {
+        "types": "./dist/x12/index.d.cts",
+        "default": "./dist/x12/index.cjs"
+      }
+    },
+    "./ncpdp": {
+      "import": {
+        "types": "./dist/ncpdp/index.d.ts",
+        "default": "./dist/ncpdp/index.mjs"
+      },
+      "require": {
+        "types": "./dist/ncpdp/index.d.cts",
+        "default": "./dist/ncpdp/index.cjs"
+      }
+    },
     "./package.json": "./package.json"
   },
   "files": [
@@ -82,7 +102,9 @@
   "peerDependencies": {
     "@cosyte/hl7": ">=0.0.0",
     "@cosyte/ccda": ">=0.0.0",
-    "@cosyte/fhir": ">=0.0.0"
+    "@cosyte/fhir": ">=0.0.0",
+    "@cosyte/x12": ">=0.0.0",
+    "@cosyte/ncpdp": ">=0.0.0"
   },
   "peerDependenciesMeta": {
     "@cosyte/hl7": {
@@ -92,6 +114,12 @@
       "optional": true
     },
     "@cosyte/fhir": {
+      "optional": true
+    },
+    "@cosyte/x12": {
+      "optional": true
+    },
+    "@cosyte/ncpdp": {
       "optional": true
     }
   },
@@ -130,11 +158,13 @@
     "@cosyte/eslint-config": "^0.0.4",
     "@cosyte/fhir": "file:vendor/cosyte-fhir-0.0.0.tgz",
     "@cosyte/hl7": "file:vendor/cosyte-hl7-0.0.1.tgz",
+    "@cosyte/ncpdp": "file:vendor/cosyte-ncpdp-0.0.1.tgz",
     "@cosyte/prettier-config": "^0.0.2",
     "@cosyte/test-utils": "^0.0.1",
     "@cosyte/tsconfig": "^0.0.2",
     "@cosyte/tsup-config": "^0.0.1",
     "@cosyte/vitest-config": "^0.0.2",
+    "@cosyte/x12": "file:vendor/cosyte-x12-0.0.1.tgz",
     "@types/node": "^22.0.0",
     "@vitest/coverage-v8": "4.1.4",
     "@xmldom/xmldom": "0.9.10",

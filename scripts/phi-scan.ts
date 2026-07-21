@@ -23,13 +23,20 @@
  *       element (given/family/prefix/suffix/name/street/city/county) and
  *       `birthTime` is checked against the allow-list — a real value there is a
  *       HARD HIT. Scoped to the header (a body `<name>` can be a drug name).
+ *     X12 STRUCTURED (`scanX12Structured`): the patient-entity NM1 name/id, DMG
+ *       DOB, and PHI-qualified REF value are checked against the allow-list — a
+ *       real value there is a HARD HIT. Provider-entity NM1 names are retained
+ *       and NOT checked (a provider/org name is not the individual's PHI).
+ *     NCPDP TELECOM STRUCTURED (`scanTelecomStructured`): each patient /
+ *       cardholder / prescriber PHI field (by its globally-unique 2-char id) is
+ *       checked against the allow-list — a real value there is a HARD HIT.
  *
  *   ⚠  Still-open gaps (do NOT treat green as "no PHI" for these): HL7 free text
  *      (OBX-5 / NTE-3 narrative), C-CDA narrative `<text>` blocks and `<id>`
- *      extensions, and the other consumer formats (FHIR / X12 / NCPDP / DICOM)
- *      have NO structured detector yet — add one with each format's phase
- *      (roadmap §7, the eventual union scanner). Add positive tests proving each
- *      new detector CATCHES real names / DOBs / ids.
+ *      extensions, X12 free-text / retained-segment residuals, NCPDP SCRIPT (XML,
+ *      de-id deferred), and FHIR / DICOM have NO structured detector yet — add one
+ *      with each format's phase (roadmap §7, the eventual union scanner). Add
+ *      positive tests proving each new detector CATCHES real names / DOBs / ids.
  *
  *   Worked examples of structured, format-aware detection live in the sibling
  *   parsers — read one before you start:
@@ -546,6 +553,133 @@ function scanCcdaStructured(path: string, content: string, allow: AllowList, hit
 }
 
 // ---------------------------------------------------------------------------
+// X12 005010 structured, element-level PHI detection (the deid-specific gate, DEID-5)
+// ---------------------------------------------------------------------------
+
+// X12 NM1-01 entity codes whose NM1-03..04 name + NM1-09 id are the covered individual's PHI. Mirrors
+// src/x12/locus-map.ts PATIENT_ENTITY_CODES — a provider-entity NM1 name is retained and NOT checked
+// (checking it would false-positive on legitimate provider/organization names in fixtures).
+const X12_PATIENT_ENTITY_CODES = new Set<string>(["IL", "QC", "03", "QD", "GD", "74", "S1", "S3"]);
+// REF-01 qualifiers whose REF-02 value is a patient identifier (SSN / member / subscriber / group /
+// medical record). Mirrors src/x12/locus-map.ts REF_PHI_QUALIFIERS.
+const X12_REF_PHI_QUALIFIERS = new Set<string>([
+  "SY",
+  "1W",
+  "0F",
+  "1L",
+  "IG",
+  "EA",
+  "23",
+  "6P",
+  "1H",
+]);
+
+/**
+ * Structured X12 PHI scan: detect the ISA envelope, read its element separator (fixed byte 3) and
+ * segment terminator (fixed byte 105), and check the identifying values of the patient-entity `NM1`
+ * (name NM1-03/04, id NM1-09), `DMG` (DOB DMG-02), and PHI-qualified `REF` (REF-02) segments against the
+ * synthetic allow-list. Anything not positively declared synthetic is a hit. Pure string splitting — no
+ * parser dependency (matches every sibling scanner).
+ */
+function scanX12Structured(path: string, content: string, allow: AllowList, hits: Hit[]): void {
+  // A real interchange begins with the 106-byte ISA header; require it at the start (a `.ts` source that
+  // merely mentions "ISA" in a comment never does), so the delimiter-from-fixed-byte read is sound.
+  // Inter-segment CRLF is not semantic in X12 (the parser normalizes it away) — strip it so a
+  // pretty-printed fixture splits on the segment terminator exactly as the wire form does.
+  const isa = content.trimStart().replace(/\r?\n/g, "");
+  if (!isa.startsWith("ISA") || isa.length < 106) return; // not an X12 interchange
+  const elementSep = isa.charAt(3);
+  const segTerm = isa.charAt(105);
+  if (elementSep.length === 0 || segTerm.length === 0) return;
+  const allowed = syntheticTokens(allow);
+
+  const check = (value: string, locator: string): void => {
+    const v = value.trim();
+    if (v.length === 0) return;
+    if (!allowed.has(v.toUpperCase())) {
+      hits.push({
+        path,
+        segment: locator,
+        value: v,
+        reason: "X12 PHI element value not declared synthetic in the allow-list",
+      });
+    }
+  };
+
+  for (const seg of isa.split(segTerm)) {
+    const els = seg.split(elementSep);
+    const id = els[0];
+    if (id === "NM1") {
+      const entity = (els[1] ?? "").toUpperCase();
+      if (!X12_PATIENT_ENTITY_CODES.has(entity)) continue; // provider/org name retained — not checked
+      check(els[3] ?? "", "NM1-03"); // last / org name
+      check(els[4] ?? "", "NM1-04"); // first name
+      check(els[9] ?? "", "NM1-09"); // identifier
+    } else if (id === "N1") {
+      const entity = (els[1] ?? "").toUpperCase();
+      if (!X12_PATIENT_ENTITY_CODES.has(entity)) continue; // recognized org party retained — not checked
+      check(els[2] ?? "", "N1-02"); // patient-side party name
+      check(els[4] ?? "", "N1-04"); // patient-side party identifier
+    } else if (id === "SBR") {
+      check(els[3] ?? "", "SBR-03"); // insured group / policy number
+      check(els[4] ?? "", "SBR-04"); // insured group name
+    } else if (id === "DMG") {
+      check(els[2] ?? "", "DMG-02"); // date of birth
+    } else if (id === "REF") {
+      if (X12_REF_PHI_QUALIFIERS.has((els[1] ?? "").toUpperCase())) check(els[2] ?? "", "REF-02");
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// NCPDP Telecom structured, field-level PHI detection (the deid-specific gate, DEID-5)
+// ---------------------------------------------------------------------------
+
+// NCPDP Telecom 2-character field ids that carry patient / cardholder / prescriber PHI. Field ids are
+// globally unique in the standard, so keying off the id (not the segment) is correct and
+// bypass-resistant. Mirrors src/ncpdp/locus-map.ts.
+const TELECOM_PHI_FIELD_IDS = new Set<string>([
+  "CA", // Patient First Name
+  "CB", // Patient Last Name
+  "CM", // Patient Street Address
+  "CN", // Patient City
+  "CQ", // Patient Phone
+  "CY", // Patient ID
+  "C4", // Date of Birth
+  "C2", // Cardholder ID
+  "C1", // Group ID
+  "CC", // Cardholder First Name
+  "CD", // Cardholder Last Name
+  "DB", // Prescriber ID
+]);
+
+/**
+ * Structured NCPDP Telecom PHI scan: split the transmission on the Field / Group / Segment separators
+ * (0x1C / 0x1D / 0x1E), and for each `<2-char-id><value>` token whose id is a known PHI field, check the
+ * value against the synthetic allow-list. Anything not positively declared synthetic is a hit.
+ */
+function scanTelecomStructured(path: string, content: string, allow: AllowList, hits: Hit[]): void {
+  // Telecom is framed by ASCII control chars; a file without them is not a Telecom transmission.
+
+  const allowed = syntheticTokens(allow);
+  for (const token of content.split(/[\x1c\x1d\x1e]/)) {
+    if (token.length < 2) continue;
+    const id = token.slice(0, 2).toUpperCase();
+    if (!TELECOM_PHI_FIELD_IDS.has(id)) continue;
+    const value = token.slice(2).trim();
+    if (value.length === 0) continue;
+    if (!allowed.has(value.toUpperCase())) {
+      hits.push({
+        path,
+        segment: id,
+        value,
+        reason: "NCPDP Telecom PHI field value not declared synthetic in the allow-list",
+      });
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Dispatch
 // ---------------------------------------------------------------------------
 
@@ -579,6 +713,16 @@ function scanTarget(target: Target, allow: AllowList, hits: Hit[]): void {
   // DOB in a C-CDA header is a hard hit. (Narrative body text and ids are the known gaps, covered by
   // the floor + synthetic discipline, per the union-scanner roadmap.)
   scanCcdaStructured(target.path, text, allow, hits);
+
+  // The deid-specific X12 gate (DEID-5): structured, element-level PHI detection. Runs on any X12
+  // interchange (106-byte ISA head) — checks the patient-entity NM1 name/id, DMG DOB, and PHI-qualified
+  // REF value against the synthetic allow-list. Provider-entity NM1 names are retained and not checked.
+  scanX12Structured(target.path, text, allow, hits);
+
+  // The deid-specific NCPDP Telecom gate (DEID-5): structured, field-id PHI detection. Runs on any
+  // control-char-framed Telecom transmission — checks each patient / cardholder / prescriber PHI field
+  // value against the synthetic allow-list. (SCRIPT XML de-id is deferred — see src/ncpdp/index.ts.)
+  scanTelecomStructured(target.path, text, allow, hits);
 }
 
 // ---------------------------------------------------------------------------

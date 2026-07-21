@@ -14,6 +14,63 @@ its public history at `0.0.x`, per the cosyte version ladder (`0.0.x` until firs
 
 ### Added
 
+- **DEID-5 — the X12 EDI and NCPDP Telecom de-identification adapters (`@cosyte/deid/x12`,
+  `@cosyte/deid/ncpdp`).** Two structured-EDI bindings of the core: each locates PHI **structurally** in a
+  parsed `@cosyte/x12` / `@cosyte/ncpdp` model (never by regex over the bytes) and returns the
+  de-identified byte stream plus the value-free manifest. `@cosyte/x12` and `@cosyte/ncpdp` are **optional
+  peer deps**, consumed only from their own subpaths (vendored `pnpm pack` tarballs at pinned commits pre
+  PUB-FLIP), so the core stays third-party-dep-free.
+  - **X12 (`@cosyte/deid/x12`).** `deidentifyX12(interchange, { policy?, context? })` and the convenience
+    `deidentifyX12String(raw, …)`; plus `extractX12Loci`, `applyX12`, the cited `PROVIDER_ENTITY_CODES` /
+    `PATIENT_ENTITY_CODES` / `X12_UNIVERSAL_SEGMENT_RULES` / `X12_ACCOUNT_SEGMENTS` /
+    `X12_RETAIN_SEGMENTS`, and the classifiers `classifyNm1Entity`, `categoryForNm1IdQualifier`,
+    `classifyRefQualifier`. Across the subscriber (2000B/2010BA) and patient (2000C/2010CA) loops of
+    837/835/270-271: **`NM1`** entity-classified — a subscriber / patient / dependent name (`NM1-03..07`)
+    removed and its identifier (`NM1-09`) routed by the `NM1-08` qualifier (SSN removed, member id
+    pseudonymized); a recognized provider / organization `NM1` **retained** (non-patient identity,
+    mirroring the HL7 adapter's provider retention); an **unknown entity code fails closed**. `N3`/`N4`
+    street + city removed, ZIP → safe 3-digit, state retained; `DMG-02` DOB → year; `PER` name + telecom
+    removed; `DTP-03`/`DTM-02` dates → year; **`REF`** qualifier-classified (patient / member / subscriber
+    / group / medical-record identifier removed or pseudonymized; recognized administrative / provider
+    reference retained — including `REF*1H` CHAMPUS/TRICARE beneficiary ids reclassified as the
+    individual's PHI; **unknown REF qualifier fails closed** — the "unusual REF qualifier" category (R)
+    frontier); a geographic `N3`/`N4` segment also **fails closed on any unmapped element** (a `N4-06`
+    location identifier is blocked; only state + country are retained); `SBR-03` insured group/policy
+    number **pseudonymized** and `SBR-04` group name **removed** (the same health-plan-beneficiary
+    identifier `REF*1L`/`REF*6P` carry — previously retained wholesale); `N1` party identification
+    **entity-classified** like `NM1` (recognized payer/provider org retained; a patient-side or unknown
+    party's name + id scrubbed / blocked); `CLM-01`/`CLP-01` patient account number pseudonymized. The
+    `@cosyte/x12` serializer is
+    byte-faithful, so a segment the map does not touch keeps its **verbatim** raw — diagnosis / procedure /
+    revenue codes, monetary amounts, and quantities survive the over-scrub test byte-identical.
+    **Free-form message text fails closed:** `MSG-01`, `III-04`, `K3-01`, and `NTE-02` are blocked (their
+    coded siblings retained) — the X12 analogue of the HL7 `OBX-5`/`NTE` and NCPDP `FY`/`F4`/`FQ` blocks.
+  - **NCPDP (`@cosyte/deid/ncpdp`).** `deidentifyTelecom(tx, …)` / `deidentifyTelecomString(raw, …)`; plus
+    `extractTelecomLoci`, `applyTelecom`, the cited `TELECOM_LOCUS_MAP` / `TELECOM_FREE_TEXT_FIELDS` /
+    `TELECOM_RETAIN_SEGMENTS`. Telecom vD.0: Patient (`01`) name / phone removed, street / city removed,
+    ZIP → 3-digit, DOB → year, patient id pseudonymized; Insurance (`04`) cardholder id / group id
+    pseudonymized, cardholder name removed; Prescriber (`03`) id removed (the roadmap scopes prescriber
+    identifiers for NCPDP — a deliberate asymmetry with the X12 provider-retention stance); Coordination of
+    Benefits (`05`) other-payer cardholder / group ids pseudonymized, other-payer date → year; header Date
+    of Service → year. Fail closed inside a PHI segment too: a free-text field (`544-FY` DUR, `504-F4`
+    message, `526-FQ` additional message information), an **unmapped field in a Patient / Prescriber /
+    Insurance / COB segment** (a `350-HN` patient e-mail, a `359-2A` Medigap id — anything not on the
+    explicit per-segment non-identifier retain list), and any unknown segment are all **blocked**; the
+    clinical / financial segments (NDC, quantities, days-supply, pricing, DUR codes) and the recognized
+    non-identifier fields (gender, state, `335-2C` pregnancy indicator, person code, other-payer amounts)
+    are retained.
+  - **NCPDP SCRIPT is deferred** (a documented non-goal of this phase): `@cosyte/ncpdp`'s SCRIPT surface
+    cannot be de-identified faithfully through its public API — `serializeScript` emits only the modeled
+    fields (a round-trip drops unmodeled XML) and the SCRIPT `Patient` model has no address / phone /
+    patient-id field, so a partial pass would silently drop content and leave unmodeled identifiers
+    unhandled, a false-safety hazard the fail-closed posture forbids.
+  - **PHI-scan gate extended** with structured X12 (`scanX12Structured`) and NCPDP Telecom
+    (`scanTelecomStructured`) detectors and their positive tests, plus the synthetic X12 / NCPDP token
+    declarations in `scripts/phi-allow-list.txt`. Both headline gates pass on all-synthetic fixtures — the
+    **leak test** (zero seeded-sentinel survivors) and the **over-scrub test** (every clinical / financial
+    value byte-identical). `verify.sh deid` green (typecheck, lint, format, phi-scan, coverage per-dir ≥90
+    incl. the new `x12/` + `ncpdp/` dirs, build, attw); the `conformance-refuter` gate returned NOT
+    REFUTED.
 - **DEID-4 — the FHIR R4 de-identification adapter (`@cosyte/deid/fhir`).** The FHIR binding of the core:
   it locates PHI **structurally** in a parsed `@cosyte/fhir` resource (never by regex over the JSON) and
   returns a transformed resource model plus the value-free manifest.

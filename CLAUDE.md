@@ -18,12 +18,16 @@ never rendered.
 
 ## Status
 
-- **DEID-1 shipped: the format-agnostic de-id core.** Pre-alpha `0.0.x`, not yet published to npm.
-  `src/` carries the policy engine (`deidentify`, `SAFE_HARBOR_POLICY`, `defineDeidPolicy`), the five
-  transforms (redact / generalize / date-shift / pseudonymize / keyed-hash, `node:crypto`-backed), the
-  18-category Safe Harbor model, the fail-closed rule, and the value-free manifest — tested against a
-  **generic locus model**. Per-format locus maps (HL7 v2, C-CDA, FHIR, X12, NCPDP, DICOM) are the next
-  phases (DEID-2…DEID-6). **Third-party runtime deps: zero (`node:crypto` only).**
+- **DEID-1…DEID-5 shipped.** Pre-alpha `0.0.x`, not yet published to npm. `src/` carries the
+  format-agnostic core (DEID-1: the policy engine `deidentify` / `SAFE_HARBOR_POLICY` /
+  `defineDeidPolicy`, the five `node:crypto`-backed transforms, the 18-category Safe Harbor model, the
+  fail-closed rule, the value-free manifest) plus **five per-format adapters** on the core's generic locus
+  model: **HL7 v2** (`@cosyte/deid/hl7`, DEID-2), **C-CDA** (`@cosyte/deid/ccda`, DEID-3), **FHIR R4**
+  (`@cosyte/deid/fhir`, DEID-4), and — DEID-5 — **X12 EDI** (`@cosyte/deid/x12`) and **NCPDP Telecom**
+  (`@cosyte/deid/ncpdp`). Each format's parser is an **optional peer dep** consumed only from its subpath
+  (vendored `pnpm pack` tarballs pre PUB-FLIP). **Remaining:** DICOM orchestration (DEID-6) and NCPDP
+  SCRIPT (deferred — its lossy serialize + address-less `Patient` model block a faithful structural
+  de-id through the current parser surface). **Third-party runtime deps: zero (`node:crypto` only).**
 
 ## Tech Stack (the shared `@cosyte/*` standard)
 
