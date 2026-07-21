@@ -87,6 +87,37 @@ describe("phi-scan starter: clean + allow-listed content passes", () => {
   });
 });
 
+describe("phi-scan deid gate: HL7 v2 structured field-level detection", () => {
+  it("catches a real-looking name / DOB / MRN in PID fields not declared synthetic (exit 1)", () => {
+    const r = scan(
+      "real.hl7",
+      "MSH|^~\\&|A|B|C|D|20200101||ADT^A01|M1|P|2.5\nPID|1||REALMRN99^^^H^MR||SMITH^JOHN||19800101\n",
+    );
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toMatch(/PID-5\.1 value="SMITH"/);
+    expect(r.stderr).toMatch(/PID-7\.1 value="19800101"/);
+    expect(r.stderr).toMatch(/PID-3\.1 value="REALMRN99"/);
+    expect(r.stderr).toMatch(/not declared synthetic/);
+  });
+
+  it("catches a relative's name in an NK1 field (relatives are in scope)", () => {
+    const r = scan(
+      "nk1.hl7",
+      "MSH|^~\\&|A|B|C|D|20200101||ADT^A01|M1|P|2.5\rNK1|1|JONES^MARY|SPO\r",
+    );
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toMatch(/NK1-2\.1 value="JONES"/);
+  });
+
+  it("passes an all-synthetic HL7 message whose tokens are allow-listed (exit 0)", () => {
+    const r = scan(
+      "synthetic.hl7",
+      "MSH|^~\\&|A|B|C|D|20200101||ADT^A01|M1|P|2.5\rPID|1||ZZMRN001^^^H^MR||ZZFAMILY^ZZGIVEN||19900215\r",
+    );
+    expect(r.code, `stderr: ${r.stderr}`).toBe(0);
+  });
+});
+
 describe("phi-scan starter: the override-log gate", () => {
   it("rejects --allow-fixture without a matching override entry (exit 2)", () => {
     const clean = join(dir, "override-me.txt");

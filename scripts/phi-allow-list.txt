@@ -27,12 +27,67 @@ EMAILDOMAIN example.org
 EMAILDOMAIN example.net
 EMAILDOMAIN example.test
 
-# --- Synthetic person-name tokens (example — extend for your fixtures) ---
-# NAME DOE
-# NAME JOHN
+# --- Synthetic person-name / street / city tokens (fixtures under test/fixtures/hl7) ---
+# Patient + relatives + guarantor + insured names, and street/city address parts. All are
+# obviously-synthetic ZZ-tagged tokens — never a real-looking name.
+NAME ZZFAMILY
+NAME ZZGIVEN
+NAME ZZMOTHERMAIDEN
+NAME ZZALIAS
+NAME ZZBIRTHPLACE
+NAME ZZSTREET
+NAME ZZCITY
+NAME ZZNKFAMILY
+NAME ZZNKGIVEN
+NAME ZZNKSTREET
+NAME ZZNKCITY
+NAME ZZGTFAMILY
+NAME ZZGTGIVEN
+NAME ZZGTSPOUSE
+NAME ZZGTSTREET
+NAME ZZGTCITY
+NAME ZZINSURED
+NAME ZZINSGIVEN
+NAME ZZINSSTREET
+NAME ZZINSCITY
+NAME ZZEMPLOYERINC
+NAME ZZMEDICAIDNAME
+NAME ZZLABFAMILY
+NAME ZZLABGIVEN
+NAME ZZLABSTREET
+NAME ZZLABCITY
 
-# --- Synthetic dates of birth (example — normalize to your detector's format) ---
-# DOB 19800115
+# --- Synthetic dates of birth / death (HL7 YYYYMMDD) ---
+DOB 19900215
+DOB 20211130
+DOB 19850302
+DOB 19850303
 
-# --- Synthetic ids: SSN / MRN / member-id shapes (example) ---
-# ID MRN12345
+# --- Synthetic ids: MRN / account / member / SSN / phone / county shapes ---
+# SSNs use the never-issued 9xx-xx-xxxx block; phones use the fictional 555 exchange.
+ID ZZMRN001
+ID ZZMRN002
+ID ZZACCT001
+ID ZZACCT018
+ID ZZACCT200
+ID ZZDL001
+ID ZZMOTHERID001
+ID ZZGTNUM001
+ID ZZGTEMPLOYERID
+ID ZZGROUP001
+ID ZZPOLICY001
+ID ZZMEMBER001
+ID ZZMEDICARE001
+ID ZZMEDICAIDCASE001
+ID 900000001
+ID 900000005
+ID 900000006
+ID 900000007
+ID 900000010
+ID 049
+ID 5550000001
+ID 5550000003
+ID 5550000004
+ID 5550000005
+ID 5550000006
+ID 5550000010

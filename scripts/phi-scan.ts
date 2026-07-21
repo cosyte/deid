@@ -9,26 +9,23 @@
  * accident.
  *
  * ===========================================================================
- * ██  STARTER — READ BEFORE YOU RELY ON THIS  ███████████████████████████████
+ * ██  COVERAGE — READ BEFORE YOU RELY ON THIS  ██████████████████████████████
  * ===========================================================================
  *
- *   This file is the SHARED MACHINERY only. As shipped it detects EXACTLY TWO
- *   cross-cutting PHI shapes that apply to ANY format:
+ *   Two layers run on every target:
  *
- *       (1) a dashed Social Security Number   (\d{3}-\d{2}-\d{4})
- *       (2) an email at a non-test domain
+ *     FLOOR (any format): (1) a dashed SSN (\d{3}-\d{2}-\d{4}); (2) an email at
+ *       a non-test domain.
+ *     HL7 v2 STRUCTURED (`scanHl7Structured`): every PID/NK1/GT1/IN1/IN2 PHI
+ *       field (names, DOB, SSN, MRN/member id, street/city, phone) is checked
+ *       against the synthetic allow-list — a real value there is a HARD HIT.
  *
- *   That is a FLOOR, not a gate. It does NOT understand De-identification. It will NOT
- *   catch a patient name, a date of birth, an MRN / member id, an address, or a
- *   phone number sitting in a structured De-identification field — the PHI that a real
- *   De-identification message actually carries.
- *
- *   ⚠  A scanner that silently ships SSN/email-only detection is a FALSE-
- *      CONFIDENCE RISK: it reports green on fixtures stuffed with real names and
- *      DOBs. Before you trust `pnpm phi-scan` as a safety gate for De-identification,
- *      YOU MUST add structured, field-level detection for THIS standard's PHI
- *      (names, DOB, MRN / member id, address, phone) in the clearly-fenced
- *      TODO section inside `scanTarget` below.
+ *   ⚠  Still-open gaps (do NOT treat green as "no PHI" for these): HL7 free text
+ *      (OBX-5 / NTE-3 narrative) is covered only by the FLOOR; and the other
+ *      consumer formats (C-CDA / FHIR / X12 / NCPDP / DICOM) have NO structured
+ *      detector yet — add one with each format's phase (roadmap §7, the eventual
+ *      union scanner). Add positive tests proving each new detector CATCHES real
+ *      names / DOBs / ids.
  *
  *   Worked examples of structured, format-aware detection live in the sibling
  *   parsers — read one before you start:
@@ -357,6 +354,131 @@ function scanCommonShapes(path: string, content: string, allow: AllowList, hits:
 }
 
 // ---------------------------------------------------------------------------
+// HL7 v2 structured, field-level PHI detection (the deid-specific gate)
+// ---------------------------------------------------------------------------
+
+// The PHI-bearing fields of the relative/guarantor/insured segments, with the
+// specific components that carry a name / DOB / SSN / MRN / phone / street /
+// city value. Mirrors src/hl7/locus-map.ts. Each listed component's value must
+// be positively declared synthetic in the allow-list (NAME / ID / DOB), or it
+// is a hit — so a real name/DOB/MRN cannot ride into a fixture unnoticed.
+// (State/ZIP/type-code components are intentionally omitted: they are not the
+// identifying tokens and would be noise.)
+const HL7_PHI_FIELDS: Readonly<Record<string, ReadonlyArray<{ field: number; comps: number[] }>>> =
+  {
+    PID: [
+      { field: 2, comps: [1] },
+      { field: 3, comps: [1] },
+      { field: 4, comps: [1] },
+      { field: 5, comps: [1, 2, 3] },
+      { field: 6, comps: [1, 2] },
+      { field: 7, comps: [1] },
+      { field: 9, comps: [1, 2] },
+      { field: 11, comps: [1, 3] },
+      { field: 12, comps: [1] },
+      { field: 13, comps: [1, 4] },
+      { field: 14, comps: [1] },
+      { field: 18, comps: [1] },
+      { field: 19, comps: [1] },
+      { field: 20, comps: [1] },
+      { field: 21, comps: [1] },
+      { field: 23, comps: [1] },
+      { field: 29, comps: [1] },
+    ],
+    NK1: [
+      { field: 2, comps: [1, 2] },
+      { field: 4, comps: [1, 3] },
+      { field: 5, comps: [1] },
+      { field: 6, comps: [1] },
+      { field: 30, comps: [1, 2] },
+      { field: 31, comps: [1] },
+      { field: 32, comps: [1, 3] },
+      { field: 33, comps: [1] },
+      { field: 37, comps: [1] },
+    ],
+    GT1: [
+      { field: 2, comps: [1] },
+      { field: 3, comps: [1, 2] },
+      { field: 4, comps: [1, 2] },
+      { field: 5, comps: [1, 3] },
+      { field: 6, comps: [1] },
+      { field: 7, comps: [1] },
+      { field: 8, comps: [1] },
+      { field: 12, comps: [1] },
+      { field: 19, comps: [1] },
+    ],
+    IN1: [
+      { field: 8, comps: [1] },
+      { field: 16, comps: [1, 2] },
+      { field: 18, comps: [1] },
+      { field: 19, comps: [1, 3] },
+      { field: 36, comps: [1] },
+      { field: 49, comps: [1] },
+    ],
+    IN2: [
+      { field: 2, comps: [1] },
+      { field: 3, comps: [1, 2] },
+      { field: 6, comps: [1] },
+      { field: 7, comps: [1] },
+      { field: 8, comps: [1, 2] },
+      { field: 61, comps: [1] },
+      { field: 63, comps: [1] },
+    ],
+  };
+
+/** Every allow-listed synthetic token, uppercased, as one set (names ∪ ids ∪ dobs). */
+function syntheticTokens(allow: AllowList): Set<string> {
+  const set = new Set<string>();
+  for (const n of allow.names) set.add(n);
+  for (const i of allow.ids) set.add(i);
+  for (const d of allow.dobs) set.add(d.toUpperCase());
+  return set;
+}
+
+/**
+ * Structured HL7 v2 PHI scan: for every PID/NK1/GT1/IN1/IN2 PHI field, check each identifying
+ * component value against the synthetic allow-list. Anything not positively declared synthetic is a
+ * hit. Pure string splitting — no parser dependency (matches every sibling scanner).
+ */
+function scanHl7Structured(path: string, content: string, allow: AllowList, hits: Hit[]): void {
+  const lines = content.split(/\r\n|\r|\n/).filter((l) => l.length > 0);
+  const msh = lines.find((l) => l.startsWith("MSH"));
+  if (msh === undefined) return; // not an HL7 v2 message
+  const fieldSep = msh.charAt(3) || "|";
+  const enc = msh.slice(4).split(fieldSep)[0] ?? "^~\\&";
+  const compSep = enc.charAt(0) || "^";
+  const repSep = enc.charAt(1) || "~";
+  const subSep = enc.charAt(3) || "&";
+  const allowed = syntheticTokens(allow);
+
+  for (const line of lines) {
+    const name = line.slice(0, 3);
+    const spec = HL7_PHI_FIELDS[name];
+    if (spec === undefined) continue;
+    const fields = line.split(fieldSep); // fields[0] = segment name; fields[n] = SEG-n
+    for (const { field, comps } of spec) {
+      const raw = fields[field];
+      if (raw === undefined || raw.length === 0) continue;
+      for (const rep of raw.split(repSep)) {
+        const components = rep.split(compSep);
+        for (const c of comps) {
+          const value = (components[c - 1] ?? "").split(subSep)[0] ?? "";
+          if (value.length === 0) continue;
+          if (!allowed.has(value.toUpperCase())) {
+            hits.push({
+              path,
+              segment: `${name}-${String(field)}.${String(c)}`,
+              value,
+              reason: "HL7 PHI field value not declared synthetic in the allow-list",
+            });
+          }
+        }
+      }
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Dispatch
 // ---------------------------------------------------------------------------
 
@@ -375,31 +497,14 @@ function scanTarget(target: Target, allow: AllowList, hits: Hit[]): void {
   // target and is all the starter detects.
   scanCommonShapes(target.path, text, allow, hits);
 
-  // ── TODO: add De-identification-specific structured field-level PHI detection here ──
+  // The deid-specific gate: HL7 v2 structured, field-level PHI detection. Runs on any HL7 message
+  // (MSH-led) among src JSDoc snippets and test/fixtures — checks every PID/NK1/GT1/IN1/IN2 PHI field
+  // against the synthetic allow-list. A real name / DOB / MRN in a fixture is a hard hit.
   //
-  //   The floor above ONLY catches SSN/email shapes. Before you rely on this
-  //   scanner as a real safety gate you MUST add structured, field-level
-  //   detection for De-identification's PHI — at minimum: person NAMES, DATE OF BIRTH,
-  //   MRN / MEMBER ID, ADDRESS, and PHONE — parsing `text` according to the
-  //   De-identification wire format and checking each PHI-bearing field against the
-  //   allow-list (`allow.names` / `allow.dobs` / `allow.ids`), pushing a `Hit`
-  //   for anything not positively declared synthetic.
-  //
-  //   Parse the format properly (delimiters / segments / elements / tags) — do
-  //   NOT bolt on a blind text regex for names: coded values (`CBC^Complete
-  //   Blood Count`, `Boston^MA`) produce false confidence. See the sibling
-  //   parsers named in the STARTER banner at the top of this file for worked,
-  //   spec-aware examples you can adapt:
-  //
-  //     const d = detectDe-identificationDelimiters(text);          // if applicable
-  //     for (const record of splitDe-identification(text, d)) {
-  //       // check name / dob / id / address / phone fields against `allow`
-  //       // hits.push({ path: target.path, segment: "<field>", value, reason });
-  //     }
-  //
-  //   Until this section is implemented, treat a green `pnpm phi-scan` as
-  //   "no SSN/email shapes found" — NOT as "no PHI".
-  // ───────────────────────────────────────────────────────────────────────────
+  // NOTE: free-text narrative (OBX-5 / NTE-3) is NOT structurally checkable and is covered only by the
+  // floor above (SSN/email) plus the synthetic-fixture discipline; per-format C-CDA/FHIR/X12/NCPDP/DICOM
+  // detectors land with their phases (roadmap §7 — the eventual union scanner).
+  scanHl7Structured(target.path, text, allow, hits);
 }
 
 // ---------------------------------------------------------------------------

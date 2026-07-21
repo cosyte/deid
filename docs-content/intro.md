@@ -23,9 +23,9 @@ through as safe.
 > certification is always the consumer's.
 
 > **Status:** pre-alpha (`0.0.x`), not yet published to npm. This release ships the **format-agnostic
-> core**: the policy engine, the five transforms, the 18-category Safe Harbor model, the fail-closed
-> rule, and the value-free manifest — tested against a generic locus model. Per-format adapters
-> (HL7 v2, C-CDA, FHIR, X12, NCPDP, DICOM) land in subsequent phases.
+> core** (policy engine, five transforms, 18-category Safe Harbor model, fail-closed rule, value-free
+> manifest) **plus the first format binding — the HL7 v2 adapter** (`@cosyte/deid/hl7`). The remaining
+> per-format adapters (C-CDA, FHIR, X12, NCPDP, DICOM) land in subsequent phases.
 
 ## Install
 
@@ -48,4 +48,5 @@ const { document, manifest } = deidentify(
 ## Next
 
 - [Quickstart](./quickstart) — de-identify a model and read the manifest.
+- [De-identifying HL7 v2](./guides-hl7) — the first end-to-end format adapter (`@cosyte/deid/hl7`).
 - [Core Concepts](./concepts-archetype) — the policy engine, the transforms, and fail-closed.
