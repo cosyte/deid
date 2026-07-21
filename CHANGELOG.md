@@ -14,6 +14,36 @@ its public history at `0.0.x`, per the cosyte version ladder (`0.0.x` until firs
 
 ### Added
 
+- **DEID-9 — Expert-Determination _support_ report (never certification).** A new value-free reporting
+  layer over the manifest every adapter emits (roadmap §Phase 9). `buildExpertDeterminationSupportReport`
+  structures one manifest (or a corpus of manifests) into the facts a statistician reasons about for a
+  HIPAA **Expert Determination** (45 CFR §164.514(b)(1)) — and the library **renders none**.
+  - **Per-locus disposition, category coverage, retained-quasi-identifier inventory.** The report carries
+    every acted-on locus (aggregated), coverage across **all 18** Safe Harbor categories in regulatory
+    order (A→R, acted-on or not), a disposition roll-up, and — the residual an expert cares about most —
+    the **retained-quasi-identifier inventory**: the coarse identifying residuals the pass recorded as
+    `DEID_RESIDUAL_RETAINED` (year-only dates, safe 3-digit ZIP prefixes, exact ages ≤ 89), the
+    §164.514(b)(2)(ii) actual-knowledge considerations.
+  - **The hard boundary: `deid` makes NO determination.** The report **never** asserts the output "is
+    de-identified", **never** computes or fabricates a re-identification **risk score**, and reaches no
+    conclusion. `determination` is always `null`; `EXPERT_DETERMINATION_DISCLAIMER` leads. Over-claiming
+    here would be a real compliance harm — the certification is the qualified expert's, always.
+  - **Optional k-anonymity indicator — caller-supplied, descriptive only.** When the consumer supplies
+    equivalence-class sizes (they hold the quasi-identifier values; the library has none), the report
+    echoes the distinct-combination count, total records, sample-uniques, and the smallest
+    equivalence-class size (the k-anonymity **indicator**) — stamped a descriptive input, **not** a risk
+    score, **not** a determination, **not** a threshold the library evaluates. Absent when not supplied:
+    the library never invents a number from the manifest alone.
+  - **Value-free + deterministic + human-readable.** Like the manifest it summarizes, the report carries
+    loci / categories / dispositions / counts, **never a PHI value**; it is deterministic and never
+    mutates its input. `formatExpertDeterminationSupportReport` renders the same facts as Markdown for a
+    statistician. New public surface: `buildExpertDeterminationSupportReport`,
+    `formatExpertDeterminationSupportReport`, `EXPERT_DETERMINATION_DISCLAIMER`, and the types
+    `ExpertDeterminationSupportReport`, `ExpertDeterminationReportOptions`, `CategoryCoverage`,
+    `DispositionSummary`, `RetainedQuasiIdentifier`, `QuasiIdentifierClassInput`,
+    `QuasiIdentifierStatistics`, `ReportDisposition`. `OUTPUT_LABEL` / `VERSION` moved to an internal
+    `labels` module and re-exported unchanged (no consumer-visible change).
+
 - **DEID-8 — free-text / narrative BYO redaction.** The known-hard concern, scoped honestly (roadmap
   §Phase 8). Free-text loci (HL7 `OBX-5` / `NTE`, C-CDA section `<text>`, FHIR `note` / `div`, X12 `MSG`
   / `NTE`, NCPDP free text) keep their **fail-closed default** (blocked, never emitted) and gain an
