@@ -6,9 +6,8 @@ sidebar_position: 1
 
 # Guides
 
-Task-oriented recipes for `@cosyte/deid`. This release ships the **format-agnostic core**, so the
-guides here cover the policy engine and the transforms; per-format recipes (de-identify a real
-`ORU^R01`, a C-CDA CCD, a FHIR Bundle) arrive as the format adapters land.
+Task-oriented recipes for `@cosyte/deid`. These guides cover the policy engine and the transforms, plus a
+per-format recipe for each shipped adapter — HL7 v2, C-CDA, FHIR, X12 EDI, NCPDP Telecom, and DICOM.
 
 ## Choose a policy
 
@@ -46,10 +45,9 @@ you surface to a human for the §164.514(b)(2)(ii) actual-knowledge test.
 ## Per-format guides
 
 - [De-identifying HL7 v2](guides-hl7), [C-CDA](guides-ccda), [FHIR](guides-fhir),
-  [X12 EDI](guides-x12), and [NCPDP Telecom](guides-ncpdp).
+  [X12 EDI](guides-x12), [NCPDP Telecom](guides-ncpdp), and [DICOM](guides-dicom).
 
 ## Planned guides
 
-- De-identify a DICOM study (orchestrating the parser's PS3.15 Annex E pass).
 - NCPDP SCRIPT (ePrescribing) once a full-fidelity parser surface exists.
 - Cross-document longitudinal consistency with date-shift + pseudonymization (Phase 7).

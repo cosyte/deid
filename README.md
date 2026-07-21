@@ -17,10 +17,10 @@ but **inverts the reflex** — where a parser is liberal on input, a de-identifi
 > always the consumer's.
 
 > **Status:** pre-alpha (`0.0.x`), not yet published to npm. This release ships the **format-agnostic
-> core** plus five format bindings — the **HL7 v2 adapter** (`@cosyte/deid/hl7`), the **C-CDA adapter**
+> core** plus six format bindings — the **HL7 v2 adapter** (`@cosyte/deid/hl7`), the **C-CDA adapter**
 > (`@cosyte/deid/ccda`), the **FHIR R4 adapter** (`@cosyte/deid/fhir`), the **X12 EDI adapter**
-> (`@cosyte/deid/x12`), and the **NCPDP Telecom adapter** (`@cosyte/deid/ncpdp`). The DICOM adapter and
-> NCPDP SCRIPT land in subsequent phases.
+> (`@cosyte/deid/x12`), the **NCPDP Telecom adapter** (`@cosyte/deid/ncpdp`), and the **DICOM adapter**
+> (`@cosyte/deid/dicom`). NCPDP SCRIPT lands in a subsequent phase.
 
 ## Install
 
@@ -261,6 +261,33 @@ pricing, DUR codes) are retained untouched.
 fields (a round-trip drops unmodeled XML) and its `Patient` model has no address / phone / patient-id
 field, so a faithful structural de-id is not achievable through the current public surface. Shipping a
 partial pass would be a false-safety hazard, which the fail-closed posture forbids.
+
+## De-identify a DICOM study
+
+The `@cosyte/deid/dicom` adapter **delegates rather than reimplements**: [`@cosyte/dicom`](https://github.com/cosyte/dicom)
+already ships the **PS3.15 Annex E** de-identification (the Basic Application Level Confidentiality
+Profile), so this adapter orchestrates that pass under the unified policy and folds its value-free report
+into the unified manifest. `@cosyte/dicom` is an **optional peer dependency**.
+
+```ts
+import { parseDicom } from "@cosyte/dicom";
+import { deidentifyDicom, deidentifyDicomBuffer } from "@cosyte/deid/dicom";
+
+const { dataset, manifest, burnedInAnnotationHazard } = deidentifyDicom(parseDicom(part10Bytes));
+const { bytes } = deidentifyDicomBuffer(part10Bytes); // parse → de-id → re-serialize in one call
+```
+
+The full Basic Profile applies by default (no key needed): Patient Name/ID/Birth Date, institution,
+referring physician, dates and the enumerated Annex E attributes are **removed**; Study / Series / SOP
+Instance UIDs are **consistently remapped** so image/series/study relationships survive; **private tags are
+removed** (fail-closed — kept only via a known-safe retain list, empty by default); clinical/technical
+values and pixel bytes are **retained untouched**. The output carries `Patient Identity Removed = YES`.
+
+**Pixel PHI is flagged, never cleaned.** This is a **metadata-only** de-identifier (`metadataOnly` is
+always `true`): it cannot inspect pixels, so recognizable text **burned into the image** (Safe Harbor
+category Q) is not removed. When Pixel Data may carry burned-in annotation, the result sets
+`burnedInAnnotationHazard === true` and emits `DICOM_BURNED_IN_ANNOTATION_NOT_REMOVED` — do **not** release
+such an image on metadata alone. Pixel cleaning is a future `@cosyte/dicom-pixel`.
 
 ## The design in five pieces
 
