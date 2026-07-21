@@ -29,6 +29,15 @@ export const FATAL_CODES = {
    * **never** falls back to an unkeyed transform — an unkeyed hash of an identifier is re-identifiable.
    */
   DEID_NO_KEY: "DEID_NO_KEY",
+  /**
+   * A policy violates the key/label contract — most importantly, it applies the interval-preserving
+   * **`date-shift`** transform while carrying the reserved **`safe-harbor`** label. A shifted-but-real
+   * date is still "an element of a date" under §164.514(b)(2)(i)(C), so date-shift is an
+   * Expert-Determination technique, **not** Safe Harbor; labelling it `safe-harbor` would misrepresent
+   * the residual risk. The engine rejects it at point of use rather than silently emit shifted real
+   * dates under a Safe Harbor claim. (Roadmap §Phase 7; the fatal set is additions-only — §Phase 1.)
+   */
+  DEID_POLICY_INVALID: "DEID_POLICY_INVALID",
 } as const;
 
 /**

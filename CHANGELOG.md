@@ -14,6 +14,30 @@ its public history at `0.0.x`, per the cosyte version ladder (`0.0.x` until firs
 
 ### Added
 
+- **DEID-7 — the longitudinal layer: cross-document consistency + the key contract.** A format-agnostic
+  layer over the six shipped adapters that keeps a longitudinal record **linkable** after de-identification.
+  - **The corpus registry (`createDeidRegistry` / `DeidRegistry`).** `registry.forPatient(patientKey)`
+    returns a memoized, deterministically-scoped `DeidContext`, so the same patient's dates shift by the
+    **same offset** — intervals preserved exactly — across every document and every run.
+    `registry.pseudonym(id)` and `registry.remapUid(uid)` give corpus-wide **consistent** surrogates so
+    the same identifier / UID links everywhere, while distinct inputs never collide (keyed-HMAC
+    collision-resistance). The registry holds the consumer's key in a module-private `WeakMap` and
+    **redacts itself through every stringify channel** — the key and the per-patient offset never appear
+    in an output, a manifest, or an error.
+  - **The key contract, formalized.** The consumer supplies the HMAC key (and an optional distinct
+    date-shift seed). There is **no weak default** — an absent/empty key is a fatal `DEID_NO_KEY`, never a
+    silent fallback that would produce a re-identifiable surrogate. **Key rotation is intentional linkage
+    breakage:** a new key deterministically produces different offsets and pseudonyms, so a corpus
+    de-identified under a rotated key no longer links to records made under the old key. The library holds
+    **no persistent key store** — key custody and lifetime are the consumer's.
+  - **The label contract (`DEID_POLICY_INVALID`).** A policy that applies the interval-preserving
+    `date-shift` transform may **not** carry the reserved `safe-harbor` label — a shifted-but-real date is
+    still a date element (§164.514(b)(2)(i)(C)), so date-shift is Expert-Determination-supporting, **not**
+    Safe Harbor. Enforced both when a policy is minted (`defineDeidPolicy`) and at point of use
+    (`resolvePolicy`), so a hand-built policy object cannot slip a mislabel past the engine. This is an
+    **additions-only** new fatal code (per the DEID-1 contract); the six adapters' per-format leak and
+    over-scrub guarantees are unchanged.
+
 - **DEID-6 — the DICOM de-identification adapter (`@cosyte/deid/dicom`).** The one adapter that
   **delegates rather than reimplements**: `@cosyte/dicom` already ships the PS3.15 **Annex E**
   de-identification (the Basic Application Level Confidentiality Profile), so this adapter **orchestrates**

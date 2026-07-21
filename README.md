@@ -20,7 +20,8 @@ but **inverts the reflex** — where a parser is liberal on input, a de-identifi
 > core** plus six format bindings — the **HL7 v2 adapter** (`@cosyte/deid/hl7`), the **C-CDA adapter**
 > (`@cosyte/deid/ccda`), the **FHIR R4 adapter** (`@cosyte/deid/fhir`), the **X12 EDI adapter**
 > (`@cosyte/deid/x12`), the **NCPDP Telecom adapter** (`@cosyte/deid/ncpdp`), and the **DICOM adapter**
-> (`@cosyte/deid/dicom`). NCPDP SCRIPT lands in a subsequent phase.
+> (`@cosyte/deid/dicom`), plus the **longitudinal layer** — the corpus registry (`createDeidRegistry`)
+> for cross-document consistency and the formalized key contract. NCPDP SCRIPT lands in a subsequent phase.
 
 ## Install
 
@@ -288,6 +289,39 @@ always `true`): it cannot inspect pixels, so recognizable text **burned into the
 category Q) is not removed. When Pixel Data may carry burned-in annotation, the result sets
 `burnedInAnnotationHazard === true` and emits `DICOM_BURNED_IN_ANNOTATION_NOT_REMOVED` — do **not** release
 such an image on metadata alone. Pixel cleaning is a future `@cosyte/dicom-pixel`.
+
+## Keep a longitudinal record linkable
+
+For research and analytics, the same patient must stay linkable across a whole corpus after de-id. A
+**registry** (`createDeidRegistry`) holds your key and keeps the same patient's dates shifting by the
+same offset — intervals preserved — and the same identifier mapping to the same pseudonym, across every
+document and every run.
+
+```ts
+import {
+  createDeidRegistry,
+  deidentify,
+  defineDeidPolicy,
+  SAFE_HARBOR_CATEGORIES,
+} from "@cosyte/deid";
+
+const registry = createDeidRegistry({ key: process.env.DEID_KEY! });
+const research = defineDeidPolicy({
+  name: "research", // date-shift may NOT wear the "safe-harbor" label — it is Expert-Determination
+  transforms: { [SAFE_HARBOR_CATEGORIES.DATES]: "date-shift" },
+});
+
+const ctx = registry.forPatient("patient-1"); // reuse for every document of this patient
+deidentify(model, { policy: research, context: ctx }); // dates shift consistently, intervals intact
+registry.pseudonym("MRN-1"); // same MRN → same surrogate corpus-wide
+```
+
+**The key contract.** You supply the key; there is **no weak default** (an absent key is a fatal
+`DEID_NO_KEY`, never a silent fallback). Rotating the key is **intentional linkage breakage** — a new
+key un-links a corpus from records made under the old one. The library holds no persistent key store.
+Date-shift retains dates in shifted form, so it is Expert-Determination-supporting, **not** Safe Harbor
+— and the library rejects any date-shifting policy that claims the `safe-harbor` label
+(`DEID_POLICY_INVALID`).
 
 ## The design in five pieces
 

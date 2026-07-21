@@ -18,6 +18,7 @@ describe("code surface stability", () => {
     expect(sortedCodeSet(FATAL_CODES)).toMatchInlineSnapshot(`
       [
         "DEID_NO_KEY",
+        "DEID_POLICY_INVALID",
         "EMPTY_INPUT",
       ]
     `);
