@@ -27,7 +27,8 @@
         "guides-fhir",
         "guides-x12",
         "guides-ncpdp",
-        "guides-dicom"
+        "guides-dicom",
+        "guides-longitudinal"
       ]
     },
     {

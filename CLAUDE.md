@@ -18,7 +18,7 @@ never rendered.
 
 ## Status
 
-- **DEID-1…DEID-5 shipped.** Pre-alpha `0.0.x`, not yet published to npm. `src/` carries the
+- **DEID-1…DEID-7 shipped.** Pre-alpha `0.0.x`, not yet published to npm. `src/` carries the
   format-agnostic core (DEID-1: the policy engine `deidentify` / `SAFE_HARBOR_POLICY` /
   `defineDeidPolicy`, the five `node:crypto`-backed transforms, the 18-category Safe Harbor model, the
   fail-closed rule, the value-free manifest) plus **five per-format adapters** on the core's generic locus
@@ -27,7 +27,12 @@ never rendered.
   (`@cosyte/deid/ncpdp`). Each format's parser is an **optional peer dep** consumed only from its subpath
   (vendored `pnpm pack` tarballs pre PUB-FLIP). **Remaining:** DICOM orchestration (DEID-6) and NCPDP
   SCRIPT (deferred — its lossy serialize + address-less `Patient` model block a faithful structural
-  de-id through the current parser surface). **Third-party runtime deps: zero (`node:crypto` only).**
+  de-id through the current parser surface). **DEID-7** adds the format-agnostic **longitudinal layer**
+  over all six adapters: the corpus registry (`createDeidRegistry`) for cross-document consistency
+  (same patient → same offset/dates, same id → same pseudonym, corpus-wide), the formalized key
+  contract (consumer-supplied key, fail-closed `DEID_NO_KEY`, rotation = intentional linkage breakage),
+  and the `DEID_POLICY_INVALID` label guard (date-shift may not wear the `safe-harbor` label).
+  **Third-party runtime deps: zero (`node:crypto` only).**
 
 ## Tech Stack (the shared `@cosyte/*` standard)
 

@@ -6,10 +6,12 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  FATAL_CODES,
   SAFE_HARBOR_CATEGORIES,
   SAFE_HARBOR_POLICY,
   defineDeidPolicy,
   resolvePolicy,
+  type DeidPolicy,
   type SafeHarborCategory,
 } from "../src/index.js";
 
@@ -64,5 +66,36 @@ describe("resolvePolicy", () => {
     expect(resolvePolicy("safe-harbor")).toBe(SAFE_HARBOR_POLICY);
     const custom = defineDeidPolicy({ name: "x" });
     expect(resolvePolicy(custom)).toBe(custom);
+  });
+});
+
+describe("the key/label contract — date-shift is not Safe Harbor", () => {
+  it("defineDeidPolicy rejects a date-shift policy that claims the safe-harbor label", () => {
+    expect(() =>
+      defineDeidPolicy({ name: "safe-harbor", transforms: { [C.DATES]: "date-shift" } }),
+    ).toThrowError(expect.objectContaining({ code: FATAL_CODES.DEID_POLICY_INVALID }));
+  });
+
+  it("resolvePolicy fails closed on a hand-built safe-harbor-labelled date-shift object", () => {
+    // A consumer can construct a DeidPolicy literal directly, bypassing defineDeidPolicy.
+    const smuggled: DeidPolicy = {
+      name: "safe-harbor",
+      transforms: { ...SAFE_HARBOR_POLICY.transforms, [C.DATES]: "date-shift" },
+    };
+    expect(() => resolvePolicy(smuggled)).toThrowError(
+      expect.objectContaining({ code: FATAL_CODES.DEID_POLICY_INVALID }),
+    );
+  });
+
+  it("allows date-shift under a distinct label, and the built-in Safe Harbor is unaffected", () => {
+    const research = defineDeidPolicy({
+      name: "research",
+      transforms: { [C.DATES]: "date-shift" },
+    });
+    expect(research.transforms[C.DATES]).toBe("date-shift");
+    expect(() => resolvePolicy(research)).not.toThrow();
+    // The built-in generalizes dates, so it satisfies the contract.
+    expect(() => resolvePolicy("safe-harbor")).not.toThrow();
+    expect(SAFE_HARBOR_POLICY.transforms[C.DATES]).toBe("generalize");
   });
 });

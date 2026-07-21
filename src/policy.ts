@@ -8,6 +8,10 @@
  */
 
 import { SAFE_HARBOR_CATEGORIES, type SafeHarborCategory } from "./categories.js";
+import { DeidError, FATAL_CODES } from "./codes.js";
+
+/** The reserved label that only a genuinely Safe-Harbor-conforming policy may carry. */
+const SAFE_HARBOR_LABEL = "safe-harbor";
 
 /**
  * The name of a transform a policy can assign to a category. `block` is the fail-closed action
@@ -131,10 +135,38 @@ export interface DeidPolicySpec {
  * ```
  */
 export function defineDeidPolicy(spec: DeidPolicySpec): DeidPolicy {
-  return Object.freeze({
+  const policy: DeidPolicy = Object.freeze({
     name: spec.name,
     transforms: Object.freeze({ ...SAFE_HARBOR_POLICY.transforms, ...(spec.transforms ?? {}) }),
   });
+  assertPolicyContract(policy);
+  return policy;
+}
+
+/**
+ * Enforce the key/label contract on a policy, **failing closed** if it is violated: a policy that
+ * applies the interval-preserving `date-shift` transform must **not** carry the reserved `safe-harbor`
+ * label, because a shifted-but-real date is still a date element (§164.514(b)(2)(i)(C)) — date-shift is
+ * an Expert-Determination technique, not Safe Harbor. Enforced both when a policy is minted
+ * ({@link defineDeidPolicy}) and, so a hand-built {@link DeidPolicy} object cannot slip past, at the
+ * point of use ({@link resolvePolicy}).
+ *
+ * @param policy - The policy to validate.
+ * @throws {@link DeidError} with code `DEID_POLICY_INVALID` if the contract is violated.
+ * @internal
+ */
+export function assertPolicyContract(policy: DeidPolicy): void {
+  if (policy.name !== SAFE_HARBOR_LABEL) {
+    return;
+  }
+  const shiftsDates = Object.values(policy.transforms).includes("date-shift");
+  if (shiftsDates) {
+    throw new DeidError(
+      FATAL_CODES.DEID_POLICY_INVALID,
+      'a "date-shift" policy must not carry the "safe-harbor" label: a shifted real date is still a ' +
+        "date element (Expert-Determination technique, not Safe Harbor). Name it distinctly.",
+    );
+  }
 }
 
 /**
@@ -154,5 +186,8 @@ export function resolvePolicy(policy: DeidPolicy | "safe-harbor" | undefined): D
   if (policy === undefined || policy === "safe-harbor") {
     return SAFE_HARBOR_POLICY;
   }
+  // Fail closed on a hand-built policy object that violates the key/label contract (defineDeidPolicy
+  // already checks its own output, but a consumer can construct a DeidPolicy literal directly).
+  assertPolicyContract(policy);
   return policy;
 }

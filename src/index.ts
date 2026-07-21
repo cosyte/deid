@@ -67,6 +67,9 @@ export { RESTRICTED_ZIP3, RESTRICTED_ZIP3_SOURCE } from "./restricted-zip.js";
 // ── The context holding the consumer's key material (self-redacting; never leaks).
 export { createDeidContext, DeidContext, type DeidContextSpec } from "./context.js";
 
+// ── The corpus registry: cross-document longitudinal consistency + the key contract (DEID-7).
+export { createDeidRegistry, DeidRegistry, type DeidRegistrySpec } from "./registry.js";
+
 // ── The five transforms.
 export {
   redact,
