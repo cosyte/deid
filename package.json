@@ -1,6 +1,6 @@
 {
   "name": "@cosyte/deid",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "description": "Healthcare de-identification for Node.js and TypeScript — a HIPAA Safe Harbor policy engine that fails closed and emits a value-free manifest.",
   "keywords": [
     "deid",
