@@ -406,6 +406,16 @@ its public history at `0.0.x`, per the cosyte version ladder (`0.0.x` until firs
     `CX-5`, `NM1-03`, `REF-01`, `ICD-10-CM`, `HL7-V2`, `FHIR-R4`, `DICOM-SR`, `NCPDP-SCRIPT`,
     `X12-837P`, and (checked against every rule) a bare `§164.514(b)(2)(i)(C)`. A rule keyed on `§`
     alone was considered and refused: `§` here is how this package cites the regulation it implements.
+  - **A refuter refuted the first version of this gate, and the finding is worth keeping.** Three
+    source files (`context.ts`, `manifest.ts`, `report.ts`) embed a raw NUL byte inside a string
+    literal as the HMAC domain separator. `awk` passed it into the string-literal pass buffer, GNU
+    grep classified that whole buffer as binary, and a seeded violation therefore reported "binary
+    file matches" against an already-deleted temp path, with no rule, no source file, no line number
+    and remediation advice pointing at an encoding that is valid UTF-8. It exited through the
+    incomplete-scan refusal, which runs before the located hits from the other three passes print.
+    The gate still failed closed throughout, so nothing could escape it, but it could not say what it
+    had caught. Both extractors now strip the byte, and the script header (which had asserted "it
+    costs this pass nothing", naming one file instead of three) is corrected.
   - **No runtime behaviour, public API, policy, transform, disposition code, locus map or leak
     guarantee changed.** The full local ladder was green on the remediated tree: typecheck, lint,
     `format:check`, the PHI scan, 372 tests in 33 files, the gating coverage run, `build`, `attw` and

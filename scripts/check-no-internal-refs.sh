@@ -360,6 +360,24 @@
 #         a specific one on top. Do not close it without re-measuring what a `§` rule would
 #         take with it.
 #
+#  (xiv)  THE `src/` PASSES SEE ONLY `*.ts`. `git ls-files 'src/*.ts' 'src/**/*.ts'` is the
+#         subject of passes three and four, so a future `src/**/*.mts` or `*.cts` would be
+#         scanned by neither, and the refusal below only fires on an EMPTY list -- a
+#         SHRUNKEN one passes green. All 44 tracked `src/` files are `.ts` today, so there
+#         is no live gap; it is stated because the rest of this list is exhaustive about
+#         exactly this class of silent shrink. The same is true of the public surface, one
+#         layer up, where SURFACE_PATHS is guarded by a tracked-ness check per path instead.
+#
+#   (xv)  RULE 1 REDS ON THE FULL X12 IMPLEMENTATION-GUIDE IDENTIFIER, `X12-005010X222A1`,
+#         and on `X12-4010`. The `X12-\d{6}` arm of STANDARDS_DESIGNATION needs a word
+#         boundary after its six digits, which `X222A1` does not provide, and `\d{4}` is not
+#         covered at all. That is a LOUD RED on correct reference material, never a silent
+#         deletion, and there are zero occurrences on this tree (this package writes "HIPAA
+#         005010" without the `X12-` prefix). NOT FIXED HERE, deliberately: widening the
+#         exclusion would diverge this copy from four siblings on the strength of zero
+#         measured instances, which residual (i) says is the worse of the two mistakes. If
+#         a real one appears, fix it in the shared list, not in this copy alone.
+#
 # Run it locally with `pnpm check:no-internal-refs`.
 set -euo pipefail
 
@@ -671,11 +689,20 @@ SRC_RULE_COUNT=6
 #     pass here because a reflow would have to model template continuation, and the fix
 #     for a missed one is the same as for any residual: the reviewer.
 #   * `src/` CONTAINS RAW NUL BYTES, and that is deliberate, load-bearing cryptography:
-#     `src/context.ts` embeds `"\0"` twice as the HMAC domain separator. It costs this pass
-#     nothing (awk reads the files, and it was checked to run past both), but it is why
-#     `src/` must never be added to the grep-driven public-surface pass below, which runs
-#     without `-I` on purpose and would classify that file as binary. The public surface
-#     itself was checked and holds no NUL byte.
+#     `src/context.ts` (2), `src/manifest.ts` (4) and `src/report.ts` (4) embed a literal
+#     NUL as the HMAC domain separator. THIS COSTS THE PASS ITS ENTIRE LOCATION REPORTING
+#     UNLESS THE EXTRACTOR STRIPS IT, and an earlier draft of this file asserted the
+#     opposite as a measured fact ("it costs this pass nothing"). It does not: awk passes
+#     the byte through, so the extracted buffer carries NULs, GNU grep classifies the whole
+#     buffer as binary, and a real violation arrives on stderr as "binary file matches"
+#     with no rule, no source file, no line number, a mktemp path the trap has already
+#     deleted, and remediation advice telling the reader to fix an encoding that is valid
+#     UTF-8. It then exits through refuse_if_incomplete, which runs BEFORE the located hits
+#     from the first three passes are printed. The strip is at the extractor, commented
+#     there. Found by a refuter after this gate reported OK over the tree it shipped with.
+#     It is also why `src/` must never be added to the grep-driven public-surface pass
+#     below, which runs without `-I` on purpose and reads source files directly. The public
+#     surface itself was checked and holds no NUL byte.
 STR_RULE_NAME[0]="${RULE_NAME[0]}"; STR_RULE_PATTERN[0]="${RULE_PATTERN[0]}"
 STR_RULE_NAME[1]="${RULE_NAME[1]}"; STR_RULE_PATTERN[1]="${RULE_PATTERN[1]}"
 STR_RULE_NAME[2]="${RULE_NAME[2]}"; STR_RULE_PATTERN[2]="${RULE_PATTERN[2]}"
@@ -1273,6 +1300,10 @@ while IFS= read -r -d '' f; do
       sub(/^[[:space:]]*\*[[:space:]]?/, "", line)
       sub(/^[[:space:]]+/, "", line)
       # The LINE pass sees the doc text with its location beside it.
+      # Same NUL strip as the fourth pass, for the same reason. No doc comment in this
+      # repo carries one today; the guard is here so the two extractors cannot diverge on a
+      # byte that is deliberate and permanent in the source of this package.
+      gsub(/\0/, "", line)
       print line >> dl; print file ":" FNR >> dm
       # The FLOW pass accumulates a PARAGRAPH, not the whole block, and squeezes it the way
       # a tooltip reflows one. A BLANK doc line is a paragraph break and ends the run, for
@@ -1376,6 +1407,20 @@ while IFS= read -r -d '' f; do
         out = out " " substr(line, RSTART + 1, RLENGTH - 2)
         line = substr(line, RSTART + RLENGTH)
       }
+      # RAW NUL BYTES ARE STRIPPED HERE, and this line is load-bearing rather than
+      # defensive. src/context.ts, src/manifest.ts and src/report.ts embed a literal NUL
+      # inside a quoted literal -- it is the HMAC domain separator, deliberate cryptography,
+      # and it is not going away. awk passes it straight through, so without this the buffer
+      # below carries NULs, GNU grep classifies the WHOLE buffer as binary, and every hit in
+      # this pass arrives on stderr as "binary file matches" with no line number, naming a
+      # mktemp path the trap has already deleted. Worse, that lands in refuse_if_incomplete,
+      # which exits BEFORE fail_with_hits prints the located hits from passes 1-3: one NUL in
+      # src/ and a real README violation is reported as an encoding error. Verified by
+      # seeding "blocked pending DEID-77 in Phase 13" into a source file; found by a refuter,
+      # not by design. DELETED rather than replaced with a space: deletion can only ever JOIN
+      # two tokens into an over-report, which is the direction every other boundary in this
+      # file leans, while a space could split an identifier across the NUL and lose it.
+      gsub(/\0/, "", out)
       if (out != "") { print out >> sl; print file ":" FNR >> sm }
     }
   ' "$f" 2>>"$ERRLOG"

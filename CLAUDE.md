@@ -92,8 +92,11 @@ a summary.
   check in this repo was advisory, on the branch that publishes a de-identification package.
 - **A required context that a branch cannot emit leaves that PR pending, not failing.** Adding the two
   `smoke` contexts therefore blocks any PR whose branch predates `.github/workflows/smoke.yml` until it
-  is rebased onto a `main` that has the file. That is the expected cost of requiring a new context, not
-  a fault; rebase the branch.
+  is rebased onto a `main` that has the file. **`no-internal-refs` did exactly the same thing when it
+  was added, and for the same reason** (any branch predating `.github/workflows/no-internal-refs.yml`
+  cannot emit it). That is the expected cost of requiring a new context, not a fault; rebase the branch.
+  Expect it EVERY time a context is added here: the count is now three separate additions that each
+  stranded every open PR until it was rebased.
 - **`scorecard` is deliberately NOT required.** It runs only on `push` to `main` and on a schedule,
   never on `pull_request`, so requiring it would leave every PR pending forever. The `CodeQL` check
   posted by the GitHub Advanced Security app is also not required: it reports alert state, not
