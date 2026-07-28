@@ -46,8 +46,20 @@ never rendered.
   chunk fix** (`splitting: true`, so one `DeidContext` registry is shared across subpaths — mixing
   `createDeidContext` with a per-format `deidentify*` no longer throws a fail-closed `DEID_NO_KEY`); and
   two date-shift fixes (timezone-independent ISO-datetime shifting; `maxShiftDays: 0` now fails closed
-  with `DEID_CONTEXT_INVALID`). **Third-party runtime deps: zero (`node:crypto` only).** The two standing
-  human gates remain: `npm publish` and the public-repo flip (**`PUB-FLIP`**).
+  with `DEID_CONTEXT_INVALID`). **Third-party runtime deps: zero (`node:crypto` only).**
+- **The repo is already PUBLIC; the package is still unpublished.** Those two are independent here and
+  neither implies the other, so do not infer one from the other. `gh api repos/cosyte/deid --jq .visibility`
+  reports `public` (checked 2026-07-28), so the flip described above as a pending gate has happened, and
+  the "pre `PUB-FLIP`" note on the vendored tarballs is stale as a reason even though the vendoring is
+  still real. `npm publish` remains the one standing gate: the registry returns 404 for
+  `@cosyte/deid`. **No rejection of this package's own name is recorded anywhere, and no publish
+  attempt is recorded either** (`version` is still `0.0.0`, there are no tags, and `CHANGELOG.md` has
+  no released section) - note that a failed publish and a never-attempted one both leave a bare 404,
+  so the registry cannot tell you which. The hold is a sequencing decision: it waits on the
+  name-similarity rejection npm returned for `@cosyte/fhir`, which this package lists as an
+  **optional** peer dependency, so nothing mechanically stops a publish. That rejection is specific
+  to that one name, not to the `@cosyte` scope, which carries other published packages.
+  No version is quoted in this file on purpose; `npm view @cosyte/deid version` is the authority.
 
 ## Tech Stack (the shared `@cosyte/*` standard)
 
@@ -69,6 +81,82 @@ a summary.
 - **CI/CD:** thin callers of the reusable `cosyte/.github` workflows.
 - **Runtime deps:** **Zero.** Node stdlib only.
 - **License:** MIT.
+
+### Branch protection and Dependabot
+
+- **`main` is protected by a repository ruleset, `ci-required-checks`.** It requires
+  `ci / verify (22, ubuntu-latest)`, `ci / verify (24, ubuntu-latest)`, `ci / actionlint` and
+  `codeql / analyze (javascript-typescript)`, each pinned to the GitHub Actions app so a commit status
+  of the same name posted by another actor cannot satisfy it, and it blocks branch deletion and
+  force-push. Before this existed, `main` had **no rules at all**: every check in this repo was
+  advisory, on the branch that publishes a de-identification package.
+- **`scorecard` is deliberately NOT required.** It runs only on `push` to `main` and on a schedule,
+  never on `pull_request`, so requiring it would leave every PR pending forever. The `CodeQL` check
+  posted by the GitHub Advanced Security app is also not required: it reports alert state, not
+  whether the analysis job ran, which is what `codeql / analyze` already gates.
+- **Read `.github/workflows/ci.yml`'s job-name banner before renaming a job or splitting a step out
+  of `verify`.** A required job gates all of its steps, so promoting a step to its own job silently
+  un-requires it, and a renamed job leaves PRs pending rather than failing. The PHI scan is a step of
+  `verify`, so it is required only for as long as it stays one. **The leak/over-scrub corpus is not
+  protected by that rule at all**: it is `test/corpus/`, selected by the `include` glob in
+  `vitest.config.ts` and run inside the `test` / `test:coverage` steps, so narrowing the glob, moving
+  the files, or `.skip`-ing the suite drops this repo's headline leak gate with no workflow change and
+  nothing for the ruleset to notice. A ruleset binds a context; it cannot tell you the context still
+  means what it meant.
+- **A gate this repo documents but does not run: `pnpm smoke`.** `CHANGELOG.md` and the script's own
+  header call it a CI gate after `build`. No job invokes it, here or upstream, so it has only ever run
+  in `verify.sh` locally. That predates the ruleset and is left as its own unit of work; wiring it up
+  means a repo-local job plus its context added to the ruleset in the same change.
+- **▶ THE RULESET BLOCKS THE "Version Packages" PR, AND THAT IS EXPECTED. IT NEEDS ONE PUSH.**
+  Changesets opens the release PR as `github-actions[bot]` using the default `GITHUB_TOKEN`, and
+  GitHub does not start workflow runs for events raised by that token. So the version PR gets **zero
+  check runs**, not failing ones, and four required contexts that never arrive leave it `BLOCKED`
+  forever. `bypass_actors` is empty on purpose, so **not even a repo admin can merge past it.** The
+  fix is one commit onto `changeset-release/main`, which fires `pull_request: synchronize` under a
+  real user and produces all four checks:
+
+  ```bash
+  gh pr checkout <n> -R cosyte/deid   # the "Version Packages" PR
+  git commit --allow-empty -m "chore: run CI on the version PR"
+  git push
+  ```
+
+  Do the push **last**, immediately before merging: if another changeset lands on `main` first, the
+  release workflow re-runs and the bot moves the branch head again, dropping the PR back to zero
+  checks. That is not the escape failing; repeat it. A bypass actor would clear it too and was
+  rejected, because it would mean a human could merge a **red** PR on this package, which is what the
+  ruleset exists to prevent.
+
+- **Unproven, and stated as unproven: pull requests from FORKS.** This is a public repo with no
+  external contributors yet, so no fork PR has ever run here. Two things are expected to differ and
+  neither has been observed: a first-time contributor's workflows do not run until a maintainer
+  approves them, which looks identical to the version-PR trap above (zero checks, `BLOCKED`); and
+  `codeql / analyze` needs `security-events: write`, which a fork's `GITHUB_TOKEN` cannot be granted,
+  so that fourth context may fail or not report.
+- **Nothing in this repository can observe its own ruleset.** It lives on GitHub, not in these files.
+  Delete it and every test here still passes, `pnpm test:coverage` still gates, the PHI scan still
+  runs, and these lines still claim protection that is gone. **Do not take this section as
+  evidence.** Verify with `gh api repos/cosyte/deid/rules/branches/main`, which reports what is
+  actually in force.
+- **`.github/dependabot.yml`** watches `npm` (the single root `package.json` + `pnpm-lock.yaml`) and
+  `github-actions`. It **cannot** see the six sibling parsers: they are optional peer deps installed
+  from `pnpm pack` tarballs committed under `vendor/` via `file:` specifiers, which Dependabot does
+  not bump. `@cosyte/deid/dicom` delegates its pass to `@cosyte/dicom`, so that vendored tarball is
+  the version the DICOM tests actually exercise, so re-pack it by hand when the upstream pass changes.
+  `package.json` also carries `pnpm.overrides`, which Dependabot does not manage; when a bump makes
+  one redundant, remove the override by hand.
+- **What the Dependabot config does NOT buy, since the file is easy to over-read.** It configures
+  **version** updates on a weekly schedule. Automatic **security** update PRs are a separate repo
+  setting: alerts are on for this repo, but `security_and_analysis.dependabot_security_updates`
+  reported `disabled` when this was written, so an advisory raises an alert and does not open a fix PR
+  by itself. That setting is not in these files either. Check it with
+  `gh api repos/cosyte/deid --jq .security_and_analysis`, not by reading this line.
+- **Unobserved, and stated as unobserved: whether Dependabot's pnpm updater tolerates this manifest.**
+  Six `devDependencies` here are `file:` tarballs under `vendor/`, which is unusual in this org. No
+  real Dependabot run has been seen against it, so it is not known whether it skips those entries
+  cleanly or errors the whole `npm` job. **Do not read "no open Dependabot PR" as "nothing is
+  stale"** until one weekly run has actually been observed; that inference is the exact mistake the
+  missing config caused in the first place.
 
 ## Engineering Guardrails
 
