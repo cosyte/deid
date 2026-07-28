@@ -51,12 +51,12 @@ updates:
       dev-dependencies:
         dependency-type: development
 
-  # Keep GitHub Actions references current. Stated honestly: all four workflows in this repo
-  # are today THIN CALLERS of `cosyte/.github/.github/workflows/*.yml@main`, and `@main` is a
-  # branch ref, so Dependabot has nothing to bump in them right now -- the pinned action SHAs
-  # live upstream in `cosyte/.github`, which has its own config. This entry is here so that the
-  # first repo-local job with a pinned `uses:` is watched from the moment it lands, rather than
-  # being remembered about later.
+  # Keep GitHub Actions references current. Four of the five workflows here are THIN CALLERS of
+  # `cosyte/.github/.github/workflows/*.yml@main`, and `@main` is a branch ref, so Dependabot has
+  # nothing to bump in those -- their pinned action SHAs live upstream in `cosyte/.github`, which
+  # has its own config. `smoke.yml` is the exception this entry was written in advance for: it is
+  # the first repo-local job, it pins `actions/checkout`, `pnpm/action-setup` and
+  # `actions/setup-node` by SHA, and those three pins are now what this ecosystem actually watches.
   - package-ecosystem: github-actions
     directory: "/"
     schedule:

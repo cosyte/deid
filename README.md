@@ -258,10 +258,9 @@ const { telecom, manifest } = deidentifyTelecom(parseTelecom(raw), { context });
 The Patient (`01`), Insurance (`04`), and Coordination-of-Benefits (`05`) segments and the header Date of
 Service carry the individual's identity: name / phone / street / city **removed**, ZIP → 3-digit, DOB and
 dates → year, patient / cardholder / group ids **pseudonymized**. The Prescriber (`03`) id is **removed**
-(the roadmap scopes prescriber identifiers for NCPDP — a deliberate asymmetry with the X12 adapter's
-provider-retention stance). A free-text field (`544-FY` DUR, `504-F4` message) and any unmapped / unknown
-segment **fail closed**; the clinical / financial segments (NDC drug codes, quantities, days-supply,
-pricing, DUR codes) are retained untouched.
+(a deliberate asymmetry with the X12 adapter's provider-retention stance). A free-text field
+(`544-FY` DUR, `504-F4` message) and any unmapped / unknown segment **fail closed**; the clinical /
+financial segments (NDC drug codes, quantities, days-supply, pricing, DUR codes) are retained untouched.
 
 **NCPDP SCRIPT (ePrescribing XML) is deferred** — its parser's `serializeScript` emits only modeled
 fields (a round-trip drops unmodeled XML) and its `Patient` model has no address / phone / patient-id

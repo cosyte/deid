@@ -45,11 +45,13 @@ jobs:
   # leak gate with no workflow change, no job change, and NOTHING for the ruleset to notice. A
   # ruleset can only bind a context; it cannot tell you the context still means what it meant.
   #
-  # ▶ KNOWN GAP, NOT FIXED HERE: `pnpm smoke` (scripts/smoke.mjs, every published subpath in ESM and
-  # CJS off the built dist/, asserting no leak) is described in CHANGELOG.md and in its own header as
-  # a CI gate after `build`. It is not in any job, here or upstream, so it has never run on a PR or a
-  # push. It runs only in `verify.sh` locally. Wiring it up means a repo-local job plus its context in
-  # the ruleset, in one change; it predates this ruleset and is left as its own unit of work.
+  # ▶ THE GATE THAT USED TO BE MISSING HERE NOW LIVES NEXT DOOR, in `.github/workflows/smoke.yml`.
+  # `pnpm smoke` (scripts/smoke.mjs: every published subpath in ESM and CJS off the built dist/, the
+  # shared-core chunk, no leak) was documented as a CI gate after `build` while running in no job at
+  # all. It now runs as its own workflow on `pull_request`, and its contexts `smoke (22)` /
+  # `smoke (24)` are required by the same ruleset as the four above. Do NOT read the upstream
+  # `Dual ESM/CJS smoke` STEP in `verify` as that gate: it is root-entry only (stat + import +
+  # require of `dist/index.*`) and cannot see a broken subpath, a missing export, or a leak.
   #
   # Universal gates from the shared pipeline (typecheck, lint, format, test, coverage, build, attw,
   # dual ESM/CJS smoke, actionlint) on the standard Node matrix. Repo-specific extra jobs (e.g. an
