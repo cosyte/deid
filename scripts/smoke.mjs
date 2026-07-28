@@ -8,7 +8,11 @@
  *    root entry is honored by a per-format adapter from a *different* subpath, i.e. they share one
  *    `DeidContext` registry, so mixing `createDeidContext` with `deidentify*` does not throw a
  *    fail-closed `DEID_NO_KEY`. Verified in ESM and CJS.
- * 3. **No format leaks a seeded synthetic sentinel through the built artifact.**
+ * 3. **The built HL7 artifact does not leak a seeded synthetic sentinel.** Scoped exactly: the sweep
+ *    runs over `deidentifyHl7`'s output and no other adapter's, so this is a release-shape leak check
+ *    for one format, not a cross-format one. The cross-format zero-leak and clinical-survivor gates
+ *    are `test/corpus/`, which runs from source under `pnpm test`. Do not read this line as covering
+ *    the other five adapters; they are checked here for load and export shape only.
  *
  * Zero external test framework, a plain node script so it slots into the CI ladder after `build`.
  * All values are synthetic. Exit non-zero on any failure.
@@ -56,8 +60,18 @@ const HEADLINE = {
   "./dicom": "deidentifyDicom",
 };
 
-/** `exports` keys that are not loadable JS entry points and are excluded on purpose. */
-const NOT_AN_ENTRY_POINT = new Set(["./package.json"]);
+/**
+ * True for an `exports` entry that is data rather than a loadable JS entry point, i.e. a bare
+ * string target ending in `.json` (`"./package.json": "./package.json"`).
+ *
+ * Derived on purpose, and this is not a detail. The obvious spelling is a set of excluded keys, but
+ * a hand-maintained exclusion set is a second lever on the gate's scope: adding `"./dicom"` to it
+ * and deleting one line from `HEADLINE` drops a published adapter out of the check while `exports`
+ * is untouched and the run still reports green. That is the same escape hatch this file exists to
+ * close, one level up. There is no list to edit here: a subpath leaves the gate's subject only by
+ * ceasing to be a JS entry point in `package.json`, which is not something that happens quietly.
+ */
+const isDataEntry = (target) => typeof target === "string" && target.endsWith(".json");
 
 /**
  * Read the published subpaths out of `package.json` and pair each with its headline export.
@@ -70,7 +84,7 @@ function resolveSubpaths() {
     throw new Error("package.json has no `exports` map: nothing to smoke");
   }
 
-  const published = Object.keys(exportsMap).filter((k) => !NOT_AN_ENTRY_POINT.has(k));
+  const published = Object.keys(exportsMap).filter((k) => !isDataEntry(exportsMap[k]));
   const declared = Object.keys(HEADLINE);
 
   const unchecked = published.filter((k) => !declared.includes(k));
@@ -171,7 +185,7 @@ run()
     }
     console.log(
       `✓ release smoke: all ${SUBPATHS.length} published subpaths load (ESM+CJS), ` +
-        "shared context honored cross-subpath, no leak",
+        "shared context honored cross-subpath, no HL7 leak",
     );
   })
   .catch((err) => {

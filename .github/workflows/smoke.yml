@@ -2,7 +2,9 @@ name: Release smoke
 
 # Runs `pnpm smoke` (scripts/smoke.mjs) against the freshly built `dist/`: every published subpath
 # loaded in BOTH ESM and CJS, the shared-core chunk proven by using a root-created `DeidContext` from
-# a different subpath, and a seeded synthetic sentinel asserted not to survive the built artifact.
+# a different subpath, and a seeded synthetic sentinel asserted not to survive the built HL7 pass.
+# That last part is HL7-scoped on purpose: the cross-format zero-leak and clinical-survivor gates are
+# `test/corpus/`, which runs from source inside `ci / verify`, not here.
 #
 # ▶ WHY THIS FILE EXISTS AT ALL, STATED PLAINLY. `pnpm smoke` was described in CHANGELOG.md and in
 # its own header as a CI gate after `build`, and it ran in NO job, here or upstream. It had only ever
@@ -12,8 +14,9 @@ name: Release smoke
 #
 # ▶ IT IS NOT THE SAME CHECK AS THE SHARED PIPELINE'S "Dual ESM/CJS smoke". That upstream step is
 # ROOT ENTRY ONLY: it stats `dist/index.{mjs,cjs,d.ts}` and imports/requires the root. It cannot see
-# a broken `./hl7` subpath, a missing headline export, a regressed shared-core chunk, or a leak.
-# Keep both; this one does not replace it, and deleting the upstream step is not this job's call.
+# a broken `./hl7` subpath, a missing headline export, a regressed shared-core chunk, or an HL7 leak
+# through the built artifact. Keep both; this one does not replace it, and deleting the upstream step
+# is not this job's call.
 #
 # ▶ WHY A SEPARATE WORKFLOW AND NOT A JOB IN ci.yml. `ci.yml` is a thin caller of
 # cosyte/.github/.github/workflows/ci.yml@main, which runs a fixed ladder and no arbitrary repo
@@ -40,10 +43,12 @@ name: Release smoke
 # ▶ AND THE JOB BOUNDARY IS NOT THE ONLY WAY TO LOSE THIS GATE, which is the failure this repo has
 # already made once. The set of subpaths the smoke loads is NOT a list inside the script: it is read
 # from `package.json`'s `exports` at run time, and the script REFUSES to run if its per-subpath
-# headline-export map and that `exports` map disagree. That is what stops the gate from being
-# narrowed under a green check the way `test/corpus/` can be narrowed by editing the `include` glob
-# in vitest.config.ts. If you ever replace that derivation with a hand-written array here or there,
-# this job goes back to reporting green over whatever subset someone last remembered to list.
+# headline-export map and that `exports` map disagree. Note that there is no exclusion LIST either,
+# deliberately: `./package.json` drops out because its target is structurally data (a bare `.json`
+# string), not because a key was named somewhere. An exclusion list would be a second lever on the
+# gate's scope, and one lever is what `test/corpus/` already has in the `include` glob of
+# vitest.config.ts. If you replace either derivation with a hand-written array, here or in the
+# script, this job goes back to reporting green over whatever subset someone last remembered.
 #
 # The Node matrix mirrors `ci / verify`, because module resolution of `exports`, ESM/CJS interop and
 # `require` of a dual package is exactly the kind of thing that moves between Node majors, and the

@@ -14,10 +14,11 @@ a protection nothing provides.
 A repo-local workflow now runs `pnpm build` then `pnpm smoke` on the Node 22 and 24 matrix, and the
 branch ruleset requires both of its contexts. This is not the same check as the shared pipeline's
 root-entry dual ESM/CJS step, which loads `dist/index.*` only and cannot see a broken subpath, a
-missing headline export, a regressed shared-core chunk, or a leak.
+missing headline export, a regressed shared-core chunk, or an HL7 leak through the built artifact.
 
-The smoke's scope is also derived rather than listed now: it reads the published subpaths out of
-`package.json`'s `exports` and refuses to run if its headline-export map disagrees with them, so a
-subpath published without coverage fails the gate rather than being skipped under a green check.
+The smoke's scope is also derived rather than listed now. It reads the published subpaths out of
+`package.json`'s `exports`, excludes only entries that are structurally data rather than any
+hand-maintained key list, and refuses to run when its headline-export map disagrees with the rest.
+A subpath published without coverage fails the gate rather than being skipped under a green check.
 
 No library code, public export, policy, profile or transform changed.

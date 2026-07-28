@@ -112,18 +112,22 @@ a summary.
   Node 22 + 24 matrix as `verify`, and the ruleset requires both of its contexts. Do not treat the
   shared pipeline's `Dual ESM/CJS smoke` step as the same check: it stats and loads the ROOT entry
   only, so it is blind to a broken subpath, a missing headline export, a regressed shared-core chunk
-  and a leak, all of which `pnpm smoke` covers. **And the smoke's scope is derived, not listed:** it
-  reads the subpaths out of `package.json`'s `exports` and refuses to run if its headline-export map
-  disagrees with them, so the check cannot be narrowed under a green result. That derivation is the
+  and an HL7 leak through the built artifact, all of which `pnpm smoke` covers. That last one is
+  scoped to HL7 and no further: the cross-format zero-leak gate is `test/corpus/` from source.
+  **And the smoke's scope is derived, not listed:** it reads the subpaths out of `package.json`'s
+  `exports`, excludes only entries that are structurally data (a bare `.json` target) rather than any
+  hand-maintained key list, and refuses to run if its headline-export map disagrees with the rest. A
+  published subpath therefore cannot leave the check while the check still reports green. That derivation is the
   gate, as much as the workflow is; replacing it with a hand-written array reopens exactly the hole
   the bullet above describes for `test/corpus/`.
 - **▶ THE RULESET BLOCKS THE "Version Packages" PR, AND THAT IS EXPECTED. IT NEEDS ONE PUSH.**
   Changesets opens the release PR as `github-actions[bot]` using the default `GITHUB_TOKEN`, and
   GitHub does not start workflow runs for events raised by that token. So the version PR gets **zero
-  check runs**, not failing ones, and four required contexts that never arrive leave it `BLOCKED`
+  check runs**, not failing ones, and required contexts that never arrive leave it `BLOCKED`
   forever. `bypass_actors` is empty on purpose, so **not even a repo admin can merge past it.** The
   fix is one commit onto `changeset-release/main`, which fires `pull_request: synchronize` under a
-  real user and produces all four checks:
+  real user and produces every one of them (count them off `gh api
+repos/cosyte/deid/rulesets/19907854`, not off this file):
 
   ```bash
   gh pr checkout <n> -R cosyte/deid   # the "Version Packages" PR

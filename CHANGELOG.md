@@ -391,10 +391,13 @@ its public history at `0.0.x`, per the cosyte version ladder (`0.0.x` until firs
   pull request on the Node 22 and 24 matrix, and the branch ruleset requires both of its contexts.
   **This is not the same check as the shared pipeline's root-entry `Dual ESM/CJS smoke` step,** which
   stats and loads `dist/index.*` only and is blind to a broken subpath, a missing headline export, a
-  regressed shared-core chunk and a leak. **The smoke's scope is now derived rather than listed:** it
-  reads the published subpaths out of `package.json`'s `exports` and refuses to run if its
-  headline-export map disagrees with them, so a subpath published without coverage fails the gate
-  instead of being silently skipped.
+  regressed shared-core chunk and an HL7 leak through the built artifact. (That last one is scoped to
+  HL7 on purpose; the cross-format zero-leak and clinical-survivor gates are `test/corpus/`, which
+  runs from source under `pnpm test`.) **The smoke's scope is now derived rather than listed:** it
+  reads the published subpaths out of `package.json`'s `exports`, excludes only entries that are
+  structurally data (a bare `.json` target) rather than any hand-maintained key list, and refuses to
+  run when its headline-export map disagrees with the rest. A subpath published without coverage
+  fails the gate instead of being silently skipped.
 - **Weekly dependency version updates are now watched.** The repository had no Dependabot
   configuration, so its zero open update PRs meant nothing was looking, not that nothing was stale.
   Scoped honestly: this buys _version_ updates on a schedule, not automatic security-fix PRs, which
