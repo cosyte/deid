@@ -2,14 +2,14 @@
  * The **C-CDA locus map** — the cited table of *where* the 18 HIPAA Safe Harbor identifier categories
  * live in an HL7 CDA R2.1 document, expressed as the structural **element types** that carry direct
  * person PHI and the coded/administrative element types that must be **retained** (the over-scrub
- * guard). This is the consumer-tier thesis (roadmap §5) applied to C-CDA: PHI is located
+ * guard). This is the consumer-tier thesis applied to C-CDA: PHI is located
  * **structurally**, at the CDA element the standard defines for it — a `<name>` inside a person role is
  * a person name because CDA says so, never because a string "looked like" a name.
  *
  * Unlike HL7 v2's flat segment/field grid, a CDA document is a tree, so the map is expressed as element
  * rules the extractor applies while walking the **header person participations** (recordTarget /
  * author / informant / authenticator / legalAuthenticator / dataEnterer / participant / custodian /
- * documentationOf / componentOf and the guardian nested under the patient — roadmap §4.6 relatives).
+ * documentationOf / componentOf and the guardian nested under the patient, relatives included).
  * The clinical **structuredBody** is deliberately *not* swept: its `<name>` can be a drug or material
  * name, so a whole-document name sweep would destroy clinical meaning (over-scrub). Section narrative
  * `<text>` blocks **fail closed**; genuinely unrecognized elements that carry a value **fail closed**.
@@ -39,7 +39,7 @@ const SSN_ROOT_OID = "2.16.840.1.113883.4.1";
 /**
  * The **document-envelope** elements — direct children of `ClinicalDocument` that carry no direct
  * patient/relative Safe Harbor identifier and are retained untouched, exactly as HL7 v2's MSH envelope
- * is (roadmap §Phase 2). The document `effectiveTime` is handled separately (it is a service-related
+ * is. The document `effectiveTime` is handled separately (it is a service-related
  * date → generalized); everything here is passed through.
  *
  * @example
@@ -76,7 +76,7 @@ export const CCDA_ENVELOPE_ELEMENTS: ReadonlySet<string> = new Set<string>([
  *   intervals are **not** dates and are excluded (they live in the clinical body, never swept).
  * - `id` — an `<id root= extension=>` at a person role (MRN / SSN / member / account). Pseudonymized:
  *   only the id value component is replaced (assigning-authority root retained), with an SSN-rooted id
- *   routed to the SSN category (redacted) — the structural, parser-typed knife-edge (§4.4).
+ *   routed to the SSN category (redacted) — the structural, parser-typed knife-edge.
  */
 export type CcdaElementMode = "name" | "telecom" | "addr" | "date" | "id";
 
@@ -113,7 +113,7 @@ export const CCDA_LOCUS_MAP: Readonly<
  * not itself acted on, **but the extractor still descends into it** — a `<code>` can wrap a free-text
  * `<originalText>` and a `<maritalStatusCode>` could nest a `<name>`; those children are handled by the
  * normal walk (blocked / redacted), never passed through because their parent was recognized. Anything
- * **not** on this list that carries a value fails closed (roadmap §4 — the (R) catch-all).
+ * **not** on this list that carries a value fails closed (the (R) catch-all).
  */
 export const CCDA_CODED_ELEMENTS: ReadonlySet<string> = new Set<string>([
   // Concept descriptors + their coded children.
@@ -173,7 +173,7 @@ export function isRetainedCcdaElement(localName: string): boolean {
  * SSN-rooted id is an **SSN** (redacted); every other person/organization id defaults to **MRN**
  * (pseudonymized to a consistent surrogate, the assigning authority retained). This is the structural,
  * parser-typed way to tell an SSN from an MRN at a CDA id locus — the C-CDA analogue of HL7's CX-5
- * identifier-type routing (§4.4 knife-edge).
+ * identifier-type routing knife-edge.
  *
  * @param root - The `id/@root` OID/UUID, or `undefined`.
  * @param fallback - The category to use when the root is unrecognized/absent (defaults to MRN).

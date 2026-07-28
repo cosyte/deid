@@ -2,7 +2,7 @@
  * The HL7 v2 **retain-list** — the explicit, auditable set of recognized segments the de-identifier
  * passes through untouched. It is the positive half of the **fail-closed** rule: a segment is retained
  * **only** if it is on this list; every other segment (whether unknown to the parser, a Z-segment, or a
- * *known* segment carrying patient/relative identifiers) is blocked (§4).
+ * *known* segment carrying patient/relative identifiers) is blocked.
  *
  * The list is the clinical / order / pharmacy / scheduling / financial / document / master-file / query /
  * envelope / provider-role segments — those that carry **no direct patient or relative Safe Harbor
@@ -13,12 +13,12 @@
  * **FAM** (family history — a relative), **PEO**, and **PDA** are deliberately **absent** from this list,
  * so they **fail closed** and are blocked.
  *
- * **Documented Phase-2 limitation.** Retained clinical/visit segments may still carry patient-related
+ * **Documented limitation.** Retained clinical/visit segments may still carry patient-related
  * *dates* (OBR observation date, DG1 diagnosis date, PV1 admit/discharge date, SPM collection date) and
  * *visit identifiers* (PV1-19), and *provider* names (PV1-7/8, OBR-16). Selective scrubbing of those loci
- * is a later phase; Phase 2 covers the PID-family patient/relative demographics and the free-text /
- * unknown-structure fail-closed defaults. Forgetting a clinical segment here fails **safe** — it is
- * blocked, not leaked.
+ * is **not** performed; this adapter covers the PID-family patient/relative demographics and the
+ * free-text / unknown-structure fail-closed defaults. Forgetting a clinical segment here fails **safe**
+ * — it is blocked, not leaked.
  *
  * @packageDocumentation
  */

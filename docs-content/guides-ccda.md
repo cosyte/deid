@@ -72,11 +72,10 @@ date, and is never generalized.
 
 ## Known limitations (this release)
 
-- Narrative is **block-only** — no NLP scrub yet (a future BYO-redaction interface, deferred to a later
-  phase).
+- Narrative is **block-only** — there is no built-in NLP scrub.
 - Within the **retained** clinical body, entry-level service **dates** (`effectiveTime`), entry **ids**,
-  in-entry **performer** names, and **family-history** relative demographics are a deferred later phase —
-  exactly mirroring the HL7 v2 adapter's retained-clinical-segment boundary. Forgetting one fails
+  in-entry **performer** names, and **family-history** relative demographics are **not**
+  de-identified — exactly mirroring the HL7 v2 adapter's retained-clinical-segment boundary. Forgetting one fails
   **safe** (retained in a coded entry), never leaked, because the leak surface for this release is the
   header and the narrative.
 - The document `id` / `code` / `title` envelope is retained (like HL7's MSH). The address generalization

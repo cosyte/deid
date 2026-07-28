@@ -3,7 +3,7 @@
  * live in a FHIR R4 resource, expressed against the **generic element tree** the sibling `@cosyte/fhir`
  * parser produces (`FhirComplex` / `FhirList` / `FhirPrimitive` — there are no typed per-resource
  * models; every resource, datatype, and extension is the same node shape, reached by property name).
- * This is the consumer-tier thesis (roadmap §5) applied to FHIR: PHI is located **structurally**, at
+ * This is the consumer-tier thesis applied to FHIR: PHI is located **structurally**, at
  * the FHIR element the standard defines for it — a `name` under a `Patient` is the patient's name
  * because FHIR says so, never because a string "looked like" a name.
  *
@@ -11,7 +11,7 @@
  * the map is split by **resource role**:
  *
  * - **Identifying (person) resources** — `Patient` / `RelatedPerson` / `Practitioner` / `Person`
- *   (roadmap §Phase 4, the demographics carriers, plus the nested `Patient.contact` relative — §4.6).
+ *   (the demographics carriers, plus the nested `Patient.contact` relative).
  *   Their demographic elements (`name` / `telecom` / `address` / `photo` / `birthDate`) are direct PHI.
  * - **Every resource** — the **universal** PHI vectors that leak regardless of resource type:
  *   `identifier` (MRN pseudonymized by system, SSN removed), PHI-bearing **dates**, the narrative
@@ -32,7 +32,7 @@ const C = SAFE_HARBOR_CATEGORIES;
 
 /**
  * The **identifying (person) resource types** whose demographic elements carry direct Safe Harbor PHI.
- * Scoped to the four the roadmap names (§Phase 4); a demographic `name` / `address` in any other
+ * Scoped to those four; a demographic `name` / `address` in any other
  * resource (`Location.address`, `Organization.name`) is facility/administrative data, not the
  * individual's PHI, and is left to the clinical-retain path — the FHIR analogue of C-CDA sweeping only
  * the header participations, never the clinical body.
@@ -54,7 +54,7 @@ export const PERSON_RESOURCE_TYPES: ReadonlySet<string> = new Set<string>([
 
 /**
  * The **demographic element** names that carry direct PHI **inside a person resource** (and its nested
- * `contact` relative — §4.6): `name` (HumanName), `telecom` (ContactPoint), and `photo` (Attachment)
+ * `contact` relative): `name` (HumanName), `telecom` (ContactPoint), and `photo` (Attachment)
  * are redacted whole; `address` (Address) is generalized to the safe 3-digit ZIP. `birthDate` and every
  * other date is handled generically by {@link isFhirDateValue} (date → year), so it is deliberately not
  * listed here.
@@ -88,7 +88,7 @@ export const FHIR_DEMOGRAPHIC_ELEMENTS: Readonly<Record<string, FhirDemographicM
  * recognized structural / coded / administrative data (not free PHI) — the over-scrub guard for the
  * fail-closed person sweep. A **bare-string** top-level property of a person resource that is neither a
  * mapped demographic, an `identifier`/`text`/`extension`/`contained`, nor on this list is **blocked**
- * (roadmap §4 — the (R) catch-all): a vendor `<Patient>`-level string field (`ssn`, `motherMaidenName`)
+ * (the (R) catch-all): a vendor `<Patient>`-level string field (`ssn`, `motherMaidenName`)
  * cannot ride through in the clear. This is an **explicit set**, never a suffix/shape heuristic, for the
  * exact reason the C-CDA map is: an open-ended match would silently retain an unknown field and leak it.
  * The list covers the R4 person-resource scalar/coded elements; complex children are descended into
@@ -128,7 +128,7 @@ export const RECOGNIZED_PERSON_ELEMENTS: ReadonlySet<string> = new Set<string>([
  * an SSN (redacted), not an MRN (pseudonymized). The US SSN system is published as both the canonical
  * HL7 URL and its OID form; both are recognized. Every other person/organization identifier system
  * defaults to MRN (a consistent keyed surrogate, the `system` retained) — the FHIR analogue of the CDA
- * `id/@root` and HL7 CX-5 identifier-type routing (§4.4 knife-edge).
+ * `id/@root` and HL7 CX-5 identifier-type routing knife-edge.
  */
 const SSN_SYSTEMS: ReadonlySet<string> = new Set<string>([
   "http://hl7.org/fhir/sid/us-ssn",

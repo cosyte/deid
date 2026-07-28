@@ -1,6 +1,6 @@
 /**
  * The **de-identification registry** — the corpus-level entry point that makes a **longitudinal**
- * record stay linkable after de-identification (roadmap §Phase 7). It layers cross-document
+ * record stay linkable after de-identification. It layers cross-document
  * **consistency** on the format-agnostic core: the same patient, and the same identifier, map to the
  * **same** de-identified surrogates across every document, message, and run in a corpus, while
  * different patients and different identifiers do not collide.

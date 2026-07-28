@@ -14,7 +14,8 @@ through as safe. The result is **"Safe-Harbor-transformed per the configured pol
 ## De-identify a model
 
 The core operates on a **generic locus model** — a flat list of structurally-located candidate values.
-(Per-format adapters for HL7 v2, C-CDA, FHIR, X12, NCPDP, and DICOM arrive in later phases.)
+The per-format adapters for HL7 v2, C-CDA, FHIR, X12, NCPDP and DICOM live behind their own subpath
+exports.
 
 ```ts runnable
 import { deidentify, SAFE_HARBOR_CATEGORIES } from "@cosyte/deid";

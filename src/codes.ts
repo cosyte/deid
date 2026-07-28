@@ -4,7 +4,7 @@
  *
  * Both registries are `key === value` so the full set survives an `Object.values(...)` snapshot into a
  * stability tripwire. These codes are part of the public contract: consumers branch on them, so
- * renaming or removing one is a **breaking change**. New codes may be **added** in later phases.
+ * renaming or removing one is a **breaking change**. New codes may be **added** in a later release.
  *
  * @packageDocumentation
  */
@@ -35,7 +35,7 @@ export const FATAL_CODES = {
    * date is still "an element of a date" under §164.514(b)(2)(i)(C), so date-shift is an
    * Expert-Determination technique, **not** Safe Harbor; labelling it `safe-harbor` would misrepresent
    * the residual risk. The engine rejects it at point of use rather than silently emit shifted real
-   * dates under a Safe Harbor claim. (Roadmap §Phase 7; the fatal set is additions-only — §Phase 1.)
+   * dates under a Safe Harbor claim. The fatal set is additions-only.
    */
   DEID_POLICY_INVALID: "DEID_POLICY_INVALID",
   /**
@@ -43,8 +43,8 @@ export const FATAL_CODES = {
    * de-identification — most importantly a `maxShiftDays` that floors to **0**, which pins **every**
    * per-patient date-shift offset to zero, so a `date-shift` policy would emit the **original real
    * dates** under a research label. A no-op shift is a leak, so the engine rejects the degenerate
-   * configuration at construction rather than silently shipping unshifted dates. (Additions-only fatal
-   * — §Phase 1; §Phase 10 release hardening.)
+   * configuration at construction rather than silently shipping unshifted dates. The fatal set is
+   * additions-only.
    */
   DEID_CONTEXT_INVALID: "DEID_CONTEXT_INVALID",
   /**
@@ -52,8 +52,7 @@ export const FATAL_CODES = {
    * from a base profile may only move a category to an **equal-or-stronger** transform (more removal,
    * never less), and may never re-weaken a category the base scrubs. A profile that would *reduce* the
    * de-identification strength of any category is rejected, so a site preset can only ever tighten — not
-   * quietly loosen — the base standard's protection. (Additions-only fatal — §Phase 10 release
-   * hardening; roadmap §Phase 10 policy profiles.)
+   * quietly loosen — the base standard's protection. The fatal set is additions-only.
    */
   DEID_PROFILE_INVALID: "DEID_PROFILE_INVALID",
 } as const;
@@ -97,11 +96,11 @@ export const DEID_DISPOSITION_CODES = {
   /** Fail-closed: a free-text locus was blocked by default (no naive regex scrub). */
   DEID_FREETEXT_BLOCKED: "DEID_FREETEXT_BLOCKED",
   /**
-   * A free-text locus was redacted **by a consumer-supplied BYO redactor** (roadmap §Phase 8), not by
+   * A free-text locus was redacted **by a consumer-supplied BYO redactor**, not by
    * the library. The library ships **no** NLP/PHI-detection engine; it orchestrates the consumer's
    * redactor at free-text loci and records the outcome here. This code is **consumer-asserted, never a
    * library guarantee**: "no findings" from a BYO redactor is not an attestation, and a redactor's
-   * completeness is the consumer's responsibility (Expert-Determination territory — §2.2). The
+   * completeness is the consumer's responsibility (Expert-Determination territory). The
    * structural PHI removal the format adapters perform is unaffected — this covers only the free *prose*.
    */
   DEID_FREETEXT_CONSUMER_REDACTED: "DEID_FREETEXT_CONSUMER_REDACTED",

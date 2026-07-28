@@ -12,7 +12,7 @@
  *   extension value, a blocked `Reference.display`, a blocked narrative `div`, a blocked unknown person
  *   string, a redacted SSN `Identifier.value`). A dropped property vanishes from its complex; a dropped
  *   list item from its list; a list that empties is dropped in turn. With a **non-null** value the locus
- *   is a **BYO-redacted free-text** locus (§Phase 8) — the redacted prose is written back in place
+ *   is a **BYO-redacted free-text** locus — the redacted prose is written back in place
  *   (a `contentString`/`valueString` primitive stays a primitive; a `note` Annotation/array becomes a
  *   `text`-only Annotation, dropping author/time).
  * - `set-primitive` — the primitive's value becomes the transformed string (a generalized date, a
@@ -25,7 +25,7 @@
  * applier **fails closed**: every rebuilt primitive is emitted **without** its `extension` metadata (its
  * value and `id` are kept). Primitive extensions are uncommon and demographic/annotative; dropping them
  * guarantees no `_`-sibling leak, at the documented cost of not preserving them (profile-aware retention
- * is Phase 10).
+ * is not offered).
  *
  * @packageDocumentation
  */
@@ -86,7 +86,7 @@ function textAnnotation(value: string): FhirComplex {
 }
 
 /**
- * Write a BYO-redacted free-text value (DEID-8) back in place, faithful to the node's kind — a redacted
+ * Write a BYO-redacted free-text value back in place, faithful to the node's kind — a redacted
  * string primitive (`contentString` / `valueString`) stays a primitive; a `note` Annotation (complex)
  * or a `note` array (list) becomes a `text`-only Annotation carrying the redacted prose. Reached only
  * for a `freetext` locus with a non-null value (the caller gates on `kind`), so a name/telecom locus

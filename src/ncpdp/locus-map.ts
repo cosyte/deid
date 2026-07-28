@@ -78,10 +78,10 @@ const INSURANCE_04: Readonly<Record<string, TelecomFieldRule>> = {
 };
 
 /**
- * The **Prescriber segment (`03`)** field map. The roadmap scopes **prescriber identifiers** for NCPDP
+ * The **Prescriber segment (`03`)** field map. **Prescriber identifiers are in scope** for NCPDP
  * (unlike the X12 adapter, which retains provider identity): the prescriber id (`411-DB`, an NPI / DEA /
- * state-license value per its `468-EZ` qualifier) is **removed** (blocked). This is the deliberate,
- * roadmap-grounded asymmetry between the two EDI adapters in this phase.
+ * state-license value per its `468-EZ` qualifier) is **removed** (blocked). This is a deliberate
+ * asymmetry between the two EDI adapters.
  */
 const PRESCRIBER_03: Readonly<Record<string, TelecomFieldRule>> = {
   DB: { mode: "block" }, // 411-DB Prescriber ID → removed (roadmap-scoped prescriber identifier)
@@ -184,7 +184,7 @@ export const TELECOM_SEGMENT_RETAIN_FIELDS: Readonly<Record<string, ReadonlySet<
 
 /**
  * NCPDP Telecom **free-text** field ids that carry human prose and therefore any of the 18 categories —
- * blocked by default (roadmap §4.5), never scrubbed by a naive pass, wherever they appear (including
+ * blocked by default, never scrubbed by a naive pass, wherever they appear (including
  * inside an otherwise-retained clinical / response segment). `544-FY` is the DUR free-text message,
  * `504-F4` is the response Message field, and `526-FQ` is the response Additional Message Information.
  *
@@ -205,10 +205,11 @@ export const TELECOM_FREE_TEXT_FIELDS: ReadonlySet<string> = new Set<string>(["F
  * inside one of these still fails closed. A segment id that is neither mapped ({@link TELECOM_LOCUS_MAP})
  * nor on this list is blocked field-by-field.
  *
- * **Documented Phase-5 limitation (mirrors the HL7 / X12 adapters).** A retained segment may carry a
+ * **Documented limitation (mirrors the HL7 / X12 adapters).** A retained segment may carry a
  * residual patient-related date (a `456-EW` associated prescription date, a `530-FU` previous date of
  * fill) or a per-prescription reference (`402-D2` Rx reference number). Selective scrubbing of those
- * residual loci is a later phase; forgetting a clinical segment here fails **safe** — blocked, not leaked.
+ * residual loci is **not** performed; forgetting a clinical segment here fails **safe** — blocked, not
+ * leaked.
  *
  * @example
  * ```ts

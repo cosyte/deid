@@ -1,6 +1,6 @@
 /**
  * **Policy profiles** — named, reusable de-identification presets a site adopts once and applies
- * everywhere (roadmap §Phase 10). A {@link DeidProfile} bundles a {@link DeidPolicy} with an optional
+ * everywhere. A {@link DeidProfile} bundles a {@link DeidPolicy} with an optional
  * default free-text redactor and the honest metadata that governs how its output may be used.
  *
  * Two presets ship:

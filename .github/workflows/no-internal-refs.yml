@@ -1,0 +1,97 @@
+name: Public-surface gate
+
+# Founder directive 2026-07-27: no internal project bookkeeping on any surface a consumer
+# reads. Item identifiers (`DEID-8`), phase and wave language, roadmap section citations,
+# ADR numbers, meta-repo paths and process commentary belong in the changeset,
+# CHANGELOG.md, the commit, the PR and the roadmap, never in README.md, docs-content/, the
+# npm description, a JSDoc block a consumer's editor renders, or a disposition message a
+# consumer reads in their logs. The rule is written out in the meta-repo's
+# `documentation/conventions.md` ("No internal project bookkeeping on a public surface");
+# `scripts/check-no-internal-refs.sh` is what enforces it.
+#
+# WHY A GATE AND NOT A NOTE. The founder, on the sweep that removed these across the
+# ecosystem: "it needs to not just be a memory note, but something that is addressed in the
+# workflow accordingly. This needs to not happen again." A sweep regresses the first time
+# someone writes `(DEID-10)` into a doc comment; a job that reds does not.
+#
+# ▶ AND THIS REPO IS THE EVIDENCE FOR THAT SENTENCE. Its public markdown had already been
+# swept and the remaining work was recorded as "1". Measured with this script on `d105b6d`:
+# `src/` JSDoc carried 105 hits, reaching 49 lines of built `.d.ts` and the same 49 again in
+# `.d.cts`, in a package with SEVEN published entry points. The markdown measured 0 BY RULE
+# and still had 18 lines of "arrive in later phases" that no rule here catches (residual (vi)
+# in the script), seven of them factually false on a package that ships all six adapters.
+# Without a gate, the class regrew on the one surface no docs review looks at -- and the
+# gate does not replace the reviewer on the surface it does look at.
+#
+# WHY A SEPARATE WORKFLOW, and not a job in ci.yml. Same reasoning as `smoke.yml` next
+# door, and the first half is the deciding one:
+#
+#   The reusable pipeline is not an option. `ci.yml` is a thin caller of
+#   cosyte/.github/.github/workflows/ci.yml@main, which runs a fixed ladder and no arbitrary
+#   repo script. Adding this there would also flip every other caller red on its next run,
+#   and remediating each repo is its own deliberate piece of work. A shared pipeline is the
+#   wrong place to land a rule most of its callers cannot yet satisfy.
+#
+#   Within this repo, keeping it out of ci.yml also keeps it cheap: this job is a checkout
+#   and a handful of greps over a small markdown surface and 44 source files, while ci.yml
+#   drives the full Node 22 + 24 matrix.
+#
+# ▶ THE JOB ID IS THE CHECK-RUN CONTEXT NAME. The `ci-required-checks` ruleset on `main`
+# requires the context this file produces, verbatim:
+#
+#     no-internal-refs
+#
+# There is no matrix, so there is no suffix. Renaming the job silently detaches the required
+# check: the ruleset stops protecting anything while still looking configured, and every PR
+# goes PENDING rather than red. Rename the job and the ruleset together or neither, and read
+# the real name off a live check run
+# (`gh api repos/cosyte/deid/commits/<sha>/check-runs --jq '.check_runs[].name'`), never off
+# the `name:` at the top of this file.
+#
+# ▶ NO MATRIX, DELIBERATELY. The script is bash + grep + awk with a pinned `LC_ALL`; it does
+# not load the package and has no Node-version-dependent behaviour beyond one `node -e` read
+# of package.json. `smoke.yml` runs a matrix because module resolution genuinely moves
+# between Node majors. This does not.
+#
+# WHAT THIS DOES NOT CHECK, deliberately: the PR title, the PR body, and commit messages.
+# This rule says identifiers BELONG in the commit, the PR and the changeset, so a PR-text
+# half here would red on correct work. That is also why there is no `edited` trigger:
+# nothing here reads PR text, so retitling a PR cannot change the result.
+#
+# The other half of this rule, the one that keeps identifiers out of a published RELEASE
+# BODY, lives in the shared pipeline: `cosyte/.github` `scripts/release-notes.mjs assert`
+# re-reads the finished body bytes and refuses to publish a violating one. This job covers
+# the repo's own files; that one covers what gets published to the releases page.
+#
+# Run it locally with `pnpm check:no-internal-refs`.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # The job id is the check-run context name a branch ruleset requires. See the banner.
+  no-internal-refs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      # The script self-tests before it reports. It proves each rule still matches its own
+      # positive sample AND still lets through the reference material it was most likely to
+      # destroy: the parser loci this library names PHI at (`PID-3`, `OBX-5`, `CX-5`,
+      # `NM1-03`, `REF-01`), the standards designations (`HL7-V2`, `FHIR-R4`, `DICOM-SR`,
+      # `NCPDP-SCRIPT`, `X12-837P`), `ICD-10-CM`, a Phase III trial, and -- the one that
+      # matters most in this package -- a bare `§164.514` CFR citation, which must match NO
+      # rule at all. It refuses to print OK from a scan that did not read all of its input.
+      # No `|| true`, no `continue-on-error`: a check that cannot fail is documentation.
+      - name: Check the public surface
+        run: bash scripts/check-no-internal-refs.sh

@@ -1,6 +1,6 @@
 /**
  * `@cosyte/deid/ccda` — the **C-CDA de-identification adapter**. The C-CDA binding of the
- * format-agnostic core (roadmap §Phase 3): it locates PHI **structurally** in an HL7 CDA R2.1 document,
+ * format-agnostic core: it locates PHI **structurally** in an HL7 CDA R2.1 document,
  * applies the configured de-identification policy, and returns a transformed `CcdaDocument` plus the
  * core's value-free manifest.
  *
@@ -8,13 +8,13 @@
  * only de-identifies C-CDA installs it alongside `@cosyte/deid`; the core stays third-party-dep-free.
  * The adapter reaches the CDA DOM **only** through `@cosyte/ccda`'s exported, XXE-hardened
  * `parseSecureXml` and re-serializes through the DOM node the parser hands back — it never imports the
- * XML substrate (`@xmldom/xmldom`, the parser's own ratified dependency — ccda ADR 0001) directly, so
+ * XML substrate (`@xmldom/xmldom`, the parser's own ratified dependency) directly, so
  * `@cosyte/deid` declares no third-party runtime dependency of its own.
  *
  * **What it covers.** The structured PHI loci of the CDA **header participations** — `recordTarget`
  * (patient) + the nested `guardian`, and `author` / `informant` / `authenticator` /
  * `legalAuthenticator` / `dataEnterer` / `participant` / `custodian` / `documentationOf` /
- * `componentOf` (relatives / providers / contacts — §4.6) — via the cited {@link CCDA_LOCUS_MAP}:
+ * `componentOf` (relatives / providers / contacts) — via the cited {@link CCDA_LOCUS_MAP}:
  * person `<name>` and `<telecom>` removed; person-role `<id>` pseudonymized (assigning root retained,
  * SSN-rooted ids redacted); `<addr>` reduced to the safe 3-digit ZIP; `<birthTime>` / participation and
  * encounter dates generalized to year. **Fail closed** everywhere else: section narrative `<text>`
@@ -25,11 +25,12 @@
  * material name, never a person, and survives. The honesty line is unchanged: the output is
  * **"Safe-Harbor-transformed per the configured policy"**, never "de-identified".
  *
- * **Known limitations (this phase).** Narrative is block-only (no semantic narrative de-id — Phase 8).
+ * **Known limitations.** Narrative is block-only (no semantic narrative de-id).
  * Within the **retained** clinical body, entry-level service dates (`effectiveTime`), entry ids,
- * in-entry performer names, and family-history relative demographics are a deferred later phase —
- * exactly mirroring HL7 v2 Phase 2's retained-clinical-segment boundary; forgetting one fails **safe**
- * (retained), never leaked, because the leak surface for this phase is the header + narrative. The
+ * in-entry performer names, and family-history relative demographics are **not** de-identified —
+ * exactly mirroring the HL7 v2 adapter's retained-clinical-segment boundary; forgetting one fails
+ * **safe** (retained), never leaked, because the leak surface this adapter covers is the header +
+ * narrative. The
  * document `id` / `title` / `code` envelope is retained (like HL7's MSH); the address generalization
  * keeps state + country (permitted) and the safe 3-digit ZIP, dropping every finer component.
  *

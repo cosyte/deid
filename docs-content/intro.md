@@ -19,13 +19,14 @@ through as safe.
 > **The honesty line that governs the whole library.** Results are **"Safe-Harbor-transformed per the
 > configured policy"** — never "de-identified" and never "HIPAA-compliant". Safe Harbor is implemented
 > mechanically; the §164.514(b)(2)(ii) actual-knowledge condition is the consumer's; Expert
-> Determination (§164.514(b)(1)) is *supported* by later phases, never *rendered* or certified. The
+> Determination (§164.514(b)(1)) is *supported*, never *rendered* or certified. The
 > certification is always the consumer's.
 
 > **Status:** pre-alpha (`0.0.x`), not yet published to npm. This release ships the **format-agnostic
 > core** (policy engine, five transforms, 18-category Safe Harbor model, fail-closed rule, value-free
-> manifest) **plus the first format binding — the HL7 v2 adapter** (`@cosyte/deid/hl7`). The remaining
-> per-format adapters (C-CDA, FHIR, X12, NCPDP, DICOM) land in subsequent phases.
+> manifest) **plus six format bindings** — HL7 v2 (`@cosyte/deid/hl7`), C-CDA (`@cosyte/deid/ccda`),
+> FHIR R4 (`@cosyte/deid/fhir`), X12 EDI (`@cosyte/deid/x12`), NCPDP Telecom (`@cosyte/deid/ncpdp`) and
+> DICOM (`@cosyte/deid/dicom`). NCPDP SCRIPT is **not** supported.
 
 ## Install
 

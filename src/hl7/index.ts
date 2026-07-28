@@ -1,6 +1,6 @@
 /**
  * `@cosyte/deid/hl7` — the **HL7 v2 de-identification adapter**. The first end-to-end format binding of
- * the format-agnostic core (roadmap §Phase 2): it locates PHI **structurally** in the parsed
+ * the format-agnostic core: it locates PHI **structurally** in the parsed
  * `@cosyte/hl7` model, applies the configured de-identification policy, and returns a transformed
  * `Hl7Message` plus the core's value-free manifest.
  *
@@ -9,7 +9,7 @@
  * this module as `@cosyte/deid/hl7`.
  *
  * **What it covers.** The structured PHI loci of **PID** (patient), **NK1** / **GT1** / **IN1** / **IN2**
- * (relatives / guarantor / insured — §4.6) via the cited {@link HL7_LOCUS_MAP}. **Fail closed**
+ * (relatives / guarantor / insured) via the cited {@link HL7_LOCUS_MAP}. **Fail closed**
  * everywhere else: a recognized segment is retained only if it is on the explicit {@link RETAIN_SEGMENTS}
  * clinical/administrative list — so a *known* patient-identity segment absent from the map (**MRG** prior
  * name + MRN on a merge, **FAM**, **ACC**, **PEO**, **PDA**) is blocked, not passed through — and
@@ -20,9 +20,9 @@
  * line is unchanged: the output is **"Safe-Harbor-transformed per the configured policy"**, never
  * "de-identified".
  *
- * **Known limitations (this phase).** Free text is block-only (no scrub); within **retained** clinical /
+ * **Known limitations.** Free text is block-only (no scrub); within **retained** clinical /
  * visit segments, patient-related dates (OBR/DG1/PV1 timestamps), visit identifiers (PV1-19), and
- * provider names (PV1-7/8, OBR-16) are a deferred later phase; the address generalization keeps only the
+ * provider names (PV1-7/8, OBR-16) are **not** de-identified; the address generalization keeps only the
  * Safe Harbor 3-digit ZIP and conservatively drops the (permitted) state as well.
  *
  * @packageDocumentation

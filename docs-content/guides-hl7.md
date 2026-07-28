@@ -68,9 +68,9 @@ handled differently — structurally, from the parser's typing.
 
 ## Known limitations (this release)
 
-- Free text is **block-only** — no NLP scrub yet (a future BYO-redaction interface).
+- Free text is **block-only** — there is no built-in NLP scrub.
 - Within **retained** clinical / visit segments, patient-related **dates** (OBR / DG1 / PV1 timestamps),
-  **visit identifiers** (PV1-19), and **provider** names (PV1-7/8, OBR-16) are a deferred later phase.
+  **visit identifiers** (PV1-19), and **provider** names (PV1-7/8, OBR-16) are **not** de-identified.
 - The address generalization keeps only the Safe Harbor 3-digit ZIP (the permitted state is also
   dropped — conservative, never a leak).
 

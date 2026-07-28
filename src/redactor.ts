@@ -7,8 +7,8 @@
  * **Why BYO, and why the library bundles nothing.** Free-text / narrative loci (C-CDA narrative
  * `<text>`, HL7 `OBX-5` / `NTE`, FHIR `note` / `div`, X12 `MSG` / `NTE`, NCPDP free text) can carry
  * any of the 18 Safe Harbor categories in prose. A naive built-in regex pass is a **false-safety
- * hazard** — it misses PHI it does not recognize while creating the *impression* of safety (roadmap
- * §4.5) — so the library refuses to ship one. Honest clinical-NER de-id is heavy, model-dependent, and
+ * hazard** — it misses PHI it does not recognize while creating the *impression* of safety — so the
+ * library refuses to ship one. Honest clinical-NER de-id is heavy, model-dependent, and
  * the consumer's choice; the library provides only the orchestration around it.
  *
  * **The fail-closed contract (the safety guarantee the library keeps).**
@@ -23,7 +23,7 @@
  * is **trusted as consumer-asserted** — the engine does **not** independently verify that the returned
  * prose is PHI-free, and it does not treat a redactor's "no findings" (returning the text unchanged) as
  * an attestation. **A BYO redactor's completeness is the consumer's responsibility** — this is
- * Expert-Determination territory (§2.2). The engine's guarantee is narrow and exact: it fails **closed**
+ * Expert-Determination territory. The engine's guarantee is narrow and exact: it fails **closed**
  * whenever a redactor is absent, errors, or returns nothing, and it **never** touches the structural
  * PHI removal the format adapters already perform — the redactor handles the free *prose* only.
  *

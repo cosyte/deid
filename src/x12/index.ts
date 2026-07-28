@@ -1,6 +1,6 @@
 /**
  * `@cosyte/deid/x12` — the **X12 EDI de-identification adapter**. The X12 binding of the
- * format-agnostic core (roadmap §Phase 5): it locates PHI **structurally** in a parsed `@cosyte/x12`
+ * format-agnostic core: it locates PHI **structurally** in a parsed `@cosyte/x12`
  * interchange, applies the configured de-identification policy, and returns the de-identified X12 byte
  * stream plus the core's value-free manifest.
  *
@@ -31,10 +31,10 @@
  * are **retained untouched** (the over-scrub guard). The honesty line is unchanged: the output is
  * **"Safe-Harbor-transformed per the configured policy"**, never "de-identified".
  *
- * **Known limitations (this phase).** Provider / organization identity is **retained** as non-patient
- * PHI (per §5); a deployment that must also suppress provider identity supplies a widening profile
- * (Phase 10). Retained clinical segments may carry residual patient-related dates the map does not
- * surface as `DTP` / `DTM` (a documented Phase-5 limitation, mirroring the HL7 adapter) — forgetting one
+ * **Known limitations.** Provider / organization identity is **retained** as non-patient identity, and
+ * there is **no** option to suppress it: the retention is structural, in the extractor, not a
+ * per-category policy choice. Retained clinical segments may carry residual patient-related dates the
+ * map does not surface as `DTP` / `DTM` (a documented limitation, mirroring the HL7 adapter) — forgetting one
  * fails **safe** (retained, not leaked, but conversely a residual date is not generalized). NCPDP SCRIPT
  * de-identification is deferred; NCPDP Telecom ships alongside this adapter at `@cosyte/deid/ncpdp`.
  *

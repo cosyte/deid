@@ -1,6 +1,6 @@
 /**
  * `@cosyte/deid/dicom` — the **DICOM de-identification adapter**. The DICOM binding of the format-agnostic
- * core (roadmap §Phase 6, §4.7), and the one adapter that **delegates rather than reimplements**:
+ * core, and the one adapter that **delegates rather than reimplements**:
  * `@cosyte/dicom` already ships the **PS3.15 Annex E** de-identification (the Basic Application Level
  * Confidentiality Profile — tag-level removal of Patient Name/ID/BirthDate, institution, referring physician,
  * dates and the enumerated Annex E attributes; consistent Study/Series/SOP-Instance **UID remapping** so

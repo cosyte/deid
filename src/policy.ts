@@ -1,8 +1,8 @@
 /**
  * The **policy engine** — a policy maps each of the 18 Safe Harbor categories to the transform the
  * engine applies. `safe-harbor` is the built-in default; `defineDeidPolicy` derives a custom policy
- * from it. A policy picks the safest defensible transform per category (the §2.1 table of the roadmap,
- * grounded in §164.514(b)(2)).
+ * from it. A policy picks the safest defensible transform per category, grounded in
+ * §164.514(b)(2).
  *
  * @packageDocumentation
  */
@@ -20,7 +20,7 @@ const SAFE_HARBOR_LABEL = "safe-harbor";
  *
  * `byo-redact` is **not** a policy-assignable Safe Harbor transform and **not** something the library
  * performs — it is the manifest marker the engine records when a **consumer-supplied free-text
- * redactor** (roadmap §Phase 8) redacts a free-text locus. The library bundles no redactor; the
+ * redactor** redacts a free-text locus. The library bundles no redactor; the
  * consumer brings the detector. Assigning `byo-redact` to a category in a policy has no effect beyond
  * the fail-closed default (the engine blocks it), because free-text redaction is driven by the
  * `redactor` option, not by the per-category policy map.

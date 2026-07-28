@@ -53,7 +53,7 @@ export interface DeidOptions {
   /** The context carrying the consumer's key, required only when the policy uses a keyed transform. */
   readonly context?: DeidContext;
   /**
-   * A **consumer-supplied** free-text redactor (roadmap §Phase 8). When present, the engine invokes it
+   * A **consumer-supplied** free-text redactor. When present, the engine invokes it
    * at each free-text locus instead of blocking, and records its output as **consumer-asserted**
    * (`DEID_FREETEXT_CONSUMER_REDACTED`). The library bundles **no** redactor. **Fail-closed contract:**
    * when this is omitted — or when the redactor throws or returns nothing — the free-text locus is
@@ -221,7 +221,7 @@ function redactedProse(result: unknown): string | null {
 
 /**
  * Handle a free-text locus. **Fail closed** by default: with no consumer redactor the prose is blocked.
- * With a BYO redactor (roadmap §Phase 8), invoke it and treat a returned redaction as *consumer-asserted*
+ * With a BYO redactor, invoke it and treat a returned redaction as *consumer-asserted*
  * — but still fail closed if it throws or returns nothing, so a redactor failure never leaks free text.
  */
 function handleFreeText(locus: GenericLocus, redactor: FreeTextRedactor | undefined): LocusOutcome {
