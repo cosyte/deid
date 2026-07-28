@@ -254,3 +254,61 @@ Mirrors the three disciplines in the meta-repo's `documentation/conventions.md` 
    widening policy in X12 (it is not; the retention is structural, in the extractor) and a different
    Census vintage being supplied via a policy (it is not; `RESTRICTED_ZIP3` is a fixed export and
    `DeidPolicy` carries only `name` + `transforms`). Both were restated as limitations instead.
+
+   **THE RELEASE BODY IS THE ONE PUBLIC SURFACE THIS REPO CANNOT GATE, AND `.changeset/` IS ITS
+   SOURCE.** `pnpm check:no-internal-refs` deliberately does not scan `.changeset/`, and it could not
+   help here anyway: the release body is rendered by `cosyte/.github`'s `scripts/release-notes.mjs`
+   from the FIRST SENTENCE of each changeset a version consumes. So a changeset's opening sentence is
+   published text written in a file the local gate treats as private. Two consequences, both measured
+   on the 13 pending changesets on 2026-07-28 with that renderer's own `collectHeadlines`:
+   - **An internal-only change is DROPPED from the body by word, not reworded.** `INTERNAL_ONLY_CHANGE`
+     recognises the category from words like `Dependabot`, `CodeQL`, `actionlint`, `no runtime impact`.
+     A changeset that states exactly those facts in none of those words is KEPT and published, which is
+     what `deid-ci-required-checks.md` and `deid-smoke-ci-gate.md` both did. The fix is to reword the
+     changeset so the renderer drops it. **Never widen the word list in `cosyte/.github` to cover a
+     changeset here** — that grows a shared gate to fit one repo's prose.
+   - **The renderer strips phase language from the first sentence and cannot check the result reads.**
+     It refuses several _shapes_ a bad cut leaves in the bytes (a tail ending in a function word, a
+     single-letter stump, doubled or orphaned clause punctuation, an emptied parenthetical, a headline
+     over 200 characters, an unsafe mid-clause cut), because a gate reads bytes and not grammar. A
+     translated sentence that is well-formed but wrong passes all of them.
+     `deid-10-release-hardening.md` opened with the item identifier, a parenthesised roadmap phase,
+     and the trailing clause "the final roadmap phase". The phase-strip rendered the public bullet
+     `Release hardening, the final` — no rule catches it, because `final` is not a function word.
+     Open every changeset with a sentence that stands on its own once the identifier is gone.
+
+   **STATED AS A LIMIT, NOT CHASED: this fix depends on another repo's word list holding.** Both
+   entries are dropped only because `INTERNAL_ONLY_CHANGE` in `cosyte/.github` still carries the words
+   they use. Nothing in this repository observes that list, and nothing here fails when it changes:
+   that is this repo's "gate that cannot observe its subject", moved one repo over, and it is not
+   fixable from here.
+
+   The mitigation taken is redundancy, not coverage, and its exact strength was measured leave-one-out
+   over all 25 alternatives on 2026-07-28: `deid-ci-required-checks.md` matches **four** (`CodeQL`,
+   `actionlint`, `Dependabot`, `no runtime impact`) and `deid-smoke-ci-gate.md` matches **three**
+   (`CodeQL`, `actionlint`, `no runtime impact`). **Removing any single alternative republishes
+   neither** — dropping `\bCodeQL\b` alone leaves both dropped. What would republish them is losing
+   _all_ of the words one entry uses, and the residual risk is that they are all CI vocabulary, so a
+   single cleanup of that regex could plausibly remove them together. Do not read this paragraph as
+   the measurement; re-run it against the renderer, which is the only thing that can answer:
+
+   ```js
+   // node probe.mjs, with <meta> the checkout that holds the .github submodule
+   import { readFileSync, readdirSync } from "node:fs";
+   import { collectHeadlines } from "<meta>/.github/scripts/release-notes.mjs";
+   const d = ".changeset";
+   const files = readdirSync(d)
+     .filter((f) => f.endsWith(".md") && f !== "README.md")
+     .map((f) => ({ id: f, text: readFileSync(`${d}/${f}`, "utf8") }));
+   const r = collectHeadlines(files, "@cosyte/deid");
+   console.log(
+     r.kept.length,
+     r.dropped.map((x) => x.id),
+   );
+   ```
+
+   **And do not let a headline drift toward the 200-character hard refusal.** `collectHeadlines`
+   REFUSES (it does not trim) a translated headline over 200, and it does so on the version commit,
+   after the Version PR has merged, costing the documented revert-and-re-version recovery. Measured
+   2026-07-28: `deid-public-surface-hygiene.md` is at **182** and `deid-1-format-agnostic-core.md` at
+   **175**. One more clause in either opening sentence trips it.

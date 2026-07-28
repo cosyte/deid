@@ -2,6 +2,9 @@
 "@cosyte/deid": patch
 ---
 
+Policy profiles: `SAFE_HARBOR_PROFILE`, the deliberately less protective `LIMITED_DATA_SET_PROFILE`,
+and `defineDeidProfile()` under a fail-closed widen-never-narrow contract.
+
 DEID-10 — release hardening (roadmap §Phase 10), the final roadmap phase. The six format adapters, the
 longitudinal layer, the free-text BYO interface, and the Expert-Determination report are unchanged; no
 per-format leak or over-scrub guarantee is weakened.
@@ -41,3 +44,11 @@ ED report makes no determination, the LDS profile is not certified).
 
 Fatal codes are additions-only: `DEID_CONTEXT_INVALID`, `DEID_PROFILE_INVALID`. `npm publish` and the
 public-repo flip remain the two standing human stops.
+
+The opening sentence leads with the profiles rather than the item identifier on purpose, and moving
+the identifier back to the front breaks the published release note. The shared release-note renderer
+takes the FIRST sentence as the release bullet and strips phase language out of it; opening with
+"DEID-10 — release hardening (roadmap §Phase 10), the final roadmap phase." left "Release hardening,
+the final" as the published bullet, which reads as a cut-off sentence and trips nothing, because the
+renderer only refuses a tail that ends in a function word and "final" is not one. The identifier and
+the phase reference belong in this file and stay below; the first sentence has to stand on its own.
