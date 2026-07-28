@@ -34,7 +34,7 @@ its public history at `0.0.x`, per the cosyte version ladder (`0.0.x` until firs
     string or a bounded rejection (never a hang/OOM).
   - **Publish dry-run / release-shape smoke (`pnpm smoke`).** Loads **every** published subpath
     (`.`/`hl7`/`ccda`/`fhir`/`x12`/`ncpdp`/`dicom`) from the built `dist/` in **both** ESM and CJS,
-    verifies each headline export, and asserts no leak. Runs after `build`, alongside `attw`, on the
+    verifies each headline export, and asserts no HL7 leak. Runs after `build`, alongside `attw`, on the
     local verify ladder. (This line claimed it was a **CI gate**; it was not wired into any CI job
     until the entry under Security below. Corrected here rather than left to be made true later,
     because it has never been released and the claim was never DEID-10's to make.)

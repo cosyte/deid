@@ -47,11 +47,11 @@ jobs:
   #
   # ▶ THE GATE THAT USED TO BE MISSING HERE NOW LIVES NEXT DOOR, in `.github/workflows/smoke.yml`.
   # `pnpm smoke` (scripts/smoke.mjs: every published subpath in ESM and CJS off the built dist/, the
-  # shared-core chunk, no leak) was documented as a CI gate after `build` while running in no job at
-  # all. It now runs as its own workflow on `pull_request`, and its contexts `smoke (22)` /
-  # `smoke (24)` are required by the same ruleset as the four above. Do NOT read the upstream
-  # `Dual ESM/CJS smoke` STEP in `verify` as that gate: it is root-entry only (stat + import +
-  # require of `dist/index.*`) and cannot see a broken subpath, a missing export, or a leak.
+  # shared-core chunk, no HL7 leak) was documented as a CI gate after `build` while running in no job
+  # at all. It now runs as its own workflow on `pull_request`, and its contexts `smoke (22)` /
+  # `smoke (24)` are required by the same ruleset that requires the contexts above. Do NOT read the
+  # upstream `Dual ESM/CJS smoke` STEP in `verify` as that gate: it is root-entry only (stat + import
+  # + require of `dist/index.*`) and cannot see a broken subpath, a missing export, or an HL7 leak.
   #
   # Universal gates from the shared pipeline (typecheck, lint, format, test, coverage, build, attw,
   # dual ESM/CJS smoke, actionlint) on the standard Node matrix. Repo-specific extra jobs (e.g. an
