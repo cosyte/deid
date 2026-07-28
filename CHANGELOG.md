@@ -369,6 +369,23 @@ its public history at `0.0.x`, per the cosyte version ladder (`0.0.x` until firs
 
 ### Security
 
+- **The CI checks that run on a pull request now block the merge.** Until now `main` had no
+  branch-protection rules at all, so `ci` (typecheck, lint, format, the PHI scan, the tests, the
+  gating coverage run, the build, `attw`, the dual ESM/CJS root-entry import check) and CodeQL could
+  every one go red
+  and the merge would still land, on the branch that publishes a de-identification package. A
+  repository ruleset now requires those checks, restricted to the GitHub Actions app so a status of
+  the same name cannot be posted by anything else, and blocks branch deletion and force-push on
+  `main`. **Scope of the claim, stated narrowly:** this makes a red check _binding_; it does not make
+  a check _correct_, and nothing inside this repository can observe the ruleset; the protection is
+  not verifiable from these files. See the banner in `.github/workflows/ci.yml` before splitting a
+  required job.
+- **Weekly dependency version updates are now watched.** The repository had no Dependabot
+  configuration, so its zero open update PRs meant nothing was looking, not that nothing was stale.
+  Scoped honestly: this buys _version_ updates on a schedule, not automatic security-fix PRs, which
+  are a repository setting rather than a config key. The config records what it still cannot see
+  either, chiefly that the sibling parsers are consumed from `file:` tarballs under `vendor/`, which
+  Dependabot does not bump.
 - Pseudonymization/keyed-hash are **keyed** (HMAC-SHA-256) by design: an unsalted hash of an identifier
   is re-identifiable (§164.514(c)). The engine never falls back to an unkeyed transform; the key and the
   per-patient date-shift offset never appear in the output or manifest.

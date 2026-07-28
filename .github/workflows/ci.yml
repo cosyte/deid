@@ -14,6 +14,43 @@ permissions:
   contents: read
 
 jobs:
+  # ▶ THESE JOB NAMES ARE LOAD-BEARING. The repository ruleset `ci-required-checks` requires the
+  # check-run contexts this caller produces, verbatim:
+  #     ci / verify (22, ubuntu-latest)
+  #     ci / verify (24, ubuntu-latest)
+  #     ci / actionlint
+  # The `ci /` prefix is the caller job id below; `verify` / `actionlint` are the job ids in the
+  # shared pipeline; the matrix suffix is `node` then `os`. Rename the job below, change the Node
+  # matrix, or rename a job upstream in cosyte/.github, and a required context stops being emitted
+  # at all -- which does not fail a PR, it leaves it PENDING and unmergeable forever. Update the
+  # ruleset in the same change.
+  #
+  # `run-actionlint: false` is a SEPARATE and UNRESOLVED case, flagged rather than asserted: the
+  # upstream job is `if: ${{ inputs.run-actionlint }}`, so turning it off produces a check run that
+  # exists with conclusion `skipped` rather than no check run at all. Whether the ruleset treats a
+  # skipped required context as never-satisfied (a stuck PR, loud) or as satisfied (the lint
+  # silently un-required, quiet) has NOT been established here against a primary source or a live
+  # run. Do not change that input without settling it first.
+  #
+  # ▶ AND: a required JOB gates all of its STEPS. `verify` runs typecheck, lint, format:check, the
+  # PHI scan, tests, the gating coverage run, build, attw and the dual ESM/CJS smoke as steps inside
+  # one required context. Promote any of those to its own job and it is silently NO LONGER REQUIRED,
+  # with no error anywhere: the ruleset still passes because the job it names still passes.
+  # Splitting a step out means adding its new context to the ruleset in the same change.
+  #
+  # ▶ AND THE JOB BOUNDARY IS NOT THE ONLY WAY TO LOSE A GATE. The PHI scan is a step, so the rule
+  # above covers it. The leak/over-scrub corpus is NOT: it is `test/corpus/`, selected by the
+  # `include` glob in vitest.config.ts and run inside the `test` / `test:coverage` steps. Narrowing
+  # that glob, moving the files out of `test/`, or `.skip`-ing the suite drops this repo's headline
+  # leak gate with no workflow change, no job change, and NOTHING for the ruleset to notice. A
+  # ruleset can only bind a context; it cannot tell you the context still means what it meant.
+  #
+  # ▶ KNOWN GAP, NOT FIXED HERE: `pnpm smoke` (scripts/smoke.mjs, every published subpath in ESM and
+  # CJS off the built dist/, asserting no leak) is described in CHANGELOG.md and in its own header as
+  # a CI gate after `build`. It is not in any job, here or upstream, so it has never run on a PR or a
+  # push. It runs only in `verify.sh` locally. Wiring it up means a repo-local job plus its context in
+  # the ruleset, in one change; it predates this ruleset and is left as its own unit of work.
+  #
   # Universal gates from the shared pipeline (typecheck, lint, format, test, coverage, build, attw,
   # dual ESM/CJS smoke, actionlint) on the standard Node matrix. Repo-specific extra jobs (e.g. an
   # examples smoke, a starter-kit build) are added on top of this caller, never instead of it.
