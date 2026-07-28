@@ -74,7 +74,8 @@ claim control, `EI` EIN, `TJ` tax id, `G1` prior authorization, provider ids) ar
 
 ## Known limitations
 
-Provider / organization identity is **retained** as non-patient PHI; a deployment that must also suppress
-it supplies a widening policy in a later profiles phase. A retained clinical segment may carry a residual
+Provider / organization identity is **retained** as non-patient identity, and there is **no** option to
+suppress it: the retention is structural, in the extractor, not a per-category policy choice. A retained
+clinical segment may carry a residual
 patient-related date the map does not surface as `DTP` / `DTM` — a documented limitation mirroring the HL7
 adapter; forgetting one fails **safe** (retained, not leaked, but conversely not generalized).

@@ -86,8 +86,8 @@ a summary.
 
 - **`main` is protected by a repository ruleset, `ci-required-checks`.** It requires
   `ci / verify (22, ubuntu-latest)`, `ci / verify (24, ubuntu-latest)`, `ci / actionlint`,
-  `codeql / analyze (javascript-typescript)`, `smoke (22)` and `smoke (24)`, each pinned to the GitHub
-  Actions app so a commit status of the same name posted by another actor cannot satisfy it, and it
+  `codeql / analyze (javascript-typescript)`, `smoke (22)`, `smoke (24)` and `no-internal-refs`, each
+  pinned to the GitHub Actions app so a commit status of the same name posted by another actor cannot satisfy it, and it
   blocks branch deletion and force-push. Before this existed, `main` had **no rules at all**: every
   check in this repo was advisory, on the branch that publishes a de-identification package.
 - **A required context that a branch cannot emit leaves that PR pending, not failing.** Adding the two
@@ -120,6 +120,16 @@ a summary.
   published subpath therefore cannot leave the check while the check still reports green. That derivation is the
   gate, as much as the workflow is; replacing it with a hand-written array reopens exactly the hole
   the bullet above describes for `test/corpus/`.
+- **`pnpm check:no-internal-refs` is the third repo-owned gate, and it runs in its own workflow.**
+  `.github/workflows/no-internal-refs.yml` runs `scripts/check-no-internal-refs.sh` on
+  `pull_request`, with **no matrix** (the script is bash + grep + awk with a pinned `LC_ALL`; nothing
+  in it moves between Node majors), so its check-run context is the bare job id **`no-internal-refs`**.
+  Read the real name off a live check run before requiring it, never off the workflow's `name:`.
+  It scans `README.md`, `LICENSE`, `docs-content/`, the npm `description` + `keywords`, `src/` doc
+  comments and `src/` string literals. It deliberately does **not** scan `CHANGELOG.md`,
+  `.changeset/`, this file, or `//` comments, because the convention names those as where identifiers
+  belong. It cannot read `dist/` either: `dist/` is untracked build output, so this is a gate on the
+  **source** of the published text, not on the published text.
 - **▶ THE RULESET BLOCKS THE "Version Packages" PR, AND THAT IS EXPECTED. IT NEEDS ONE PUSH.**
   Changesets opens the release PR as `github-actions[bot]` using the default `GITHUB_TOKEN`, and
   GitHub does not start workflow runs for events raised by that token. So the version PR gets **zero
@@ -201,3 +211,42 @@ Mirrors the three disciplines in the meta-repo's `documentation/conventions.md` 
    `[Unreleased]` entry per meaningful change. Renaming a stable warning code is a **breaking change**.
 3. **Crew + knowledgebase loop** — if this parser's public API or warning codes change, flag/update
    the matching `crew` healthcare skill + the KB product doc.
+4. **No internal project bookkeeping on a public surface** (founder directive, 2026-07-27). What a
+   consumer reads (`README.md`, `docs-content/`, the npm `description`, a release body, and the
+   JSDoc that compiles into `dist/**/*.d.ts` and renders on hover) says what the software does and
+   what changed. Item identifiers (`DEID-8`), phase and roadmap-section language (`roadmap §4.6`,
+   `Phase 10`), ADR numbers, meta-repo paths and "how this got built" commentary belong in the
+   changeset, `CHANGELOG.md`, the commit, the PR and the roadmap. Gated by
+   `pnpm check:no-internal-refs` and `.github/workflows/no-internal-refs.yml`.
+
+   **The gate keys on known project prefixes, never the `WORD-N` shape, and in THIS repo that is not
+   a stylistic choice.** `deid` consumes all six parsers, so it documents the loci of all six
+   standards on one page: `PID-3`, `OBX-5`, `PID-19`, `CX-5`, `NM1-03`, `REF-01`, `DTP-03`, `CLP-01`,
+   `N4-06`, plus `ICD-10-CM`, `US-SSN`, `HMAC-SHA` and `YYYY-MM-DD`. Those are the coordinates a
+   consumer needs in order to audit what was and was not transformed. A shape rule deletes them.
+   Never re-key it on `WORD-N`, and never resync the prefix list with a sibling copy without
+   re-reading why `SYNTH` is present here and absent in `ncpdp`'s.
+
+   **The `§` non-catch is a decision, pinned by a self-test.** Bare `(§4.6)` roadmap-section
+   citations are NOT caught by any rule, and 19 of them were cleared by hand. A bare-`§` rule was
+   refused because `§` in this package is overwhelmingly `§164.514`, the regulation the library
+   implements and the thing a consumer most needs to look up. `BARE_SECTION_SAMPLE` in the script
+   asserts that no rule matches it, so closing that gap has to be deliberate.
+
+   **The gate catches identifiers, not English about our process, and the residual is large here.**
+   `phase` at the end of a clause ("arrive in later phases.") is deliberately uncaught, because
+   determiner-plus-`phase` collides with ordinary clinical English. That shape was **all 18** of the
+   public-markdown instances this sweep removed, which is why the markdown measured **0 by rule**
+   while still saying "no format is wired yet" on a page published to docs.cosyte.com. **A count is
+   a function of the rule set: quote the rule set with the count, or the count means nothing.**
+
+   **CUT, do not rewrite.** Stripping a citation is a deletion; the temptation to improve the
+   sentence around it is how a hygiene sweep ships a new falsehood. In THIS package that risk is a
+   safety one: every claim here is deliberately scoped ("Safe-Harbor-transformed per the configured
+   policy", never "de-identified"; a BYO redactor is consumer-asserted, never re-verified; the DICOM
+   pass is metadata-only with burned-in pixels flagged, not cleaned; the release smoke's leak sweep
+   is **HL7-only**). Two sentences in this sweep would have become guarantees the code does not
+   provide if the roadmap pointer had simply been cut: provider identity being suppressible by a
+   widening policy in X12 (it is not; the retention is structural, in the extractor) and a different
+   Census vintage being supplied via a policy (it is not; `RESTRICTED_ZIP3` is a fixed export and
+   `DeidPolicy` carries only `name` + `transforms`). Both were restated as limitations instead.

@@ -370,6 +370,52 @@ its public history at `0.0.x`, per the cosyte version ladder (`0.0.x` until firs
 
 ### Fixed
 
+- **`PUBLIC-SURFACE-HYGIENE` (founder directive 2026-07-27): internal project bookkeeping removed from
+  every surface a consumer reads, and the corrections that fell out of it.** Item identifiers, phase
+  and roadmap-section language and ADR numbers are gone from `README.md`, `docs-content/` and the
+  `src/` JSDoc that compiles into `dist/**/*.d.ts` + `*.d.cts` and renders on hover in a consumer's
+  editor. Measured on `d105b6d` with the rule set that shipped with the gate: `src/` doc comments
+  **105 hits (60 line-pass + 45 reflow-only) across 30 of 44 source files**, built `dist/**/*.d.ts`
+  **49 lines** and `*.d.cts` **49 more**, npm metadata **0**, `src/` string literals **0** (over 1,134
+  extracted literal lines), public markdown **0 by rule**. All now 0.
+  - **The "0 by rule" figure was an artefact of the rule set, and this is the finding worth keeping.**
+    The public markdown still carried **18 lines** of "arrive in later phases" / "are a deferred later
+    phase", the clause-terminal shape the phase rule deliberately does not match, because
+    determiner-plus-`phase` collides with ordinary clinical English ("the acute phase reactant", "a
+    Phase III trial"). Cleared by hand, along with **19** bare `(§4.6)` roadmap-section citations and
+    **17** clause-terminal instances in `src/`. A count is a function of the rule set.
+  - **Seven of those 18 markdown lines were also factually false**, on pages published to
+    docs.cosyte.com: they said no format adapter was wired and that the remaining adapters were still
+    to come, in a package shipping all six, and that the bring-your-own free-text redaction interface
+    was not yet available when it is (`redactor`). Corrected.
+  - **Two limitations restated exactly rather than as pending work, because cutting the roadmap
+    pointer would otherwise have upgraded each into a capability the code does not provide.** The X12
+    guide and adapter docs said provider / organization identity could be suppressed with a widening
+    policy. It cannot: the retention is structural, in the extractor, and no `DeidOptions`, policy or
+    profile setting reaches it. `restricted-zip.ts` said a consumer needing a different Census vintage
+    supplies their own via a policy. They cannot: `RESTRICTED_ZIP3` is a fixed export and
+    `DeidPolicy` carries only `name` + `transforms`. Neither behaviour changed; both descriptions did.
+  - **The class is now gated, which is the half that stops it regrowing.**
+    `scripts/check-no-internal-refs.sh` (`pnpm check:no-internal-refs`) plus
+    `.github/workflows/no-internal-refs.yml` scan `README.md`, `LICENSE`, `docs-content/`, the npm
+    `description` + `keywords`, `src/` doc comments and `src/` string literals, line by line and
+    paragraph-joined, and self-test in both directions before reporting. Ported from `ncpdp`'s copy
+    (which carries the string-literal fourth pass, the plural phase stem and `/` in the ADR separator
+    class) with `transform`'s `roadmap §` arms, which alone found 35 of this repo's citations. The
+    negative self-tests pin the reference material a shape-keyed rule would destroy: `PID-3`, `OBX-5`,
+    `CX-5`, `NM1-03`, `REF-01`, `ICD-10-CM`, `HL7-V2`, `FHIR-R4`, `DICOM-SR`, `NCPDP-SCRIPT`,
+    `X12-837P`, and (checked against every rule) a bare `§164.514(b)(2)(i)(C)`. A rule keyed on `§`
+    alone was considered and refused: `§` here is how this package cites the regulation it implements.
+  - **No runtime behaviour, public API, policy, transform, disposition code, locus map or leak
+    guarantee changed.** The full local ladder was green on the remediated tree: typecheck, lint,
+    `format:check`, the PHI scan, 372 tests in 33 files, the gating coverage run, `build`, `attw` and
+    `pnpm smoke`.
+  - **Deferred, recorded rather than silently skipped.** Nine of this repo's thirteen pending
+    changesets carry item identifiers, phase or roadmap-section language. The release pipeline's
+    `release-notes.mjs` translates before it refuses, so it is not known whether they block a release
+    here; that is a separate surface with a separate gate and it was not touched, because a live
+    release run and an open version PR were in flight.
+
 ### Security
 
 - **The CI checks that run on a pull request now block the merge.** Until now `main` had no

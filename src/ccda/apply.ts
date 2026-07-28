@@ -6,7 +6,7 @@
  * index-aligned (both preserve extraction order).
  *
  * Removal is clean: a redacted name / blocked narrative becomes an empty element (`<name/>`,
- * `<text/>`) — while a **BYO-redacted** narrative (§Phase 8) keeps the redactor's prose as the element's
+ * `<text/>`) — while a **BYO-redacted** narrative keeps the redactor's prose as the element's
  * text; a redacted telecom loses its `@value`; a generalized date keeps only its year; a
  * pseudonymized id replaces only the id value (the assigning-authority `root` retained); a generalized
  * address keeps only the Safe Harbor 3-digit ZIP (state / country retained) and drops every finer

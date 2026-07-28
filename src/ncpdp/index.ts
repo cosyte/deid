@@ -1,6 +1,6 @@
 /**
  * `@cosyte/deid/ncpdp` — the **NCPDP de-identification adapter**. The NCPDP binding of the
- * format-agnostic core (roadmap §Phase 5): it locates PHI **structurally** in a parsed `@cosyte/ncpdp`
+ * format-agnostic core: it locates PHI **structurally** in a parsed `@cosyte/ncpdp`
  * **Telecommunication (vD.0)** transaction, applies the configured de-identification policy, and returns
  * the de-identified Telecom byte stream plus the core's value-free manifest.
  *
@@ -17,8 +17,8 @@
  *   patient id (`CY`) pseudonymized. Gender and state retained.
  * - **Insurance (`04`)** — cardholder id (`C2`) and group id (`C1`) pseudonymized; cardholder name
  *   (`CC`/`CD`) removed. Person code retained.
- * - **Prescriber (`03`)** — the prescriber id (`DB`) removed (the roadmap scopes prescriber identifiers
- *   for NCPDP — the deliberate asymmetry with the X12 adapter, which retains provider identity).
+ * - **Prescriber (`03`)** — the prescriber id (`DB`) removed (prescriber identifiers are in scope for
+ *   NCPDP — the deliberate asymmetry with the X12 adapter, which retains provider identity).
  * - **Coordination of Benefits (`05`)** — the other-payer cardholder id (`NU`) and group id (`MJ`)
  *   pseudonymized; the other-payer date (`E8`) generalized to year.
  * - **Header** — Date of Service generalized to year.
@@ -30,14 +30,14 @@
  * **retained untouched** (the over-scrub guard). The output is **"Safe-Harbor-transformed per the
  * configured policy"**, never "de-identified".
  *
- * **NCPDP SCRIPT is deferred (a documented non-goal of this phase).** `@cosyte/ncpdp`'s SCRIPT
+ * **NCPDP SCRIPT is deferred (a documented non-goal).** `@cosyte/ncpdp`'s SCRIPT
  * (ePrescribing XML) surface cannot be structurally de-identified faithfully through its public API:
  * `serializeScript` emits **only the modeled fields** (a parse → serialize round-trip drops every
  * unmodeled XML element), and the SCRIPT `Patient` model carries **no address, phone, or patient-id**
  * field. Performing a partial de-id through that surface would silently drop unmodeled content and leave
  * unmodeled patient identifiers unhandled — a false-safety hazard, which the fail-closed posture
- * forbids. SCRIPT de-identification therefore waits for a parser surface that preserves the full document
- * (tracked as a follow-up), rather than shipping an unfaithful pass here.
+ * forbids. SCRIPT de-identification therefore waits for a parser surface that preserves the full
+ * document, rather than shipping an unfaithful pass here.
  *
  * @packageDocumentation
  */

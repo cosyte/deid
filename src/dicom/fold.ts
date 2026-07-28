@@ -1,8 +1,8 @@
 /**
- * Fold a `@cosyte/dicom` **PS3.15 Annex E** de-identification report into the unified value-free manifest
- * (roadmap §Phase 6, §4.7). The DICOM layer is authoritative for *what was done* to each attribute — this
- * module only re-expresses its report in the shared {@link DeidManifestEntry} shape so a DICOM manifest
- * reads like every other format's.
+ * Fold a `@cosyte/dicom` **PS3.15 Annex E** de-identification report into the unified value-free manifest.
+ * The DICOM layer is authoritative for *what was done* to each attribute — this module only re-expresses
+ * its report in the shared {@link DeidManifestEntry} shape so a DICOM manifest reads like every other
+ * format's.
  *
  * **Value-free, always.** An entry carries the Safe Harbor category, the transform, the **locus** (the DICOM
  * tag + keyword + any sequence context path) and a count — **never** a decoded value. The source→replacement

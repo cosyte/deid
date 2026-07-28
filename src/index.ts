@@ -11,11 +11,12 @@
  * **Honesty line (governs the whole library).** Results are **"Safe-Harbor-transformed per the
  * configured policy"** — never "de-identified" and never "HIPAA-compliant". Safe Harbor is implemented
  * mechanically; the §164.514(b)(2)(ii) actual-knowledge condition is the consumer's; Expert
- * Determination (§164.514(b)(1)) is *supported* by later phases, never *rendered* or certified here.
+ * Determination (§164.514(b)(1)) is *supported*, never *rendered* or certified here.
  *
- * This phase ships the **format-agnostic core**: the policy engine, the five transforms, the 18-category
- * Safe Harbor model, the fail-closed rule, and the value-free manifest — tested against a generic locus
- * model. Per-format locus maps (HL7 v2, C-CDA, FHIR, X12, NCPDP, DICOM) arrive in later phases.
+ * The root entry ships the **format-agnostic core**: the policy engine, the five transforms, the
+ * 18-category Safe Harbor model, the fail-closed rule, and the value-free manifest — tested against a
+ * generic locus model. The per-format locus maps (HL7 v2, C-CDA, FHIR, X12, NCPDP, DICOM) live behind
+ * the matching subpath exports.
  *
  * @packageDocumentation
  */

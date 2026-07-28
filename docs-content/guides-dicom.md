@@ -103,5 +103,5 @@ warns rather than giving a false sense of safety.
 
 - **Metadata only** — pixels are never inspected; a burned-in-annotation hazard is *flagged*, never
   cleaned.
-- **No Retain/Clean deviations in this release** — the full Basic Profile always applies (maximal
-  removal). Expert-Determination retain options are a later phase.
+- **No Retain/Clean deviations** — the full Basic Profile always applies (maximal removal).
+  Expert-Determination retain options are **not** offered.

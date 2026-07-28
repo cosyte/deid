@@ -4,7 +4,7 @@
  * path such as `"PID-5"`, `"recordTarget/patientRole/id"`, `"(0010,0010)"`), **what** kind of value it
  * is, and — when the caller can classify it — which Safe Harbor **category** it belongs to.
  *
- * Per-format locus maps (P2–P6) produce these loci from a parsed model. Phase 1 is tested against this
+ * Per-format locus maps produce these loci from a parsed model. The core is tested against this
  * generic shape directly, so the policy/transform/fail-closed core is independently shippable.
  *
  * @packageDocumentation
@@ -55,7 +55,7 @@ export interface GenericLocus {
 
 /**
  * The format-agnostic input model: a flat list of located candidate values. A per-format adapter
- * (later phases) produces this from a parsed HL7 / C-CDA / FHIR / X12 / NCPDP / DICOM model.
+ * produces this from a parsed HL7 / C-CDA / FHIR / X12 / NCPDP / DICOM model.
  *
  * @example
  * ```ts
@@ -93,7 +93,7 @@ export interface TransformedLocus {
 
 /**
  * The transformed document — the same loci with de-identified values. Format-specific documents
- * replace this `unknown`-shaped placeholder in later phases; the core returns this generic shape.
+ * replace this `unknown`-shaped placeholder; the core returns this generic shape.
  *
  * @example
  * ```ts

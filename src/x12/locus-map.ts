@@ -1,7 +1,7 @@
 /**
  * The **X12 locus map** — the cited table of *where* the 18 HIPAA Safe Harbor identifier categories
- * live in the `@cosyte/x12` structural model, per segment. This is the consumer-tier thesis (roadmap
- * §5) applied to HIPAA 005010 EDI: PHI is located **structurally at the parser's loci** (segment id +
+ * live in the `@cosyte/x12` structural model, per segment. This is the consumer-tier thesis applied to
+ * HIPAA 005010 EDI: PHI is located **structurally at the parser's loci** (segment id +
  * 1-indexed element position), never by regex over the raw bytes. A name is at `NM1-03..07` because
  * the X12 TR3 says so, not because a string "looked like" a name.
  *
@@ -9,7 +9,7 @@
  * hierarchical levels — subscriber 2000B/2010BA, patient 2000C/2010CA) are implicit. The map is
  * therefore expressed **per segment id** plus two **qualifier classifiers** that route an identifier by
  * its own qualifier element — the structural, parser-typed way to tell an SSN from a member id from a
- * provider NPI (§4.4 knife-edge), independent of loop position:
+ * provider NPI, independent of loop position:
  *
  * - **{@link classifyNm1Entity}** — the `NM1-01` entity-identifier code decides whether an `NM1` names a
  *   **patient-side individual** (subscriber / patient / dependent → scrub name + id) or a **recognized
@@ -125,7 +125,7 @@ export const PROVIDER_ENTITY_CODES: ReadonlySet<string> = new Set<string>([
 /**
  * The **patient-side individual** `NM1-01` entity-identifier codes whose name and identifiers are
  * **scrubbed** — the subscriber / insured, the patient, the dependent, and the responsible party are
- * the covered individual and their relatives (§4.6). Grounded in the HIPAA 005010 TR3 entity-identifier
+ * the covered individual and their relatives. Grounded in the HIPAA 005010 TR3 entity-identifier
  * code list (X12 element 98).
  *
  * @example
@@ -356,7 +356,7 @@ export const X12_UNIVERSAL_SEGMENT_RULES: Readonly<Record<string, readonly X12El
 
 /**
  * The X12 segments carrying **free-form human message text** and the 1-indexed element(s) that hold it —
- * blocked by default (roadmap §4.5), the exact inverse of a naive scrub and the analogue of the HL7
+ * blocked by default, the exact inverse of a naive scrub and the analogue of the HL7
  * adapter's `OBX-5`/`NTE` fail-closed default and the NCPDP adapter's `544-FY`/`504-F4`/`526-FQ` blocks.
  * Free text can carry any of the 18 categories in prose (a name, a DOB, an MRN in a note), so it is
  * removed, never passed through. The segment's other (coded) elements are retained (the over-scrub
@@ -440,11 +440,11 @@ export const X12_ACCOUNT_SEGMENTS: ReadonlySet<string> = new Set<string>(["CLM",
  * of its elements is blocked, so an unknown segment can never ride a patient identifier through in the
  * clear.
  *
- * **Documented Phase-5 limitation (mirrors the HL7 adapter).** Retained clinical segments may still
+ * **Documented limitation (mirrors the HL7 adapter).** Retained clinical segments may still
  * carry patient-related *dates* not surfaced as `DTP` / `DTM` (e.g. a `DTM` inside a retained 837 loop
  * the map does not descend, or a service-line date), and administrative per-claim references (a
- * prescription number, a prior-authorization number). Selective scrubbing of those residual loci is a
- * later phase; forgetting a clinical segment here fails **safe** — it is blocked, not leaked.
+ * prescription number, a prior-authorization number). Selective scrubbing of those residual loci is
+ * **not** performed; forgetting a clinical segment here fails **safe** — it is blocked, not leaked.
  *
  * @example
  * ```ts

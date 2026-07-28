@@ -7,8 +7,8 @@
  *
  * PHI is located **structurally**, per the cited {@link "./locus-map.js"}: the demographic elements
  * (`name` / `telecom` / `address` / `photo` / dates) of the **person resources**
- * (`Patient` / `RelatedPerson` / `Practitioner` / `Person`, plus the nested `Patient.contact` relative —
- * §4.6), and the **universal** vectors that leak from any resource — `identifier`, PHI-bearing dates,
+ * (`Patient` / `RelatedPerson` / `Practitioner` / `Person`, plus the nested `Patient.contact`
+ * relative), and the **universal** vectors that leak from any resource — `identifier`, PHI-bearing dates,
  * the narrative `text.div`, extension values, and a `Reference.display`. The **fail-closed** rule
  * governs the person sweep: a value-bearing top-level person-resource property that is neither mapped
  * PHI nor on the recognized allow-list is blocked. Everything else — the codes, values, units, and
@@ -138,7 +138,7 @@ function blockNode(out: FhirExtraction, node: FhirNode, path: string): void {
 }
 
 /**
- * Leaf string element names that carry **human free-text prose** — blocked by default (roadmap §4.5):
+ * Leaf string element names that carry **human free-text prose** — blocked by default:
  * a `contentString` (a `Communication`/message body) and a `valueString` (an *uncoded* string result,
  * the direct FHIR analogue of an HL7 OBX-5 typed `ST`, which the sibling HL7 adapter also fails closed
  * on — a structured `valueQuantity` / `valueCodeableConcept` / `valueDateTime` result is retained). A
@@ -245,7 +245,7 @@ function handleDemographic(out: FhirExtraction, name: string, value: FhirNode, p
  * nesting, retaining the `url` and the nested `extension` skeleton. An extension can carry any of the 18
  * categories (an MRN in a local extension, a name in a `valueHumanName`, an address in a birthplace
  * extension), and the reader preserves unknown extensions verbatim — so the value is dropped
- * unconditionally (roadmap §Phase 4: fail closed on an unknown extension carrying a value).
+ * unconditionally: fail closed on an unknown extension carrying a value.
  */
 function blockExtension(out: FhirExtraction, value: FhirNode, path: string): void {
   if (isList(value)) {

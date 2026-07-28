@@ -9,8 +9,8 @@
  * PHI is located **structurally**, per the cited {@link CCDA_LOCUS_MAP}: the person `<name>` /
  * `<telecom>` / `<addr>` / `<birthTime>` / person-role `<id>` and participation dates of the CDA
  * **header participations** (recordTarget/patient + guardian, author, informant, authenticator,
- * legalAuthenticator, dataEnterer, participant, custodian, documentationOf, componentOf — roadmap §4.6
- * relatives included). The **fail-closed** rule governs everything else: section narrative `<text>`
+ * legalAuthenticator, dataEnterer, participant, custodian, documentationOf, componentOf, relatives
+ * included). The **fail-closed** rule governs everything else: section narrative `<text>`
  * blocks and the unstructured `nonXMLBody` are blocked; an element carrying a value that is neither a
  * mapped PHI element nor a recognized coded/administrative one is blocked; the clinical
  * **structuredBody** entries are retained untouched (the over-scrub guard) — a `<name>` there is a drug

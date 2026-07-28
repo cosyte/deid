@@ -1,7 +1,7 @@
 /**
  * The **HL7 v2 locus map** — the cited table of *where* the 18 HIPAA Safe Harbor identifier categories
  * live in the `@cosyte/hl7` structural model, per segment. This is the whole thesis of the consumer
- * tier (roadmap §5): PHI is located **structurally at the parser's loci**, never by regex over the raw
+ * tier: PHI is located **structurally at the parser's loci**, never by regex over the raw
  * bytes. A name is at PID-5 because the HL7 v2 standard says PID-5 is the patient name — not because a
  * string "looked like" a name.
  *
@@ -9,7 +9,7 @@
  * tells the extractor how to turn it into a generic {@link LocusRule} the format-agnostic engine can
  * transform. Relatives / guarantor / insured loci (NK1 / GT1 / IN1 / IN2) are first-class — Safe Harbor
  * removes identifiers of the individual **and of relatives, employers, and household members**
- * (§164.514(b)(2)(i); roadmap §4.6), and missing them is the common real-world leak.
+ * (§164.514(b)(2)(i)), and missing them is the common real-world leak.
  *
  * Field positions are grounded in the HL7 v2.x segment definitions (PID, NK1, GT1, IN1, IN2). Only the
  * well-known PHI-bearing fields are mapped; a field absent from this map inside a **mapped** segment is
@@ -52,7 +52,7 @@ export interface Hl7FieldRule {
    * For `id` fields only: when `true`, the category is resolved **per repetition** from the CX-5
    * identifier-type code (`SS` → SSN, `MR` → MRN, `AN`/`AC` → account, `MA`/`MB`/`PN` → beneficiary),
    * falling back to {@link category} for an unrecognized or absent type code. This is the structural,
-   * parser-typed way to tell an SSN from an MRN inside one PID-3 list (§4.4 knife-edge).
+   * parser-typed way to tell an SSN from an MRN inside one PID-3 list.
    */
   readonly routeByTypeCode?: boolean;
 }
@@ -84,7 +84,7 @@ const PID_RULES: readonly Hl7FieldRule[] = [
 ];
 
 /**
- * **NK1 — Next of Kin / Associated Parties.** Relatives and contacts (roadmap §4.6).
+ * **NK1 — Next of Kin / Associated Parties.** Relatives and contacts.
  */
 const NK1_RULES: readonly Hl7FieldRule[] = [
   { field: 2, category: C.NAMES, mode: "redact" }, // NK1-2  Name (XPN~)
@@ -99,7 +99,7 @@ const NK1_RULES: readonly Hl7FieldRule[] = [
 ];
 
 /**
- * **GT1 — Guarantor.** The financially-responsible party — frequently a relative (roadmap §4.6).
+ * **GT1 — Guarantor.** The financially-responsible party — frequently a relative.
  */
 const GT1_RULES: readonly Hl7FieldRule[] = [
   { field: 2, category: C.ACCOUNT, mode: "id" }, // GT1-2  Guarantor Number (CX~)

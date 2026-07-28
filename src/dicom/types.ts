@@ -97,7 +97,7 @@ export interface DicomDeidResult {
    */
   readonly burnedInAnnotationHazard: boolean;
   /**
-   * The Annex E Retain/Clean options that were active. Empty in this phase (the full Basic Profile applies
+   * The Annex E Retain/Clean options that were active. Always empty (the full Basic Profile applies
    * with no deviations); surfaced so a reviewer can confirm nothing was retained.
    */
   readonly retained: readonly string[];
@@ -126,6 +126,6 @@ export interface DicomBufferDeidResult {
   readonly metadataOnly: true;
   /** `true` when the image may carry burned-in PHI this metadata-only pass cannot remove. */
   readonly burnedInAnnotationHazard: boolean;
-  /** The Annex E Retain/Clean options that were active (empty in this phase). */
+  /** The Annex E Retain/Clean options that were active (always empty). */
   readonly retained: readonly string[];
 }

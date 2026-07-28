@@ -106,11 +106,11 @@ not mistaken for a date, so it survives.
 
 ## Known limitations (this release)
 
-- Extension values are **block-only** — no profile-aware retention yet, so a `us-core-*` demographic
-  extension is dropped rather than kept (deferred to a later policy-profiles phase).
+- Extension values are **block-only** — there is no profile-aware retention, so a `us-core-*`
+  demographic extension is dropped rather than kept.
 - Reference **wiring** and resource logical `id`s are preserved structurally; coordinated
-  pseudonymization of resource ids across a corpus (so the same patient links across documents) is the
-  longitudinal phase.
+  pseudonymization of resource ids across a corpus (so the same patient links across documents) is
+  **not** performed.
 - Free-text **prose** loci (`note`, `contentString`, uncoded `valueString`) fail closed by default; a
   semantic (NLP) narrative scrub, `contentAttachment` binary content, and person names embedded in
   non-person resources (`Organization.contact.name`, `Location.address`) remain out of scope.

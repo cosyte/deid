@@ -6,11 +6,12 @@
  * than 20,000 people**. For the three-digit prefixes whose population is **20,000 or fewer**, the
  * initial three digits must be changed to **`000`**.
  *
- * This list is the **cited, published** set (never invented — ADR 0018 public-cited-only): the 17
+ * This list is the **cited, published** set, never invented: the 17
  * three-digit ZCTAs enumerated in the HHS Office for Civil Rights *Guidance Regarding Methods for
  * De-identification of Protected Health Information* (2012), derived from **2000 Census** data. Getting
- * this list wrong under-generalizes a rural patient (a leak), so it is versioned and cited, and a
- * consumer who must apply a different Census vintage supplies their own via a policy (a later phase).
+ * this list wrong under-generalizes a rural patient (a leak), so it is versioned and cited. A consumer
+ * who must apply a different Census vintage **cannot** substitute one: the list is a fixed export
+ * ({@link RESTRICTED_ZIP3}), not a policy option.
  *
  * @packageDocumentation
  */

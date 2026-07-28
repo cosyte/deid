@@ -1,5 +1,5 @@
 /**
- * The **Expert-Determination support report** (roadmap §Phase 9) — a structured, value-free account of
+ * The **Expert-Determination support report** — a structured, value-free account of
  * *what a de-identification pass did and what it left in place*, built from the value-free
  * {@link DeidManifestEntry} manifest every adapter emits. It exists to **support** a qualified
  * statistician's HIPAA **Expert Determination** (45 CFR §164.514(b)(1)) with the residual-risk-relevant
@@ -91,7 +91,7 @@ export interface CategoryCoverage {
   readonly transforms: readonly TransformName[];
   /** The distinct disposition codes recorded for this category, sorted. */
   readonly codes: readonly DeidDispositionCode[];
-  /** `true` when a coarse identifying **residual** was retained for this category (see §residual). */
+  /** `true` when a coarse identifying **residual** was retained for this category. */
   readonly residualRetained: boolean;
 }
 

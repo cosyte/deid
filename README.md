@@ -13,7 +13,7 @@ but **inverts the reflex** — where a parser is liberal on input, a de-identifi
 > **The honesty line.** Results are **"Safe-Harbor-transformed per the configured policy"** — never
 > "de-identified" and never "HIPAA-compliant". Safe Harbor is implemented mechanically; the
 > actual-knowledge condition (§164.514(b)(2)(ii)) is the consumer's; **Expert Determination
-> (§164.514(b)(1)) is supported by later phases, never rendered or certified.** The certification is
+> (§164.514(b)(1)) is supported, never rendered or certified.** The certification is
 > always the consumer's.
 
 > **Status:** pre-alpha (`0.0.x`), not yet published to npm. This release ships the **format-agnostic
@@ -23,7 +23,7 @@ but **inverts the reflex** — where a parser is liberal on input, a de-identifi
 > (`@cosyte/deid/dicom`), plus the **longitudinal layer** — the corpus registry (`createDeidRegistry`)
 > for cross-document consistency and the formalized key contract, and the **Expert-Determination support
 > report** (`buildExpertDeterminationSupportReport`) that structures the manifest for a statistician
-> **without ever rendering a determination**. NCPDP SCRIPT lands in a subsequent phase.
+> **without ever rendering a determination**. NCPDP SCRIPT is **not** supported.
 
 ## Install
 
@@ -108,7 +108,7 @@ as do **NTE-3** comments. Structured clinical values, units, codes, and statuses
 **Known limitations (this release).** Free text is block-by-default (no built-in scrub; opt-in BYO
 redaction — see [Free text](#free-text--block-by-default--byo-redaction)); within **retained** clinical /
 visit segments, patient-related _dates_ (OBR/DG1/PV1 timestamps), _visit identifiers_ (PV1-19), and
-_provider_ names (PV1-7/8, OBR-16) are a deferred later phase; the address generalization keeps only the
+_provider_ names (PV1-7/8, OBR-16) are **not** de-identified; the address generalization keeps only the
 Safe Harbor 3-digit ZIP.
 
 ## De-identify a C-CDA document
@@ -151,7 +151,7 @@ or material name, not a person.
 **Known limitations (this release).** Narrative is block-by-default (no built-in scrub; opt-in BYO
 redaction — see [Free text](#free-text--block-by-default--byo-redaction)); within the **retained**
 clinical body, entry service _dates_, entry _ids_, in-entry _performer_ names, and _family-history_
-relative demographics are a deferred later phase (mirroring the HL7 adapter's boundary); the document
+relative demographics are **not** de-identified (mirroring the HL7 adapter's boundary); the document
 `id`/`code`/`title` envelope is retained (like HL7's MSH).
 
 ## De-identify a FHIR R4 resource
@@ -203,9 +203,9 @@ that is not on a `Coding` is treated as a Reference person-label and blocked —
 `valueString`) are blocked (the FHIR analogue of the HL7 adapter's OBX-5-`ST` / NTE fail-closed default).
 
 **Known limitations (this release).** Extension values are block-only (no profile-aware retention — a
-`us-core-*` demographic extension is dropped, deferred to a later policy-profiles phase). Reference
+`us-core-*` demographic extension is dropped). Reference
 _wiring_ (`Reference.reference` pointers, resource logical `id`s) is preserved structurally; coordinated
-pseudonymization of resource ids across a corpus is the longitudinal phase. Free-text **prose** loci
+pseudonymization of resource ids across a corpus is **not** performed. Free-text **prose** loci
 (`note`, `contentString`, uncoded `valueString`) fail closed by default, or run through an opt-in BYO
 redactor (see [Free text](#free-text--block-by-default--byo-redaction)); a **built-in** semantic (NLP)
 narrative scrub, `contentAttachment` binary content, and person names embedded in non-person resources

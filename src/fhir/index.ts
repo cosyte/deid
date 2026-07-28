@@ -1,6 +1,6 @@
 /**
  * `@cosyte/deid/fhir` — the **FHIR R4 de-identification adapter**. The FHIR binding of the
- * format-agnostic core (roadmap §Phase 4): it locates PHI **structurally** in a parsed `@cosyte/fhir`
+ * format-agnostic core: it locates PHI **structurally** in a parsed `@cosyte/fhir`
  * resource, applies the configured de-identification policy, and returns a transformed `FhirComplex`
  * plus the core's value-free manifest.
  *
@@ -11,9 +11,9 @@
  * constructors) and its `parseResource` / `serializeResource` codec — it never touches a third-party
  * JSON substrate, so `@cosyte/deid` declares no third-party runtime dependency of its own.
  *
- * **What it covers.** FHIR is a **graph of typed resources**, so the map splits by role (roadmap §5):
+ * **What it covers.** FHIR is a **graph of typed resources**, so the map splits by role:
  * - **Person resources** — `Patient` / `RelatedPerson` / `Practitioner` / `Person` (and the nested
- *   `Patient.contact` relative, §4.6): `name` / `telecom` / `photo` removed; `address` → safe 3-digit
+ *   `Patient.contact` relative): `name` / `telecom` / `photo` removed; `address` → safe 3-digit
  *   ZIP; `birthDate` and every date → year.
  * - **Every resource (the universal vectors that leak from any type):** `identifier` pseudonymized by
  *   `system` (a US-SSN system removed); PHI-bearing **dates** → year; the narrative **`text.div`** blocked
@@ -29,13 +29,13 @@
  * (the side-channel the structural walk cannot otherwise reach). The honesty line is unchanged: the
  * output is **"Safe-Harbor-transformed per the configured policy"**, never "de-identified".
  *
- * **Known limitations (this phase).** Extension values are block-only (no profile-aware retention — a
- * `us-core-*` demographic extension is dropped, not kept — deferred to Phase 10 policy profiles).
+ * **Known limitations.** Extension values are block-only (no profile-aware retention — a
+ * `us-core-*` demographic extension is dropped, not kept).
  * Reference **wiring** (`Reference.reference` pointers and resource logical `id`s) is preserved
- * structurally; coordinated pseudonymization of resource ids across a corpus is the longitudinal Phase 7.
+ * structurally; coordinated pseudonymization of resource ids across a corpus is **not** performed here.
  * Structured free-text elements inside clinical resources (`Observation.valueString`, `Annotation.text`)
- * are retained (the over-scrub guard) — narrative free-text de-id is the separately-scoped Phase 8; only
- * the rendered narrative `text.div` is blocked here.
+ * are retained (the over-scrub guard) — narrative free-text de-id is separately scoped (the BYO
+ * redaction interface); only the rendered narrative `text.div` is blocked here.
  *
  * @packageDocumentation
  */

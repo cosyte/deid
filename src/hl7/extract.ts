@@ -53,7 +53,7 @@ export interface Hl7Extraction {
  * HL7 v2 value types (OBX-2, HL7 Table 0125) that make OBX-5 a **structured clinical value** that must
  * **survive** the over-scrub test — numeric, coded, and date/time types. OBX-5 is retained **only** for
  * these; every other value type — narrative `TX`/`FT`, ambiguous String `ST`, and any **empty or unknown**
- * OBX-2 — **fails closed** and is blocked (roadmap §4.5). This is the inverse (fail-closed) reflex: OBX-5
+ * OBX-2 — **fails closed** and is blocked. This is the inverse (fail-closed) reflex: OBX-5
  * is passed through only when the parser positively types it as a non-narrative clinical value.
  */
 const STRUCTURED_VALUE_TYPES: ReadonlySet<string> = new Set([

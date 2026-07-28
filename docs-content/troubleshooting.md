@@ -36,10 +36,10 @@ The library's promise is **narrow and honest**. Do **not** over-trust it:
 - **Not a certification.** Output is **"Safe-Harbor-transformed per the configured policy,"** never
   "de-identified" / "HIPAA-compliant". The actual-knowledge condition (§164.514(b)(2)(ii)) is the
   consumer's; Expert Determination is not rendered.
-- **No format is wired yet.** This release is the transform/policy/manifest core over a **generic locus
-  model**. The caller supplies each locus's `path`, `kind`, and `category`. Per-format locus maps
-  (HL7 v2, C-CDA, FHIR, X12, NCPDP, DICOM) — which is where "the parser knows where the name is"
-  becomes automatic — arrive in later phases.
+- **The root entry is the generic core.** `@cosyte/deid` itself is the transform/policy/manifest core
+  over a **generic locus model**, so the caller supplies each locus's `path`, `kind`, and `category`.
+  The per-format locus maps (HL7 v2, C-CDA, FHIR, X12, NCPDP, DICOM) — which is where "the parser knows
+  where the name is" becomes automatic — live behind the matching subpath exports.
 - **DOB vs. age is not linked in the core.** Under the default policy a date generalizes to its
   **year**, and a year is retained as a `DEID_RESIDUAL_RETAINED` residual. A birth-date *indicative of
   an age over 89* is **not** aggregated to `90+` by the generic core, because resolving DOB→age needs a
@@ -51,7 +51,7 @@ The library's promise is **narrow and honest**. Do **not** over-trust it:
   digit fragment (recorded as a residual, never silently). The per-format locus maps classify these
   precisely.
 - **Free text is block-only.** A `freetext` locus is blocked by default — no naive regex scrub (a
-  false-safety hazard). A bring-your-own redaction interface is a later phase.
+  false-safety hazard). A bring-your-own redaction interface is available via the `redactor` option.
 - **Date-shift is not Safe Harbor.** It is an Expert-Determination-supporting mode; a shifted real date
   is still a date. The `safe-harbor` policy generalizes dates to year instead.
 
