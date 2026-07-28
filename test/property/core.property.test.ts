@@ -70,9 +70,18 @@ describe("deid core conformance (fail-safe invariants)", () => {
           expect(KNOWN_CODES.has(entry.code)).toBe(true);
           expect(entry.count).toBeGreaterThan(0);
           // Value-free: no input value may appear anywhere in the serialized manifest entry.
+          //
+          // A manifest entry carries a PATH, and paths and values are both arbitrary strings here, so
+          // a value can occur inside some other locus's path by coincidence. That is not a leak, and
+          // treating it as one makes this property fail at random: the counterexample that first
+          // exposed it was `{path: "to__ ", value: ""}` beside `{path: " ", value: "to__"}`, where
+          // "to__" is a substring of the FIRST locus's path. Excluding only `entry.locus === value`
+          // caught exact equality and missed that. A PHI-leak property that reds at random is worse
+          // than a narrower one, because random reds are what teach a reader to ignore it.
           const serialized = JSON.stringify(entry);
+          const pathHaystack = loci.map((l) => l.path).join("\u0000");
           for (const locus of loci) {
-            if (locus.value.length >= 4 && entry.locus !== locus.value) {
+            if (locus.value.length >= 4 && !pathHaystack.includes(locus.value)) {
               expect(serialized.includes(locus.value)).toBe(false);
             }
           }
