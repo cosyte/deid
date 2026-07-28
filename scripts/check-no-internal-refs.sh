@@ -378,6 +378,29 @@
 #         measured instances, which residual (i) says is the worse of the two mistakes. If
 #         a real one appears, fix it in the shared list, not in this copy alone.
 #
+#  (xvi)  STRIPPING THE NUL CAN ITSELF LOSE A VIOLATION, and this is the residual the strip
+#         BUYS rather than the one it closes. Deleting the byte also deletes the CONTEXT it
+#         provided, so a banned token sitting immediately beside one can stop matching.
+#         Demonstrated on this tree, both green after the strip and both red before it:
+#           `"x\0DEID-77 shipped this"`   -- the NUL was the word boundary rule 1 needed
+#           `"the study \0phase 13 note"` -- deleting it completes `(?<!study )`, which is
+#                                          the clinical lookbehind rule 2 uses to protect
+#                                          "the study phase of a trial"
+#         A SPACE WOULD CATCH BOTH and would miss `"DEID\0-77"` instead, so the two choices
+#         are equal and opposite rather than one being safe. Deletion is kept because it
+#         models what a CONSUMER IS SHOWN (a NUL renders as nothing), which is the line this
+#         gate draws everywhere else. Neither shape is reachable on a real tree: all ten
+#         NULs in tracked `src/` are structural separators inside template literals, nowhere
+#         near prose. Recorded because the alternative is a gate with an unstated fail-open.
+#         SAME CAUSE, SMALLER EFFECT IN PASS 3: a doc line whose only content was a NUL
+#         becomes empty after the strip and is treated as a paragraph break. No such line
+#         exists here (verified: the pass-3 buffers are byte-identical with and without the
+#         strip), so it is a property of the code, not of this tree.
+#         ALSO UNTESTED, and stated as untested: `gsub(/\0/, ...)` is awk-implementation
+#         defined. It was verified under mawk, which is what `awk` resolves to both in this
+#         container and on `runs-on: ubuntu-latest`, across all 255 non-NUL bytes. It has
+#         NOT been verified under gawk or BusyBox awk.
+#
 # Run it locally with `pnpm check:no-internal-refs`.
 set -euo pipefail
 
@@ -688,9 +711,13 @@ SRC_RULE_COUNT=6
 #     line breaks is missed. Under-reports rather than over-reports. There is no reflow
 #     pass here because a reflow would have to model template continuation, and the fix
 #     for a missed one is the same as for any residual: the reviewer.
-#   * `src/` CONTAINS RAW NUL BYTES, and that is deliberate, load-bearing cryptography:
-#     `src/context.ts` (2), `src/manifest.ts` (4) and `src/report.ts` (4) embed a literal
-#     NUL as the HMAC domain separator. THIS COSTS THE PASS ITS ENTIRE LOCATION REPORTING
+#   * `src/` CONTAINS TEN RAW NUL BYTES, all deliberate and none of them going away.
+#     `src/context.ts` (2) uses one as an HMAC domain separator inside `createHmac(...)`.
+#     `src/manifest.ts` (4) and `src/report.ts` (4) use one as the FIELD SEPARATOR in a
+#     composite Map key (`${category}\0${transform}\0${locus}\0...`); neither file imports
+#     `node:crypto`. An earlier draft of this note called all ten "the HMAC domain
+#     separator", which was right about two and wrong about eight.
+#     THIS COSTS THE PASS ITS ENTIRE LOCATION REPORTING
 #     UNLESS THE EXTRACTOR STRIPS IT, and an earlier draft of this file asserted the
 #     opposite as a measured fact ("it costs this pass nothing"). It does not: awk passes
 #     the byte through, so the extracted buffer carries NULs, GNU grep classifies the whole
@@ -1408,18 +1435,29 @@ while IFS= read -r -d '' f; do
         line = substr(line, RSTART + RLENGTH)
       }
       # RAW NUL BYTES ARE STRIPPED HERE, and this line is load-bearing rather than
-      # defensive. src/context.ts, src/manifest.ts and src/report.ts embed a literal NUL
-      # inside a quoted literal -- it is the HMAC domain separator, deliberate cryptography,
-      # and it is not going away. awk passes it straight through, so without this the buffer
-      # below carries NULs, GNU grep classifies the WHOLE buffer as binary, and every hit in
-      # this pass arrives on stderr as "binary file matches" with no line number, naming a
-      # mktemp path the trap has already deleted. Worse, that lands in refuse_if_incomplete,
-      # which exits BEFORE fail_with_hits prints the located hits from passes 1-3: one NUL in
-      # src/ and a real README violation is reported as an encoding error. Verified by
-      # seeding "blocked pending DEID-77 in Phase 13" into a source file; found by a refuter,
-      # not by design. DELETED rather than replaced with a space: deletion can only ever JOIN
-      # two tokens into an over-report, which is the direction every other boundary in this
-      # file leans, while a space could split an identifier across the NUL and lose it.
+      # defensive. Ten of them live in tracked src/: two in src/context.ts as an HMAC domain
+      # separator, and eight in src/manifest.ts and src/report.ts as the field separator in a
+      # composite Map key. All ten are deliberate and none is going away. awk passes the byte
+      # straight through, so without this the buffer below carries NULs, GNU grep classifies
+      # the WHOLE buffer as binary, and a hit in this pass arrives on stderr as "binary file
+      # matches" with no rule, no source file and no line number, naming a mktemp path the
+      # trap has already deleted. It then exits through refuse_if_incomplete, which runs
+      # BEFORE fail_with_hits prints the located hits from passes 1-3, so a run that has BOTH
+      # a string-literal hit and a real README violation reports only the encoding error and
+      # never names the README line. (A README violation on its own is unaffected; the
+      # binary classification needs a pass-4 MATCH to surface.) Verified by seeding
+      # "blocked pending DEID-77 in Phase 13" into a source file; found by a refuter, not by
+      # design.
+      #
+      # DELETED RATHER THAN REPLACED WITH A SPACE, and the honest reason is that deletion
+      # models what a CONSUMER IS SHOWN -- a NUL renders as nothing -- which is the line this
+      # whole gate draws. It is NOT because deletion is the safe direction. An earlier draft
+      # of this comment claimed deletion "can only ever JOIN two tokens into an over-report".
+      # That is false in both directions and was demonstrated so: deletion also removes
+      # CONTEXT, so it can erase a word boundary or complete a lookbehind and turn a red into
+      # a green. Residual (xvi) records the two inputs that do it. A space would catch those
+      # two and miss a different contrived one; neither is reachable on a real tree, and the
+      # under-report is stated rather than traded for an equal and opposite one.
       gsub(/\0/, "", out)
       if (out != "") { print out >> sl; print file ":" FNR >> sm }
     }

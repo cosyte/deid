@@ -407,15 +407,23 @@ its public history at `0.0.x`, per the cosyte version ladder (`0.0.x` until firs
     `X12-837P`, and (checked against every rule) a bare `§164.514(b)(2)(i)(C)`. A rule keyed on `§`
     alone was considered and refused: `§` here is how this package cites the regulation it implements.
   - **A refuter refuted the first version of this gate, and the finding is worth keeping.** Three
-    source files (`context.ts`, `manifest.ts`, `report.ts`) embed a raw NUL byte inside a string
-    literal as the HMAC domain separator. `awk` passed it into the string-literal pass buffer, GNU
-    grep classified that whole buffer as binary, and a seeded violation therefore reported "binary
-    file matches" against an already-deleted temp path, with no rule, no source file, no line number
-    and remediation advice pointing at an encoding that is valid UTF-8. It exited through the
-    incomplete-scan refusal, which runs before the located hits from the other three passes print.
-    The gate still failed closed throughout, so nothing could escape it, but it could not say what it
-    had caught. Both extractors now strip the byte, and the script header (which had asserted "it
-    costs this pass nothing", naming one file instead of three) is corrected.
+    source files embed raw NUL bytes inside string literals: two in `context.ts` as an HMAC domain
+    separator, eight in `manifest.ts` and `report.ts` as the field separator in a composite Map key.
+    `awk` passed them into the string-literal pass buffer, GNU grep classified that whole buffer as
+    binary, and a seeded violation therefore reported "binary file matches" against an already-deleted
+    temp path, with no rule, no source file, no line number and remediation advice pointing at an
+    encoding that is valid UTF-8. It exited through the incomplete-scan refusal, which runs before the
+    located hits from the other three passes print. The gate still failed closed throughout, so
+    nothing could escape it, but it could not say what it had caught. Both extractors now strip the
+    byte, and the script header (which had asserted "it costs this pass nothing", naming one file
+    instead of three) is corrected.
+  - **A third pass then refuted the correction, which is the part worth recording.** The fix worked;
+    the sentence justifying it did not. It claimed deleting the NUL "can only ever join two tokens
+    into an over-report", and a refuter demonstrated the opposite on two inputs where deleting the
+    byte erases a word boundary or completes a clinical lookbehind and flips a red to a green. It
+    also called all ten NULs cryptography when eight are Map-key separators. The code is unchanged
+    and the under-report is now written down as a residual with both demonstrated inputs, rather than
+    traded for an equal and opposite one.
   - **No runtime behaviour, public API, policy, transform, disposition code, locus map or leak
     guarantee changed.** The full local ladder was green on the remediated tree: typecheck, lint,
     `format:check`, the PHI scan, 372 tests in 33 files, the gating coverage run, `build`, `attw` and
