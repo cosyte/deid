@@ -50,4 +50,4 @@ you surface to a human for the §164.514(b)(2)(ii) actual-knowledge test.
 ## Planned guides
 
 - NCPDP SCRIPT (ePrescribing) once a full-fidelity parser surface exists.
-- Cross-document longitudinal consistency with date-shift + pseudonymization (Phase 7).
+- Cross-document longitudinal consistency with date-shift + pseudonymization.

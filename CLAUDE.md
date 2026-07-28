@@ -85,11 +85,15 @@ a summary.
 ### Branch protection and Dependabot
 
 - **`main` is protected by a repository ruleset, `ci-required-checks`.** It requires
-  `ci / verify (22, ubuntu-latest)`, `ci / verify (24, ubuntu-latest)`, `ci / actionlint` and
-  `codeql / analyze (javascript-typescript)`, each pinned to the GitHub Actions app so a commit status
-  of the same name posted by another actor cannot satisfy it, and it blocks branch deletion and
-  force-push. Before this existed, `main` had **no rules at all**: every check in this repo was
-  advisory, on the branch that publishes a de-identification package.
+  `ci / verify (22, ubuntu-latest)`, `ci / verify (24, ubuntu-latest)`, `ci / actionlint`,
+  `codeql / analyze (javascript-typescript)`, `smoke (22)` and `smoke (24)`, each pinned to the GitHub
+  Actions app so a commit status of the same name posted by another actor cannot satisfy it, and it
+  blocks branch deletion and force-push. Before this existed, `main` had **no rules at all**: every
+  check in this repo was advisory, on the branch that publishes a de-identification package.
+- **A required context that a branch cannot emit leaves that PR pending, not failing.** Adding the two
+  `smoke` contexts therefore blocks any PR whose branch predates `.github/workflows/smoke.yml` until it
+  is rebased onto a `main` that has the file. That is the expected cost of requiring a new context, not
+  a fault; rebase the branch.
 - **`scorecard` is deliberately NOT required.** It runs only on `push` to `main` and on a schedule,
   never on `pull_request`, so requiring it would leave every PR pending forever. The `CodeQL` check
   posted by the GitHub Advanced Security app is also not required: it reports alert state, not
@@ -103,17 +107,27 @@ a summary.
   the files, or `.skip`-ing the suite drops this repo's headline leak gate with no workflow change and
   nothing for the ruleset to notice. A ruleset binds a context; it cannot tell you the context still
   means what it meant.
-- **A gate this repo documents but does not run: `pnpm smoke`.** `CHANGELOG.md` and the script's own
-  header call it a CI gate after `build`. No job invokes it, here or upstream, so it has only ever run
-  in `verify.sh` locally. That predates the ruleset and is left as its own unit of work; wiring it up
-  means a repo-local job plus its context added to the ruleset in the same change.
+- **`pnpm smoke` is a real CI gate now, and was not one for as long as it was documented as one.**
+  `.github/workflows/smoke.yml` runs `pnpm build` then `pnpm smoke` on `pull_request`, on the same
+  Node 22 + 24 matrix as `verify`, and the ruleset requires both of its contexts. Do not treat the
+  shared pipeline's `Dual ESM/CJS smoke` step as the same check: it stats and loads the ROOT entry
+  only, so it is blind to a broken subpath, a missing headline export, a regressed shared-core chunk
+  and an HL7 leak through the built artifact, all of which `pnpm smoke` covers. That last one is
+  scoped to HL7 and no further: the cross-format zero-leak gate is `test/corpus/` from source.
+  **And the smoke's scope is derived, not listed:** it reads the subpaths out of `package.json`'s
+  `exports`, excludes only entries that are structurally data (a bare `.json` target) rather than any
+  hand-maintained key list, and refuses to run if its headline-export map disagrees with the rest. A
+  published subpath therefore cannot leave the check while the check still reports green. That derivation is the
+  gate, as much as the workflow is; replacing it with a hand-written array reopens exactly the hole
+  the bullet above describes for `test/corpus/`.
 - **▶ THE RULESET BLOCKS THE "Version Packages" PR, AND THAT IS EXPECTED. IT NEEDS ONE PUSH.**
   Changesets opens the release PR as `github-actions[bot]` using the default `GITHUB_TOKEN`, and
   GitHub does not start workflow runs for events raised by that token. So the version PR gets **zero
-  check runs**, not failing ones, and four required contexts that never arrive leave it `BLOCKED`
+  check runs**, not failing ones, and required contexts that never arrive leave it `BLOCKED`
   forever. `bypass_actors` is empty on purpose, so **not even a repo admin can merge past it.** The
   fix is one commit onto `changeset-release/main`, which fires `pull_request: synchronize` under a
-  real user and produces all four checks:
+  real user and produces every one of them (count them off `gh api
+repos/cosyte/deid/rulesets/19907854`, not off this file):
 
   ```bash
   gh pr checkout <n> -R cosyte/deid   # the "Version Packages" PR

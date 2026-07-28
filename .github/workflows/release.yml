@@ -7,10 +7,12 @@ name: Release
 # ▶ THE "Version Packages" PR THIS OPENS WILL SIT BLOCKED UNTIL SOMEONE PUSHES TO IT. That is the
 # expected state, not a broken pipeline. Changesets opens it as `github-actions[bot]` with the
 # default GITHUB_TOKEN, and GitHub does not start workflow runs for events raised by that token, so
-# the PR gets ZERO check runs. The `ci-required-checks` ruleset on `main` requires four contexts, and
-# four contexts that never arrive are pending, not failing, so the PR is unmergeable and nobody can
-# bypass it (`bypass_actors` is empty on purpose). One commit onto `changeset-release/main` fires
-# `pull_request: synchronize` under a real user and produces all four:
+# the PR gets ZERO check runs. The `ci-required-checks` ruleset on `main` requires several contexts
+# (the count has already moved once, so read it with `gh api repos/cosyte/deid/rulesets/19907854`
+# rather than from any comment, including this one), and a required context that
+# never arrives is pending, not failing, so the PR is unmergeable and nobody can bypass it
+# (`bypass_actors` is empty on purpose). One commit onto `changeset-release/main` fires
+# `pull_request: synchronize` under a real user and produces all of them:
 #
 #   gh pr checkout <n> -R cosyte/deid
 #   git commit --allow-empty -m "chore: run CI on the version PR"

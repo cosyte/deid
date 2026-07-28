@@ -50,7 +50,7 @@ standard, so the map keys off the field id directly.
 | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
 | **Patient (`01`)**                       | name (`CA`/`CB`) + phone (`CQ`) removed; street (`CM`) + city (`CN`) removed; ZIP (`CP`) → 3-digit; DOB (`C4`) → year; patient id (`CY`) **pseudonymized**; gender + state retained |
 | **Insurance (`04`)**                     | cardholder id (`C2`) + group id (`C1`) **pseudonymized**; cardholder name (`CC`/`CD`) removed; person code retained |
-| **Prescriber (`03`)**                    | prescriber id (`DB`) **removed** (the roadmap scopes prescriber identifiers for NCPDP)                          |
+| **Prescriber (`03`)**                    | prescriber id (`DB`) **removed**                                                                              |
 | **Coordination of Benefits (`05`)**      | other-payer cardholder (`NU`) + group (`MJ`) ids **pseudonymized**; other-payer date (`E8`) → year             |
 | **Header**                               | Date of Service → year                                                                                        |
 | **Free text** (`544-FY`, `504-F4`, `526-FQ`) | **fails closed** — blocked, never scrubbed by a naive pass                                                 |
@@ -58,8 +58,7 @@ standard, so the map keys off the field id directly.
 | Any **unmapped / unknown** segment       | **fails closed** — every field blocked                                                                        |
 
 The X12 adapter **retains** provider identity, while this adapter **removes** the prescriber id — a
-deliberate asymmetry: the roadmap scopes prescriber identifiers for NCPDP but leaves X12 provider identity
-in place.
+deliberate asymmetry.
 
 ## NCPDP SCRIPT is deferred
 

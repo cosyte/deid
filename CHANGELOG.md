@@ -34,7 +34,10 @@ its public history at `0.0.x`, per the cosyte version ladder (`0.0.x` until firs
     string or a bounded rejection (never a hang/OOM).
   - **Publish dry-run / release-shape smoke (`pnpm smoke`).** Loads **every** published subpath
     (`.`/`hl7`/`ccda`/`fhir`/`x12`/`ncpdp`/`dicom`) from the built `dist/` in **both** ESM and CJS,
-    verifies each headline export, and asserts no leak — a CI gate after `build`, alongside `attw`.
+    verifies each headline export, and asserts no HL7 leak. Runs after `build`, alongside `attw`, on the
+    local verify ladder. (This line claimed it was a **CI gate**; it was not wired into any CI job
+    until the entry under Security below. Corrected here rather than left to be made true later,
+    because it has never been released and the claim was never DEID-10's to make.)
   - **The tsup shared-core chunk fix (`splitting: true`).** Each built subpath previously inlined its own
     copy of the core, so a `DeidContext` created via the root entry and used with a per-format
     `deidentify*` resolved to a _different_ module-private `WeakMap` registry → a fail-closed
@@ -380,6 +383,21 @@ its public history at `0.0.x`, per the cosyte version ladder (`0.0.x` until firs
   a check _correct_, and nothing inside this repository can observe the ruleset; the protection is
   not verifiable from these files. See the banner in `.github/workflows/ci.yml` before splitting a
   required job.
+- **The release smoke (`pnpm smoke`) now runs in CI, and a red one blocks the merge.** It had been
+  described in this file and in its own header as a CI gate after `build` while running in **no job**,
+  here or in the shared pipeline; it had only ever run on the local verify ladder. A documented gate
+  that never executes is worse than a missing one, because the description asserts a protection
+  nothing provides. `.github/workflows/smoke.yml` now runs `pnpm build` then `pnpm smoke` on every
+  pull request on the Node 22 and 24 matrix, and the branch ruleset requires both of its contexts.
+  **This is not the same check as the shared pipeline's root-entry `Dual ESM/CJS smoke` step,** which
+  stats and loads `dist/index.*` only and is blind to a broken subpath, a missing headline export, a
+  regressed shared-core chunk and an HL7 leak through the built artifact. (That last one is scoped to
+  HL7 on purpose; the cross-format zero-leak and clinical-survivor gates are `test/corpus/`, which
+  runs from source under `pnpm test`.) **The smoke's scope is now derived rather than listed:** it
+  reads the published subpaths out of `package.json`'s `exports`, excludes only entries that are
+  structurally data (a bare `.json` target) rather than any hand-maintained key list, and refuses to
+  run when its headline-export map disagrees with the rest. A subpath published without coverage
+  fails the gate instead of being silently skipped.
 - **Weekly dependency version updates are now watched.** The repository had no Dependabot
   configuration, so its zero open update PRs meant nothing was looking, not that nothing was stale.
   Scoped honestly: this buys _version_ updates on a schedule, not automatic security-fix PRs, which
