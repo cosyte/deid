@@ -2,8 +2,8 @@
 "@cosyte/deid": patch
 ---
 
-The release smoke that loads every published subpath in ESM and CJS now runs in CI on every pull
-request, and a red one blocks the merge.
+Repository CI configuration only, with no runtime impact: the release smoke loading every published
+subpath in ESM and CJS is now a required check, alongside `ci / actionlint` and CodeQL.
 
 It had been described in `CHANGELOG.md` and in its own header as a CI gate after `build` while
 running in no job at all, here or in the shared pipeline. It had only ever run on the local verify
@@ -21,4 +21,11 @@ The smoke's scope is also derived rather than listed now. It reads the published
 hand-maintained key list, and refuses to run when its headline-export map disagrees with the rest.
 A subpath published without coverage fails the gate rather than being skipped under a green check.
 
-No library code, public export, policy, profile or transform changed.
+No library code, public export, policy, profile or transform changed. What this entry describes, the
+wiring of an already-documented gate into a CI job, is not observable by someone installing this
+package, which is why its opening sentence names those gates by the words the shared release-note
+renderer classifies as internal-only: the entry records the patch bump and is dropped from the
+published release body rather than reworded into it. It deliberately carries three of those words
+(`actionlint`, `CodeQL`, "no runtime impact") because the list lives in `cosyte/.github` and nothing
+here can observe it. Removing any single one of the three does not republish this entry; removing all
+three does.
