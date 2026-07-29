@@ -110,7 +110,9 @@ a summary.
   `vitest.config.ts` and run inside the `test` / `test:coverage` steps, so narrowing the glob, moving
   the files, or `.skip`-ing the suite drops this repo's headline leak gate with no workflow change and
   nothing for the ruleset to notice. A ruleset binds a context; it cannot tell you the context still
-  means what it meant.
+  means what it meant. **The SELECTION half of that is now gated by `pnpm check:test-selection`
+  (below); the `.skip` half is not, and neither is anything else about whether a selected suite
+  asserts something.**
 - **`pnpm smoke` is a real CI gate now, and was not one for as long as it was documented as one.**
   `.github/workflows/smoke.yml` runs `pnpm build` then `pnpm smoke` on `pull_request`, on the same
   Node 22 + 24 matrix as `verify`, and the ruleset requires both of its contexts. Do not treat the
@@ -134,6 +136,62 @@ a summary.
   `.changeset/`, this file, or `//` comments, because the convention names those as where identifiers
   belong. It cannot read `dist/` either: `dist/` is untracked build output, so this is a gate on the
   **source** of the published text, not on the published text.
+- **`pnpm check:test-selection` is the fourth repo-owned gate: it gates what the required test job
+  SELECTS, not just that it ran.** `.github/workflows/test-selection.yml` runs
+  `scripts/check-test-selection.ts` on `pull_request`, no matrix, so its check-run context is the
+  bare job id **`test-selection`**. **That context is deliberately NOT in the ruleset yet.** A
+  required context no workflow on `main` has emitted leaves every PR pending and unmergeable, which
+  has already happened here twice; let this run on `main` first, then require it as its own change.
+  - **What it watches, and what it does not.** Its subject is three sets: every tracked module
+    outside `src/` that **imports one of the seven published `exports` subpaths** (31 of the 33 test
+    files, `test/corpus/leak-corpus.test.ts` among them), every module under `test/` referencing
+    `scripts/phi-scan` (1), and the `.test.`/`.spec.` filename shape. The first two are
+    name-independent and reach **32 of the 33** test files; a module in them survives a rename, a
+    move to another directory and a symlinked path. Only `test/docs-content.test.ts` rests on the
+    filename shape alone, and the OK line prints how many modules under `test/` no rule watches
+    (**3** today, all genuine helpers).
+  - **The subject is DERIVED from `exports`, not listed here, and that choice is the gate.** `ncpdp`
+    derives its equivalent from a workflow that hands a path to `vitest run`; **no workflow here does
+    that**, so that derivation has no grounding in this repo. The corpus is named today only by prose
+    in `ci.yml`, `smoke.yml` and this file, and deriving from prose would make a docs edit the drop
+    route. `exports` cannot be quietly narrowed: npm resolves it, `attw` checks it, and
+    `scripts/smoke.mjs` already derives its own scope from it. **Replace either derivation with a
+    hand-written array and both gates go back to reporting green over whatever subset someone last
+    remembered.**
+  - **The cost is paid in the repo, not in an exemption list.** There is no exemption for helpers,
+    because every exemption `ncpdp` offered was walked through by a rename. So a module that is not a
+    test may not import a published entry point: `test/helpers/run-date-shift.ts`, the child-process
+    timezone probe, imports `src/context.ts` and `src/transforms/date-shift.ts` directly. Same
+    function objects; do not "tidy" it back to the root entry.
+  - **Measured limits, none of them claimed closed.** A config that can tell **which run it is in**
+    serves this gate a wide selection and CI a narrow one: branching on `process.argv` leaves **29 of
+    33 suites not running** with the gate green, and because this check lives in its own workflow,
+    branching on `GITHUB_JOB` does the same (6 of 33 left running). A **specifier rewritten into a
+    form the gate does not resolve** leaves its subject: a substituted template literal, a `?query`
+    suffix and a `resolve.alias` plus a bare specifier were each measured green here and each red on
+    `pnpm typecheck` or `pnpm lint`, so they are caught by a different gate, not this one. `.skip`
+    inside a selected file is invisible (selection is not execution). Deleting the corpus outright is
+    green, because six per-format suites still import those entry points; a move that breaks a
+    module's own relative imports is that same delete case (moving the corpus to `scripts/` is green,
+    the same move with its imports repaired is red).
+  - **A refuter closed two of these rather than documenting them, and that is the precedent to
+    follow.** A **backtick** dynamic import and a **tracked symlink** to `src/` each took the corpus
+    out of the subject with every other gate green. Both are now closed, and **self-test D** exists
+    because the other three self-tests could not see them: A and C take the derived subject as given.
+    Do not remove D to "simplify"; without it, gutting the PHI-enablement rule to `return true`
+    reports OK while claiming its self-tests reddened.
+  - **▶ BUT D COVERS THREE NAMED DERIVATIONS, NOT "the derivations", AND THE DIFFERENCE IS THE ONE
+    THING TO READ BEFORE REFACTORING THIS GATE.** It seeds the PHI-enablement rule, the specifier
+    extractor, and the **count** of exported subpaths. It does **not** check that each subpath maps
+    to its **own** source, and it does **not** cover `resolveSpecifier`. Both gaps are measured:
+    pointing every entry at `src/dicom/index.ts` keeps the count at 7, collapses the subject from 31
+    modules to **3**, and the gate prints OK saying all four self-tests reddened; a two-line
+    `if (fromFile.startsWith("test/corpus/")) return [];` inside `resolveSpecifier` re-adds exactly
+    the hand-editable exclusion design rule 1 forbids, with every self-test green. **A refuter
+    demanded the sentence be corrected rather than a self-test E added** (a derivation has no closed
+    set of spellings, so each new self-test buys one more), which means: **a diff touching
+    `exportedSourceEntries` or `resolveSpecifier` is reviewed by a person, and the OK line's counts
+    are what a reviewer compares it against.**
 - **▶ THE RULESET BLOCKS THE "Version Packages" PR, AND THAT IS EXPECTED. IT NEEDS ONE PUSH.**
   Changesets opens the release PR as `github-actions[bot]` using the default `GITHUB_TOKEN`, and
   GitHub does not start workflow runs for events raised by that token. So the version PR gets **zero
