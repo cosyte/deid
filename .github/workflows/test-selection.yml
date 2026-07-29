@@ -1,0 +1,80 @@
+name: Test-selection gate
+
+# A required JOB gates its STEPS. It does not gate what those steps SELECT.
+#
+# `ci / verify` runs `pnpm test` and `pnpm test:coverage`, which run vitest, which runs whatever
+# `vitest.config.ts`'s `include` globs select. That single repo-local line is the sole selector for
+# every test in this repo: the shared `@cosyte/vitest-config` supplies no `include` of its own and
+# spreads this repo's `test` block last. Narrow it to the per-format directories and
+# `test/corpus/leak-corpus.test.ts` -- the consolidated zero-leak and over-scrub corpus across all
+# six format adapters, this package's headline safety gate -- stops running, while every required
+# check stays green and every ruleset stays exactly as configured. `ci.yml`'s own banner has said so
+# in prose since the smoke gate landed; this is the job that makes the prose enforceable.
+#
+# COVERAGE IS NOT A BACKSTOP, which is what makes this silent rather than merely risky. The coverage
+# gate measures `src/**/*.ts`, and the corpus re-exercises `src/` paths the per-format suites already
+# touch, so dropping it costs close to zero coverage percent.
+#
+# `scripts/check-test-selection.ts` closes that by comparing the test files that EXIST against the
+# test files vitest would actually RUN, and by re-proving on every run that it can still see the
+# difference. Its subject is scoped rather than universal; the scope, and the largest known hole in
+# it, are stated in the script header and printed on the OK line as a denominator.
+#
+# IT ALSO CHECKS THE INVOCATION, because resolving the config cannot see the command line:
+# narrowing the run with a path filter, an alternate `--config`, a `--project` or a `--shard` in the
+# `test` / `test:coverage` scripts leaves `vitest.config.ts` looking pristine, and so does
+# delegating those scripts to a third one that does any of it. That rule does not parse the script
+# body; it requires an exact match against two known-good bodies, ported verbatim from `ncpdp`,
+# where three successive parsing versions each shipped an evasion.
+#
+# WHY A SEPARATE WORKFLOW, and not a job in ci.yml. Same reasoning as the two gate workflows next
+# door. `ci.yml` is a thin caller of cosyte/.github/.github/workflows/ci.yml@main, which runs a
+# fixed ladder and no arbitrary repo script, so this cannot go upstream without landing on every
+# other caller of the shared pipeline at once.
+#
+# WHY ONE JOB AND NOT TWO. The install and the check are steps of a single job on purpose. Promoting
+# either into its own job would leave that half un-required unless the ruleset were edited in the
+# same change, which is exactly the class of silent detachment this gate exists to answer.
+#
+# ▶ THE JOB ID IS THE CHECK-RUN CONTEXT NAME, AND THIS CONTEXT IS NOT REQUIRED YET, DELIBERATELY.
+# `test-selection` is emitted by this file and is NOT in the `ci-required-checks` ruleset. Adding a
+# required context before its workflow has completed on `main` does not turn PRs red; it leaves
+# every one of them PENDING and unmergeable, with nothing anywhere saying why. This repo has already
+# paid that cost twice (the two `smoke` contexts, then `no-internal-refs`), and `deid#17` is blocked
+# by it right now. Wire the workflow first, let it run on `main`, then require the context as its own
+# deliberate change -- and rename the job and the required context together or neither.
+#
+# Run it locally with `pnpm check:test-selection`, also reached by `pnpm check`, which is on the
+# meta-repo's `scripts/verify.sh deid` ladder.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # The job id is the check-run context name. See the banner before renaming it.
+  test-selection:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: "22"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      # No `|| true`, no `continue-on-error`: a check that cannot fail is documentation. The script
+      # seeds a narrowed selection and requires itself to catch it before it reports anything, so a
+      # green here is a green from a detector proven able to red.
+      - name: Check that CI still selects every test
+        run: pnpm check:test-selection

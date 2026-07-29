@@ -462,6 +462,36 @@ its public history at `0.0.x`, per the cosyte version ladder (`0.0.x` until firs
   structurally data (a bare `.json` target) rather than any hand-maintained key list, and refuses to
   run when its headline-export map disagrees with the rest. A subpath published without coverage
   fails the gate instead of being silently skipped.
+- **What the required test job SELECTS is now checked, not just that the job ran.** A required job
+  gates its steps; it does not gate what those steps select. `pnpm test` / `pnpm test:coverage` run
+  whatever the `include` glob in `vitest.config.ts` selects, and the shared `@cosyte/vitest-config`
+  supplies no `include` of its own, so that single repo-local line was the sole selector for every
+  test here. Narrowing it to the per-format directories stopped `test/corpus/leak-corpus.test.ts` —
+  the cross-format zero-leak and over-scrub corpus, this package's headline safety gate — with every
+  required check still green. **Coverage could not backstop it:** coverage is measured over `src/`
+  only, and the corpus re-walks `src/` paths the per-format suites already cover, so dropping it cost
+  close to zero coverage percent, which is what made it silent rather than merely risky.
+  `scripts/check-test-selection.ts` (`pnpm check:test-selection`, and
+  `.github/workflows/test-selection.yml` under it) now asks vitest for its resolved selection and
+  reds when a module in its subject is missing from it, so an `exclude`, a `projects` split and a
+  narrowed `include` are all caught alike. Because resolving the config cannot see the command line,
+  it separately requires the two test scripts CI invokes to equal one of two exact bodies, so a path
+  filter, an alternate config, a project filter, a shard, a wrapper and a delegation to another
+  script are simply not one of those bodies. **Its subject is derived, not listed:** the modules that
+  must run are those importing one of the seven published `exports` subpaths, plus those referencing
+  the PHI scanner, so no hand-editable list inside the gate decides its own scope. It re-proves on
+  every run that it can still red, by seeding the removals it exists to catch, and it seeds three of
+  its own derivations, which is not the same as proving the subject is derived large enough: it does
+  not check that each subpath maps to its own source, and it does not cover the specifier resolver,
+  so a change to either of those two functions is reviewed by a person or not at all. **Scope of the
+  claim, stated
+  narrowly:** 32 of the 33 test files are watched by a name-independent rule and the remaining one by
+  the filename shape alone, which the check prints as a number; a config that can tell which run it
+  is in is not caught (29 of 33 suites can stop running with the check green); a specifier rewritten
+  into a form the check does not resolve, such as a substitution, a query suffix or a resolver alias,
+  leaves its subject and is caught today by `typecheck` or `lint` rather than by this check; `.skip`
+  inside a selected file is not selection and is not seen; and the new context is deliberately not
+  required by the ruleset until it has run on `main`.
 - **Weekly dependency version updates are now watched.** The repository had no Dependabot
   configuration, so its zero open update PRs meant nothing was looking, not that nothing was stale.
   Scoped honestly: this buys _version_ updates on a schedule, not automatic security-fix PRs, which
