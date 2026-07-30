@@ -24,6 +24,9 @@
 // ── The output label + version (own module, so internal modules read them without an index cycle).
 export { OUTPUT_LABEL, VERSION } from "./labels.js";
 
+// ── What a manifest locus prints in place of an identifier the adapter would not echo.
+export { WITHHELD_LOCUS_TOKEN } from "./derived-token.js";
+
 // ── The Safe Harbor category model (45 CFR §164.514(b)(2)(i)(A)–(R)).
 export {
   SAFE_HARBOR_CATEGORIES,

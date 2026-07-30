@@ -22,6 +22,7 @@
 import { attr, childElements, children, text, xsiType } from "@cosyte/ccda";
 
 import { SAFE_HARBOR_CATEGORIES } from "../categories.js";
+import { isWithheldToken, safeLocusToken } from "../derived-token.js";
 import type { GenericLocus } from "../locus.js";
 import {
   CCDA_ENVELOPE_ELEMENTS,
@@ -89,27 +90,58 @@ function hasAttr(el: Element, name: string): boolean {
   return v !== undefined && v.length > 0;
 }
 
-/** Build a value-free child path segment, indexing among same-named siblings only when there is >1. */
+/**
+ * Build a value-free child path segment, indexing among same-named siblings only when there is >1.
+ *
+ * The element's local name is **bounded before it becomes a path segment** ({@link safeLocusToken}):
+ * an XML name is unbounded by the XML specification, so an element name is only an identifier by
+ * convention. The sibling counter keys on the *bounded* name so that several refused siblings stay
+ * distinguishable as `<withheld>[0]`, `<withheld>[1]` instead of aggregating into one manifest row.
+ */
 function childPaths(parent: Element): { el: Element; path: string }[] {
-  const kids = childElements(parent);
+  const named = childElements(parent).map((el) => ({
+    el,
+    name: safeLocusToken(el.localName ?? "", "xmlName"),
+  }));
   const counts = new Map<string, number>();
-  for (const k of kids) {
-    const key = `${k.namespaceURI ?? ""}|${k.localName ?? ""}`;
+  for (const k of named) {
+    const key = `${k.el.namespaceURI ?? ""}|${k.name}`;
     counts.set(key, (counts.get(key) ?? 0) + 1);
   }
   const seen = new Map<string, number>();
-  return kids.map((el) => {
-    const key = `${el.namespaceURI ?? ""}|${el.localName ?? ""}`;
+  return named.map(({ el, name }) => {
+    const key = `${el.namespaceURI ?? ""}|${name}`;
     const idx = seen.get(key) ?? 0;
     seen.set(key, idx + 1);
     const suffix = (counts.get(key) ?? 1) > 1 ? `[${String(idx)}]` : "";
-    return { el, path: `${el.localName ?? ""}${suffix}` };
+    return { el, path: `${name}${suffix}` };
   });
 }
 
 /** Join a running path with a child segment. */
 function join(base: string, seg: string): string {
   return base === "" ? seg : `${base}/${seg}`;
+}
+
+/**
+ * Bound a body-descent element name, keeping the child's position when the name is refused so two
+ * refused siblings stay distinguishable in the manifest.
+ *
+ * **Read this before "tidying" it to always index.** Two *legitimate* same-named siblings here still
+ * merge into one manifest row at count 2, and that is base behaviour this deliberately does not
+ * change: for an unrefused name the token is returned unchanged, so the path is byte-identical to
+ * what a consumer's existing manifests carry. It is worth knowing about precisely because it now
+ * sits next to {@link childPaths}, which *does* index same-named siblings, and a defect that looks
+ * handled because its neighbour is handled is worse than an obvious one. It is recorded as its own
+ * item rather than fixed in passing.
+ *
+ * The consequence for the wording elsewhere: every claim this package makes about rows staying
+ * distinct is scoped to **refused** positions, and it is true only because of that scope. Do not
+ * widen it.
+ */
+function narrativeSegment(localName: string, position: number): string {
+  const token = safeLocusToken(localName, "xmlName");
+  return isWithheldToken(token) ? `${token}[${String(position)}]` : token;
 }
 
 /** Extract a person `<name>` locus — redacted (whole element cleared). */
@@ -264,10 +296,10 @@ function sweep(out: CcdaExtraction, el: Element, path: string): void {
  * human-readable narrative (or a reference into it), never a clinical value.
  */
 function blockNarrative(out: CcdaExtraction, el: Element, path: string): void {
-  for (const child of childElements(el)) {
+  childElements(el).forEach((child, i) => {
     const ln = child.localName ?? "";
     if (child.namespaceURI === V3_NS && ln === "text") {
-      if (text(child) === undefined) continue; // empty narrative — nothing to block
+      if (text(child) === undefined) return; // empty narrative: nothing to block
       push(
         out,
         {
@@ -278,10 +310,15 @@ function blockNarrative(out: CcdaExtraction, el: Element, path: string): void {
         },
         { node: child, edit: "clear-element" },
       );
-      continue; // do not descend into a blocked narrative block
+      return; // do not descend into a blocked narrative block
     }
-    blockNarrative(out, child, join(path, ln)); // descend to reach nested / entry-level narrative
-  }
+    // Descend to reach nested / entry-level narrative. The name is bounded first: this descent runs
+    // over the clinical body, where an unrecognized element name is as likely to be document content
+    // as anywhere else in the tree. A refused name keeps this child's position, so two refused
+    // siblings do not aggregate into one manifest row (`childPaths` gets the same guarantee from its
+    // same-name sibling counter, which a refused name cannot key on).
+    blockNarrative(out, child, join(path, narrativeSegment(ln, i)));
+  });
 }
 
 /** Handle the document body `<component>`: all narrative fails closed; unstructured `nonXMLBody` blocks. */

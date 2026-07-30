@@ -24,10 +24,35 @@ unkeyed hash of an identifier is re-identifiable. Date-shift additionally needs 
 
 The model was null/undefined or carried no `loci` array. Pass `{ loci: [...] }`.
 
-## The manifest is safe to log; the input is not
+## What the manifest is safe to log, and the one thing to know about the locus
 
-Manifest entries and error messages **never contain PHI** (no value, no key, no offset) — they are safe
-to log. Never log the input model or the raw document; it carries protected health information.
+Error messages carry **no PHI**: every message this library raises is a fixed sentence, and no value,
+key, or date-shift offset is ever interpolated into one. A manifest entry never carries the value that
+was removed, generalized, or pseudonymized, and never the key or the offset.
+
+The **locus** needs one more sentence, because it is the one field built out of the document rather
+than chosen by the library. A per-format adapter names a locus using the identifier at that position:
+an HL7 v2 segment id, a C-CDA element name, a FHIR element name, an X12 segment or transaction-set id,
+an NCPDP segment code. When the input is malformed, an upstream parser may report something at one of
+those positions that is not an identifier at all, and on an unrecognized narrative line that content
+can be clinical prose. Each identifier is therefore checked against the
+shape its position promises before it is used; one that does not match is refused outright and the
+locus reads `WITHHELD_LOCUS_TOKEN` (`<withheld>`) plus a structural index, so two refused positions
+stay distinguishable and nothing is silently dropped.
+
+That is a bound, not a guarantee of impossibility, and how much it leaves behind depends on the
+position. An HL7 v2 segment id, an X12 segment or transaction-set id and an NCPDP code are at most
+three characters with no separator and no whitespace, so the residue there is a narrative line whose
+entire content is three letters, which is indistinguishable from a real segment id. A C-CDA element
+name and a FHIR element name are bounded at 64 and 65 characters, so an unspaced token that long is
+still echoed at those positions. No whitespace passes any of the six, which is what keeps prose out,
+but "no whitespace" is not "no content". So treat a manifest as safe to log, and treat a run producing
+`<withheld>` loci as a signal that the input was not what it claimed to be. Never log the input model
+or the raw document; it carries protected health information.
+
+> **If you have `0.0.2` installed, upgrade.** In `0.0.2` and earlier those identifiers were interpolated
+> unbounded, so a malformed document could put document content into the manifest and into
+> `buildExpertDeterminationSupportReport`'s output. See the changelog entry for the full detail.
 
 ## Known Limitations (this release — the format-agnostic core)
 

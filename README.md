@@ -435,7 +435,10 @@ determination**.
 - **Fail-closed rule** — anything uncertain is blocked, never passed through; clinical values are
   retained untouched.
 - **Value-free manifest** — category + transform + locus + count + disposition + code, never a value,
-  never the key, never the date-shift offset.
+  never the key, never the date-shift offset. The locus is the one field built out of the document: a
+  per-format adapter names the position with the identifier that sits there, so each identifier is
+  checked against the shape its position promises and a non-conforming one is refused as
+  `WITHHELD_LOCUS_TOKEN` (`<withheld>`) rather than echoed.
 
 ## License
 

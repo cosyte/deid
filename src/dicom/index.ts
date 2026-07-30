@@ -27,16 +27,39 @@
  * @packageDocumentation
  */
 
-import {
-  deidentify as dicomDeidentify,
-  parseDicom,
-  serializeDicom,
-  type Dataset,
-} from "@cosyte/dicom";
+import { Dataset, deidentify as dicomDeidentify, parseDicom, serializeDicom } from "@cosyte/dicom";
 
 import { BURNED_IN_ANNOTATION_CODE, foldReport, foldWarnings } from "./fold.js";
 import { resolveDicomOptions } from "./policy-map.js";
 import type { DicomBufferDeidResult, DicomDeidOptions, DicomDeidResult } from "./types.js";
+
+/**
+ * Return the de-identified dataset with the **input file's** parse warnings dropped.
+ *
+ * The delegated Annex E pass carries `Dataset.warnings` across from the source dataset, so without
+ * this the artifact this function calls de-identified arrives holding diagnostics *about the original
+ * file*, and a parse warning is written about the bytes that were there before anything was removed.
+ * That is the same reasoning the C-CDA adapter applies at its own re-parse, where the parser's warnings
+ * are deliberately discarded because they are not part of the de-identification contract.
+ *
+ * Nothing is lost to the caller: the warnings that describe **this pass** are returned separately on
+ * {@link DicomDeidResult.warnings}, and a caller who wants the input's parse warnings still has the
+ * input dataset they passed in.
+ *
+ * Only the root dataset needs rebuilding: every nested `Item` is constructed with an empty warnings
+ * array by both the parser and the Annex E pass.
+ *
+ * @internal
+ */
+function withoutInputWarnings(dataset: Dataset): Dataset {
+  if (dataset.warnings.length === 0) return dataset;
+  const elements = new Map(dataset.elements().map((el) => [el.tag, el]));
+  return new Dataset({
+    warnings: [],
+    elements,
+    ...(dataset.fileMeta !== undefined ? { fileMeta: dataset.fileMeta } : {}),
+  });
+}
 
 /**
  * De-identify a parsed DICOM dataset under a policy (Safe Harbor by default). Delegates the tag-level work to
@@ -47,6 +70,10 @@ import type { DicomBufferDeidResult, DicomDeidOptions, DicomDeidResult } from ".
  * The output is **"Safe-Harbor-transformed per the configured policy"** — it is not certified de-identified,
  * and it is **metadata-only**: pixels are not inspected, so a burned-in-annotation hazard is *flagged*, never
  * cleaned. Always check {@link DicomDeidResult.burnedInAnnotationHazard} before releasing an image.
+ *
+ * The returned dataset carries **no parse warnings from the input file**. Those describe the bytes as they
+ * were *before* anything was removed, so they are not part of the de-identification contract; the warnings
+ * raised by **this pass** are returned separately on {@link DicomDeidResult.warnings}.
  *
  * @param dataset - The parsed dataset (`parseDicom(bytes)`).
  * @param options - The policy and (for cross-file UID consistency) a shared `uidMap` / `uidRoot`.
@@ -74,7 +101,7 @@ export function deidentifyDicom(dataset: Dataset, options: DicomDeidOptions = {}
 
   const warnings = foldWarnings(report.warnings);
   return Object.freeze({
-    dataset: deidentified,
+    dataset: withoutInputWarnings(deidentified),
     manifest: foldReport(report),
     warnings,
     metadataOnly: true,
