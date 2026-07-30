@@ -273,3 +273,45 @@ describe("fail-safe on minimal / odd input", () => {
     expect(out.includes("ZZSENTINELUNKNOWNPRIV")).toBe(false);
   });
 });
+
+describe("the folded locus keeps the upstream report's own spelling", () => {
+  // Regression pins, not decoration. The tag, the keyword and a sequence-context entry all come from
+  // `@cosyte/dicom`'s report rather than from bytes this package reads, so no shape bound is applied to
+  // them (see `src/derived-token.ts`). An earlier attempt at one was calibrated against an invented
+  // contract and, on this spec-clean file, refused every sequence-context entry (they carry brackets,
+  // being `TAG[index]`) and refused a genuine Part 6 attribute name longer than 64 characters. Both
+  // cases are asserted here so the same mistake cannot be made again silently.
+  function withSequence(): ReturnType<typeof deidentifyDicomBuffer> {
+    const bytes = buildDicom({
+      transferSyntax: TS_EXPLICIT_LE,
+      elements: [
+        { tag: "00080060", vr: "CS", value: pad(CLINICAL.modality) },
+        {
+          // Procedure Code Sequence: two items, each carrying an Institution Name the pass acts on.
+          tag: "00081032",
+          items: [
+            { elements: [{ tag: "00080080", vr: "LO", value: pad("ZZINSTITUTIONONE") }] },
+            { elements: [{ tag: "00080080", vr: "LO", value: pad("ZZINSTITUTIONTWO") }] },
+          ],
+        },
+        // Referenced General Purpose Scheduled Procedure Step Transaction UID: a real attribute whose
+        // NAME is 67 characters. PS3.6 bounds the Keyword column at 64, not the Name column.
+        { tag: "00404023", vr: "UI", value: pad("1.2.3.4.5") },
+      ],
+    });
+    return deidentifyDicomBuffer(bytes);
+  }
+
+  it("keeps a sequence-context entry, so items stay distinct manifest rows", () => {
+    const loci = withSequence().manifest.map((e) => e.locus);
+    expect(loci).toContain("00081032[0]/(0008,0080) Institution Name");
+    expect(loci).toContain("00081032[1]/(0008,0080) Institution Name");
+  });
+
+  it("keeps an attribute name longer than 64 characters", () => {
+    const loci = withSequence().manifest.map((e) => e.locus);
+    expect(loci).toContain(
+      "(0040,4023) Referenced General Purpose Scheduled Procedure Step Transaction UID",
+    );
+  });
+});

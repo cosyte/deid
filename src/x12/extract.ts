@@ -21,6 +21,7 @@
 import { type X12Interchange, type X12Segment } from "@cosyte/x12";
 
 import { SAFE_HARBOR_CATEGORIES, type SafeHarborCategory } from "../categories.js";
+import { safeLocusToken } from "../derived-token.js";
 import type { GenericLocus } from "../locus.js";
 import {
   X12_ACCOUNT_SEGMENTS,
@@ -68,7 +69,10 @@ interface SegPos {
   readonly groupIndex: number;
   readonly txIndex: number;
   readonly segIndex: number;
+  /** The bounded `ST-01` transaction-set id, e.g. `837`. */
   readonly stId: string;
+  /** The bounded segment id, e.g. `NM1`; the key every rule lookup uses. */
+  readonly segId: string;
   /** The value-free segment label scoped by occurrence, e.g. `NM1[1]`. */
   readonly segIdBracket: string;
 }
@@ -261,7 +265,7 @@ function handleGeoSegment(
 ): void {
   const ruleByElement = new Map<number, X12ElementRule>();
   for (const rule of rules) ruleByElement.set(rule.element, rule);
-  const retain = X12_GEO_RETAIN_ELEMENTS[seg.id] ?? new Set<number>();
+  const retain = X12_GEO_RETAIN_ELEMENTS[pos.segId] ?? new Set<number>();
   for (let n = 1; n < seg.elements.length; n += 1) {
     if (!has(seg, n)) continue;
     const rule = ruleByElement.get(n);
@@ -306,7 +310,7 @@ function handleUnknown(out: X12Extraction, seg: X12Segment, pos: SegPos): void {
 
 /** Dispatch one segment through the X12 PHI rules. */
 function handleSegment(out: X12Extraction, seg: X12Segment, pos: SegPos): void {
-  const id = seg.id;
+  const id = pos.segId;
   if (id === "NM1") {
     handleNm1(out, seg, pos);
     return;
@@ -364,18 +368,24 @@ export function extractX12Loci(interchange: X12Interchange): X12Extraction {
 
   interchange.groups.forEach((group, groupIndex) => {
     group.transactions.forEach((tx, txIndex) => {
-      const stId = tx.st.elements[1] ?? "";
+      // `ST-01` is a data element the parser copies verbatim, and it is the ROOT of every path this
+      // transaction produces; `X12Segment.id` is the token before the first element separator on a
+      // line the parser may not have recognized at all. Both are bounded before they are interpolated,
+      // and the occurrence counter keys on the bounded id so refused segments stay distinguishable.
+      const stId = safeLocusToken(tx.st.elements[1] ?? "", "x12TransactionSetId");
       const occ = new Map<string, number>();
       tx.segments.forEach((seg, segIndex) => {
         if (seg.id === "ST" || seg.id === "SE") return; // envelope control — no patient PHI
-        const n = occ.get(seg.id) ?? 0;
-        occ.set(seg.id, n + 1);
+        const segId = safeLocusToken(seg.id, "x12SegmentId");
+        const n = occ.get(segId) ?? 0;
+        occ.set(segId, n + 1);
         const pos: SegPos = {
           groupIndex,
           txIndex,
           segIndex,
           stId,
-          segIdBracket: `${seg.id}[${String(n)}]`,
+          segId,
+          segIdBracket: `${segId}[${String(n)}]`,
         };
         handleSegment(out, seg, pos);
       });

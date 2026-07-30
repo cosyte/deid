@@ -19,6 +19,7 @@
 import { type Hl7Message, type Segment } from "@cosyte/hl7";
 
 import { SAFE_HARBOR_CATEGORIES } from "../categories.js";
+import { safeLocusToken } from "../derived-token.js";
 import type { GenericLocus } from "../locus.js";
 import { HL7_LOCUS_MAP, categoryForIdentifierType, type Hl7FieldRule } from "./locus-map.js";
 import { RETAIN_SEGMENTS } from "./retain.js";
@@ -96,7 +97,12 @@ function push(out: Hl7Extraction, locus: GenericLocus, coord: Hl7Coord): void {
   out.coords.push(coord);
 }
 
-/** Build the human-readable, value-free manifest path for a field (optionally a specific repetition). */
+/**
+ * Build the human-readable, value-free manifest path for a field (optionally a specific repetition).
+ *
+ * `type` is already bounded by {@link extractHl7Loci} before it reaches here; see the note there on
+ * why a segment "name" the parser could not recognize is not an identifier.
+ */
 function fieldPath(type: string, occ: number, field: number, rep?: number): string {
   const seg = occ > 0 ? `${type}[${String(occ)}]` : type;
   const repSuffix = rep !== undefined ? `[${String(rep)}]` : "";
@@ -231,13 +237,13 @@ function extractNte(out: Hl7Extraction, seg: Segment, occ: number): void {
 }
 
 /** Fail closed on an unknown/Z-segment: block every populated field (unrecognized structure). */
-function extractUnknownSegment(out: Hl7Extraction, seg: Segment, occ: number): void {
+function extractUnknownSegment(out: Hl7Extraction, seg: Segment, type: string, occ: number): void {
   // fields[0] is the segment-name placeholder — start at HL7 position 1.
   for (let field = 1; field < seg.fields.length; field += 1) {
     if (!hasContent(seg, field)) continue;
     push(
       out,
-      { path: fieldPath(seg.type, occ, field), kind: "unknown", value: seg.field(field).value },
+      { path: fieldPath(type, occ, field), kind: "unknown", value: seg.field(field).value },
       { segIndex: seg.absoluteIndex, field, rep: 0, edit: "whole-field" },
     );
   }
@@ -263,7 +269,12 @@ export function extractHl7Loci(msg: Hl7Message): Hl7Extraction {
   const occurrences = new Map<string, number>();
 
   for (const seg of msg.allSegments()) {
-    const type = seg.type;
+    // `Segment.type` is the parser's reading of the line prefix, not a checked identifier: on a line
+    // it could not recognize (an unterminated narrative continuation, say) it is the prefix of that
+    // line's content. Bound it BEFORE it is used for anything, including the occurrence counter, so
+    // that two refused segments stay distinguishable as `<withheld>` and `<withheld>[1]` rather than
+    // aggregating into one manifest row.
+    const type = safeLocusToken(seg.type, "hl7SegmentId");
     const occ = occurrences.get(type) ?? 0;
     occurrences.set(type, occ + 1);
 
@@ -287,7 +298,7 @@ export function extractHl7Loci(msg: Hl7Message): Hl7Extraction {
     // patient/relative-identity segment absent from the map and the retain-list (MRG / ACC / FAM / PEO /
     // PDA) — is blocked, so a merge message's prior name + MRN can never ride through in the clear.
     if (RETAIN_SEGMENTS.has(type)) continue;
-    extractUnknownSegment(out, seg, occ);
+    extractUnknownSegment(out, seg, type, occ);
   }
 
   return out;

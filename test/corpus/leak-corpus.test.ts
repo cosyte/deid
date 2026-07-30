@@ -2,8 +2,13 @@
  * The **consolidated leak / over-scrub corpus** (roadmap §Phase 10, §6) — one CI-gating suite that
  * exercises the two headline gates across **all six** format adapters in a single place:
  *
- * - **Leak gate (must be ZERO):** after a de-id pass, sweep the *entire serialized output* for every
- *   seeded synthetic PHI sentinel. A single survivor is a hard failure (the under-scrub harm, §4).
+ * - **Leak gate (must be ZERO):** after a de-id pass, sweep the *entire serialized output* AND the
+ *   *value-free manifest* for every seeded synthetic PHI sentinel. A single survivor is a hard failure
+ *   (the under-scrub harm, §4). The manifest half exists because the output document is not the only
+ *   artifact a pass hands back: a locus is built by interpolating an identifier read out of the input,
+ *   so a manifest can carry document content that never appears in the output at all. Sweeping only the
+ *   wire is structurally blind to that; `derived-locus.test.ts` attacks it directly, and this adds the
+ *   same sentinels to the same sweep so the headline gate is not the one that misses it.
  * - **Over-scrub gate:** the clinical/financial survivor values must remain present (the over-scrub
  *   harm, §4) — the library must not degenerate into a "safe but useless" blanket scrubber.
  *
@@ -34,7 +39,11 @@ import { parseCcda } from "@cosyte/ccda";
 import { parseResource, serializeResource } from "@cosyte/fhir";
 import { serializeDicom } from "@cosyte/dicom";
 
-import { createDeidContext } from "../../src/index.js";
+import {
+  buildExpertDeterminationSupportReport,
+  createDeidContext,
+  type DeidManifestEntry,
+} from "../../src/index.js";
 import { deidentifyHl7 } from "../../src/hl7/index.js";
 import { deidentifyCcda } from "../../src/ccda/index.js";
 import { deidentifyFhir } from "../../src/fhir/index.js";
@@ -54,6 +63,8 @@ interface CorpusCase {
   readonly name: string;
   /** The serialized de-identified output the leak sweep scans. */
   readonly deidWire: string;
+  /** The value-free manifest the pass produced; swept for the same sentinels as the wire. */
+  readonly manifest: readonly DeidManifestEntry[];
   /** The serialized ORIGINAL (un-de-identified) wire — used to prove the sentinels are really present. */
   readonly originalWire: string;
   /** Synthetic PHI sentinels that must be ABSENT from `deidWire` and PRESENT in `originalWire`. */
@@ -68,7 +79,7 @@ interface CorpusCase {
 function hl7Case(): CorpusCase {
   const ctx = createDeidContext({ key: "hl7-corpus", patientId: "p-hl7" });
   const original = parseHL7(hl7Wire("oru-r01"));
-  const { document } = deidentifyHl7(parseHL7(hl7Wire("oru-r01")), { context: ctx });
+  const { document, manifest } = deidentifyHl7(parseHL7(hl7Wire("oru-r01")), { context: ctx });
   const clinicalPaths = [
     "OBX[0].5",
     "OBX[0].6",
@@ -84,6 +95,7 @@ function hl7Case(): CorpusCase {
   return {
     name: "hl7",
     deidWire: document.toString(),
+    manifest,
     originalWire: hl7Wire("oru-r01"),
     sentinels: [
       "ZZMRN002",
@@ -110,10 +122,11 @@ function hl7Case(): CorpusCase {
 function ccdaCase(): CorpusCase {
   const ctx = createDeidContext({ key: "ccda-corpus", patientId: "p-ccda" });
   const raw = FIX("ccda", "ccd.xml");
-  const { document } = deidentifyCcda(parseCcda(raw), { context: ctx });
+  const { document, manifest } = deidentifyCcda(parseCcda(raw), { context: ctx });
   return {
     name: "ccda",
     deidWire: document.toString(),
+    manifest,
     originalWire: raw,
     sentinels: [
       "ZZMRNCCDA1",
@@ -146,10 +159,11 @@ function fhirCase(): CorpusCase {
   const ctx = createDeidContext({ key: "fhir-corpus", patientId: "p-fhir" });
   const raw = FIX("fhir", "bundle.json");
   const { resource } = parseResource(raw);
-  const { document } = deidentifyFhir(resource, { context: ctx });
+  const { document, manifest } = deidentifyFhir(resource, { context: ctx });
   return {
     name: "fhir",
     deidWire: serializeResource(document),
+    manifest,
     originalWire: raw,
     sentinels: [
       "ZZPATNARRATIVE",
@@ -183,10 +197,11 @@ function fhirCase(): CorpusCase {
 function x12Case(): CorpusCase {
   const ctx = createDeidContext({ key: "x12-corpus", patientId: "p-x12" });
   const raw = FIX("x12", "837p.edi");
-  const { x12 } = deidentifyX12String(raw, { context: ctx });
+  const { x12, manifest } = deidentifyX12String(raw, { context: ctx });
   return {
     name: "x12",
     deidWire: x12,
+    manifest,
     originalWire: raw,
     sentinels: [
       "ZZSUBLAST",
@@ -212,10 +227,11 @@ function x12Case(): CorpusCase {
 function ncpdpCase(): CorpusCase {
   const ctx = createDeidContext({ key: "ncpdp-corpus", patientId: "p-ncpdp" });
   const raw = FIX("ncpdp", "telecom-b1.ncpdp");
-  const { telecom } = deidentifyTelecomString(raw, { context: ctx });
+  const { telecom, manifest } = deidentifyTelecomString(raw, { context: ctx });
   return {
     name: "ncpdp",
     deidWire: telecom,
+    manifest,
     originalWire: raw,
     sentinels: [
       "ZZPATFIRST",
@@ -240,10 +256,11 @@ function ncpdpCase(): CorpusCase {
 // ── DICOM (metadata-only, delegated PS3.15 Annex E) ───────────────────────────────────────────────
 function dicomCase(): CorpusCase {
   const original = serializeDicom(buildPhiDataset()).toString("latin1");
-  const { dataset } = deidentifyDicom(buildPhiDataset());
+  const { dataset, manifest } = deidentifyDicom(buildPhiDataset());
   return {
     name: "dicom",
     deidWire: serializeDicom(dataset).toString("latin1"),
+    manifest,
     originalWire: original,
     sentinels: [...ALL_SENTINELS, UID.sop, UID.study, UID.series],
     survivors: [CLINICAL.modality, CLINICAL.photometric, CLINICAL.sopClassUid],
@@ -269,6 +286,15 @@ describe("consolidated leak corpus — every format, zero leak", () => {
     it(`${c.name}: no seeded PHI sentinel survives the de-id pass`, () => {
       expect(leaks(c.deidWire, c.sentinels)).toEqual([]);
     });
+
+    // The manifest is the OTHER artifact of a pass, and it is built by interpolating identifiers read
+    // out of the input, so it can carry document content the output document never sees.
+    it(`${c.name}: no seeded PHI sentinel reaches the value-free manifest or the report`, () => {
+      const manifestText = JSON.stringify(c.manifest);
+      const reportText = JSON.stringify(buildExpertDeterminationSupportReport(c.manifest));
+      expect(leaks(manifestText, c.sentinels)).toEqual([]);
+      expect(leaks(reportText, c.sentinels)).toEqual([]);
+    });
   }
 });
 
@@ -277,6 +303,11 @@ describe("corpus non-vacuity — the sweep and the corpus both have teeth", () =
     it(`${c.name}: every sentinel is present in the ORIGINAL wire (pre-condition)`, () => {
       const missing = c.sentinels.filter((s) => !c.originalWire.includes(s));
       expect(missing).toEqual([]);
+    });
+
+    it(`${c.name}: the manifest sweep has a haystack (pre-condition)`, () => {
+      // A manifest sweep over an empty manifest reports zero for the wrong reason.
+      expect(c.manifest.length).toBeGreaterThan(0);
     });
 
     it(`${c.name}: a sentinel re-injected into the de-identified wire IS caught (tamper)`, () => {

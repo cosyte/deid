@@ -436,6 +436,59 @@ its public history at `0.0.x`, per the cosyte version ladder (`0.0.x` until firs
 
 ### Security
 
+- **The value-free manifest could carry clinical narrative from a malformed document, on defaults,
+  with no options set, and the Expert-Determination support report carried it onward.** Each
+  per-format adapter names a manifest `locus` by interpolating the identifier at that position: an
+  HL7 v2 segment id, a C-CDA element local name, a FHIR element name and `resourceType`, an X12
+  segment id and `ST-01`, an NCPDP segment code. None of those was checked before it was
+  interpolated, and none of the upstream parsers is obliged to hand back an identifier there: on a
+  line or an element it cannot recognize, a parser reports whatever bytes stood in that position. On
+  an unrecognized HL7 narrative continuation line that content is clinical prose, and it was written
+  verbatim and unbounded into the manifest. Measured on the affected builds: a locus of 200,039 bytes
+  from a 200,010-byte input, reproduced on `deidentifyHl7(msg, {})`, with the equivalent reproduced
+  for C-CDA, FHIR, X12 and NCPDP. `buildExpertDeterminationSupportReport()` copies each locus into
+  `perLocus`, so the leak travelled into the structured object a consumer is meant to hand to an
+  outside statistician. `formatExpertDeterminationSupportReport()`'s Markdown rendering does not print
+  loci and was not affected.
+
+  **Every identifier read out of a document is now checked against the shape its position promises
+  before it enters a locus**, against the cited spec for that format (HL7 v2 Ch. 2 §2.5 three-character
+  segment identifiers; ASC X12.6 two-to-three-character segment ids and the three-character `ST-01`;
+  the FHIR `[A-Za-z][A-Za-z0-9]{0,63}` element-name rule; an ASCII XML name with an explicit
+  64-character ceiling, since the XML `Name` production has none; two-character NCPDP codes). A
+  conforming identifier is returned **byte-identical**, so a well-formed document produces exactly the
+  manifest it produced before.
+
+  **The DICOM manifest is deliberately unchanged**, because its locus is not built from document bytes:
+  the tag is normalised by the parser, the keyword is a static table string, and a sequence-context
+  entry is a composed `TAG[index]`. Two regression tests now pin that, one on a sequence-context entry
+  and one on a Part 6 attribute name longer than 64 characters.
+
+  **A refusal is recorded rather than silently truncated.** A non-conforming identifier is refused
+  whole (truncating to N characters would still emit the first N characters of the content) and the
+  locus reads the new public `WITHHELD_LOCUS_TOKEN` (`<withheld>`) plus the structural index of that
+  position, so two refused positions remain distinct manifest rows and no count is quietly merged.
+  **Stated as a bound, not an impossibility:** content that happens to match the shape, such as a
+  narrative line whose entire content is three letters, is indistinguishable from a real segment
+  identifier and is still echoed.
+
+  **Error messages were not affected and are unchanged.** Every `DeidError` this package raises is a
+  fixed sentence with nothing interpolated.
+
+  **If you have `0.0.2` installed:** upgrade, and treat any manifest, log, or Expert-Determination
+  support report produced by `0.0.2` or earlier from input that was not spec-clean as potentially
+  carrying PHI, on the same footing as the input document itself. The de-identified output documents
+  were never affected: this was the audit artifact, not the wire.
+
+- **`deidentifyDicom()` no longer returns a dataset carrying the input file's parse warnings.** The
+  delegated PS3.15 Annex E pass copies `Dataset.warnings` across from the source dataset, so the
+  de-identified `Dataset` arrived holding diagnostics written about the bytes as they were _before_
+  anything was removed, and an upstream parse warning may quote a value it could not interpret (a
+  55,093-byte warning was reproduced end to end from an unsupported Specific Character Set term). A
+  parse warning about the input is not part of the de-identification contract, which is the same
+  reasoning the C-CDA adapter already applies at its own re-parse. The warnings raised by the pass
+  itself are unchanged and still returned on `DicomDeidResult.warnings`.
+
 - **The CI checks that run on a pull request now block the merge.** Until now `main` had no
   branch-protection rules at all, so `ci` (typecheck, lint, format, the PHI scan, the tests, the
   gating coverage run, the build, `attw`, the dual ESM/CJS root-entry import check) and CodeQL could

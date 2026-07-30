@@ -33,6 +33,7 @@ import {
 } from "@cosyte/fhir";
 
 import { SAFE_HARBOR_CATEGORIES } from "../categories.js";
+import { isWithheldToken, safeLocusToken } from "../derived-token.js";
 import type { GenericLocus } from "../locus.js";
 import {
   FHIR_DATE_CATEGORY,
@@ -90,6 +91,17 @@ function join(base: string, seg: string): string {
 /** Append a list-index segment to a value-free path (`entry` + `0` → `entry[0]`). */
 function idx(base: string, i: number): string {
   return `${base}[${String(i)}]`;
+}
+
+/**
+ * Bound a JSON property name before it becomes a path segment. A JSON object key is an arbitrary
+ * string (the reader has no obligation to have recognized it as a FHIR element), so a key is only an
+ * "element name" by convention. A refused key keeps its **position** (`<withheld>[3]`) so two refused
+ * keys on the same object stay distinguishable in the manifest.
+ */
+function elementSegment(name: string, position: number): string {
+  const token = safeLocusToken(name, "fhirElementName");
+  return isWithheldToken(token) ? idx(token, position) : token;
 }
 
 /** The string form of a primitive value (`FhirDecimal` → its exact lexical text). `""` when absent. */
@@ -259,17 +271,19 @@ function blockExtension(out: FhirExtraction, value: FhirNode, path: string): voi
     return;
   }
   if (!isComplex(value)) return;
-  for (const prop of value.properties) {
-    if (prop.name === "url") continue; // structural — a definitional URI, never PHI
+  value.properties.forEach((prop, i) => {
+    if (prop.name === "url") return; // structural: a definitional URI, never PHI
     if (prop.name === "extension" || prop.name === "modifierExtension") {
       blockExtension(out, prop.value, join(path, prop.name)); // nested extension — recurse
-      continue;
+      return;
     }
     if (prop.name.startsWith("value")) {
-      blockNode(out, prop.value, join(path, prop.name)); // value[x] — the PHI payload, dropped
+      // `startsWith` is a prefix test, not an identifier check: a key of "value" followed by any
+      // number of arbitrary bytes satisfies it, so the name is bounded before it is interpolated.
+      blockNode(out, prop.value, join(path, elementSegment(prop.name, i))); // value[x]: the PHI payload, dropped
     }
     // any other extension child (id) is structural and retained
-  }
+  });
 }
 
 /** Block the `div` of a `Narrative` (rendered PHI) — at any depth (resource-, section-, entry-level). */
@@ -363,17 +377,19 @@ function walkComplex(
   const ctx = rt !== undefined ? PERSON_RESOURCE_TYPES.has(rt) : personCtx;
   const isPersonTop = rt !== undefined && ctx; // fail-closed scalar block only at a person resource root
   const parentIsCoding = isCodingComplex(complex);
-  for (const prop of complex.properties) {
+  complex.properties.forEach((prop, i) => {
+    // The rule dispatch reads the RAW name (a set lookup can never interpolate it); only the path
+    // segment is bounded, because that is the one that reaches the manifest.
     handleProperty(
       out,
       prop.name,
       prop.value,
-      join(path, prop.name),
+      join(path, elementSegment(prop.name, i)),
       ctx,
       isPersonTop,
       parentIsCoding,
     );
-  }
+  });
 }
 
 /**
@@ -395,7 +411,9 @@ function walkComplex(
  */
 export function extractFhirLoci(resource: FhirComplex): FhirExtraction {
   const out: FhirExtraction = { loci: [], coords: [] };
-  const rt = resourceType(resource) ?? "";
+  // `resourceType` is a JSON string VALUE, not a checked identifier, and it is the ROOT of every path
+  // in the manifest, so an unbounded one prefixes the whole audit with document content.
+  const rt = safeLocusToken(resourceType(resource) ?? "", "fhirElementName");
   walkComplex(out, resource, rt, false);
   return out;
 }

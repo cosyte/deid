@@ -47,6 +47,13 @@ stable **code**. It **never** records the value that was removed, generalized, o
 manifest that logged a value would be a PHI leak in the audit trail. The date-shift offset and the HMAC
 key never appear anywhere.
 
+The **locus** is the one field a per-format adapter builds out of the document, by naming the position
+with the identifier that sits there (a segment id, an element name, a tag). Each of those is checked
+against the shape its position promises before it is used, because a malformed document can put
+something at that position that is not an identifier; one that does not match is refused and the locus
+reads `WITHHELD_LOCUS_TOKEN` (`<withheld>`) plus a structural index. Content that happens to match the
+shape is still echoed, so this is a bound rather than an impossibility claim.
+
 ## Immutability
 
 The input model is never mutated; `deidentify` returns a deeply frozen `DeidResult`.

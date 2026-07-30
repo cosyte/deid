@@ -20,6 +20,7 @@
 import { type TelecomTransaction } from "@cosyte/ncpdp/telecom";
 
 import { SAFE_HARBOR_CATEGORIES, type SafeHarborCategory } from "../categories.js";
+import { isWithheldToken, safeLocusToken } from "../derived-token.js";
 import type { GenericLocus } from "../locus.js";
 import {
   TELECOM_FREE_TEXT_FIELDS,
@@ -50,6 +51,17 @@ export interface TelecomExtraction {
 function push(out: TelecomExtraction, locus: GenericLocus, coord: TelecomCoord): void {
   out.loci.push(locus);
   out.coords.push(coord);
+}
+
+/**
+ * Bound a Segment Identification (111-AM) code or a field identifier before it becomes part of a
+ * manifest path. Both are two-character codes on the wire, but the tokenizer reads them off a message
+ * it may not have been able to frame, so neither is an identifier until it is checked. A refused code
+ * keeps its **structural position** (`<withheld>[2]`) so two refused codes stay distinguishable.
+ */
+function codeSegment(code: string, position: number): string {
+  const token = safeLocusToken(code, "ncpdpCode");
+  return isWithheldToken(token) ? `${token}[${String(position)}]` : token;
 }
 
 /** The generic-locus kind for a mapped field mode. */
@@ -121,6 +133,9 @@ export function extractTelecomLoci(tx: TelecomTransaction): TelecomExtraction {
 
   tx.segments.forEach((seg, segmentIndex) => {
     const segId = seg.segmentId;
+    // The bounded form is what reaches the manifest; the raw form still drives the rule lookups, which
+    // are set/record reads and can never interpolate anything.
+    const segPath = codeSegment(segId, segmentIndex);
     const fieldMap = TELECOM_LOCUS_MAP[segId];
     const isMapped = fieldMap !== undefined;
     const isRetained = TELECOM_RETAIN_SEGMENTS.has(segId);
@@ -129,13 +144,14 @@ export function extractTelecomLoci(tx: TelecomTransaction): TelecomExtraction {
     seg.fields.forEach((field, fieldIndex) => {
       if (field.value.length === 0) return;
       const coord: TelecomCoord = { target: "field", segmentIndex, fieldIndex };
+      const fieldPath = codeSegment(field.id, fieldIndex);
 
       // Free text fails closed wherever it sits — including inside a retained clinical/response segment.
       if (TELECOM_FREE_TEXT_FIELDS.has(field.id)) {
         push(
           out,
           {
-            path: `${segId}/${field.id}`,
+            path: `${segPath}/${fieldPath}`,
             kind: "freetext",
             category: SAFE_HARBOR_CATEGORIES.OTHER_UNIQUE_ID,
             value: field.value,
@@ -148,7 +164,7 @@ export function extractTelecomLoci(tx: TelecomTransaction): TelecomExtraction {
       if (isMapped && fieldMap !== undefined) {
         const rule = fieldMap[field.id];
         if (rule !== undefined) {
-          emitRule(out, segId, field.id, field.value, rule, coord);
+          emitRule(out, segPath, fieldPath, field.value, rule, coord);
           return;
         }
         // Fail closed INSIDE a PHI segment: a populated field that is neither scrubbed nor on the
@@ -156,11 +172,11 @@ export function extractTelecomLoci(tx: TelecomTransaction): TelecomExtraction {
         // blocked, never passed through. This closes the "unmapped identifier field" leak: a Patient
         // e-mail (350-HN), a Medigap id (359-2A), or any un-enumerated id cannot ride through in the clear.
         if (retainFields !== undefined && retainFields.has(field.id)) return; // recognized non-identifier
-        blockField(out, segId, field.id, field.value, coord);
+        blockField(out, segPath, fieldPath, field.value, coord);
         return;
       }
       if (isRetained) return; // recognized clinical / financial segment — retained untouched
-      blockField(out, segId, field.id, field.value, coord); // unknown segment → fail closed
+      blockField(out, segPath, fieldPath, field.value, coord); // unknown segment → fail closed
     });
   });
 

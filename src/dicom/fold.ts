@@ -150,7 +150,18 @@ function formatTag(tag: string): string {
     : tag;
 }
 
-/** Build the value-free locus string for an attribute: `[ctx/…]/(gggg,eeee) Keyword`. */
+/**
+ * Build the value-free locus string for an attribute: `[ctx/…]/(gggg,eeee) Keyword`.
+ *
+ * **None of these three is document-derived, which is why no shape bound is applied here** (the sibling
+ * adapters all bound theirs, see `../derived-token.ts`). `@cosyte/dicom` composes the report this reads:
+ * the tag is normalised to eight uppercase hex digits by the parser, the keyword is a string from a
+ * static table, and a sequence-context entry is a structurally-composed `TAG[index]`. A shape test here
+ * cannot reach any input byte, and a first attempt at one refused every sequence-context entry (they
+ * carry brackets) and two genuine Part 6 attribute names longer than 64 characters, on spec-clean files.
+ * If a bound is ever wanted here, calibrate it against that real contract rather than against the shape
+ * a keyword "ought" to have.
+ */
 function formatLocus(tag: string, keyword: string, contextPath?: readonly string[]): string {
   const prefix = contextPath && contextPath.length > 0 ? `${contextPath.join("/")}/` : "";
   const kw = keyword.length > 0 ? ` ${keyword}` : "";
