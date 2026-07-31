@@ -1,3 +1,8 @@
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://cosyte.com/tile/cosyte-lockup-tile-on-dark-1200x300.png">
+  <img alt="Cosyte: a plus mark set in two overlapping rounded squares, one solid and one outlined, beside the Cosyte wordmark" src="https://cosyte.com/tile/cosyte-lockup-tile-on-light-1200x300.png">
+</picture>
+
 # @cosyte/deid
 
 > Healthcare **de-identification** for Node.js and TypeScript — a HIPAA-grounded policy engine that
@@ -16,7 +21,7 @@ but **inverts the reflex** — where a parser is liberal on input, a de-identifi
 > (§164.514(b)(1)) is supported, never rendered or certified.** The certification is
 > always the consumer's.
 
-> **Status:** pre-alpha (`0.0.x`), not yet published to npm. This release ships the **format-agnostic
+> **Status:** pre-alpha (`0.0.x`), published on npm. This release ships the **format-agnostic
 > core** plus six format bindings — the **HL7 v2 adapter** (`@cosyte/deid/hl7`), the **C-CDA adapter**
 > (`@cosyte/deid/ccda`), the **FHIR R4 adapter** (`@cosyte/deid/fhir`), the **X12 EDI adapter**
 > (`@cosyte/deid/x12`), the **NCPDP Telecom adapter** (`@cosyte/deid/ncpdp`), and the **DICOM adapter**

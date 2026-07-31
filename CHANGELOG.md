@@ -14,6 +14,13 @@ its public history at `0.0.x`, per the cosyte version ladder (`0.0.x` until firs
 
 ### Added
 
+- **A brand image at the top of `README.md`.** The page opens with the Cosyte lockup, served as a
+  `<picture>` with a light and a dark source so it follows the reader's theme, and carrying alt text
+  that describes the mark for anyone reading with images off or a screen reader on. The block is
+  copied byte for byte from the `hl7` README, which is the reference the suite mirrors, so every repo
+  carrying it stays one string rather than drifting into hand-typed variants. Nothing else on the
+  page moved: the title, the honesty line and every code sample are unchanged, and no API, `DEID_*`
+  code, policy, manifest disposition or transformed value differs.
 - **DEID-10 — release hardening (roadmap §Phase 10): policy profiles, a non-vacuous leak/over-scrub
   corpus + pipeline fuzz, a publish dry-run, and the honesty docs.** The final roadmap phase; the six
   format adapters, the longitudinal layer, the free-text BYO interface, and the ED report are unchanged.
@@ -370,6 +377,14 @@ its public history at `0.0.x`, per the cosyte version ladder (`0.0.x` until firs
 
 ### Fixed
 
+- **`README.md` no longer claims the package is absent from npm.** The opening summary read "not yet
+  published to npm" on the very page npm renders, directly beneath the version in npm's own header,
+  so the page contradicted itself and a reader had no way to tell which half was true. It now says
+  the package is published and names no version, leaving `npm view @cosyte/deid version` as the one
+  source of that fact; a quoted version is exactly how the equivalent line drifted elsewhere. The
+  identical claim in `CLAUDE.md` is deliberately left alone, and so is this file's future-tense
+  preamble about a release that has shipped: both belong to cross-repo items spanning several repos,
+  and correcting one repo's copy inside this change would fragment them.
 - **`PUBLIC-SURFACE-HYGIENE` (founder directive 2026-07-27): internal project bookkeeping removed from
   every surface a consumer reads, and the corrections that fell out of it.** Item identifiers, phase
   and roadmap-section language and ADR numbers are gone from `README.md`, `docs-content/` and the
