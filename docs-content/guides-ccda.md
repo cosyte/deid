@@ -61,6 +61,42 @@ surrogate** — so an SSN and an MRN at adjacent `id` loci are handled different
 parser's typing. A dosing-period `effectiveTime` (`PIVL_TS` / `EIVL_TS`) is a duration, not a calendar
 date, and is never generalized.
 
+## How to read a C-CDA locus path
+
+A locus is a `/`-joined path of element names. Entries that agree on **all five** of locus, category,
+transform, disposition and code are aggregated into one entry with a running `count` — and two
+narratives blocked the same way agree on the other four, so two narrative positions printing the same
+path would arrive as **one row with `count: 2`**. That is why the index in a path matters, and it has
+one meaning:
+
+> `[n]` is the position's index **among its document siblings that print the same segment name**. It
+> appears when more than one sibling prints that name, and always when the name was refused.
+
+```
+component/structuredBody/component[0]/section/text   ← the first section's narrative
+component/structuredBody/component[1]/section/text   ← the second section's, its own row
+recordTarget/patientRole/id[0]                       ← two <id> siblings, one row each
+recordTarget/patientRole/patient/name                ← the only <name>, so no index is needed
+recordTarget/patientRole/patient/<withheld>[0]       ← name refused; the index is the only "where" left
+```
+
+A refused segment (`<withheld>`) always carries an index, since the token itself names nothing.
+
+Three scoping notes, because each is easy to over-read:
+
+- **The index is a document position, not a row number, so the indices in a manifest can be gapped.**
+  A sibling that produced nothing to record produces no entry: an empty `<text>`, an `<entry>` whose
+  narrative is a `<reference value="#…"/>` into the section rather than character data, a
+  `nullFlavor`-only `<id>`. A manifest showing `component[2]` and no `component[0]` or `component[1]`
+  means those two siblings had nothing to record — **not** that rows are missing. Count the rows, not
+  the indices.
+- This covers the segments built from an **element name** — the header sweep and the body narrative
+  descent. Some segments are fixed strings instead: `structuredBody`, `nonXMLBody/text`, and the
+  `low` / `high` / `center` bounds of an interval. The CDA schema allows each at most once at its
+  position; a document that repeats one anyway still prints one path for both.
+- An index says two positions were **distinct**, not what stood at either. The path is still
+  value-free: no narrative, no identifier, no value.
+
 ## The two guarantees
 
 - **No leak.** Every seeded PHI sentinel across the header participations and the section narrative is

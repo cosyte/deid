@@ -91,57 +91,60 @@ function hasAttr(el: Element, name: string): boolean {
 }
 
 /**
- * Build a value-free child path segment, indexing among same-named siblings only when there is >1.
+ * Build the value-free path segment for every element child of `parent` — **the one place a CDA path
+ * segment is composed**, used by both the header sweep and the body narrative descent.
  *
  * The element's local name is **bounded before it becomes a path segment** ({@link safeLocusToken}):
  * an XML name is unbounded by the XML specification, so an element name is only an identifier by
- * convention. The sibling counter keys on the *bounded* name so that several refused siblings stay
- * distinguishable as `<withheld>[0]`, `<withheld>[1]` instead of aggregating into one manifest row.
+ * convention.
+ *
+ * ## The index base, which a manifest reader must be able to state without this file
+ *
+ * `[n]` is the child's index **among its document siblings that print the same segment name**, and it
+ * is emitted in exactly two cases:
+ *
+ * - **more than one sibling prints that name**, so the name alone would not say which one this is; or
+ * - **the name was refused**, because `<withheld>` names nothing, so the index is the only "where"
+ *   that position has left. A refused segment therefore always carries one, even when it is the only
+ *   refusal at that level.
+ *
+ * Three consequences worth stating, because each has been mis-read:
+ *
+ * - **It counts document siblings, not manifest rows, so the indices in a manifest can be gapped.** A
+ *   sibling that yields no locus — an empty `<text>`, an `<entry>` whose narrative is a `<reference>`
+ *   into the section, a `nullFlavor`-only `<id>` — contributes no row, and the surviving rows keep
+ *   their document indices. `component[2]` alone means two siblings had nothing to record, not that
+ *   rows went missing. Do not document it as a counter derivable from the manifest alone.
+ * - The counter keys on the **printed** name, not on `namespaceURI|name`. A path prints no namespace,
+ *   so keying on one hid the counter from the reader and let two refused siblings in *different*
+ *   namespaces both print a bare `<withheld>` and aggregate into a single manifest row.
+ * - Only the printed path is affected. Every scrub decision below dispatches on the **raw**
+ *   `localName` and namespace, so a refusal degrades an audit label and never moves what is
+ *   de-identified.
+ *
+ * Segments composed here are element names. The fixed-string segments (`structuredBody`,
+ * `nonXMLBody/text`, and an interval's `low` / `high` / `center` bounds) do not pass through this
+ * function and carry no index; the CDA schema allows each at most once at its position.
  */
-function childPaths(parent: Element): { el: Element; path: string }[] {
-  const named = childElements(parent).map((el) => ({
-    el,
-    name: safeLocusToken(el.localName ?? "", "xmlName"),
-  }));
+function childSegments(parent: Element): { el: Element; path: string }[] {
+  const named = childElements(parent).map((el) => {
+    const name = safeLocusToken(el.localName ?? "", "xmlName");
+    return { el, name, withheld: isWithheldToken(name) };
+  });
   const counts = new Map<string, number>();
-  for (const k of named) {
-    const key = `${k.el.namespaceURI ?? ""}|${k.name}`;
-    counts.set(key, (counts.get(key) ?? 0) + 1);
-  }
+  for (const k of named) counts.set(k.name, (counts.get(k.name) ?? 0) + 1);
   const seen = new Map<string, number>();
-  return named.map(({ el, name }) => {
-    const key = `${el.namespaceURI ?? ""}|${name}`;
-    const idx = seen.get(key) ?? 0;
-    seen.set(key, idx + 1);
-    const suffix = (counts.get(key) ?? 1) > 1 ? `[${String(idx)}]` : "";
-    return { el, path: `${name}${suffix}` };
+  return named.map(({ el, name, withheld }) => {
+    const idx = seen.get(name) ?? 0;
+    seen.set(name, idx + 1);
+    const indexed = withheld || (counts.get(name) ?? 1) > 1;
+    return { el, path: indexed ? `${name}[${String(idx)}]` : name };
   });
 }
 
 /** Join a running path with a child segment. */
 function join(base: string, seg: string): string {
   return base === "" ? seg : `${base}/${seg}`;
-}
-
-/**
- * Bound a body-descent element name, keeping the child's position when the name is refused so two
- * refused siblings stay distinguishable in the manifest.
- *
- * **Read this before "tidying" it to always index.** Two *legitimate* same-named siblings here still
- * merge into one manifest row at count 2, and that is base behaviour this deliberately does not
- * change: for an unrefused name the token is returned unchanged, so the path is byte-identical to
- * what a consumer's existing manifests carry. It is worth knowing about precisely because it now
- * sits next to {@link childPaths}, which *does* index same-named siblings, and a defect that looks
- * handled because its neighbour is handled is worse than an obvious one. It is recorded as its own
- * item rather than fixed in passing.
- *
- * The consequence for the wording elsewhere: every claim this package makes about rows staying
- * distinct is scoped to **refused** positions, and it is true only because of that scope. Do not
- * widen it.
- */
-function narrativeSegment(localName: string, position: number): string {
-  const token = safeLocusToken(localName, "xmlName");
-  return isWithheldToken(token) ? `${token}[${String(position)}]` : token;
 }
 
 /** Extract a person `<name>` locus — redacted (whole element cleared). */
@@ -243,7 +246,7 @@ function blockUnknown(out: CcdaExtraction, el: Element, path: string): void {
  * recognized coded/administrative elements untouched, and **failing closed** on everything else.
  */
 function sweep(out: CcdaExtraction, el: Element, path: string): void {
-  for (const { el: childEl, path: seg } of childPaths(el)) {
+  for (const { el: childEl, path: seg } of childSegments(el)) {
     const childPath = join(path, seg);
     if (childEl.namespaceURI !== V3_NS) {
       // Foreign / sdtc namespace — unrecognized structure. Fail closed on any value, then descend.
@@ -296,29 +299,30 @@ function sweep(out: CcdaExtraction, el: Element, path: string): void {
  * human-readable narrative (or a reference into it), never a clinical value.
  */
 function blockNarrative(out: CcdaExtraction, el: Element, path: string): void {
-  childElements(el).forEach((child, i) => {
-    const ln = child.localName ?? "";
-    if (child.namespaceURI === V3_NS && ln === "text") {
-      if (text(child) === undefined) return; // empty narrative: nothing to block
+  for (const { el: child, path: seg } of childSegments(el)) {
+    const childPath = join(path, seg);
+    if (child.namespaceURI === V3_NS && (child.localName ?? "") === "text") {
+      if (text(child) === undefined) continue; // empty narrative: nothing to block
       push(
         out,
         {
-          path: join(path, "text"),
+          path: childPath,
           kind: "freetext",
           category: SAFE_HARBOR_CATEGORIES.OTHER_UNIQUE_ID,
           value: text(child) ?? "",
         },
         { node: child, edit: "clear-element" },
       );
-      return; // do not descend into a blocked narrative block
+      continue; // do not descend into a blocked narrative block
     }
-    // Descend to reach nested / entry-level narrative. The name is bounded first: this descent runs
-    // over the clinical body, where an unrecognized element name is as likely to be document content
-    // as anywhere else in the tree. A refused name keeps this child's position, so two refused
-    // siblings do not aggregate into one manifest row (`childPaths` gets the same guarantee from its
-    // same-name sibling counter, which a refused name cannot key on).
-    blockNarrative(out, child, join(path, narrativeSegment(ln, i)));
-  });
+    // Descend to reach nested / entry-level narrative, over segments composed exactly as the header
+    // sweep composes its own ({@link childSegments}). This descent runs over the clinical body, which
+    // is where same-named siblings are the norm — a `structuredBody` is a run of `<component>`s and a
+    // `<section>` a run of `<entry>`s — so without the shared index every section's narrative
+    // aggregates into a single manifest row and the artifact stops saying *which* narratives were
+    // blocked.
+    blockNarrative(out, child, childPath);
+  }
 }
 
 /** Handle the document body `<component>`: all narrative fails closed; unstructured `nonXMLBody` blocks. */
@@ -363,7 +367,7 @@ function handleBody(out: CcdaExtraction, componentEl: Element, path: string): vo
  */
 export function extractCcdaLoci(root: Element): CcdaExtraction {
   const out: CcdaExtraction = { loci: [], coords: [] };
-  for (const { el, path } of childPaths(root)) {
+  for (const { el, path } of childSegments(root)) {
     if (el.namespaceURI !== V3_NS) {
       blockUnknown(out, el, path);
       sweep(out, el, path);
