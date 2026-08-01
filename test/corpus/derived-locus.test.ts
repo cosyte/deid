@@ -270,8 +270,8 @@ describe("derived-identifier loci: two refused identifiers stay distinguishable"
   });
 
   it("ccda: two unrecognizable siblings in the body descent produce two distinct loci", () => {
-    // The body descent has no same-name sibling counter to fall back on, so it carries the child's
-    // own position instead.
+    // Both descents compose their segments the same way, and a refused name always carries its index
+    // among the refused siblings — `<withheld>` names nothing, so the index is the only "where" left.
     const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <ClinicalDocument xmlns="urn:hl7-org:v3">
   <recordTarget><patientRole><patient><name use="L"><given>ZZGIVEN</given></name></patient></patientRole></recordTarget>
@@ -283,6 +283,41 @@ describe("derived-identifier loci: two refused identifiers stay distinguishable"
     const { manifest } = deidentifyCcda(parseCcda(xml), { context: ctx() });
     const withheld = manifest.filter((e) => e.locus.includes(WITHHELD_LOCUS_TOKEN));
     expect(new Set(withheld.map((e) => e.locus)).size).toBe(2);
+  });
+
+  it("ccda: two refused siblings in DIFFERENT namespaces still produce two distinct loci", () => {
+    // A path prints no namespace, so a counter keyed on `namespaceURI|name` counted a difference the
+    // reader could not see: both siblings printed a bare `<withheld>` and aggregated into one row.
+    // The counter keys on the printed name, so the two are separated whatever namespace they sit in.
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<ClinicalDocument xmlns="urn:hl7-org:v3" xmlns:sdtc="urn:hl7-org:sdtc">
+  <recordTarget><patientRole><patient>
+    <${LONG_MARKER}>ZZONE</${LONG_MARKER}>
+    <sdtc:${LONG_MARKER}>ZZTWO</sdtc:${LONG_MARKER}>
+  </patient></patientRole></recordTarget>
+</ClinicalDocument>`;
+    const { manifest } = deidentifyCcda(parseCcda(xml), { context: ctx() });
+    const withheld = manifest.filter((e) => e.locus.includes(WITHHELD_LOCUS_TOKEN));
+    expect(withheld.map((e) => e.locus)).toEqual([
+      `recordTarget/patientRole/patient/${WITHHELD_LOCUS_TOKEN}[0]`,
+      `recordTarget/patientRole/patient/${WITHHELD_LOCUS_TOKEN}[1]`,
+    ]);
+    for (const e of withheld) expect(e.count).toBe(1);
+  });
+
+  it("ccda: a lone refused sibling still carries its index", () => {
+    // Not needed for distinctness — needed because `<withheld>` names nothing, so without the index
+    // the locus says only "somewhere under this parent".
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<ClinicalDocument xmlns="urn:hl7-org:v3">
+  <recordTarget><patientRole><patient>
+    <${LONG_MARKER}>ZZONE</${LONG_MARKER}>
+  </patient></patientRole></recordTarget>
+</ClinicalDocument>`;
+    const { manifest } = deidentifyCcda(parseCcda(xml), { context: ctx() });
+    expect(manifest.map((e) => e.locus)).toEqual([
+      `recordTarget/patientRole/patient/${WITHHELD_LOCUS_TOKEN}[0]`,
+    ]);
   });
 
   it("fhir: two unrecognizable keys on one object produce two distinct loci", () => {

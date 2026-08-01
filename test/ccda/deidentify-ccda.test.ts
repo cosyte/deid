@@ -421,3 +421,118 @@ describe("deidentifyCcda — fatal + policy + immutability", () => {
     }
   });
 });
+
+describe("deidentifyCcda — one manifest row per position (the path index base)", () => {
+  // A manifest is the evidence that a de-identification happened, so it has to say *which* positions
+  // were acted on. `ManifestBuilder` aggregates entries agreeing on all five of category, transform,
+  // locus, disposition and code — which two narratives blocked the same way always do — so two
+  // narrative positions printing the same path became one row with `count: 2` and the artifact
+  // stopped naming them. The header sweep and the body narrative descent now compose a segment the
+  // same way: the bounded local name, plus `[n]` — the index among the *document* siblings printing
+  // that same name — whenever more than one sibling prints it, and always when the name was refused.
+  // The index is a document position, not a row number; the gap tests below pin that.
+
+  it("gives each section narrative its own row (the shipped two-section fixture)", () => {
+    const { manifest } = deid("ccd");
+    const narrative = manifest.filter((m) => m.code === D.DEID_FREETEXT_BLOCKED);
+    expect(narrative.map((m) => m.locus)).toEqual([
+      "component/structuredBody/component[0]/section/text",
+      "component/structuredBody/component[1]/section/text",
+    ]);
+    for (const row of narrative) expect(row.count).toBe(1);
+  });
+
+  it("indexes two legitimate same-named siblings in the body descent", () => {
+    const xml = `<?xml version="1.0"?><ClinicalDocument xmlns="urn:hl7-org:v3">
+      <component><structuredBody>
+        <component><section><text>ZZNARRATIVEONE</text></section></component>
+        <component><section><text>ZZNARRATIVETWO</text></section></component>
+      </structuredBody></component></ClinicalDocument>`;
+    const { document, manifest } = deidentifyCcda(parseCcda(xml), { context: ctx });
+    const wire = document.toString();
+    expect(wire).not.toContain("ZZNARRATIVEONE");
+    expect(wire).not.toContain("ZZNARRATIVETWO");
+    const loci = manifest.filter((m) => m.code === D.DEID_FREETEXT_BLOCKED).map((m) => m.locus);
+    expect(loci).toEqual([
+      "component/structuredBody/component[0]/section/text",
+      "component/structuredBody/component[1]/section/text",
+    ]);
+  });
+
+  it("adds no index where a name is unique among its siblings", () => {
+    // The suffix is disambiguation, not decoration: a lone `<component>` keeps the bare path a
+    // consumer's existing manifests already carry.
+    const xml = `<?xml version="1.0"?><ClinicalDocument xmlns="urn:hl7-org:v3">
+      <component><structuredBody>
+        <component><section><text>ZZONLYNARRATIVE</text></section></component>
+      </structuredBody></component></ClinicalDocument>`;
+    const { manifest } = deidentifyCcda(parseCcda(xml), { context: ctx });
+    expect(manifest.map((m) => m.locus)).toEqual([
+      "component/structuredBody/component/section/text",
+    ]);
+  });
+
+  it("indexes the document position, so manifest indices are gapped where a sibling records nothing", () => {
+    // The documented scope, pinned: `[n]` counts document siblings, NOT manifest rows. A section
+    // whose narrative is absent (or, in a conformant document, a `<reference>` into the section
+    // rather than character data) yields no locus, and the rows that survive keep their document
+    // index. `component[2]` alone must not be read as two rows having gone missing.
+    const xml = `<?xml version="1.0"?><ClinicalDocument xmlns="urn:hl7-org:v3">
+      <component><structuredBody>
+        <component><section><title>A</title></section></component>
+        <component><section><text><reference value="#s2"/></text></section></component>
+        <component><section><text>ZZTHIRDNARRATIVE</text></section></component>
+      </structuredBody></component></ClinicalDocument>`;
+    const { document, manifest } = deidentifyCcda(parseCcda(xml), { context: ctx });
+    expect(document.toString()).not.toContain("ZZTHIRDNARRATIVE");
+    expect(manifest.map((m) => m.locus)).toEqual([
+      "component/structuredBody/component[2]/section/text",
+    ]);
+  });
+
+  it("keeps the header's own gaps (a nullFlavor-only id records nothing)", () => {
+    const xml = `<?xml version="1.0"?><ClinicalDocument xmlns="urn:hl7-org:v3">
+      <recordTarget><patientRole>
+        <id root="2.16.840.1.113883.19.5" extension="ZZIDONE"/>
+        <id nullFlavor="NI"/>
+        <id root="2.16.840.1.113883.19.5" extension="ZZIDTWO"/>
+      </patientRole></recordTarget></ClinicalDocument>`;
+    const { manifest } = deidentifyCcda(parseCcda(xml), { context: ctx });
+    expect(manifest.map((m) => m.locus)).toEqual([
+      "recordTarget/patientRole/id[0]",
+      "recordTarget/patientRole/id[2]",
+    ]);
+  });
+
+  it("aggregates on the whole entry, not on the locus alone", () => {
+    // The premise the index rule rests on, pinned in the honest direction: two positions printing one
+    // path merge only when they also agree on category, transform, disposition and code. Two
+    // narratives blocked alike always do — which is why the index matters — but a locus is not by
+    // itself an aggregation key.
+    const xml = `<?xml version="1.0"?><ClinicalDocument xmlns="urn:hl7-org:v3">
+      <componentOf><encompassingEncounter><effectiveTime>
+        <low value="20190101120000"/><low value="ZZNOTADATE"/><low value="19200101"/>
+      </effectiveTime></encompassingEncounter></componentOf></ClinicalDocument>`;
+    const { manifest } = deidentifyCcda(parseCcda(xml), { context: ctx });
+    const low = manifest.filter(
+      (m) => m.locus === "componentOf/encompassingEncounter/effectiveTime/low",
+    );
+    expect(low.map((m) => [m.disposition, m.count])).toEqual([
+      ["transformed", 2],
+      ["blocked", 1],
+    ]);
+  });
+
+  it("indexes two legitimate same-named siblings in the header sweep", () => {
+    const xml = `<?xml version="1.0"?><ClinicalDocument xmlns="urn:hl7-org:v3">
+      <recordTarget><patientRole>
+        <id root="2.16.840.1.113883.19.5" extension="ZZMRNONE"/>
+        <id root="2.16.840.1.113883.19.5" extension="ZZMRNTWO"/>
+      </patientRole></recordTarget></ClinicalDocument>`;
+    const { manifest } = deidentifyCcda(parseCcda(xml), { context: ctx });
+    expect(manifest.map((m) => m.locus)).toEqual([
+      "recordTarget/patientRole/id[0]",
+      "recordTarget/patientRole/id[1]",
+    ]);
+  });
+});

@@ -377,6 +377,61 @@ its public history at `0.0.x`, per the cosyte version ladder (`0.0.x` until firs
 
 ### Fixed
 
+- **A C-CDA manifest row now names one position rather than several.** A C-CDA locus is a `/`-joined
+  path of element names, and the manifest aggregates entries agreeing on **all five** of locus,
+  category, transform, disposition and code — and two narratives blocked the same way agree on the
+  other four — so two narrative positions printing the same path arrived as a single entry with
+  `count: 2`. The body narrative descent printed no sibling index at all, so on the shipped
+  two-section fixture both section narratives — Results and Medications — arrived as **one** row,
+  `component/structuredBody/component/section/text`, `count: 2`.
+  Both narratives were still blocked, and no dose, allergy, code system or patient identifier was
+  ever mis-read; what was lost was the artifact's ability to say **which** narratives it had blocked,
+  in the package whose README calls that artifact the value-free manifest. A `structuredBody` is a run
+  of same-named `<component>`s and a `<section>` a run of same-named `<entry>`s, so this was the
+  ordinary shape of the descent, not an edge case.
+  - **One rule now, in one function, for both descents.** The header sweep and the body narrative
+    descent compose a path segment the same way: the bounded local name, plus `[n]` — its index
+    **among its document siblings that print the same segment name** — whenever more than one sibling
+    prints that name, and always when the name was refused. Previously the two descents used
+    different and undocumented bases (same-named siblings in the header, all children in the body),
+    so a manifest could show `<withheld>[1]` and `<withheld>[3]` with nothing between them and no way
+    to tell which scheme was in play.
+  - **The index is a document position, not a row number, and `docs-content/guides-ccda.md` says so.**
+    A sibling that yields no locus contributes no manifest row — an empty `<text>`, an `<entry>` whose
+    narrative is a `<reference value="#…"/>` into the section rather than character data, a
+    `nullFlavor`-only `<id>` — and the surviving rows keep their document indices. So a manifest can
+    show `component[2]` with no `component[0]` or `component[1]`, which means those two siblings had
+    nothing to record, not that rows are missing. The index is therefore **not** a counter derivable
+    from the manifest alone, and the guide says to count the rows rather than the indices. (The
+    header has always been able to gap this way — a `nullFlavor`-only `<id>` between two real ones
+    yields `id[0]`, `id[2]` on every version — and that is now explained rather than only true.)
+  - **A second collision, in the header counter, measured rather than reasoned about.** Its bucket key
+    was `namespaceURI|name`, a distinction a path never prints: two refused siblings in _different_
+    namespaces each counted as the only one of its kind, both printed a bare `<withheld>`, and
+    aggregated into one row with `count: 2`. Reproduced with a `urn:hl7-org:v3` and a
+    `urn:hl7-org:sdtc` sibling under one `<patient>`. The counter now keys on the printed name, which
+    closes it — and the Security entry below, whose claim that "two refused positions remain distinct
+    manifest rows" did not hold in exactly that case, holds now.
+  - **A refused segment always carries its index**, where a lone refusal previously printed a bare
+    `<withheld>`. It is not needed for distinctness there; it is needed because `<withheld>` names
+    nothing, so the index is the only "where" that position has left.
+  - **What existing C-CDA manifests do and do not lose.** C-CDA loci only — no other adapter shares
+    this code, and the other five are untouched. A path changes only where more than one sibling
+    prints the same segment name, or a name was refused; every other path is byte-identical. Measured
+    on the shipped fixture: the transformed document is byte-for-byte unchanged and exactly one
+    manifest row becomes two. Surrogates and date-shift offsets derive from the value and the key,
+    never from a path, so no pseudonym moved. The one place a path change is more than cosmetic is a
+    consumer routing a **BYO free-text redactor** on an exact C-CDA narrative path:
+    `FreeTextRedactRequest.locus` carries the same path, so a route matching
+    `component/structuredBody/component/section/text` exactly now needs the indexed form.
+  - **Nothing about what is de-identified moved.** Every scrub decision dispatches on the **raw**
+    local name and namespace, never on the printed segment, so a refused or re-indexed segment
+    degrades an audit label and changes no transform.
+  - **Not closed, and deliberately.** Some segments are fixed strings rather than element names —
+    `structuredBody`, `nonXMLBody/text`, and an interval's `low` / `high` / `center` bounds. CDA
+    allows each at most once at its position; a document that repeats one anyway still prints one path
+    for both, exactly as before. `docs-content/guides-ccda.md` now states the index rule and this
+    scope.
 - **`README.md` no longer claims the package is absent from npm.** The opening summary read "not yet
   published to npm" on the very page npm renders, directly beneath the version in npm's own header,
   so the page contradicted itself and a reader had no way to tell which half was true. It now says
