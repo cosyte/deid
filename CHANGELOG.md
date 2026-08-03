@@ -377,6 +377,67 @@ its public history at `0.0.x`, per the cosyte version ladder (`0.0.x` until firs
 
 ### Fixed
 
+- **The PHI commit gate no longer reads a symbolic link under a scan root as clean.** A link
+  pointing at a file full of real identifiers passed **both** of the scanner's enumerating routes,
+  in the package whose whole job is removing identifiers. Development tooling only
+  (`scripts/phi-scan.ts` is not in `files` and ships in no tarball); no runtime code, public export,
+  `DEID_*` code, policy, profile, manifest disposition or transformed value changes.
+  - **Reproduced before any fix.** A synthetic name-bearing payload — an HL7 v2 message carrying a
+    person name, a DOB, an MRN, a dashed SSN and an email at a non-test domain — placed outside the
+    walk roots, with a link to it at `src/leak.ts`. The all-mode sweep printed `OK — no hits` and
+    exited 0; the `--staged` sweep, after `git add`, did the same. Naming the link's **target**
+    explicitly returned 8 hits and exited 1 — the two floor shapes plus six from this repo's own
+    structured HL7 detector. The payload was never marginal; the two routes never looked at it.
+  - **Two mechanisms, two fixes.** The walk enumerates `Dirent.isFile()`, an **lstat** answer, so a
+    link is neither a file nor a directory and fell out of the loop with no record that anything was
+    skipped; `isDirectory()` answers false for a linked directory too, so a whole subtree vanished
+    the same way (measured). The `--staged` route reads content with `git show :<path>`, and git
+    stores a symbolic link as its **target path** under mode `120000`, so it scanned the path text
+    and never the target's bytes. That second route is this repo's `pre-commit` hook.
+  - **Neither route follows the link.** Following would read bytes the enumeration does not control
+    — outside the repo, a loop, a device, a FIFO that blocks the gate forever — and git does not
+    carry those bytes anyway, so a hit on them would be a claim about something no commit contains.
+    The enumeration is narrowed instead: an **in-scope** entry that is not a regular file **refuses
+    the scan** (exit 2, the code the scanner already used for "could not complete"), naming every
+    offender rather than the first. The decision is structural on both routes — the walk admits
+    `isDirectory()` and `isFile()` and refuses what is left, `--staged` admits the two regular blob
+    modes and refuses what is left — so an entry kind nobody enumerated is refused too, and the kind
+    tokens are labels on that decision rather than the decision itself. `--staged` reads
+    `git diff --cached --raw -z` instead of `--name-only` so the destination mode is visible at all;
+    a `--raw` record that does not parse refuses rather than being skipped into a shortened list.
+  - **`T` (typechange) is in the `--diff-filter`, and leaving it out made the mode check unreachable
+    whenever the file being replaced was already tracked.** Replacing a **tracked** regular file
+    with a link is neither an add nor a modify: git raises `:100644 120000 <sha> <sha> T`, so
+    `--diff-filter=AM` deleted the record before any mode could be read and the hook passed the link
+    green. Measured on git 2.39.5: with `AM` the raw output for that stage is empty. Typechange
+    carries a single path, exactly like `A` and `M`, so admitting it costs the record stride
+    nothing — and the reverse typechange, a link replaced by a real file bearing identifiers, is now
+    scanned as the ordinary file it became.
+  - **A refusal names the entry's own repo-relative path and an engine-owned kind token, never the
+    link target** — a target path is text off the working tree and can itself carry identifiers.
+    Asserted rather than argued: the pinning payload and the link target's own filename both carry a
+    synthetic person name and DOB, and every refusal message is checked to contain none of it. No
+    example target path is written into this entry or the source docblock for the same reason; the
+    shape is described instead.
+  - **What this does not cover, each measured.** Explicit-path mode already read through a link and
+    reported the target's hits; unchanged. The `--staged` path scope is unchanged (`test/fixtures/**`
+    and `src/**.ts`), so a staged link outside it is still not looked at — narrowing what a scope
+    admits is not widening it. That scope also bounds the gitlink half: a submodule staged at
+    `test/fixtures/nested` is refused, one at `src/nested` fails the `.ts` suffix and is not looked
+    at. `R` (rename) and `C` (copy) are still **not** enumerated by `--staged` at all, and that
+    costs the route a **mode** check as well as content: a staged rename that also appends
+    identifiers passes it, and so does renaming an **already-tracked symlink**, which git raises as
+    an `R` record with a `120000` destination — in scope by path, dropped by the filter before any
+    mode is read (measured on git 2.39.5; `--staged` exits 0 while the all-mode walk refuses that
+    same worktree with exit 2). The `--diff-filter` is part of this route's boundary, not just the
+    path set, so "refuses mode `120000`" holds only of the records the filter admits. Pre-existing
+    and a scope decision, not this one; if one ever reaches the parser the stride desyncs and it
+    refuses. This repo has never
+    had a rule that a scan observing **no** targets should refuse, and still does not. And the
+    scanner still has no tolerance for a file that vanishes between enumeration and read — a
+    different defect, which fails **closed** (a read failure refuses the whole sweep with exit 2,
+    measured), deliberately not addressed here.
+
 - **The `attw` publish gate no longer passes a tarball that carries no type declarations.**
   `attw`'s CLI exits **0** when the analysed package contains no types — `getExitCode()` opens with
   `if (!analysis.types) return 0`, before the problem list is read — so for a package that ships
