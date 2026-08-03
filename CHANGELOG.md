@@ -377,6 +377,46 @@ its public history at `0.0.x`, per the cosyte version ladder (`0.0.x` until firs
 
 ### Fixed
 
+- **The `attw` publish gate no longer passes a tarball that carries no type declarations.**
+  `attw`'s CLI exits **0** when the analysed package contains no types — `getExitCode()` opens with
+  `if (!analysis.types) return 0`, before the problem list is read — so for a package that ships
+  declarations for seven entry points, a broken `dist/` was reported in prose and scored as a pass.
+  No `--profile`, `--ignore-rules` or config value reaches that early return.
+  - **Measured on this package, with the invocation it runs (`--profile node16`).** `dist/` absent,
+    and `dist/` built with every `.d.ts`/`.d.cts` deleted, both printed "This package does not
+    contain types." and exited 0. Deleting only the **entry** declarations exits non-zero instead:
+    the build emits shared declaration chunks the manifest never names, so a partial loss leaves
+    `attw` something to analyse. It is total loss that is silent. Deleting only `dist/index.mjs` and
+    `dist/index.cjs` still reports every `node16` resolution green and exits 0, a missing JavaScript
+    entry point being invisible to a tool that analyses types.
+  - **Total loss is a window in every build, not an exotic state.** The bundler writes JavaScript in
+    one pass and declarations in a later one, leaving `dist/` with `.mjs`/`.cjs` and no declarations
+    for a few seconds — 6.9 s and 10.0 s across two builds measured here, on a CPU-constrained
+    machine where the figure moves with load. Deliberately **not** answered with a lock, lease or
+    build queue: the gate must be able to report that its own inputs were missing, whatever removed
+    them.
+  - **Two nets, catching different things.** A preflight requires every relative path
+    `package.json` promises — `main`, `module`, `types`, `typings`, every string leaf of `exports` —
+    to exist and be non-empty, and names the ones that do not; it reaches the build window and the
+    missing-JavaScript case. A post-check promotes an untyped report to a failure, reaching what the
+    preflight structurally cannot: declarations on disk but excluded from the tarball by `files` or
+    `.npmignore`. No instance of the latter has occurred here.
+  - **The post-check reads printed output, so what would hide it is refused, not tolerated.**
+    `--quiet`, `--format json` and an `.attw.json` setting either were each measured to return exit 0
+    with the untyped sentence unreadable; `--config-path` is refused by inference rather than
+    measurement, as it moves the config file out of view. Refusal is by option name and never by
+    value, over two shapes: an argv token, and a combined short-option cluster containing `q` or `f`
+    — `-Pf json` means `--pack --format json`, so `-f` is never a token, and a whole-token-only
+    draft of this guard returned exit 0 on an untyped pack through it. Both shapes are asserted
+    against the real tool; that is a statement about two shapes, not a guarantee that none remains,
+    which is what the empty-transcript check is for.
+  - **`--profile node16` is unchanged, and asserted rather than assumed.** The suite pins a fixture
+    shaped like this package — subpath exports into a directory — that fails without the flag and
+    passes with it, through the wrapper, plus the manifest line that supplies it.
+  - **No consumer-visible behaviour moved**: no API, `DEID_*` code, policy, profile, manifest
+    disposition, locus or transformed value changes. What changes is that a release cannot be cut
+    from a `dist/` that failed to produce its declarations.
+
 - **A C-CDA manifest row now names one position rather than several.** A C-CDA locus is a `/`-joined
   path of element names, and the manifest aggregates entries agreeing on **all five** of locus,
   category, transform, disposition and code — and two narratives blocked the same way agree on the

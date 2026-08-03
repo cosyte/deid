@@ -70,7 +70,8 @@ a summary.
 - **Language:** TypeScript (strict, full rigor set incl. `noUncheckedIndexedAccess`) via
   `@cosyte/tsconfig`. **Target ES2023**, `NodeNext`. TypeScript 5.9.x, exact-pinned.
 - **Build:** dual ESM + CJS + `.d.ts` via `tsup` (`@cosyte/tsup-config`); `attw` is a publish gate
-  (per-condition types: `.d.ts` for `import`, `.d.cts` for `require`).
+  (per-condition types: `.d.ts` for `import`, `.d.cts` for `require`). The `attw` script is
+  **`node scripts/attw.mjs --profile node16`, not the bare CLI** — see the guardrail below.
 - **Node:** **>= 22** (CI matrix 22 + 24).
 - **Package manager:** `pnpm@10`.
 - **Lint/format:** **ESLint 10** + unified `typescript-eslint` (type-checked) via
@@ -143,13 +144,16 @@ a summary.
   required context no workflow on `main` has emitted leaves every PR pending and unmergeable, which
   has already happened here twice; let this run on `main` first, then require it as its own change.
   - **What it watches, and what it does not.** Its subject is three sets: every tracked module
-    outside `src/` that **imports one of the seven published `exports` subpaths** (31 of the 33 test
-    files, `test/corpus/leak-corpus.test.ts` among them), every module under `test/` referencing
-    `scripts/phi-scan` (1), and the `.test.`/`.spec.` filename shape. The first two are
-    name-independent and reach **32 of the 33** test files; a module in them survives a rename, a
-    move to another directory and a symlinked path. Only `test/docs-content.test.ts` rests on the
-    filename shape alone, and the OK line prints how many modules under `test/` no rule watches
-    (**3** today, all genuine helpers).
+    outside `src/` that **imports one of the seven published `exports` subpaths**
+    (`test/corpus/leak-corpus.test.ts` among them), every module under `test/` referencing
+    `scripts/phi-scan`, and the `.test.`/`.spec.` filename shape. The first two are
+    name-independent — a module in them survives a rename, a move to another directory and a
+    symlinked path — and they reach every test file but **TWO**: `test/docs-content.test.ts` and
+    `test/scripts/attw-gate.test.ts`, neither of which imports this package, rest on the filename
+    shape alone. **The tallies that used to be written here are gone deliberately**: they were
+    already stale by one before the second of those two files existed, and the OK line of
+    `pnpm check:test-selection` prints the live figures on every run — including how many modules
+    under `test/` no rule watches (all genuine helpers today).
   - **The subject is DERIVED from `exports`, not listed here, and that choice is the gate.** `ncpdp`
     derives its equivalent from a workflow that hands a path to `vitest run`; **no workflow here does
     that**, so that derivation has no grounding in this repo. The corpus is named today only by prose
@@ -260,6 +264,56 @@ repos/cosyte/deid/rulesets/19907854`, not off this file):
   stable `DEID_*` code + locus (never a value, never the key, never the date-shift offset).
 - Coverage: per-directory >= 90% (lines/branches/functions/statements), enforced by
   `pnpm test:coverage`.
+- **▶ `attw` SAYS "does not contain types" AND EXITS 0, SO THE `attw` SCRIPT IS A WRAPPER, NOT THE
+  BARE CLI.** `getExitCode.js` in `@arethetypeswrong/cli` opens with `if (!analysis.types) return 0`
+  — an untyped package is a legitimate npm package, so "no types at all" is a description, not a
+  problem, and the problem list is never consulted. No `--profile`, `--ignore-rules` or config
+  setting reaches that early return. For a package that ships types it means the declarations were
+  **not in the tarball**, which is a broken publish reported as a pass. A false red costs an hour; a
+  false green merges.
+  **Concurrency only supplies the condition; the trigger is the build order.** `tsup` emits JS in one
+  pass and declarations in a later one, so every build has a window where `dist/` holds `.mjs`/`.cjs`
+  and no declarations — measured here from `dist/index.mjs` to `dist/index.d.ts` at 6.9 s and 10.0 s
+  on two builds. **Do not read those as a constant**: this box runs under a hard 2.0-CPU quota and the
+  figure moves with load. So the answer is **not** a lock, a lease or a build queue: the gate must be
+  able to say its own inputs were missing, whatever removed them.
+  **What is measured on THIS package, with the real `--profile node16` invocation, and where it
+  differs from the single-entry siblings** (no version is quoted, because a quoted one drifts): no
+  `dist` at all, and `dist` built with every
+  declaration deleted, both print the sentence and exit 0. But deleting only the **entry**
+  declarations exits **1** — `tsup` emits shared declaration chunks this manifest never names, so a
+  PARTIAL loss still leaves `analysis.types` true and `attw` does its job. It is TOTAL loss that is
+  silent, and total loss is the shape of the build window. Deleting only `dist/index.mjs` and
+  `dist/index.cjs` still reports every node16 resolution 🟢 and exits 0 — a missing JS entry point is
+  invisible to a tool that analyses types. **Do not carry a sibling's sentence about this over
+  without re-running it here**, and specifically **do not write "No problems found" into that last
+  row**: that is what a single-entry FIXTURE prints, a draft of this entry generalized it to the
+  package, and it is false here — `render/typed.js` emits it only on an empty problem list, and this
+  package always carries ignored node10 `NoResolution` problems, so it is absent even from a
+  PRISTINE run. Measured both ways.
+  `scripts/attw.mjs` carries **two nets that catch different things** — a preflight that every
+  relative path `package.json` promises (`main`, `module`, `types`, `typings`, every string leaf of
+  `exports`) exists and is non-empty, which catches the window, reaches the missing-JS case, and
+  _names the files_; and a post-check on the untyped sentence, which catches what the preflight
+  structurally cannot — declarations on disk but excluded from the tarball by `files`/`.npmignore`.
+  No instance of that second case is on record here. **The post-check reads a string, so what would
+  hide that string is refused, not tolerated**: `--quiet`, `--format json` and a `.attw.json` setting
+  either were each measured against this repo's own binary to hand back exit 0 with the sentence
+  unreadable; `--config-path` is refused **by inference, not measurement**. The refusal is by option
+  name and never by value, and "by name" means **two matched shapes**: an argv token (before any
+  `=`), **and a combined short-option cluster containing `q` or `f`** — commander reads `-Pf json` as
+  `--pack --format json`, so `-f` is never a token, and a whole-token-only draft of this guard let
+  that spelling walk back to **exit 0 over an untyped pack**. Both shapes are pinned. **That is a
+  claim about two shapes, not a claim that no spelling remains**; the empty-transcript net is there
+  for the one nobody enumerated, and if another turns up the honest answer may be to correct this
+  paragraph rather than grow the guard a second time.
+  `test/scripts/attw-gate.test.ts` pins both nets against the real binary, including the upstream
+  exit-0 itself, a negative control on a well-formed package, and that a real `attw` failure still
+  fails. It also pins **`--profile node16` end to end** on a fixture shaped like this package
+  (subpath exports into a directory) that exits 1 without the flag and 0 with it, plus the manifest
+  line that sends it — a port that wired up the wrapper and dropped the flag would otherwise be green.
+  **This is a per-repo script.** Landing it here fixes this repo only; check the siblings before
+  claiming the class is closed.
 
 ## Standing disciplines (every change)
 
