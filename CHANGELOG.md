@@ -377,6 +377,128 @@ its public history at `0.0.x`, per the cosyte version ladder (`0.0.x` until firs
 
 ### Fixed
 
+- **The PHI commit gate now sweeps all of `test/` and `scripts/`, not just `test/fixtures/` and
+  `src/`.** 38 tracked files under `test/` were enumerated by **neither** of the scanner's routes —
+  four of them already carrying inline HL7 `PID|…` literals — so a real name, MRN, DOB, SSN or email
+  pasted into a test module committed with both gates green, in the package whose whole job is
+  removing identifiers. Development tooling only (`scripts/phi-scan.ts` is not in `files` and ships
+  in no tarball); no runtime code, public export, `DEID_*` code, policy, profile, manifest
+  disposition or transformed value changes. Counted on the tree this landed on, not inherited.
+  - **This is the WIDENING half.** The symbolic-link work below narrowed what the existing scopes
+    ADMIT; it did not widen the scopes, and said so accurately. Both halves were needed.
+  - **One scope, shared by both routes.** They disagreed before: the walk covered `test/fixtures/`
+    plus all of `src/`, `--staged` covered `test/fixtures/**` plus `src/**.ts`. A single
+    `isUnderScanRoot` now answers for both, so a path is in scope for the pre-commit hook exactly
+    when it is in scope for the CI sweep. A staged `src/**.json`, anything under `test/` outside
+    `fixtures/`, and all of `scripts/` — including the allow-list that DECLARES identifiers
+    synthetic — were read by nothing.
+  - **The roots were re-derived for this repo, not ported.** `mllp` walks `test/` but excludes `.ts`
+    sources from it; copying that here would have closed **none** of the 38 files, because they are
+    all `.ts`. `ccda` roots at the repo root, which this tree cannot do without walking
+    `node_modules/`, `dist/`, `coverage/` and six binary `vendor/*.tgz`. Still out of scope, stated
+    rather than implied: `.github/`, `docs-content/`, `vendor/`, and the root-level manifests.
+  - **Enumerating the files was not enough, and shipping only that would have been a false claim.**
+    Every HL7 message and NCPDP transmission here lives in a `.ts` module as a single-line string
+    literal, so the bytes on disk carry a backslash and an `r` rather than a carriage return, and the
+    structured detectors — which split on real CR/LF and on real `0x1C`/`0x1D`/`0x1E` — saw one
+    undifferentiated line and detected nothing. Each file is now also scanned as its string literals,
+    decoded and joined, IN ADDITION to its raw bytes. Measured: a name, MRN and DOB in an inline
+    `PID` literal are reported at `PID-5.1` / `PID-3.1` / `PID-7.1`, and were silent before.
+  - **And the RECOGNISERS had to be widened with it, or three formats got the floor and nothing
+    else.** Every detector must recognise the document before it checks anything, and each was
+    written for a file that IS the document. A conformance gate found four shapes the widened root
+    swept and every detector then declined to read; each is now covered, each red before and green
+    after, and each pinned:
+    - **X12 required its 106-byte `ISA` at offset 0.** A `.ts` module never begins with `ISA` — its
+      first bytes are an import statement — so three files carrying inline patient-entity
+      interchanges read clean while the identical wire as a fixture returned five hard hits. The
+      header is now found anywhere, on a non-alphanumeric boundary with a full 106 bytes and a
+      non-alphanumeric terminator at the fixed offset, **and the same element separator again at
+      offset 6, because ISA01 is exactly two characters wide** — without which a prose
+      `ISA-IEA envelope` earlier in the file captured `-` as the separator and took a real
+      interchange below it from four hits to one, or to none. Each terminator-delimited piece is
+      then read **both** per LINE — so an interchange assembled from several literals, this repo's
+      own `wrap()` idiom, is not glued to the literal before it — **and rejoined**, so a segment
+      broken by a hard wrap does not lose every element after the break. In addition to, never
+      instead of: dropping either loses real identifiers, each measured, each pinned by a case that
+      goes red when its mechanism is removed.
+    - **A bare `PID|…` line with no `MSH` above it read clean**, which is the single most likely
+      thing to be pasted out of a ticket. A missing or mis-shaped header now falls back to the HL7
+      default delimiters and keeps scanning, guarded by requiring the segment id to be followed by
+      the field separator.
+    - **An INDENTED segment** — a multi-line template literal, which is what prettier produces
+      inside a nested block — was invisible to a column-0 segment anchor. Indentation is stripped
+      **in the source-literal view only**: doing it in the raw view as well re-opened the "source
+      syntax rides along on the last field" false red that taking the literals was introduced to
+      fix, reporting a declared-synthetic DOB with a backtick and a semicolon attached.
+    - **A source literal spells HL7's own backslash doubled**, so `MSH-2` arrived five characters
+      long and the sub-component separator was read as the backslash rather than `&`.
+      None of this is a claim that arbitrary embedded text is reached, and the banner in
+      `scripts/phi-scan.ts` now says so: a fragment carrying neither a `urn:hl7-org:v3` namespace nor
+      NCPDP control-char framing gets the floor only, a message assembled at run time from pieces no
+      literal contains is not text this scan can see, two documents with different delimiters in one
+      file are read with the first one's, prose that satisfies ISA's fixed widths by accident would
+      still be preferred to the real header below it, and a segment broken across two source
+      **literals** is not rejoined (across two **lines** it is).
+  - **Widening a recogniser is a two-sided risk, and the second side cost a gate round.** The
+    per-line X12 split that made the multi-literal idiom readable also stopped reading a segment
+    broken by a hard wrap — a shape the code it replaced handled, because that code removed line
+    breaks before splitting. A wrapped `NM1*IL` went from three patient identifiers at base to zero,
+    silently, in the de-identification package. Every widened recogniser now carries a case that goes
+    RED when its mechanism is removed, verified by removing each one.
+  - **Two earlier drafts of that decode were wrong, both caught here.** Decoding the whole file in
+    place carried the closing quote and comma of the source line onto the last field of the last
+    segment, so a declared-synthetic DOB arrived with two characters of TypeScript attached and was
+    reported as undeclared; and it took the delimiters from the first MSH-shaped text anywhere in the
+    file, so an `MSH-9` in prose set the field separator to `-` and the detector then found nothing.
+    Taking the literals fixes both: a literal's content is the wire text and nothing else, and prose
+    in a comment is not a literal.
+  - **A `${identifier.path}` substitution site is a hole, not a value.** Hand-written TypeScript
+    reached the structured detectors for the first time, and a template that builds a document writes
+    the placeholder, not the value. The rule is the tightest one that covers it — the WHOLE value must
+    be a single placeholder containing only a dotted chain of identifiers — so `${"SMITH"}`,
+    `${a + "SMITH"}` and `${t.given} SMITH` are all still hits.
+  - **What the widened sweep found on this tree, and what was done about it.** Every value it
+    surfaced was already synthetic and is now declared token-by-token in `scripts/phi-allow-list.txt`
+    — except two in the release smoke, a plausible street and city, which were replaced with
+    `ZZ`-tagged sentinels rather than declared. `19800101` is deliberately NOT declared and must stay
+    undeclared: it is the date four positive tests use to prove the HL7, C-CDA, X12 and NCPDP
+    detectors catch a real-looking DOB, so declaring it would make those four assert nothing. The two
+    fixtures carrying it moved onto a declared date.
+  - **One file is bypassed, and the cost is stated rather than hidden.** `test/scripts/phi-scan.test.ts`
+    is the scanner's own suite, so its positive cases are necessarily real-looking violator literals;
+    a suite that could pass its own scan would be asserting nothing. The bypass runs through the
+    existing `--allow-fixture` + `phi-scan-overrides.md` mechanism, which now works in the two modes
+    that actually run (the CI sweep and the pre-commit hook) instead of only in explicit-path mode.
+    Real PHI pasted into that one file is not caught. Nothing else under `test/` is bypassed.
+  - **A bypass may not rot, and may not be quiet.** A logged path must be an existing, non-`.md`
+    regular file inside a scan root or the scan refuses (exit 2) — so a renamed, deleted or mistyped
+    entry reddens instead of silently subtracting nothing, a directory can never be named, and a
+    `.md` (never a scan target, so bypassing one subtracts nothing) is refused too. Every bypass that
+    applies is announced on stderr on every run. The override log's own parser now skips fenced code
+    blocks, because its `## Format` section shows the entry shape inside a fence and a flat sweep read
+    that placeholder as a logged path.
+  - **A scan ROOT that is not a directory now refuses the sweep.** The root is handed to
+    `existsSync`/`readdirSync` directly, is never a `Dirent`, and both follow — so replacing `src`,
+    `test` or `scripts` with a link to a directory made the sweep read a tree the repository does not
+    contain. It gets the same lstat-based decision every entry under it already had.
+
+- **`--staged` now enumerates an UNMERGED (`U`) entry, and refuses it.** Neither `AM` nor `AMT`
+  returned one, so a path left conflicted by a merge was seen by that route at all. Measured on git
+  2.39.5: `:100644 000000 <sha> 0000000 U` — a single path, so the record stride is unchanged, and
+  the all-zero destination mode lands it in the existing non-regular refusal rather than in a read.
+  That is the honest answer: `git show :<path>` has no stage-0 blob to hand back for a conflicted
+  path, so the route cannot vouch for what would be committed. Development tooling only.
+
+- **The scanner's exit codes now mean what they are documented to mean: 1 is HITS FOUND, and nothing
+  else spends it.** `loadAllowList()` sat outside every handler and `readdirSync` inside the walk
+  threw a plain `Error` that no `instanceof` arm matched, so a missing allow-list and an unreadable
+  directory both escaped as uncaught exceptions — which Node exits **1** for. A gate that could not
+  read its own allow-list reported the code that means "I read your corpus and found identifiers in
+  it", and a caller distinguishing 1 from 2 was told the opposite of the truth. Catching by type was
+  the mistake: the set of things that can fail is open, so failure is now the default path and a hit
+  is the exception. Development tooling only.
+
 - **The PHI commit gate no longer reads a symbolic link under a scan root as clean.** A link
   pointing at a file full of real identifiers passed **both** of the scanner's enumerating routes,
   in the package whose whole job is removing identifiers. Development tooling only

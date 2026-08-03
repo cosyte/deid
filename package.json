@@ -153,7 +153,7 @@
     "build": "tsup",
     "changeset": "changeset",
     "typecheck": "tsc --noEmit",
-    "phi-scan": "tsx scripts/phi-scan.ts",
+    "phi-scan": "tsx scripts/phi-scan.ts --allow-fixture test/scripts/phi-scan.test.ts",
     "check": "pnpm run check:test-selection",
     "check:test-selection": "tsx scripts/check-test-selection.ts",
     "check:no-internal-refs": "bash scripts/check-no-internal-refs.sh",

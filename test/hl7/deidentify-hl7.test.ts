@@ -309,7 +309,7 @@ describe("deidentifyHl7 — fail closed on free text and unknown structure", () 
     // MRG is a recognized segment but not on the retain-list, so it must block, not pass through.
     const msg = parseHL7(
       "MSH|^~\\&|A|B|C|D|20200101||ADT^A40|M1|P|2.5\r" +
-        "PID|1||NEWMRN^^^H^MR||ZZSURVIVOR^ZZJANE||19800101|F\r" +
+        "PID|1||NEWMRN^^^H^MR||ZZSURVIVOR^ZZJANE||19850302|F\r" +
         "MRG|ZZPRIORMRN^^^H^MR|||||ZZPRIORACCT|ZZPRIORNAME^ZZPRIORGIVEN",
     );
     const { document, manifest } = deidentifyHl7(msg, { context: ctx });
