@@ -315,12 +315,22 @@ repos/cosyte/deid/rulesets/19907854`, not off this file):
   **string literals, decoded and joined**, in addition to its raw bytes — and four recognisers had
   to widen with it, each measured red-before / green-after and pinned:
   **X12 required its `ISA` at offset 0** (a `.ts` never starts with `ISA`, so three files carrying
-  inline interchanges read clean while the same wire as a fixture returned five hits), and its
-  segments are now matched per LINE of each terminator-delimited piece so the `wrap()` idiom is read
-  rather than glued; **a bare `PID|…` with no `MSH`** — the shape pasted out of a ticket — now falls
-  back to the default delimiters; **an INDENTED segment** in a multi-line template literal was
-  invisible to a column-0 anchor; and **a source literal spells HL7's backslash doubled**, so `MSH-2`
-  arrived five characters long and the sub-component separator was read as `\` rather than `&`.
+  inline interchanges read clean while the same wire as a fixture returned five hits); **a bare
+  `PID|…` with no `MSH`** — the shape pasted out of a ticket — now falls back to the default
+  delimiters; **an INDENTED segment** in a multi-line template literal was invisible to a column-0
+  anchor; and **a source literal spells HL7's backslash doubled**, so `MSH-2` arrived five characters
+  long and the sub-component separator was read as `\` rather than `&`.
+  **▶ WIDENING A RECOGNISER IS TWO-SIDED, AND THE SECOND SIDE COST A GATE ROUND. EVERY ONE OF THESE
+  IS "IN ADDITION TO", NEVER "INSTEAD OF" — DO NOT SIMPLIFY ONE AWAY.** The per-line X12 split that
+  made the `wrap()` idiom readable also stopped reading a segment broken by a HARD WRAP, which the
+  code it replaced handled by removing line breaks first: a wrapped `NM1*IL` went from **three
+  patient identifiers at base to zero, silently.** Each piece is now read both per line and
+  rejoined, `check` de-duplicates the overlap, and the ISA header must also repeat its element
+  separator at offset 6 (ISA01 is two characters wide) or a prose `ISA-IEA` captures the delimiters
+  and suppresses the real interchange below it. Indentation is stripped **in the literal view
+  only**; doing it in the raw view re-opened the trailing-source-syntax false red. **Each of those
+  four mechanisms has a case that goes RED when the mechanism is removed — verified by removing each
+  one, not by reading the code.**
   Two drafts of the decode were wrong and both were measured here: decoding the whole file in place
   glued the source line's closing quote and comma onto the last field (a declared DOB reported as
   undeclared), and it took the delimiters from the first MSH-shaped text anywhere in the file, so an

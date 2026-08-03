@@ -413,22 +413,39 @@ its public history at `0.0.x`, per the cosyte version ladder (`0.0.x` until firs
       first bytes are an import statement — so three files carrying inline patient-entity
       interchanges read clean while the identical wire as a fixture returned five hard hits. The
       header is now found anywhere, on a non-alphanumeric boundary with a full 106 bytes and a
-      non-alphanumeric terminator at the fixed offset, which is the job offset-0 was really doing.
-      Segments are matched per LINE of each terminator-delimited piece, so an interchange assembled
-      from several literals — this repo's own `wrap()` idiom — is read rather than glued together.
+      non-alphanumeric terminator at the fixed offset, **and the same element separator again at
+      offset 6, because ISA01 is exactly two characters wide** — without which a prose
+      `ISA-IEA envelope` earlier in the file captured `-` as the separator and took a real
+      interchange below it from four hits to one, or to none. Each terminator-delimited piece is
+      then read **both** per LINE — so an interchange assembled from several literals, this repo's
+      own `wrap()` idiom, is not glued to the literal before it — **and rejoined**, so a segment
+      broken by a hard wrap does not lose every element after the break. In addition to, never
+      instead of: dropping either loses real identifiers, each measured, each pinned by a case that
+      goes red when its mechanism is removed.
     - **A bare `PID|…` line with no `MSH` above it read clean**, which is the single most likely
       thing to be pasted out of a ticket. A missing or mis-shaped header now falls back to the HL7
       default delimiters and keeps scanning, guarded by requiring the segment id to be followed by
       the field separator.
     - **An INDENTED segment** — a multi-line template literal, which is what prettier produces
-      inside a nested block — was invisible to a column-0 segment anchor.
+      inside a nested block — was invisible to a column-0 segment anchor. Indentation is stripped
+      **in the source-literal view only**: doing it in the raw view as well re-opened the "source
+      syntax rides along on the last field" false red that taking the literals was introduced to
+      fix, reporting a declared-synthetic DOB with a backtick and a semicolon attached.
     - **A source literal spells HL7's own backslash doubled**, so `MSH-2` arrived five characters
       long and the sub-component separator was read as the backslash rather than `&`.
       None of this is a claim that arbitrary embedded text is reached, and the banner in
       `scripts/phi-scan.ts` now says so: a fragment carrying neither a `urn:hl7-org:v3` namespace nor
       NCPDP control-char framing gets the floor only, a message assembled at run time from pieces no
-      literal contains is not text this scan can see, and two documents with different delimiters in
-      one file are read with the first one's.
+      literal contains is not text this scan can see, two documents with different delimiters in one
+      file are read with the first one's, prose that satisfies ISA's fixed widths by accident would
+      still be preferred to the real header below it, and a segment broken across two source
+      **literals** is not rejoined (across two **lines** it is).
+  - **Widening a recogniser is a two-sided risk, and the second side cost a gate round.** The
+    per-line X12 split that made the multi-literal idiom readable also stopped reading a segment
+    broken by a hard wrap — a shape the code it replaced handled, because that code removed line
+    breaks before splitting. A wrapped `NM1*IL` went from three patient identifiers at base to zero,
+    silently, in the de-identification package. Every widened recogniser now carries a case that goes
+    RED when its mechanism is removed, verified by removing each one.
   - **Two earlier drafts of that decode were wrong, both caught here.** Decoding the whole file in
     place carried the closing quote and comma of the source line onto the last field of the last
     segment, so a declared-synthetic DOB arrived with two characters of TypeScript attached and was

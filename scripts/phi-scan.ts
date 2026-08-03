@@ -51,7 +51,11 @@
  *        - a message assembled at run time from pieces no literal contains is
  *          not text this scan can see at all;
  *        - a delimiter set that differs BETWEEN two documents in one file is read
- *          with the first document's.
+ *          with the first document's, and prose that satisfies ISA's fixed
+ *          widths by accident would be preferred to the real header below it;
+ *        - a segment broken across lines is read both ways (line by line and
+ *          rejoined), but a segment broken across two SOURCE LITERALS is not
+ *          rejoined.
  *      When you widen a recogniser, prove it with a case that is RED before and
  *      GREEN after — a recogniser that quietly matches nothing reports "no hits".
  *
@@ -931,7 +935,13 @@ function syntheticTokens(allow: AllowList): Set<string> {
  * component value against the synthetic allow-list. Anything not positively declared synthetic is a
  * hit. Pure string splitting — no parser dependency (matches every sibling scanner).
  */
-function scanHl7Structured(path: string, content: string, allow: AllowList, hits: Hit[]): void {
+function scanHl7Structured(
+  path: string,
+  content: string,
+  allow: AllowList,
+  hits: Hit[],
+  literalView: boolean,
+): void {
   const lines = content.split(/\r\n|\r|\n/).filter((l) => l.length > 0);
   // The MSH header is found ANYWHERE on its line, not only at column 0. In a
   // `.ts` test module the message opens mid-line, inside a quote, so a column-0
@@ -982,14 +992,16 @@ function scanHl7Structured(path: string, content: string, allow: AllowList, hits
   const allowed = syntheticTokens(allow);
 
   for (const lineRaw of lines) {
-    // Leading WHITESPACE is stripped before the segment id is read. A message
-    // written as an indented multi-line template literal — which is what
-    // prettier produces inside a nested block — put every segment at column 2 or
-    // more, and a column-0 `slice(0, 3)` read those files as containing no
-    // segments at all. Quote characters are deliberately NOT stripped: in the
-    // raw view a quoted literal would then match and every value would carry the
-    // source line's trailing syntax.
-    const line = lineRaw.replace(/^[ \t]+/, "");
+    // Leading WHITESPACE is stripped before the segment id is read, IN THE
+    // SOURCE-LITERAL VIEW ONLY. A message written as an indented multi-line
+    // template literal — what prettier produces inside a nested block — puts
+    // every segment at column 2 or more, and a column-0 `slice(0, 3)` read those
+    // files as containing no segments at all. Doing it in the RAW view as well
+    // re-opened the defect that taking the literals was introduced to fix: a
+    // literal whose closing backtick sits on its last segment line reported a
+    // declared-synthetic DOB with the backtick and semicolon attached.
+    // Quote characters are never stripped, in either view, for the same reason.
+    const line = literalView ? lineRaw.replace(/^[ \t]+/, "") : lineRaw;
     const name = line.slice(0, 3);
     const spec = HL7_PHI_FIELDS[name];
     if (spec === undefined) continue;
@@ -1129,14 +1141,24 @@ function scanX12Structured(path: string, content: string, allow: AllowList, hits
   //
   // The offset-0 rule was doing two jobs and only one of them is load-bearing:
   // it kept a source that merely MENTIONS "ISA" in prose from having delimiters
-  // read out of it. That job is done properly here instead — the match must be
-  // an `ISA` on a non-alphanumeric boundary, followed by a non-alphanumeric,
-  // non-space element separator, with a full 106 bytes and a non-alphanumeric
-  // segment terminator at the fixed offset. Prose does not satisfy that.
+  // read out of it. That job is done here instead, off ISA's own FIXED WIDTHS —
+  // an `ISA` on a non-alphanumeric boundary; a non-alphanumeric, non-space
+  // element separator at offset 3; the SAME separator again at offset 6, because
+  // ISA01 is exactly two characters wide in 005010 and no prose satisfies that;
+  // 106 bytes available; and a non-alphanumeric segment terminator at offset 105.
   //
-  // Only the FIRST such header is used, so a file carrying two interchanges with
-  // DIFFERENT delimiters is read with the first one's. Every interchange in this
-  // repo uses `*` and `~`; stated as a limit rather than chased.
+  // ▶ THE FIXED-WIDTH CHECK IS NOT COSMETIC AND "prose cannot capture the
+  // delimiters" WOULD BE AN OVERCLAIM WITHOUT IT. A gate measured the case:
+  // `"an ISA-IEA envelope"` earlier in the same file satisfied the boundary and
+  // the terminator offset, captured `-` as the element separator, and took a
+  // real inline interchange below it from four hits to one — or to ZERO with the
+  // same words in a comment as well. What is left is stated rather than claimed
+  // closed: prose that ALSO happens to put the same byte at offsets 3 and 6 and
+  // a non-alphanumeric at 105 would still capture them.
+  //
+  // Only the FIRST accepted header is used, so a file carrying two interchanges
+  // with DIFFERENT delimiters is read with the first one's. Every interchange in
+  // this repo uses `*` and `~`; stated as a limit rather than chased.
   //
   // THE BOUNDARY IS TESTED BEFORE THE NEWLINES ARE STRIPPED, NOT AFTER, and that
   // ordering is load-bearing: `sourceLiteralDocument` joins literals with CRLF,
@@ -1150,6 +1172,7 @@ function scanX12Structured(path: string, content: string, allow: AllowList, hits
     const at = m.index + m[0].length - 4;
     const candidate = src.slice(at).replace(/\r?\n/g, "");
     if (candidate.length < 106) continue;
+    if (candidate.charAt(6) !== candidate.charAt(3)) continue; // ISA01 is 2 wide
     if (/[A-Za-z0-9\s]/.test(candidate.charAt(105))) continue;
     header = candidate; // newline-free, for the two FIXED-OFFSET delimiter reads only
     body = src.slice(at); // newline-PRESERVING, for the segment split below
@@ -1161,11 +1184,19 @@ function scanX12Structured(path: string, content: string, allow: AllowList, hits
   if (elementSep.length === 0 || segTerm.length === 0) return;
   const allowed = syntheticTokens(allow);
 
+  // One value is reported once per locus. The segment loop below deliberately
+  // offers the SAME piece to the checks twice (once split on line breaks, once
+  // with them removed), so without this a pretty-printed fixture would report
+  // every hit twice.
+  const seen = new Set<string>();
   const check = (value: string, locator: string): void => {
     const v = value.trim();
     if (v.length === 0) return;
     if (isSubstitutionSite(v)) return; // a source hole, not a value
+    const key = `${locator} ${v.toUpperCase()}`;
+    if (seen.has(key)) return;
     if (!allowed.has(v.toUpperCase())) {
+      seen.add(key);
       hits.push({
         path,
         segment: locator,
@@ -1175,20 +1206,34 @@ function scanX12Structured(path: string, content: string, allow: AllowList, hits
     }
   };
 
-  // EVERY LINE of every terminator-delimited piece is a segment candidate, and
-  // that is what makes an interchange assembled from several source literals
-  // readable. Stripping the newlines first (which the previous shape did) glued
-  // unrelated literals onto the front of the segment, so `els[0]` read as
-  // `…SECRETIDNM1` rather than `NM1` and the check never ran — measured on this
-  // repo's own `test/x12/deidentify-x12.test.ts`, whose envelope comes from a
-  // `wrap()` template and whose segments are separate literals. It costs nothing
-  // on a wire-form fixture (no newlines, one line per piece) and nothing on a
-  // pretty-printed one (a newline exactly at each terminator). A segment id is
-  // still matched EXACTLY, so an extra candidate line can only be skipped.
+  // ▶ EACH TERMINATOR-DELIMITED PIECE IS OFFERED TWICE, AND "IN ADDITION TO"
+  // RATHER THAN "INSTEAD OF" IS THE WHOLE POINT — replacing one with the other
+  // loses real hits in BOTH directions, each measured:
+  //
+  //   - EVERY LINE of the piece. Without this, an interchange assembled from
+  //     several source literals is unreadable: the joined view glues the
+  //     preceding literal onto the front of the segment, so `els[0]` reads as
+  //     `…SECRETIDNM1` rather than `NM1`. Measured on this repo's own
+  //     `test/x12/deidentify-x12.test.ts`, whose envelope comes from a `wrap()`
+  //     template and whose segments are separate literals: five sentinels, none
+  //     of them found by the glued view alone.
+  //   - THE PIECE WITH ITS LINE BREAKS REMOVED. Without this, a segment broken
+  //     across lines by a hard wrap loses every element after the break, and it
+  //     is a REGRESSION rather than a gap: the pre-existing code removed line
+  //     breaks before splitting, so it read those files. CR/LF is non-semantic
+  //     filler in X12 and `@cosyte/x12` rejoins the segment, so a hard-wrapped
+  //     EDI dump is a real artifact and the identifiers after the wrap are real
+  //     patient loci. Measured: a wrapped `NM1*IL` went from three hits at base
+  //     to zero.
+  //
+  // A segment id is matched EXACTLY, so an extra candidate can only be skipped,
+  // and `check` de-duplicates so the overlap between the two costs no noise.
   for (const piece of body.split(segTerm)) {
     for (const seg of piece.split(/\r\n|\r|\n/)) {
       scanX12Segment(seg, elementSep, check);
     }
+    const rejoined = piece.replace(/\r?\n/g, "");
+    if (rejoined !== piece) scanX12Segment(rejoined, elementSep, check);
   }
 }
 
@@ -1354,7 +1399,7 @@ function sourceLiteralDocument(text: string): string {
 
 /** Identity of a hit within one file, for de-duplicating across the two views. */
 function hitKey(h: Hit): string {
-  return `${h.segment} ${h.value} ${h.reason}`;
+  return `${h.segment} ${h.value} ${h.reason}`;
 }
 
 function scanTarget(target: Target, allow: AllowList, hits: Hit[]): void {
@@ -1369,7 +1414,7 @@ function scanTarget(target: Target, allow: AllowList, hits: Hit[]): void {
   const text = buf.toString("utf8");
 
   const raw: Hit[] = [];
-  scanViews(target.path, text, allow, raw);
+  scanViews(target.path, text, allow, raw, false);
   hits.push(...raw);
 
   // The second view: this file's string literals, decoded and joined. Only hits
@@ -1378,7 +1423,7 @@ function scanTarget(target: Target, allow: AllowList, hits: Hit[]): void {
   const literals = sourceLiteralDocument(text);
   if (literals.length > 0 && literals !== text) {
     const extra: Hit[] = [];
-    scanViews(target.path, literals, allow, extra);
+    scanViews(target.path, literals, allow, extra, true);
     const seen = new Set(raw.map(hitKey));
     for (const h of extra) {
       if (seen.has(hitKey(h))) continue;
@@ -1388,7 +1433,26 @@ function scanTarget(target: Target, allow: AllowList, hits: Hit[]): void {
   }
 }
 
-function scanViews(path: string, text: string, allow: AllowList, hits: Hit[]): void {
+/**
+ * Run every detector over one VIEW of a file.
+ *
+ * `literalView` says which view this is, and exactly one detector needs to know:
+ * indented segments are a fact about text taken OUT of a source literal, and
+ * stripping indentation in the RAW view re-opens the "source syntax rides along"
+ * false red that taking the literals was introduced to fix — a template literal
+ * whose closing backtick sits on its last segment line reported a declared DOB
+ * with two characters of TypeScript attached, unanswerable except by
+ * allow-listing a token containing TypeScript. Nothing is lost by the
+ * restriction: an indented segment only ever occurs inside a literal, and the
+ * literal view is where it is read.
+ */
+function scanViews(
+  path: string,
+  text: string,
+  allow: AllowList,
+  hits: Hit[],
+  literalView: boolean,
+): void {
   const target = { path };
   // The format-agnostic floor: dashed SSN + non-test email. This runs on every
   // target and is all the starter detects.
@@ -1401,7 +1465,7 @@ function scanViews(path: string, text: string, allow: AllowList, hits: Hit[]): v
   // NOTE: free-text narrative (OBX-5 / NTE-3) is NOT structurally checkable and is covered only by the
   // floor above (SSN/email) plus the synthetic-fixture discipline; per-format C-CDA/FHIR/X12/NCPDP/DICOM
   // detectors land with their phases (roadmap §7 — the eventual union scanner).
-  scanHl7Structured(target.path, text, allow, hits);
+  scanHl7Structured(target.path, text, allow, hits, literalView);
 
   // The deid-specific C-CDA gate (DEID-3): structured, header-element PHI detection. Runs on any CDA R2
   // document (HL7 v3 namespace) among src JSDoc snippets and test/fixtures — checks every header

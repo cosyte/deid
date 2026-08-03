@@ -1073,3 +1073,117 @@ describe("phi-scan: a bypass that would subtract nothing is refused, not accepte
     expect(r.stderr).not.toMatch(/replace it with a regular file/);
   });
 });
+
+// ---------------------------------------------------------------------------
+// The remedy for the recogniser widening — each case a REGRESSION guard
+// ---------------------------------------------------------------------------
+//
+// Widening a recogniser is a two-sided risk, and a conformance gate found the
+// second side: the per-line segment split that made an interchange assembled
+// from several source literals readable ALSO stopped reading a segment broken
+// across lines, which the code it replaced handled. These pin both sides.
+
+describe("phi-scan: an X12 segment broken across lines is read BOTH ways", () => {
+  const WRAPPED =
+    ISA +
+    "\nGS*HC*A*B*20260615*0930*2*X*005010X222A2~\nST*837*0002~\n" +
+    "NM1*IL*1*\nRIVERA*JUANITA****MI*REALMEMBER9~\n" +
+    "SE*3*0002~\nGE*1*2~\nIEA*1*000000002~\n";
+
+  it("catches every element after a hard wrap inside a segment (exit 1)", () => {
+    // CR/LF is non-semantic filler in X12 and @cosyte/x12 rejoins the segment,
+    // so a hard-wrapped EDI dump is a real artifact and the identifiers after
+    // the wrap are real patient loci. Reading only line by line lost all three.
+    const root = makeRepo();
+    writeFileSync(join(root, "test", "fixtures", "wrapped.edi"), WRAPPED);
+
+    const r = runIn(root, []);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toMatch(/NM1-03 value="RIVERA"/);
+    expect(r.stderr).toMatch(/NM1-04 value="JUANITA"/);
+    expect(r.stderr).toMatch(/NM1-09 value="REALMEMBER9"/);
+  });
+
+  it("and reports a wrapped value ONCE, not once per view", () => {
+    const root = makeRepo();
+    writeFileSync(join(root, "test", "fixtures", "wrapped.edi"), WRAPPED);
+
+    const r = runIn(root, []);
+    expect(r.stderr.match(/NM1-04 value="JUANITA"/g) ?? []).toHaveLength(1);
+  });
+
+  it("still reads the multi-literal envelope idiom, which the rejoin alone cannot", () => {
+    // The rejoin only reaches a segment whose PRECEDING literal happens to end
+    // at a terminator. This repo's real idiom has assertion literals in between,
+    // so the rejoined view reads `…blockedNM1` and the per-line split is the
+    // only thing that finds the segment. Drop it and this case goes green-to-red.
+    const root = makeRepo();
+    mkdirSync(join(root, "test", "x12"), { recursive: true });
+    writeFileSync(
+      join(root, "test", "x12", "wrap.test.ts"),
+      `const ISA = "${ISA}";\n` +
+        "const wrap = (body) =>\n" +
+        "  `${ISA}GS*HC*A*B*20260615*0930*2*X*005010X222A2~ST*837*0002~${body}SE*9*0002~IEA*1*000000002~`;\n" +
+        'export const label = "blocked";\n' +
+        'export const other = "pseudonymized";\n' +
+        'export const raw = wrap("NM1*IL*1*RIVERA*JUANITA****MI*REALMEMBER9~");\n',
+    );
+
+    const r = runIn(root, []);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toMatch(/NM1-03 value="RIVERA"/);
+  });
+
+  it("a prose ISA does not capture the delimiters away from a real header below it", () => {
+    // Built to be exactly the shape that slips past a boundary-plus-terminator
+    // test: `ISA-` at a non-alphanumeric boundary and a non-alphanumeric at the
+    // fixed 105th byte. ISA01's fixed two-character width is the only thing that
+    // rejects it — drop that check and the real interchange below reads clean.
+    const proseIsa = `${"ISA-IEA envelope".padEnd(105, ".")}:`;
+    expect(proseIsa).toHaveLength(106);
+
+    const root = makeRepo();
+    mkdirSync(join(root, "test", "x12"), { recursive: true });
+    writeFileSync(
+      join(root, "test", "x12", "prose.test.ts"),
+      `export const note = "${proseIsa}";\n` +
+        `export const raw =\n  "${ISA}" +\n` +
+        '  "GS*HC*A*B*20260615*0930*2*X*005010X222A2~ST*837*0002~" +\n' +
+        '  "NM1*IL*1*RIVERA*JUANITA****MI*REALMEMBER9~SE*3*0002~IEA*1*000000002~";\n',
+    );
+
+    const r = runIn(root, []);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toMatch(/NM1-03 value="RIVERA"/);
+    expect(r.stderr).toMatch(/NM1-09 value="REALMEMBER9"/);
+  });
+});
+
+describe("phi-scan: indentation is stripped in the literal view only", () => {
+  it("does not report a declared-synthetic value with the closing backtick attached", () => {
+    // Stripping indentation in the RAW view too re-opened the "source syntax
+    // rides along on the last field" false red that taking the literals fixed.
+    const root = makeRepo();
+    writeFileSync(
+      join(root, "test", "indented-clean.test.ts"),
+      "export const msg = `MSH|^~\\\\&|A|B|C|D|20200101||ADT^A01|M1|P|2.5\n" +
+        "    PID|1||ZZMRN001^^^H^MR||ZZFAMILY^ZZGIVEN||19850302`;\n",
+    );
+
+    const r = runIn(root, []);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(0);
+  });
+
+  it("but still catches a REAL value in that same indented shape", () => {
+    const root = makeRepo();
+    writeFileSync(
+      join(root, "test", "indented-dirty.test.ts"),
+      "export const msg = `MSH|^~\\\\&|A|B|C|D|20200101||ADT^A01|M1|P|2.5\n" +
+        "    PID|1||REALMRN99^^^H^MR||RIVERA^JUANITA||19850302`;\n",
+    );
+
+    const r = runIn(root, []);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toMatch(/PID-5\.1 value="RIVERA"/);
+  });
+});
