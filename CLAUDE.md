@@ -308,16 +308,31 @@ repos/cosyte/deid/rulesets/19907854`, not off this file):
   every one is a `.ts`. **`ccda` roots at the repo root**, which this tree cannot do without walking
   `node_modules/`, `dist/`, `coverage/` and six binary `vendor/*.tgz`. Still out of scope and stated
   as such: `.github/`, `docs-content/`, `vendor/`, the root manifests.
-  **▶ ENUMERATION ALONE BUYS YOU THE SSN/EMAIL FLOOR AND C-CDA, AND NOTHING ELSE. This repo's HL7
-  and NCPDP text is a SINGLE-LINE STRING LITERAL in a `.ts` module**, so the bytes carry a backslash
-  and an `r`, not a CR, and the structured detectors — which split on real CR/LF and real
-  `0x1C`/`0x1D`/`0x1E` — saw one line and found nothing. Each file is therefore also scanned as its
-  **string literals, decoded and joined**, in addition to its raw bytes. Two drafts of that decode
-  were wrong and both were measured here: decoding the whole file in place glued the source line's
-  closing quote and comma onto the last field (a declared DOB reported as undeclared), and it took
-  the delimiters from the first MSH-shaped text anywhere in the file, so an `MSH-9` in prose set the
-  field separator to `-` and detection stopped. **A comment in this file is inside a scan root now:
-  writing out an escaped example decodes into a segment the detector reads as a fixture.** It did.
+  **▶ ENUMERATING THE FILES BUYS YOU THE SSN/EMAIL FLOOR AND NOTHING ELSE. A DETECTOR HAS TO
+  RECOGNISE THE DOCUMENT FIRST, AND EVERY RECOGNISER WAS WRITTEN FOR A FILE THAT _IS_ THE
+  DOCUMENT.** This repo's HL7 and NCPDP text is a SINGLE-LINE STRING LITERAL in a `.ts` module, so
+  the bytes carry a backslash and an `r`, not a CR. Each file is therefore also scanned as its
+  **string literals, decoded and joined**, in addition to its raw bytes — and four recognisers had
+  to widen with it, each measured red-before / green-after and pinned:
+  **X12 required its `ISA` at offset 0** (a `.ts` never starts with `ISA`, so three files carrying
+  inline interchanges read clean while the same wire as a fixture returned five hits), and its
+  segments are now matched per LINE of each terminator-delimited piece so the `wrap()` idiom is read
+  rather than glued; **a bare `PID|…` with no `MSH`** — the shape pasted out of a ticket — now falls
+  back to the default delimiters; **an INDENTED segment** in a multi-line template literal was
+  invisible to a column-0 anchor; and **a source literal spells HL7's backslash doubled**, so `MSH-2`
+  arrived five characters long and the sub-component separator was read as `\` rather than `&`.
+  Two drafts of the decode were wrong and both were measured here: decoding the whole file in place
+  glued the source line's closing quote and comma onto the last field (a declared DOB reported as
+  undeclared), and it took the delimiters from the first MSH-shaped text anywhere in the file, so an
+  `MSH-9` in prose set the field separator to `-` and detection stopped.
+  **▶ NONE OF THAT IS A CLAIM THAT ARBITRARY EMBEDDED TEXT IS REACHED**, and the banner in
+  `scripts/phi-scan.ts` enumerates what is not: a fragment with neither a `urn:hl7-org:v3` namespace
+  nor NCPDP control-char framing gets the floor only; a message assembled at run time from pieces no
+  literal contains is invisible; two documents with different delimiters in one file are read with
+  the first one's. **When you widen a recogniser, prove it with a case RED before and GREEN after —
+  a recogniser that quietly matches nothing reports "no hits".**
+  **▶ A COMMENT IN `scripts/phi-scan.ts` IS INSIDE A SCAN ROOT NOW: writing out an escaped example
+  decodes into a segment the detector reads as a fixture.** It did, on the first draft.
   **▶ `19800101` MUST STAY OUT OF THE ALLOW-LIST.** It is the undeclared DOB four positive tests use
   to prove the HL7 / C-CDA / X12 / NCPDP detectors catch a real-looking date; declare it and all four
   assert nothing. The two fixtures that carried it were moved onto a declared date instead.

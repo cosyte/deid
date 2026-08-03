@@ -38,6 +38,23 @@
  *      with each format's phase (roadmap §7, the eventual union scanner). Add
  *      positive tests proving each new detector CATCHES real names / DOBs / ids.
  *
+ *   ⚠  AND THE GAPS THAT ARE ABOUT THE *CONTAINER*, NOT THE FORMAT. Every detector
+ *      above has to RECOGNISE the document before it checks anything, and a
+ *      hand-written source file is not the shape any of them was written for.
+ *      Each recogniser was widened for that (an MSH found anywhere and falling
+ *      back to the default delimiters, an ISA header found anywhere, indented
+ *      segments, and the source-literal view in `sourceLiteralDocument`), and
+ *      NONE of it is a claim that arbitrary embedded text is reached:
+ *        - a C-CDA is recognised by its `urn:hl7-org:v3` namespace and an NCPDP
+ *          Telecom transmission by its control-char framing, so a fragment
+ *          carrying neither is covered by the FLOOR only;
+ *        - a message assembled at run time from pieces no literal contains is
+ *          not text this scan can see at all;
+ *        - a delimiter set that differs BETWEEN two documents in one file is read
+ *          with the first document's.
+ *      When you widen a recogniser, prove it with a case that is RED before and
+ *      GREEN after — a recogniser that quietly matches nothing reports "no hits".
+ *
  *   Worked examples of structured, format-aware detection live in the sibling
  *   parsers — read one before you start:
  *       ../hl7/scripts/phi-scan.ts     (segment → field → component aware)
@@ -432,15 +449,20 @@ function validateAllowFixtures(allowFixtures: string[]): void {
   // silently stops applying is indistinguishable from one that silently applies
   // to the wrong file. Directories are refused by the same rule (a directory is
   // not a regular file), so a bypass can never widen past one named file.
+  // `.md` is excluded here for the same reason a missing path is: documentation
+  // under a scan root is never a scan TARGET, so bypassing one subtracts nothing
+  // and prints nothing. That is precisely the silent no-op this check exists to
+  // refuse — a reviewer reading the log would believe a bypass was in force.
   const unusable = normalized.filter(
-    (p) => !isUnderScanRoot(p) || !existsSync(join(REPO_ROOT, p)) || !isRegularFile(p),
+    (p) =>
+      !isUnderScanRoot(p) || isDocFile(p) || !existsSync(join(REPO_ROOT, p)) || !isRegularFile(p),
   );
   if (unusable.length > 0) {
     const lines = unusable.map((p) => `  - ${p}`).join("\n");
     throw new InvocationError(
-      `--allow-fixture rejected: each bypassed path must be an existing regular file inside a ` +
-        `scan root (${SCAN_ROOT_NAMES.join(", ")}), so that it is genuinely subtracted from a ` +
-        `sweep rather than silently matching nothing:\n${lines}`,
+      `--allow-fixture rejected: each bypassed path must be an existing, non-.md regular file ` +
+        `inside a scan root (${SCAN_ROOT_NAMES.join(", ")}), so that it is genuinely subtracted ` +
+        `from a sweep rather than silently matching nothing:\n${lines}`,
     );
   }
 }
@@ -587,7 +609,12 @@ function gitIgnored(paths: string[]): Set<string> {
  * A root that is simply ABSENT is not an error (this scanner is shared with
  * repos that have no `scripts/`); a root that EXISTS and is not a directory is.
  */
-function enterRoot(name: string, out: string[], unscannable: Unscannable[]): void {
+function enterRoot(
+  name: string,
+  out: string[],
+  unscannable: Unscannable[],
+  badRoots: Unscannable[],
+): void {
   const full = join(REPO_ROOT, name);
   let st;
   try {
@@ -602,7 +629,7 @@ function enterRoot(name: string, out: string[], unscannable: Unscannable[]): voi
   // `direntKind`'s catch-all arm reads "not a regular file", which is the right
   // sentence about an ENTRY and the wrong one about a ROOT — a root that IS a
   // regular file is exactly as unwalkable as one that is a FIFO.
-  unscannable.push({
+  badRoots.push({
     path: name,
     kind: st.isFile() ? "a regular file where a scan root is expected" : direntKind(st),
   });
@@ -611,7 +638,17 @@ function enterRoot(name: string, out: string[], unscannable: Unscannable[]): voi
 function buildTargetsForAll(): Target[] {
   const files: string[] = [];
   const unscannable: Unscannable[] = [];
-  for (const name of SCAN_ROOT_NAMES) enterRoot(name, files, unscannable);
+  const badRoots: Unscannable[] = [];
+  for (const name of SCAN_ROOT_NAMES) enterRoot(name, files, unscannable, badRoots);
+
+  // A bad ROOT and a bad ENTRY get separate remedies. They shared one before,
+  // and it told the reader of a root that is a regular file to "replace it with
+  // a regular file" — which the very next run refuses.
+  refuseUnscannable(
+    badRoots,
+    "A scan root must be a directory the walk can enumerate.",
+    "Restore it as a real directory, or remove it entirely (an ABSENT root is not an error).",
+  );
 
   // One `git check-ignore` over both lists. An ignored entry is already out of
   // scope for the file route, so applying the same rule to a link keeps a single
@@ -917,18 +954,49 @@ function scanHl7Structured(path: string, content: string, allow: AllowList, hits
       break;
     }
   }
-  if (msh === undefined) return; // not an HL7 v2 message
-  const fieldSep = msh.charAt(mshAt + 3) || "|";
-  const enc = msh.slice(mshAt + 4).split(fieldSep)[0] ?? "^~\\&";
+  // ▶ A MISSING OR MIS-SHAPED MSH FALLS BACK TO THE HL7 DEFAULT DELIMITERS AND
+  // KEEPS SCANNING. Returning here instead meant two silent zeros:
+  //
+  //   - a BARE `PID|…` line with no MSH above it read clean, and that is the
+  //     single most likely thing to be pasted out of a ticket into a test;
+  //   - the strict anchor above rejects an MSH-2 of length 0 or 1, a truncated
+  //     header with no closing separator, and an MSH-2 longer than eight — all
+  //     of which the older column-0 `startsWith("MSH")` accepted. Every one of
+  //     those still uses `|`, so the defaults read them correctly.
+  //
+  // The strict anchor is still what DERIVES non-default delimiters, because
+  // relaxing it is what let an `MSH-9` in prose set the field separator to `-`.
+  // Residual, disclosed rather than chased: a header that uses a non-default
+  // field separator AND a mis-shaped MSH-2 gets the defaults and is read as if
+  // it used `|`. The segment guard below is what keeps that from inventing hits.
+  const encRaw =
+    msh === undefined ? "" : (msh.slice(mshAt + 4).split(msh.charAt(mshAt + 3))[0] ?? "");
+  // A source literal spells HL7's own backslash doubled, so `^~\\&` arrives five
+  // characters long and the sub-component separator read out of position 3 was
+  // the backslash rather than `&`.
+  const enc = encRaw.replace(/\\\\/g, "\\") || "^~\\&";
+  const fieldSep = (msh === undefined ? "" : msh.charAt(mshAt + 3)) || "|";
   const compSep = enc.charAt(0) || "^";
   const repSep = enc.charAt(1) || "~";
   const subSep = enc.charAt(3) || "&";
   const allowed = syntheticTokens(allow);
 
-  for (const line of lines) {
+  for (const lineRaw of lines) {
+    // Leading WHITESPACE is stripped before the segment id is read. A message
+    // written as an indented multi-line template literal — which is what
+    // prettier produces inside a nested block — put every segment at column 2 or
+    // more, and a column-0 `slice(0, 3)` read those files as containing no
+    // segments at all. Quote characters are deliberately NOT stripped: in the
+    // raw view a quoted literal would then match and every value would carry the
+    // source line's trailing syntax.
+    const line = lineRaw.replace(/^[ \t]+/, "");
     const name = line.slice(0, 3);
     const spec = HL7_PHI_FIELDS[name];
     if (spec === undefined) continue;
+    // The segment id must be FOLLOWED BY THE FIELD SEPARATOR. Without this the
+    // fallback above would let any line whose first three characters happen to
+    // spell a segment name be parsed as one.
+    if (line.charAt(3) !== fieldSep) continue;
     const fields = line.split(fieldSep); // fields[0] = segment name; fields[n] = SEG-n
     for (const { field, comps } of spec) {
       const raw = fields[field];
@@ -1047,14 +1115,49 @@ const X12_REF_PHI_QUALIFIERS = new Set<string>([
  * parser dependency (matches every sibling scanner).
  */
 function scanX12Structured(path: string, content: string, allow: AllowList, hits: Hit[]): void {
-  // A real interchange begins with the 106-byte ISA header; require it at the start (a `.ts` source that
-  // merely mentions "ISA" in a comment never does), so the delimiter-from-fixed-byte read is sound.
   // Inter-segment CRLF is not semantic in X12 (the parser normalizes it away) — strip it so a
-  // pretty-printed fixture splits on the segment terminator exactly as the wire form does.
-  const isa = content.trimStart().replace(/\r?\n/g, "");
-  if (!isa.startsWith("ISA") || isa.length < 106) return; // not an X12 interchange
-  const elementSep = isa.charAt(3);
-  const segTerm = isa.charAt(105);
+  // pretty-printed fixture, and the joined source-literal view, split on the segment terminator
+  // exactly as the wire form does.
+  const src = content.trimStart();
+  // ▶ THE 106-BYTE ISA HEADER IS FOUND ANYWHERE, NOT ONLY AT OFFSET 0, AND
+  // REQUIRING OFFSET 0 GAVE THE WIDENED `test/` ROOT NOTHING FOR X12. A `.ts`
+  // module never begins with `ISA`: its first bytes are an import statement, and
+  // the joined source-literal view begins with the first string literal in the
+  // file (an import specifier). Three files this gate newly sweeps carry inline
+  // patient-entity interchanges, and all three read clean — measured, with the
+  // identical bytes as a `test/fixtures/*.edi` returning five hard hits.
+  //
+  // The offset-0 rule was doing two jobs and only one of them is load-bearing:
+  // it kept a source that merely MENTIONS "ISA" in prose from having delimiters
+  // read out of it. That job is done properly here instead — the match must be
+  // an `ISA` on a non-alphanumeric boundary, followed by a non-alphanumeric,
+  // non-space element separator, with a full 106 bytes and a non-alphanumeric
+  // segment terminator at the fixed offset. Prose does not satisfy that.
+  //
+  // Only the FIRST such header is used, so a file carrying two interchanges with
+  // DIFFERENT delimiters is read with the first one's. Every interchange in this
+  // repo uses `*` and `~`; stated as a limit rather than chased.
+  //
+  // THE BOUNDARY IS TESTED BEFORE THE NEWLINES ARE STRIPPED, NOT AFTER, and that
+  // ordering is load-bearing: `sourceLiteralDocument` joins literals with CRLF,
+  // so stripping first glued the preceding literal onto the header — an import
+  // specifier ending `index.js` put an alphanumeric immediately before `ISA` and
+  // the boundary never matched. The newlines are then stripped from the
+  // CANDIDATE, which is what makes the fixed-offset delimiter read sound.
+  let header = "";
+  let body = "";
+  for (const m of src.matchAll(/(?:^|[^A-Za-z0-9])ISA[^A-Za-z0-9\s]/g)) {
+    const at = m.index + m[0].length - 4;
+    const candidate = src.slice(at).replace(/\r?\n/g, "");
+    if (candidate.length < 106) continue;
+    if (/[A-Za-z0-9\s]/.test(candidate.charAt(105))) continue;
+    header = candidate; // newline-free, for the two FIXED-OFFSET delimiter reads only
+    body = src.slice(at); // newline-PRESERVING, for the segment split below
+    break;
+  }
+  if (header.length === 0) return; // not an X12 interchange
+  const elementSep = header.charAt(3);
+  const segTerm = header.charAt(105);
   if (elementSep.length === 0 || segTerm.length === 0) return;
   const allowed = syntheticTokens(allow);
 
@@ -1072,28 +1175,49 @@ function scanX12Structured(path: string, content: string, allow: AllowList, hits
     }
   };
 
-  for (const seg of isa.split(segTerm)) {
-    const els = seg.split(elementSep);
-    const id = els[0];
-    if (id === "NM1") {
-      const entity = (els[1] ?? "").toUpperCase();
-      if (!X12_PATIENT_ENTITY_CODES.has(entity)) continue; // provider/org name retained — not checked
-      check(els[3] ?? "", "NM1-03"); // last / org name
-      check(els[4] ?? "", "NM1-04"); // first name
-      check(els[9] ?? "", "NM1-09"); // identifier
-    } else if (id === "N1") {
-      const entity = (els[1] ?? "").toUpperCase();
-      if (!X12_PATIENT_ENTITY_CODES.has(entity)) continue; // recognized org party retained — not checked
-      check(els[2] ?? "", "N1-02"); // patient-side party name
-      check(els[4] ?? "", "N1-04"); // patient-side party identifier
-    } else if (id === "SBR") {
-      check(els[3] ?? "", "SBR-03"); // insured group / policy number
-      check(els[4] ?? "", "SBR-04"); // insured group name
-    } else if (id === "DMG") {
-      check(els[2] ?? "", "DMG-02"); // date of birth
-    } else if (id === "REF") {
-      if (X12_REF_PHI_QUALIFIERS.has((els[1] ?? "").toUpperCase())) check(els[2] ?? "", "REF-02");
+  // EVERY LINE of every terminator-delimited piece is a segment candidate, and
+  // that is what makes an interchange assembled from several source literals
+  // readable. Stripping the newlines first (which the previous shape did) glued
+  // unrelated literals onto the front of the segment, so `els[0]` read as
+  // `…SECRETIDNM1` rather than `NM1` and the check never ran — measured on this
+  // repo's own `test/x12/deidentify-x12.test.ts`, whose envelope comes from a
+  // `wrap()` template and whose segments are separate literals. It costs nothing
+  // on a wire-form fixture (no newlines, one line per piece) and nothing on a
+  // pretty-printed one (a newline exactly at each terminator). A segment id is
+  // still matched EXACTLY, so an extra candidate line can only be skipped.
+  for (const piece of body.split(segTerm)) {
+    for (const seg of piece.split(/\r\n|\r|\n/)) {
+      scanX12Segment(seg, elementSep, check);
     }
+  }
+}
+
+/** One X12 segment candidate: dispatch on its id and check the identifying elements. */
+function scanX12Segment(
+  seg: string,
+  elementSep: string,
+  check: (value: string, locator: string) => void,
+): void {
+  const els = seg.split(elementSep);
+  const id = els[0];
+  if (id === "NM1") {
+    // A provider/organization entity's name is RETAINED by the de-identifier, so
+    // checking it would false-positive on legitimate provider names in fixtures.
+    if (!X12_PATIENT_ENTITY_CODES.has((els[1] ?? "").toUpperCase())) return;
+    check(els[3] ?? "", "NM1-03"); // last / org name
+    check(els[4] ?? "", "NM1-04"); // first name
+    check(els[9] ?? "", "NM1-09"); // identifier
+  } else if (id === "N1") {
+    if (!X12_PATIENT_ENTITY_CODES.has((els[1] ?? "").toUpperCase())) return;
+    check(els[2] ?? "", "N1-02"); // patient-side party name
+    check(els[4] ?? "", "N1-04"); // patient-side party identifier
+  } else if (id === "SBR") {
+    check(els[3] ?? "", "SBR-03"); // insured group / policy number
+    check(els[4] ?? "", "SBR-04"); // insured group name
+  } else if (id === "DMG") {
+    check(els[2] ?? "", "DMG-02"); // date of birth
+  } else if (id === "REF") {
+    if (X12_REF_PHI_QUALIFIERS.has((els[1] ?? "").toUpperCase())) check(els[2] ?? "", "REF-02");
   }
 }
 

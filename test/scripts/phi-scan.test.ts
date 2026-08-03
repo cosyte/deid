@@ -1,12 +1,19 @@
 /**
  * Unit tests for scripts/phi-scan.ts — the STARTER PHI commit-gate.
  *
- * These exercise the SHARED MACHINERY and the cross-cutting SSN/email FLOOR that
- * ships with the template. They deliberately do NOT test structured, field-level
- * PHI detection — that is format-specific and is the author's obligation to add
- * (see the STARTER banner in scripts/phi-scan.ts). When you add structured
- * detectors, add positive tests here proving they CATCH real-looking names /
- * DOBs / ids for this standard — a weak scanner is worse than none.
+ * These exercise the SHARED MACHINERY, the cross-cutting SSN/email FLOOR, and the
+ * four structured detectors this repo added on top of it (HL7 v2, C-CDA, X12,
+ * NCPDP Telecom) — each with a positive case proving it CATCHES a real-looking
+ * name / DOB / id, and a negative one proving it does not scrub legitimate
+ * clinical content. A weak scanner is worse than none, so a new detector without
+ * a positive case here is not finished. (This header used to say the opposite,
+ * having been left behind by the detectors that landed under it.)
+ *
+ * ▶ THIS FILE IS THE ONE PATH `pnpm phi-scan` DOES NOT READ, and it has to be:
+ * its positive cases ARE real-looking violator literals, so a suite that could
+ * pass its own scan would be asserting nothing. The bypass needs BOTH the
+ * `--allow-fixture` in package.json's `phi-scan` script and the entry in
+ * phi-scan-overrides.md; the last describe block pins both.
  *
  * The scanner is invoked via spawnSync (array args, no shell) so the full CLI
  * path (argv parse, exit code, stderr) is exercised. Violator/clean files are
@@ -856,7 +863,7 @@ describe("phi-scan: the whole-file bypass, in the modes that actually run", () =
 
     const r = runIn(root, ["--allow-fixture", "test/renamed-away.test.ts"]);
     expect(r.code, `stderr: ${r.stderr}`).toBe(2);
-    expect(r.stderr).toMatch(/existing regular file inside a scan root/);
+    expect(r.stderr).toMatch(/non-\.md regular file\s*\n?\s*inside a scan root/);
   });
 
   it("refuses a logged path outside every scan root, and a logged DIRECTORY", () => {
@@ -908,5 +915,161 @@ describe("phi-scan: this repo's own wiring still carries both halves of its one 
       if (m?.[1] !== undefined) entries.push(m[1]);
     }
     expect(entries).toEqual([BYPASSED]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Recognising a document inside a hand-written source file
+// ---------------------------------------------------------------------------
+//
+// Every structured detector has to RECOGNISE the document before it checks
+// anything, and each recogniser was written for a file that IS the document. A
+// conformance gate found three shapes that the widened `test/` root swept and
+// every detector then declined to read; each case below is red without its fix.
+
+describe("phi-scan: the X12 recogniser finds an ISA header that is not at offset 0", () => {
+  const INTERCHANGE =
+    'import { deidentifyX12 } from "../../src/x12/index.js";\n' +
+    "const wire =\n" +
+    `  "${ISA}" +\n` +
+    '  "GS*HC*A*B*20260615*0930*2*X*005010X222A2~ST*837*0002~" +\n' +
+    '  "NM1*IL*1*RIVERA*JUANITA****MI*REALMEMBER9~DMG*D8*19780314*F~" +\n' +
+    '  "SE*4*0002~GE*1*2~IEA*1*000000002~";\n';
+
+  it("catches a patient NM1 name / id and a DMG DOB inline in a .ts module", () => {
+    const root = makeRepo();
+    mkdirSync(join(root, "test", "x12"), { recursive: true });
+    writeFileSync(join(root, "test", "x12", "inline.test.ts"), INTERCHANGE);
+
+    const r = runIn(root, []);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toMatch(/NM1-03 value="RIVERA"/);
+    expect(r.stderr).toMatch(/NM1-09 value="REALMEMBER9"/);
+    expect(r.stderr).toMatch(/DMG-02 value="19780314"/);
+  });
+
+  it("the same WIRE as a fixture was always caught — so this was the container, not the format", () => {
+    const root = makeRepo();
+    writeFileSync(
+      join(root, "test", "fixtures", "inline.edi"),
+      ISA +
+        "GS*HC*A*B*20260615*0930*2*X*005010X222A2~ST*837*0002~" +
+        "NM1*IL*1*RIVERA*JUANITA****MI*REALMEMBER9~DMG*D8*19780314*F~" +
+        "SE*4*0002~GE*1*2~IEA*1*000000002~",
+    );
+
+    const r = runIn(root, []);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toMatch(/NM1-03 value="RIVERA"/);
+  });
+
+  it("prose that merely mentions ISA does not switch the detector on", () => {
+    const root = makeRepo();
+    writeFileSync(
+      join(root, "src", "prose.ts"),
+      "// The ISA-IEA envelope wraps every X12 interchange; ISA*16 is the count.\n" +
+        "export const note = 'ISA: interchange control header';\n",
+    );
+
+    const r = runIn(root, []);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(0);
+  });
+});
+
+describe("phi-scan: the HL7 recogniser reads a segment without a usable MSH above it", () => {
+  it("catches a BARE PID line with no MSH at all — the shape pasted out of a ticket", () => {
+    const root = makeRepo();
+    writeFileSync(
+      join(root, "test", "bare.test.ts"),
+      'export const seg = "PID|1||REALMRN99^^^H^MR||RIVERA^JUANITA||19780314|F";\n',
+    );
+
+    const r = runIn(root, []);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toMatch(/PID-5\.1 value="RIVERA"/);
+  });
+
+  it("catches an INDENTED segment in a multi-line template literal", () => {
+    const root = makeRepo();
+    writeFileSync(
+      join(root, "test", "indented.test.ts"),
+      "export const msg = `\n" +
+        "    MSH|^~\\\\&|A|B|C|D|20200101||ADT^A01|M1|P|2.5\n" +
+        "    PID|1||REALMRN99^^^H^MR||RIVERA^JUANITA||19780314|F\n" +
+        "  `;\n",
+    );
+
+    const r = runIn(root, []);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toMatch(/PID-5\.1 value="RIVERA"/);
+  });
+
+  it("reads a header whose MSH-2 is too short for the strict anchor (a detection REGRESSION guard)", () => {
+    // `MSH|^|…` — one encoding character. The strict anchor that derives
+    // non-default delimiters rejects it; falling back to the HL7 defaults is
+    // what keeps it scanned, and an earlier draft of this slice lost it.
+    const root = makeRepo();
+    writeFileSync(
+      join(root, "test", "fixtures", "short-enc.hl7"),
+      "MSH|^|A|B|C|D|20200101||ADT^A01|M1|P|2.5\rPID|1||REALMRN99^^^H^MR||RIVERA^JUANITA||19780314|F\r",
+    );
+
+    const r = runIn(root, []);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toMatch(/PID-5\.1 value="RIVERA"/);
+  });
+
+  it("does NOT invent a segment from a line that merely starts with those three letters", () => {
+    const root = makeRepo();
+    writeFileSync(
+      join(root, "src", "prose.ts"),
+      "// PID is the patient identification segment.\n" +
+        "export const NK1_NOTE = 'NK1 carries next of kin';\n" +
+        "export const words = 'GT1 guarantor, IN1 insurance, IN2 more insurance';\n",
+    );
+
+    const r = runIn(root, []);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(0);
+  });
+
+  it("reads the sub-component separator through a source literal's doubled backslash", () => {
+    // In a `.ts` source MSH-2 arrives as five characters, so position 3 is the
+    // backslash rather than `&`, and a component was split on the wrong byte.
+    const root = makeRepo();
+    writeFileSync(
+      join(root, "test", "subsep.test.ts"),
+      'export const m =\n  "MSH|^~\\\\&|A|B|C|D|20200101||ADT^A01|M1|P|2.5' +
+        '\\rPID|1||ZZMRN001^^^H^MR||RIVERA&X^JUANITA||19850302";\n',
+    );
+
+    const r = runIn(root, []);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toMatch(/PID-5\.1 value="RIVERA"/);
+  });
+});
+
+describe("phi-scan: a bypass that would subtract nothing is refused, not accepted quietly", () => {
+  it("refuses --allow-fixture on a .md, which is never a scan target", () => {
+    const root = makeRepo();
+    writeFileSync(join(root, "test", "NOTES.md"), "x\n");
+    writeFileSync(
+      join(root, "phi-scan-overrides.md"),
+      "# log\n\n## Entries\n\n### test/NOTES.md\n\n- **Reason:** test\n",
+    );
+
+    const r = runIn(root, ["--allow-fixture", "test/NOTES.md"]);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(2);
+    expect(r.stderr).toMatch(/non-\.md regular file/);
+  });
+
+  it("tells a reader of a bad ROOT to restore a directory, not to make a regular file", () => {
+    const root = makeRepo();
+    rmSync(join(root, "src"), { recursive: true });
+    writeFileSync(join(root, "src"), "not a directory\n");
+
+    const r = runIn(root, []);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(2);
+    expect(r.stderr).toMatch(/scan root must be a directory/);
+    expect(r.stderr).not.toMatch(/replace it with a regular file/);
   });
 });

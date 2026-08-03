@@ -404,6 +404,31 @@ its public history at `0.0.x`, per the cosyte version ladder (`0.0.x` until firs
     undifferentiated line and detected nothing. Each file is now also scanned as its string literals,
     decoded and joined, IN ADDITION to its raw bytes. Measured: a name, MRN and DOB in an inline
     `PID` literal are reported at `PID-5.1` / `PID-3.1` / `PID-7.1`, and were silent before.
+  - **And the RECOGNISERS had to be widened with it, or three formats got the floor and nothing
+    else.** Every detector must recognise the document before it checks anything, and each was
+    written for a file that IS the document. A conformance gate found four shapes the widened root
+    swept and every detector then declined to read; each is now covered, each red before and green
+    after, and each pinned:
+    - **X12 required its 106-byte `ISA` at offset 0.** A `.ts` module never begins with `ISA` — its
+      first bytes are an import statement — so three files carrying inline patient-entity
+      interchanges read clean while the identical wire as a fixture returned five hard hits. The
+      header is now found anywhere, on a non-alphanumeric boundary with a full 106 bytes and a
+      non-alphanumeric terminator at the fixed offset, which is the job offset-0 was really doing.
+      Segments are matched per LINE of each terminator-delimited piece, so an interchange assembled
+      from several literals — this repo's own `wrap()` idiom — is read rather than glued together.
+    - **A bare `PID|…` line with no `MSH` above it read clean**, which is the single most likely
+      thing to be pasted out of a ticket. A missing or mis-shaped header now falls back to the HL7
+      default delimiters and keeps scanning, guarded by requiring the segment id to be followed by
+      the field separator.
+    - **An INDENTED segment** — a multi-line template literal, which is what prettier produces
+      inside a nested block — was invisible to a column-0 segment anchor.
+    - **A source literal spells HL7's own backslash doubled**, so `MSH-2` arrived five characters
+      long and the sub-component separator was read as the backslash rather than `&`.
+      None of this is a claim that arbitrary embedded text is reached, and the banner in
+      `scripts/phi-scan.ts` now says so: a fragment carrying neither a `urn:hl7-org:v3` namespace nor
+      NCPDP control-char framing gets the floor only, a message assembled at run time from pieces no
+      literal contains is not text this scan can see, and two documents with different delimiters in
+      one file are read with the first one's.
   - **Two earlier drafts of that decode were wrong, both caught here.** Decoding the whole file in
     place carried the closing quote and comma of the source line onto the last field of the last
     segment, so a declared-synthetic DOB arrived with two characters of TypeScript attached and was
@@ -429,9 +454,10 @@ its public history at `0.0.x`, per the cosyte version ladder (`0.0.x` until firs
     existing `--allow-fixture` + `phi-scan-overrides.md` mechanism, which now works in the two modes
     that actually run (the CI sweep and the pre-commit hook) instead of only in explicit-path mode.
     Real PHI pasted into that one file is not caught. Nothing else under `test/` is bypassed.
-  - **A bypass may not rot, and may not be quiet.** A logged path must be an existing regular file
-    inside a scan root or the scan refuses (exit 2) — so a renamed, deleted or mistyped entry reddens
-    instead of silently subtracting nothing, and a directory can never be named. Every bypass that
+  - **A bypass may not rot, and may not be quiet.** A logged path must be an existing, non-`.md`
+    regular file inside a scan root or the scan refuses (exit 2) — so a renamed, deleted or mistyped
+    entry reddens instead of silently subtracting nothing, a directory can never be named, and a
+    `.md` (never a scan target, so bypassing one subtracts nothing) is refused too. Every bypass that
     applies is announced on stderr on every run. The override log's own parser now skips fenced code
     blocks, because its `## Format` section shows the entry shape inside a fence and a flat sweep read
     that placeholder as a logged path.

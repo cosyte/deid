@@ -217,6 +217,13 @@ ID 5550000010
 # --- Synthetic X12 005010 identifiers (test/fixtures/x12) ---
 ID ZZMEMBERX12
 ID ZZPATMEMBER
+# Inline X12 sentinels written as string literals in test/x12/deidentify-x12.test.ts, reachable now
+# that the ISA header is recognized inside a source file. Each is asserted ABSENT after de-id.
+ID MYSTERYID
+ID POLICY-SECRET
+ID PATMEMBER
+NAME ACME GROUP
+NAME PATIENT PARTY
 ID ZZACCTX12
 ID 900000201
 ID ZZCHAMPUSID
