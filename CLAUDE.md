@@ -264,6 +264,40 @@ repos/cosyte/deid/rulesets/19907854`, not off this file):
   stable `DEID_*` code + locus (never a value, never the key, never the date-shift offset).
 - Coverage: per-directory >= 90% (lines/branches/functions/statements), enforced by
   `pnpm test:coverage`.
+- **▶ THE PHI SCAN FOLLOWS NOTHING, AND A NON-REGULAR IN-SCOPE ENTRY REFUSES IT (exit 2).** Both of
+  `scripts/phi-scan.ts`'s enumerating routes used to read a symbolic link as **clean**, in the
+  package whose whole job is removing PHI: `walk()` enumerates `Dirent.isFile()`, an **lstat**
+  answer, so a link is neither a file nor a directory (and a linked _directory_ took a whole subtree
+  with it); `--staged` reads `git show :<path>`, and **git stores a link as its target path under
+  mode `120000`**, so it scanned path text and never the target's bytes. Reproduced on `e040ffc`
+  with a name-bearing synthetic payload outside the walk roots: both routes exit 0 while naming the
+  target directly returned 8 hits. **Do not "fix" this by following the link** — that reads bytes
+  the enumeration does not control (outside the repo, a loop, a device, a FIFO that blocks the gate
+  forever), and git does not carry them anyway, so a hit on them would be a claim about something no
+  commit contains. The enumeration is narrowed instead, and the decision is **structural** on both
+  routes: the walk admits `isDirectory()`/`isFile()` and refuses what is left, `--staged` admits the
+  two regular blob modes and refuses what is left. The kind tokens are labels with a catch-all arm,
+  never the decision — **do not turn either into a list of shapes to match.**
+  **▶ THE ONE-LETTER TRAP: `--diff-filter` MUST KEEP `T`.** Replacing a **tracked** regular file
+  with a link is neither an add nor a modify — git raises `:100644 120000 <sha> <sha> T` — so
+  `--diff-filter=AM` deleted the record before any mode could be read and the `pre-commit` hook
+  (`simple-git-hooks` runs `pnpm phi-scan --staged`) passed a mode-`120000` blob **green** while the
+  changelog claimed it refused one. A conformance gate caught exactly that here. `T` also buys the
+  reverse typechange, a link replaced by a real file bearing PHI.
+  **`--staged`'s boundary is the `--diff-filter` as well as the path set**, so "refuses mode
+  `120000`" holds only of the records the filter admits: `R`/`C` are not enumerated at all, and
+  renaming an already-tracked symlink is an `R` record with a `120000` destination that this route
+  reads clean (the all-mode walk refuses that same worktree). Pre-existing and disclosed, not closed
+  — admitting `R`/`C` needs the two-path record shape handled. **A REFUSAL NAMES THE ENTRY'S OWN
+  REPO-RELATIVE PATH AND AN ENGINE-OWNED KIND TOKEN, NEVER THE LINK TARGET**, which is working-tree
+  text that can itself carry PHI; that is why no example target path appears in the docblock, the
+  CHANGELOG or the changeset either — a diagnostic about a PHI leak is itself a PHI surface, and so
+  is the prose explaining it. Pinned in `test/scripts/phi-scan.test.ts`, 9 cases red on `e040ffc`.
+  Two things this does **not** cover, both measured: explicit-path mode still reads through a link
+  (unchanged), and there is still **no** tolerance for a file that vanishes between enumeration and
+  read — that one fails **closed** (a read failure refuses the whole sweep with exit 2), so it is a
+  false-red risk rather than this false-green one, and the siblings' TOCTOU machinery was
+  deliberately not ported.
 - **▶ `attw` SAYS "does not contain types" AND EXITS 0, SO THE `attw` SCRIPT IS A WRAPPER, NOT THE
   BARE CLI.** `getExitCode.js` in `@arethetypeswrong/cli` opens with `if (!analysis.types) return 0`
   — an untyped package is a legitimate npm package, so "no types at all" is a description, not a
