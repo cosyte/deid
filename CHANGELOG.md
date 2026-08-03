@@ -424,9 +424,15 @@ its public history at `0.0.x`, per the cosyte version ladder (`0.0.x` until firs
     and `src/**.ts`), so a staged link outside it is still not looked at — narrowing what a scope
     admits is not widening it. That scope also bounds the gitlink half: a submodule staged at
     `test/fixtures/nested` is refused, one at `src/nested` fails the `.ts` suffix and is not looked
-    at. `R` (rename) and `C` (copy) are still **not** enumerated by `--staged` at all, so a staged
-    rename that also appends identifiers passes that route — pre-existing and a scope decision, not
-    this one; if one ever reaches the parser the stride desyncs and it refuses. This repo has never
+    at. `R` (rename) and `C` (copy) are still **not** enumerated by `--staged` at all, and that
+    costs the route a **mode** check as well as content: a staged rename that also appends
+    identifiers passes it, and so does renaming an **already-tracked symlink**, which git raises as
+    an `R` record with a `120000` destination — in scope by path, dropped by the filter before any
+    mode is read (measured on git 2.39.5; `--staged` exits 0 while the all-mode walk refuses that
+    same worktree with exit 2). The `--diff-filter` is part of this route's boundary, not just the
+    path set, so "refuses mode `120000`" holds only of the records the filter admits. Pre-existing
+    and a scope decision, not this one; if one ever reaches the parser the stride desyncs and it
+    refuses. This repo has never
     had a rule that a scan observing **no** targets should refuse, and still does not. And the
     scanner still has no tolerance for a file that vanishes between enumeration and read — a
     different defect, which fails **closed** (a read failure refuses the whole sweep with exit 2,

@@ -97,6 +97,19 @@
  * own), and `--staged` still only looks at `test/fixtures/**` and `src/**.ts`.
  * This narrows what those scopes ADMIT; it does not widen the scopes.
  *
+ * ⚠ `--staged`'s BOUNDARY IS THE `--diff-filter` AS WELL AS THE PATH SET, so the
+ * mode check above reaches only the records that filter enumerates. `R`/`C` are
+ * not among them (see `buildTargetsForStaged`), and that is not only a content
+ * gap: RENAMING an ALREADY-TRACKED symlink is an `R` record with a `120000`
+ * destination, so this route reads it clean even though its path is in scope
+ * (measured on git 2.39.5: `git mv` of a tracked link yields
+ * `:120000 120000 <sha> <sha> R100`, dropped by `AMT`, and `--staged` exits 0).
+ * The all-mode walk refuses that same worktree, so it is not clean everywhere;
+ * this route is where it is missed. That is PRE-EXISTING and disclosed rather
+ * than fixed here, because admitting `R`/`C` needs the two-path record shape
+ * handled, which is a scope decision. Do not read the paragraph above as
+ * covering it.
+ *
  * A refusal names the entry's own repo-relative path and an engine-owned token
  * for its kind. IT NEVER REPORTS THE LINK TARGET, which is text off the working
  * tree and can itself carry PHI — a target path of the shape
@@ -466,7 +479,10 @@ function buildTargetsForStaged(): Target[] {
   // outcome as any other unparseable record, and the safe one.
   //
   // Excluding `R`/`C` also means this route does not enumerate a staged rename
-  // at all. That is PRE-EXISTING and is not narrowed here: admitting them needs
+  // at all — which costs it a MODE check, not only content: renaming an
+  // already-tracked symlink is an `R` record with a `120000` destination, so
+  // this route reads it clean while the all-mode walk refuses the same worktree.
+  // That is PRE-EXISTING and is not narrowed here: admitting them needs
   // the two-path record shape handled, which is a scope decision, not this one.
   // A record that does not parse REFUSES rather than being skipped: a silently
   // shortened list is exactly the shape this scan must never report clean over.
