@@ -27,6 +27,7 @@ import {
   copyFileSync,
   symlinkSync,
   realpathSync,
+  chmodSync,
 } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -297,7 +298,7 @@ const repos: string[] = [];
 
 /**
  * A throwaway git repo laid out the way the scanner expects: an allow-list under
- * `scripts/`, both walk roots, and one ordinary source file so the walk has
+ * `scripts/`, every scan root, and one ordinary source file so the walk has
  * something legitimate to find.
  */
 function makeRepo(): string {
@@ -547,5 +548,365 @@ describe("phi-scan: the --staged route refuses a staged non-regular entry", () =
 
     const r = runIn(root, ["--staged"]);
     expect(r.code, `stderr: ${r.stderr}`).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The SCAN ROOTS, on both enumerating routes
+// ---------------------------------------------------------------------------
+//
+// The refusal cases above NARROWED what the existing roots admit. These cover
+// the other half: what the roots ARE. Both routes used to stop short of `test/`
+// itself (the walk covered `test/fixtures/` + `src/`, `--staged` covered
+// `test/fixtures/**` + `src/**.ts`), and this repo keeps its document text
+// INLINE IN `.ts` TEST MODULES, so 38 tracked files under `test/` were
+// enumerated by neither. Every case here is red on that enumeration.
+
+/** The escaped, single-line shape a `.ts` module actually embeds HL7 in. */
+const INLINE_HL7 =
+  'export const message =\n  "MSH|^~\\\\&|A|B|C|D|20200101||ADT^A01|M1|P|2.5' +
+  '\\rPID|1||REALMRN99^^^H^MR||RIVERA^JUANITA||19780314";\n';
+
+describe("phi-scan: the all-mode walk covers src/, test/ and scripts/", () => {
+  it("catches a violator in a test MODULE, not just under test/fixtures/", () => {
+    const root = makeRepo();
+    mkdirSync(join(root, "test", "hl7"), { recursive: true });
+    writeFileSync(join(root, "test", "hl7", "deidentify.test.ts"), SYNTHETIC_PHI);
+
+    const r = runIn(root, []);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toContain("test/hl7/deidentify.test.ts");
+    expect(r.stderr).toContain("123-45-6789");
+  });
+
+  it("catches a violator under scripts/, which neither route reached", () => {
+    const root = makeRepo();
+    writeFileSync(join(root, "scripts", "seed.txt"), SYNTHETIC_PHI);
+
+    const r = runIn(root, []);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toContain("scripts/seed.txt");
+  });
+
+  it("still covers src/ and test/fixtures/, the two roots it started from", () => {
+    for (const rel of [
+      ["src", "leak.ts"],
+      ["test", "fixtures", "leak.hl7"],
+    ]) {
+      const root = makeRepo();
+      writeFileSync(join(root, ...rel), SYNTHETIC_PHI);
+      const r = runIn(root, []);
+      expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+      expect(r.stderr).toContain(rel.join("/"));
+    }
+  });
+
+  it("does NOT reach outside those roots — the residual, pinned rather than implied", () => {
+    // `.github/`, `docs-content/`, `vendor/` and the root-level manifests are not
+    // claimed covered. If a later change widens to the repo root, this is the
+    // case that should be REWRITTEN, not deleted quietly.
+    const root = makeRepo();
+    mkdirSync(join(root, "docs-content"));
+    writeFileSync(join(root, "docs-content", "sidebars.json"), SYNTHETIC_PHI);
+
+    const r = runIn(root, []);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(0);
+  });
+
+  it("skips .md under a root — documentation may describe violator values", () => {
+    const root = makeRepo();
+    writeFileSync(join(root, "test", "NOTES.md"), SYNTHETIC_PHI);
+
+    const r = runIn(root, []);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(0);
+  });
+});
+
+describe("phi-scan: --staged is judged against the SAME roots as the walk", () => {
+  it("catches a staged test MODULE carrying the payload (exit 1)", () => {
+    const root = makeRepo();
+    mkdirSync(join(root, "test", "hl7"), { recursive: true });
+    writeFileSync(join(root, "test", "hl7", "deidentify.test.ts"), SYNTHETIC_PHI);
+    git(root, ["add", "test/hl7/deidentify.test.ts"]);
+
+    const r = runIn(root, ["--staged"]);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toContain("test/hl7/deidentify.test.ts");
+  });
+
+  it("catches a staged scripts/ file, and a staged non-.ts src/ file", () => {
+    for (const rel of ["scripts/seed.txt", "src/data.json"]) {
+      const root = makeRepo();
+      writeFileSync(join(root, rel), SYNTHETIC_PHI);
+      git(root, ["add", rel]);
+      const r = runIn(root, ["--staged"]);
+      expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+      expect(r.stderr).toContain(rel);
+    }
+  });
+
+  it("refuses a staged link under the WIDENED part of the scope, too", () => {
+    const root = makeRepo();
+    writeFileSync(join(root, TARGET_NAME), SYNTHETIC_PHI);
+    symlinkSync(join("..", TARGET_NAME), join(root, "scripts", "leak.txt"));
+    git(root, ["add", "scripts/leak.txt"]);
+
+    const r = runIn(root, ["--staged"]);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(2);
+    expect(r.stderr).toContain("scripts/leak.txt");
+    expect(r.stderr).toContain("a symbolic link");
+    expectNoPhi(r.stderr);
+  });
+});
+
+describe("phi-scan: a scan ROOT that is not a directory refuses the sweep", () => {
+  it("refuses a root replaced by a symlink (exit 2), naming the root and no target", () => {
+    // The root is handed to existsSync/readdirSync directly and is never a
+    // Dirent, so the entry-level refusal could not see it: BOTH follow, and the
+    // sweep read a tree the repository does not contain.
+    const root = makeRepo();
+    mkdirSync(join(root, "elsewhere"));
+    writeFileSync(join(root, "elsewhere", TARGET_NAME), SYNTHETIC_PHI);
+    rmSync(join(root, "test"), { recursive: true });
+    symlinkSync("elsewhere", join(root, "test"));
+
+    const r = runIn(root, []);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(2);
+    expect(r.stderr).toMatch(/refusing the scan/);
+    expect(r.stderr).toMatch(/- test \(a symbolic link\)/);
+    expectNoPhi(r.stderr);
+  });
+
+  it("refuses a root replaced by a regular FILE, and says so in those words", () => {
+    const root = makeRepo();
+    rmSync(join(root, "src"), { recursive: true });
+    writeFileSync(join(root, "src"), "not a directory\n");
+
+    const r = runIn(root, []);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(2);
+    expect(r.stderr).toMatch(/- src \(a regular file where a scan root is expected\)/);
+  });
+
+  it("a root that is absent is not an error — the scanner is shared across repos", () => {
+    const root = makeRepo();
+    rmSync(join(root, "test"), { recursive: true });
+
+    const r = runIn(root, []);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(0);
+  });
+});
+
+describe("phi-scan: the source-literal view reaches the inline wire text", () => {
+  it("the premise — the bytes on disk carry a backslash, not a carriage return", () => {
+    // If this stopped holding, the decode below would be solving a problem that
+    // no longer exists, and the structured detectors would need no second view.
+    expect(INLINE_HL7).not.toContain("\r");
+    expect(INLINE_HL7.split(/\r\n|\r|\n/).filter((l) => l.startsWith("PID"))).toHaveLength(0);
+  });
+
+  it("catches a name / MRN / DOB in an escaped single-line HL7 literal (exit 1)", () => {
+    const root = makeRepo();
+    mkdirSync(join(root, "test", "hl7"), { recursive: true });
+    writeFileSync(join(root, "test", "hl7", "inline.test.ts"), INLINE_HL7);
+
+    const r = runIn(root, []);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toMatch(/PID-5\.1 value="RIVERA"/);
+    expect(r.stderr).toMatch(/PID-5\.2 value="JUANITA"/);
+    expect(r.stderr).toMatch(/PID-3\.1 value="REALMRN99"/);
+  });
+
+  it("catches an escaped NCPDP Telecom transmission, framed by \\x1c escapes", () => {
+    const root = makeRepo();
+    writeFileSync(
+      join(root, "test", "inline-ncpdp.test.ts"),
+      'export const t = "AM01\\x1cCBRIVERA\\x1cCAJUANITA\\x1cC419780314";\n',
+    );
+
+    const r = runIn(root, []);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toMatch(/segment=CB value="RIVERA/);
+  });
+
+  it("an all-synthetic escaped literal still passes (the over-scrub control)", () => {
+    const root = makeRepo();
+    writeFileSync(
+      join(root, "test", "inline-clean.test.ts"),
+      'export const m =\n  "MSH|^~\\\\&|A|B|C|D|20200101||ADT^A01|M1|P|2.5' +
+        '\\rPID|1||ZZMRN001^^^H^MR||ZZFAMILY^ZZGIVEN||19900215";\n',
+    );
+
+    const r = runIn(root, []);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(0);
+  });
+});
+
+describe("phi-scan: a ${…} substitution site is a hole, not a value", () => {
+  const ccda = (given: string): string =>
+    '<ClinicalDocument xmlns="urn:hl7-org:v3"><recordTarget><patientRole><patient>' +
+    `<name><given>${given}</given></name>` +
+    "</patient></patientRole></recordTarget></ClinicalDocument>\n";
+
+  it("does not flag a bare identifier chain — the value is not in the file", () => {
+    const r = scan("tpl.xml", ccda("${t.given}"));
+    expect(r.code, `stderr: ${r.stderr}`).toBe(0);
+  });
+
+  it("STILL flags a quoted literal inside the braces", () => {
+    const r = scan("tpl-literal.xml", ccda('${"SMITH"}'));
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+  });
+
+  it("STILL flags a value that merely CONTAINS a placeholder", () => {
+    const r = scan("tpl-suffix.xml", ccda("${t.given} SMITH"));
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+  });
+
+  it("STILL flags an expression with an operator inside the braces", () => {
+    const r = scan("tpl-expr.xml", ccda('${a + "SMITH"}'));
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+  });
+});
+
+describe("phi-scan: the exit-code contract — 1 means HITS, and nothing else may spend it", () => {
+  it("a missing allow-list exits 2, not the 1 that means 'hits found'", () => {
+    const root = makeRepo();
+    rmSync(join(root, "scripts", "phi-allow-list.txt"));
+
+    const r = runIn(root, []);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(2);
+    expect(r.stderr).toMatch(/allow-list not found/);
+  });
+
+  it("an unreadable directory under a scan root exits 2, not 1", () => {
+    const root = makeRepo();
+    const blocked = join(root, "src", "blocked");
+    mkdirSync(blocked);
+    chmodSync(blocked, 0o000);
+    try {
+      const r = runIn(root, []);
+      expect(r.code, `stderr: ${r.stderr}`).toBe(2);
+      expect(r.stderr).toMatch(/could not read the directory/);
+    } finally {
+      chmodSync(blocked, 0o755);
+    }
+  });
+});
+
+describe("phi-scan: --staged enumerates an UNMERGED entry", () => {
+  it("refuses a conflicted in-scope path (exit 2), naming it as unmerged", () => {
+    // `U` was returned by neither `AM` nor `AMT`, so a path left conflicted by a
+    // merge was enumerated by this route at all. Its destination mode is
+    // `000000` and `git show :<path>` has no stage-0 blob to hand back, so the
+    // honest answer is a refusal, not a scan.
+    const root = makeRepo();
+    const id = ["-c", "user.email=t@example.com", "-c", "user.name=t"];
+    writeFileSync(join(root, "test", "fixtures", "f.hl7"), "base\n");
+    git(root, ["add", "test/fixtures/f.hl7"]);
+    git(root, [...id, "commit", "-qm", "base"]);
+    git(root, ["checkout", "-q", "-b", "other"]);
+    writeFileSync(join(root, "test", "fixtures", "f.hl7"), "other\n");
+    git(root, [...id, "commit", "-qam", "other"]);
+    git(root, ["checkout", "-q", "-"]);
+    writeFileSync(join(root, "test", "fixtures", "f.hl7"), "mine\n");
+    git(root, [...id, "commit", "-qam", "mine"]);
+    spawnSync("git", [...id, "merge", "other"], { cwd: root, encoding: "utf8", shell: false });
+
+    // The premise: git raises it as `U`, with an all-zero destination mode, and
+    // neither `AM` nor `AMT` returns it.
+    expect(gitOut(root, ["diff", "--cached", "--raw", "--diff-filter=AMT"]).trim()).toBe("");
+    expect(gitOut(root, ["diff", "--cached", "--raw"])).toMatch(/ 000000 .* U\t/);
+
+    const r = runIn(root, ["--staged"]);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(2);
+    expect(r.stderr).toContain("test/fixtures/f.hl7");
+    expect(r.stderr).toContain("an unmerged (conflicted) entry");
+  });
+});
+
+describe("phi-scan: the whole-file bypass, in the modes that actually run", () => {
+  const LOG = (p: string): string =>
+    `# phi-scan bypass log\n\n## Entries\n\n### ${p}\n\n- **Reason:** test\n`;
+
+  it("subtracts a logged path from the ALL-mode sweep, and announces it", () => {
+    const root = makeRepo();
+    writeFileSync(join(root, "test", "violator.test.ts"), SYNTHETIC_PHI);
+    writeFileSync(join(root, "phi-scan-overrides.md"), LOG("test/violator.test.ts"));
+
+    expect(runIn(root, []).code).toBe(1); // without the flag it is a hit
+    const r = runIn(root, ["--allow-fixture", "test/violator.test.ts"]);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(0);
+    expect(r.stderr).toContain("BYPASSED");
+    expect(r.stderr).toContain("test/violator.test.ts");
+  });
+
+  it("subtracts it from --staged too — the route the pre-commit hook runs", () => {
+    const root = makeRepo();
+    writeFileSync(join(root, "test", "violator.test.ts"), SYNTHETIC_PHI);
+    writeFileSync(join(root, "phi-scan-overrides.md"), LOG("test/violator.test.ts"));
+    git(root, ["add", "test/violator.test.ts"]);
+
+    expect(runIn(root, ["--staged"]).code).toBe(1);
+    expect(runIn(root, ["--staged", "--allow-fixture", "test/violator.test.ts"]).code).toBe(0);
+  });
+
+  it("refuses a logged path that no longer exists — a bypass may not rot silently", () => {
+    const root = makeRepo();
+    writeFileSync(join(root, "phi-scan-overrides.md"), LOG("test/renamed-away.test.ts"));
+
+    const r = runIn(root, ["--allow-fixture", "test/renamed-away.test.ts"]);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(2);
+    expect(r.stderr).toMatch(/existing regular file inside a scan root/);
+  });
+
+  it("refuses a logged path outside every scan root, and a logged DIRECTORY", () => {
+    const root = makeRepo();
+    writeFileSync(join(root, "outside.txt"), "x\n");
+    writeFileSync(join(root, "phi-scan-overrides.md"), LOG("outside.txt") + "\n### test\n");
+
+    expect(runIn(root, ["--allow-fixture", "outside.txt"]).code).toBe(2);
+    expect(runIn(root, ["--allow-fixture", "test"]).code).toBe(2);
+  });
+});
+
+describe("phi-scan: this repo's own wiring still carries both halves of its one bypass", () => {
+  // The bypass only holds if the manifest passes the flag AND the log authorizes
+  // it. Dropping either half is silent: without the flag CI reddens on the
+  // scanner's own violator literals, and without the log entry the scan refuses.
+  const BYPASSED = "test/scripts/phi-scan.test.ts";
+
+  it("package.json's phi-scan script passes --allow-fixture for it", () => {
+    const manifest: unknown = JSON.parse(readFileSync(join(REPO_ROOT, "package.json"), "utf8"));
+    const scripts =
+      typeof manifest === "object" && manifest !== null && "scripts" in manifest
+        ? (manifest.scripts as Record<string, string>)
+        : {};
+    expect(scripts["phi-scan"]).toContain(`--allow-fixture ${BYPASSED}`);
+  });
+
+  it("phi-scan-overrides.md logs it", () => {
+    expect(readFileSync(join(REPO_ROOT, "phi-scan-overrides.md"), "utf8")).toContain(
+      `### ${BYPASSED}`,
+    );
+  });
+
+  it("and it is the ONLY file bypassed", () => {
+    // Fenced blocks are skipped here for the same reason the scanner skips them:
+    // the log's own "## Format" section shows the entry shape inside a fence, and
+    // a flat `^###` sweep reads that placeholder as a logged path. This assertion
+    // was written flat first and failed on exactly that.
+    const log = readFileSync(join(REPO_ROOT, "phi-scan-overrides.md"), "utf8");
+    let fenced = false;
+    const entries: string[] = [];
+    for (const line of log.split(/\r?\n/)) {
+      if (/^\s*(?:```|~~~)/.test(line)) {
+        fenced = !fenced;
+        continue;
+      }
+      if (fenced) continue;
+      const m = /^###\s+(.+?)\s*$/.exec(line);
+      if (m?.[1] !== undefined) entries.push(m[1]);
+    }
+    expect(entries).toEqual([BYPASSED]);
   });
 });

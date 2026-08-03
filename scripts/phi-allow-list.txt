@@ -80,6 +80,32 @@ NAME ZZAUTHCITY
 NAME ZZCUSTODIANSTREET
 NAME ZZCUSTODIANCITY
 
+# --- Synthetic C-CDA header tokens written INLINE in test modules (test/ccda/*.test.ts) ---
+# This repo keeps most of its document text as string literals inside `.ts` tests rather than as
+# files under test/fixtures/, and the scan roots now cover all of test/, so those literals are
+# declared here exactly like a fixture's. Both are ZZ-tagged sentinels a test asserts the ABSENCE
+# of after de-identification.
+NAME ZZAUTHORFAM
+NAME ZZNAMEUNDERCODE
+
+# --- Synthetic HL7 v2 tokens written INLINE in test modules and in scripts/smoke.mjs ---
+# Same reason as the block above: this repo's HL7 messages are string literals inside `.ts`/`.mjs`
+# sources, and the structured detector now reads them through the source-literal view. All ZZ-tagged.
+NAME ZZFAM
+NAME ZZGIV
+NAME ZZF
+NAME ZZG
+NAME ZZF2
+NAME ZZG2
+NAME ZZHIDDENALIAS
+NAME ZZHIDDENGIVEN
+NAME ZZSURVIVOR
+NAME ZZJANE
+NAME ZZSMOKEFAMILY
+NAME ZZSMOKEGIVEN
+NAME ZZSMOKESTREET
+NAME ZZSMOKECITY
+
 # --- Synthetic FHIR R4 person/relative/practitioner tokens (test/fixtures/fhir) ---
 # Patient + contact-relative + practitioner + related-person + contained-relative person names,
 # street/city/county parts, the reference display label, and the narrative-div sentinel. All are
@@ -131,11 +157,31 @@ DOB 19900215
 DOB 20211130
 DOB 19850302
 DOB 19850303
+# The fixed birthTime of the C-CDA property-test template (test/ccda/property.test.ts). Invented.
+DOB 19811203
+# The two birth dates of the longitudinal date-shift fixtures (test/hl7/deidentify-hl7.test.ts).
+DOB 20200110
+DOB 20200210
+#
+# ▶ `19800101` IS DELIBERATELY ABSENT AND MUST STAY ABSENT. It is the undeclared DOB
+# `test/scripts/phi-scan.test.ts` uses to prove the HL7, C-CDA, X12 and NCPDP detectors CATCH a
+# real-looking date; declaring it here would make four positive tests assert nothing. The two
+# fixtures that used to carry it were moved onto a declared date instead.
 
 # --- Synthetic ids: MRN / account / member / SSN / phone / county shapes ---
 # SSNs use the never-issued 9xx-xx-xxxx block; phones use the fictional 555 exchange.
+ID ZZMRN
 ID ZZMRN001
 ID ZZMRN002
+# Inline HL7 identifiers in test modules / scripts/smoke.mjs — the five identifier-type placeholders
+# of the PID-3 repetition test, the surviving MRN of the MRG merge case, and the smoke MRN.
+ID I1
+ID I2
+ID I3
+ID I4
+ID I5
+ID NEWMRN
+ID ZZSMOKEMRN
 ID ZZACCT001
 ID ZZACCT018
 ID ZZACCT200

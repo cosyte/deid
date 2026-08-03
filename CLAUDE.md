@@ -298,6 +298,41 @@ repos/cosyte/deid/rulesets/19907854`, not off this file):
   read — that one fails **closed** (a read failure refuses the whole sweep with exit 2), so it is a
   false-red risk rather than this false-green one, and the siblings' TOCTOU machinery was
   deliberately not ported.
+- **▶ THE SCAN ROOTS ARE `src/`, `test/` AND `scripts/` — ALL of `test/`, and that is a DIFFERENT
+  DECISION FROM EVERY SIBLING'S. DO NOT PORT ONE OVER IT.** The bullet above NARROWED what the
+  scopes admit; it did not widen the scopes, and the scopes were the bigger hole. The walk covered
+  `test/fixtures/` + `src/` and `--staged` covered `test/fixtures/**` + `src/**.ts`, so **38 tracked
+  files under `test/` were enumerated by NEITHER route**, four of them already carrying inline HL7
+  `PID|…` literals. Both routes now share one `isUnderScanRoot`. **`mllp` walks `test/` too but
+  EXCLUDES `.ts` from it** — correct there, and it would have closed **none** of these 38, because
+  every one is a `.ts`. **`ccda` roots at the repo root**, which this tree cannot do without walking
+  `node_modules/`, `dist/`, `coverage/` and six binary `vendor/*.tgz`. Still out of scope and stated
+  as such: `.github/`, `docs-content/`, `vendor/`, the root manifests.
+  **▶ ENUMERATION ALONE BUYS YOU THE SSN/EMAIL FLOOR AND C-CDA, AND NOTHING ELSE. This repo's HL7
+  and NCPDP text is a SINGLE-LINE STRING LITERAL in a `.ts` module**, so the bytes carry a backslash
+  and an `r`, not a CR, and the structured detectors — which split on real CR/LF and real
+  `0x1C`/`0x1D`/`0x1E` — saw one line and found nothing. Each file is therefore also scanned as its
+  **string literals, decoded and joined**, in addition to its raw bytes. Two drafts of that decode
+  were wrong and both were measured here: decoding the whole file in place glued the source line's
+  closing quote and comma onto the last field (a declared DOB reported as undeclared), and it took
+  the delimiters from the first MSH-shaped text anywhere in the file, so an `MSH-9` in prose set the
+  field separator to `-` and detection stopped. **A comment in this file is inside a scan root now:
+  writing out an escaped example decodes into a segment the detector reads as a fixture.** It did.
+  **▶ `19800101` MUST STAY OUT OF THE ALLOW-LIST.** It is the undeclared DOB four positive tests use
+  to prove the HL7 / C-CDA / X12 / NCPDP detectors catch a real-looking date; declare it and all four
+  assert nothing. The two fixtures that carried it were moved onto a declared date instead.
+  **▶ EXACTLY ONE FILE IS BYPASSED, AND IT NEEDS BOTH HALVES.** `test/scripts/phi-scan.test.ts` — the
+  scanner's own suite, whose positive cases are necessarily real-looking violator literals. It works
+  because `package.json`'s `phi-scan` script passes `--allow-fixture` **and** `phi-scan-overrides.md`
+  logs it; drop either half and CI reddens or the scan refuses. Pinned. A logged path must be an
+  existing regular file inside a scan root or the scan refuses, and every applied bypass prints a
+  `BYPASSED` line. **Real PHI pasted into that one file is not caught — that is the stated cost.**
+  **▶ `U` IS NOW IN THE `--diff-filter` AND IS REFUSED, NOT READ** (`:100644 000000 <sha> 0000000 U`,
+  measured on git 2.39.5; single path, so the record stride is unchanged). `R`/`C` remain open.
+  **▶ EXIT 1 MEANS HITS AND NOTHING ELSE MAY SPEND IT.** `loadAllowList()` and `readdirSync` used to
+  escape as uncaught exceptions, which Node exits **1** for — a gate that could not read its own
+  allow-list reporting "I found PHI in your corpus". Failure is the default path now; do not go back
+  to catching by type, because the set of things that can fail is open.
 - **▶ `attw` SAYS "does not contain types" AND EXITS 0, SO THE `attw` SCRIPT IS A WRAPPER, NOT THE
   BARE CLI.** `getExitCode.js` in `@arethetypeswrong/cli` opens with `if (!analysis.types) return 0`
   — an untyped package is a legitimate npm package, so "no types at all" is a description, not a
