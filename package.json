@@ -167,7 +167,7 @@
     "clean": "rm -rf dist coverage",
     "pack:docs": "bash scripts/build-docs-artifacts.sh",
     "smoke": "node scripts/smoke.mjs",
-    "attw": "attw --pack . --profile node16",
+    "attw": "node scripts/attw.mjs --profile node16",
     "version": "changeset version && prettier --write package.json CHANGELOG.md",
     "release": "changeset publish",
     "prepublishOnly": "pnpm clean && pnpm typecheck && pnpm lint && pnpm test && pnpm build && pnpm attw",
