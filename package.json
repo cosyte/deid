@@ -168,7 +168,7 @@
     "pack:docs": "bash scripts/build-docs-artifacts.sh",
     "smoke": "node scripts/smoke.mjs",
     "attw": "node scripts/attw.mjs --profile node16",
-    "version": "changeset version && prettier --write package.json CHANGELOG.md",
+    "version": "changeset version && node scripts/sync-version.mjs && prettier --write package.json CHANGELOG.md src/labels.ts",
     "release": "changeset publish",
     "prepublishOnly": "pnpm clean && pnpm typecheck && pnpm lint && pnpm test && pnpm build && pnpm attw",
     "prepare": "command -v simple-git-hooks >/dev/null 2>&1 && simple-git-hooks || true"
