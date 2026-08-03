@@ -1170,7 +1170,7 @@ function scanX12Structured(path: string, content: string, allow: AllowList, hits
   let body = "";
   for (const m of src.matchAll(/(?:^|[^A-Za-z0-9])ISA[^A-Za-z0-9\s]/g)) {
     const at = m.index + m[0].length - 4;
-    const candidate = src.slice(at).replace(/\r?\n/g, "");
+    const candidate = src.slice(at).replace(/[\r\n]/g, "");
     if (candidate.length < 106) continue;
     if (candidate.charAt(6) !== candidate.charAt(3)) continue; // ISA01 is 2 wide
     if (/[A-Za-z0-9\s]/.test(candidate.charAt(105))) continue;
@@ -1232,7 +1232,7 @@ function scanX12Structured(path: string, content: string, allow: AllowList, hits
     for (const seg of piece.split(/\r\n|\r|\n/)) {
       scanX12Segment(seg, elementSep, check);
     }
-    const rejoined = piece.replace(/\r?\n/g, "");
+    const rejoined = piece.replace(/[\r\n]/g, "");
     if (rejoined !== piece) scanX12Segment(rejoined, elementSep, check);
   }
 }
