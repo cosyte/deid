@@ -5,9 +5,9 @@
 > the case that earned it (the measurement, the sha, the negative control). **Read the section before
 > you touch the thing it guards.** This file is always-read for every worker that `cd`s in, so it is
 > budgeted at write time by the umbrella's `.claude/hooks/doc-budget.mjs` (ADR 0023, amended
-> 2026-08-04); the notes are read on demand. **The number lives in that hook, not here** — the ADR and
-> the hook do not currently agree on it, so read the hook. **The remedy for size is always relocation,
-> never deleting a trap.**
+> 2026-08-04); the notes are read on demand. **The number lives in that hook, not here** — the ADR
+> states the policy, the hook states the byte figure, and the hook is what refuses the write. **The
+> remedy for size is always relocation, never deleting a trap.**
 
 ## Project
 
@@ -43,11 +43,14 @@ never rendered**. Full statement: `documentation/agent-notes.md#project`.
   breakage**. → `documentation/agent-notes.md#shipped-phases-deid-1-through-deid-10`
 - **Publish state and repo visibility are INDEPENDENT — check each, never infer one from the other, and
   NEVER QUOTE A VERSION IN THIS FILE.** `npm view @cosyte/deid version`, `git tag` and
-  `gh api repos/cosyte/deid --jq .visibility` are the only authorities. **⚠ The publish-state paragraph
-  this file used to carry is FLAGGED STALE in the umbrella backlog (`CHANGELOG-PREAMBLE-FUTURE-TENSE`,
-  alongside `hl7`, `mllp`, `transform`) — it is preserved with that warning at
-  `documentation/agent-notes.md#publish-state-and-visibility` and must not be restated as fact from
-  here.** `npm publish` is waived by standing founder directive; **flipping a repo public is not.**
+  `gh api repos/cosyte/deid --jq .visibility` are the only authorities. **⚠ TWO DATED CLAIMS ARE IN
+  PLAY AND NEITHER IS A STANDING FACT:** the publish-state paragraph this file used to carry (itself a
+  _correction_ of an earlier "not yet published" claim, preserved at
+  `documentation/agent-notes.md#publish-state-and-visibility`), and the umbrella backlog entry
+  `CHANGELOG-PREAMBLE-FUTURE-TENSE`, which still names this file alongside `hl7`, `mllp` and
+  `transform` as saying "not yet published" — **that entry is out of date for `deid`.** Re-measure;
+  restate neither as fact from here. `npm publish` is waived by standing founder directive;
+  **flipping a repo public is not.**
 
 ## Tech Stack (the shared `@cosyte/*` standard)
 
@@ -76,7 +79,8 @@ truth is the meta-repo's `documentation/conventions.md`; the full per-line detai
 - **Never require `scorecard`** (it never runs on `pull_request`), nor the GHAS `CodeQL` check.
   → `documentation/agent-notes.md#why-scorecard-is-not-required`
 - **Read `ci.yml`'s job-name banner before renaming a job or splitting a step out of `verify`** — a
-  required job gates its steps, so promoting one silently un-requires it. **The leak/over-scrub corpus
+  required job gates its steps, so promoting one silently un-requires it. **The PHI scan is a STEP of
+  `verify`, so it is required only for as long as it stays one.** **The leak/over-scrub corpus
   (`test/corpus/`, the cross-format zero-leak gate, proven non-vacuous) is protected by NO ruleset**: it
   is glob-selected in `vitest.config.ts`, so narrowing the glob, moving it or `.skip`-ing it drops this
   repo's headline leak gate with nothing to notice.
@@ -92,10 +96,12 @@ truth is the meta-repo's `documentation/conventions.md`; the full per-line detai
 - **`pnpm check:test-selection` gates what the required test job SELECTS.** Context `test-selection` is
   **deliberately NOT in the ruleset yet** — let it run on `main` first. **Its subject is DERIVED from
   `exports`; there is no exemption list, because every exemption a sibling offered was walked through by
-  a rename.** So `test/helpers/run-date-shift.ts` imports `src/` directly on purpose — **do not "tidy"
-  it back to the root entry.** **Self-test D covers THREE NAMED DERIVATIONS, not "the derivations": a
-  diff touching `exportedSourceEntries` or `resolveSpecifier` is reviewed by a person against the OK
-  line's counts.** Selection is not execution, and the measured limits are listed, none claimed closed.
+  a rename. The cost is paid in the repo instead: A MODULE THAT IS NOT A TEST MAY NOT IMPORT A PUBLISHED
+  ENTRY POINT.** So `test/helpers/run-date-shift.ts` imports `src/` directly on purpose — **do not
+  "tidy" it back to the root entry.** **Self-test D covers THREE NAMED DERIVATIONS, not "the
+  derivations": a diff touching `exportedSourceEntries` or `resolveSpecifier` is reviewed by a person
+  against the OK line's counts. DO NOT REMOVE D TO "SIMPLIFY"** — the other three self-tests cannot see
+  what it sees. Selection is not execution, and the measured limits are listed, none claimed closed.
   → `documentation/agent-notes.md#the-test-selection-gate`
 - **The ruleset BLOCKS the "Version Packages" PR by design — it needs one push** (an empty commit onto
   `changeset-release/main`), done **last**, immediately before merging. `bypass_actors` is empty on
@@ -137,9 +143,8 @@ truth is the meta-repo's `documentation/conventions.md`; the full per-line detai
 Every line here is clinical-safety content. Full cases: `documentation/agent-notes.md#the-phi-scan`.
 
 - **The scan FOLLOWS NOTHING — a non-regular in-scope entry REFUSES the scan (exit 2). Never "fix" this
-  by following the link.** Both enumerating routes read a symlink as **clean** — reproduced on
-  `e040ffc`, and see the notes for which commit closed which route. The narrowing is **structural** on
-  both routes; **the kind tokens are labels with a catch-all arm, never
+  by following the link.** Both enumerating routes read a symlink as **clean**; reproduced on
+  `e040ffc`. The narrowing is **structural** on both routes; **the kind tokens are labels with a catch-all arm, never
   the decision — do not turn either into a list of shapes to match.**
   → `documentation/agent-notes.md#phi-scan-follows-nothing`
 - **THE ONE-LETTER TRAP: `--diff-filter` MUST KEEP `T`.** Without it a tracked file replaced by a link

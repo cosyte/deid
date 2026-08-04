@@ -21,6 +21,11 @@ re-identification risk, not a tidiness regression. Treat every rule below as cli
 the live system before acting on one; several of these paragraphs exist *because* an earlier version of
 them was read as a standing fact after it had gone stale.
 
+**This file is BYTE-VERBATIM and is deliberately NOT prettier-formatted.** It sits outside
+`format:check`'s globs only because `*.{json,md,yml}` is root-only. **Widening that glob to
+`documentation/**/*.md` would silently reflow the relocated prose** — if you widen it, exclude this
+file, and never run prettier over it by name.
+
 ## Project
 
 **`@cosyte/deid`** — a developer-focused healthcare **de-identification** library for Node.js/TypeScript,
@@ -76,15 +81,20 @@ warning — read it before quoting anything from it.
 
 ### Publish state and visibility
 
-**⚠ STALENESS WARNING — READ BEFORE QUOTING ANY OF THIS.** The paragraph below is a *correction* of
-an earlier false paragraph, and it is itself a dated observation, not a standing fact. The umbrella
-backlog still lists this file alongside `hl7`, `mllp` and `transform` under
-`CHANGELOG-PREAMBLE-FUTURE-TENSE` as carrying a stale publish-state claim, so **treat the text below
-as flagged-stale and do not lift a sentence out of it into any other document as fact.** Publish
-state and repo visibility are independent; check each, every time, with `npm view @cosyte/deid
-version`, `git tag` and `gh api repos/cosyte/deid --jq .visibility`. **No version number belongs in
-this section or in `CLAUDE.md`** — quoting one is precisely how the paragraph it corrects went
-stale in the first place.
+**⚠ POINT-IN-TIME, ON BOTH SIDES — READ BEFORE QUOTING ANY OF THIS.** The paragraph below is itself
+a *correction*: it replaced an earlier paragraph that claimed the package was still unpublished. So
+there are two dated claims in play and **neither is a standing fact**:
+
+1. The paragraph below, which is a dated observation of the registry and of repo visibility.
+2. The umbrella backlog entry `CHANGELOG-PREAMBLE-FUTURE-TENSE`, which names this file alongside
+   `hl7`, `mllp` and `transform` as *still saying* "not yet published to npm". **That entry is out
+   of date for `deid`** — the correction below had already landed when it was read.
+
+**Do not lift a sentence out of either into another document as fact.** Publish state and repo
+visibility are independent; check each, every time, with `npm view @cosyte/deid version`, `git tag`
+and `gh api repos/cosyte/deid --jq .visibility`. **No version number belongs in this section or in
+`CLAUDE.md`** — quoting one is precisely how the paragraph this corrects went stale in the first
+place.
 
 - **The repo is PUBLIC and the package IS published.** Those two are independent here and neither
   implies the other, so do not infer one from the other. Check each. `gh api repos/cosyte/deid --jq
