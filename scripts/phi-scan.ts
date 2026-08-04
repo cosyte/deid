@@ -145,18 +145,24 @@
  *
  * ⚠ `--staged`'s BOUNDARY IS THE `--diff-filter` AS WELL AS THE PATH SET, so the
  * mode check above reaches only the records that filter enumerates. `R`/`C` are
- * not among them (see `buildTargetsForStaged`), and that is not only a content
+ * returned by none of `AM`, `AMT` or `AMTU`, and that was not only a content
  * gap: RENAMING an ALREADY-TRACKED symlink is an `R` record with a `120000`
- * destination, so this route reads it clean even though its path is in scope
+ * destination, so this route read it clean even though its path is in scope
  * (measured on git 2.39.5: `git mv` of a tracked link yields
- * `:120000 120000 <sha> <sha> R100`, dropped by `AMTU`, and `--staged` exits 0).
- * The all-mode walk refuses that same worktree, so it is not clean everywhere;
- * this route is where it is missed. That is PRE-EXISTING and disclosed rather
- * than fixed here, because admitting `R`/`C` needs the two-path record shape
- * handled, which is a scope decision. Do not read the paragraph above as
- * covering it. `U` (UNMERGED) WAS THE SAME SHAPE OF GAP AND IS NOW CLOSED: it
- * carries a single path, so the stride is unchanged, and its all-zero
- * destination mode lands it in the refusal rather than in a read.
+ * `:120000 120000 <sha> <sha> R100`, dropped by `AMTU`, and `--staged` exited
+ * 0). The all-mode walk refuses that same worktree, so the hole was AT
+ * PRE-COMMIT and the sweep was the backstop.
+ *
+ * THE REMEDY IS `--no-renames`, AND IT COSTS NO STRIDE WORK. The "needs the
+ * two-path record shape, a scope decision" framing this banner carried is
+ * WITHDRAWN, not deferred again. With detection off git emits no `R` and no `C`
+ * at all: the destination arrives as a single-path `A` and the source as a `D`
+ * the filter drops, so the enumeration is a SUPERSET of the previous one (EQUAL
+ * when git emitted no `R` and no `C`, LARGER when it did) and the two-field stride
+ * becomes structural. `U` (UNMERGED) was the same shape of gap, but it is closed
+ * BY A DIFFERENT MECHANISM AND THE TWO MUST NOT BE CONFLATED: `U` is closed by
+ * being IN `--diff-filter=AMTU`, and `--no-renames` does not carry it. Dropping
+ * `U` from the filter on the belief that the flag covers it re-opens that gap.
  *
  * A refusal names the entry's own repo-relative path and an engine-owned token
  * for its kind. IT NEVER REPORTS THE LINK TARGET, which is text off the working
@@ -728,10 +734,39 @@ function buildTargetsForStaged(): Target[] {
     // path fails, because the content lives at stages 1/2/3 and there is no
     // stage-0 blob to hand back, so this route cannot vouch for what would be
     // committed. Refusing is also the same verdict `git commit` itself gives.
-    listBuf = execFileSync("git", ["diff", "--cached", "--raw", "-z", "--diff-filter=AMTU"], {
-      encoding: "buffer",
-      stdio: ["ignore", "pipe", "pipe"],
-    });
+    //
+    // `--no-renames` IS THE THIRD HALF OF THE SAME DEFECT, AND THE FILTER ALONE
+    // COULD NEVER HAVE CLOSED IT. `R` (rename) and `C` (copy) are returned by
+    // neither `AM` nor `AMT` nor `AMTU`, so with rename detection on (it is ON BY
+    // DEFAULT, and `diff.renames` can turn copy detection on as well)
+    // `git mv <link> test/<name>` stages as `:120000 120000 <sha> <sha> R100`
+    // with TWO paths, which the filter then deletes outright. An ordinary
+    // `git mv` put a mode-120000 entry under a scan root and this route printed
+    // its clean line (measured on git 2.39.5). It is not only a MODE gap: a
+    // rename that also SUBSTITUTES a real name stages as `R052` and its new
+    // content is never read either (measured, same tree, exit 0 while naming the
+    // destination directly returned two hits).
+    //
+    // Turning detection OFF makes the destination arrive as an ordinary
+    // single-path `A` (`:000000 120000 0000000 <sha> A`, or `:000000 100644 ...
+    // A` for a content rename) and the source as a `D` the filter drops. So the
+    // enumeration is a SUPERSET of the previous one (EQUAL when git emitted no
+    // `R` and no `C`, LARGER when it did), it costs the
+    // two-field stride below nothing, and it needs no two-path record shape,
+    // which is why the "needs a scope decision" framing this route carried is
+    // withdrawn rather than deferred again.
+    //
+    // It also makes that stride STRUCTURAL rather than conditional: with
+    // detection off, git cannot produce an `R` or `C` record whatever the
+    // caller's `diff.renames` / `diff.renameLimit` configuration says.
+    listBuf = execFileSync(
+      "git",
+      ["diff", "--cached", "--raw", "-z", "--no-renames", "--diff-filter=AMTU"],
+      {
+        encoding: "buffer",
+        stdio: ["ignore", "pipe", "pipe"],
+      },
+    );
   } catch (err) {
     throw new InvocationError(
       `git diff --cached failed: ${err instanceof Error ? err.message : String(err)}`,
@@ -739,19 +774,20 @@ function buildTargetsForStaged(): Target[] {
   }
 
   // `--raw -z` emits `<info>\0<path>\0` per record. `R` (rename) and `C` (copy)
-  // are the only statuses carrying a SECOND path, and the filter excludes both,
-  // so the stride is two fields. If one ever reached here the stride would
-  // desync and the next record would fail to parse, which REFUSES — the same
-  // outcome as any other unparseable record, and the safe one.
+  // are the only statuses carrying a SECOND path, and `--no-renames` above means
+  // git cannot emit either, so the stride is two fields, structurally and not
+  // because the caller's configuration happens to agree. The regex still admits a
+  // score-suffixed status: if one ever reached here the stride would desync and
+  // the next record would fail to parse, which REFUSES: the same outcome as any
+  // other unparseable record, and the safe one. A record that does not parse
+  // REFUSES rather than being skipped: a silently shortened list is exactly the
+  // shape this scan must never report clean over.
   //
-  // Excluding `R`/`C` also means this route does not enumerate a staged rename
-  // at all — which costs it a MODE check, not only content: renaming an
-  // already-tracked symlink is an `R` record with a `120000` destination, so
-  // this route reads it clean while the all-mode walk refuses the same worktree.
-  // That is PRE-EXISTING and is not narrowed here: admitting them needs
-  // the two-path record shape handled, which is a scope decision, not this one.
-  // A record that does not parse REFUSES rather than being skipped: a silently
-  // shortened list is exactly the shape this scan must never report clean over.
+  // What this route still does NOT enumerate, stated because the boundary is
+  // narrower than the path prefix alone: `--diff-filter=AMTU` also drops `D` (a
+  // deletion has no staged blob to scan), and a rename's SOURCE path now arrives
+  // as exactly that `D`. That is the correct answer (the source path is leaving
+  // the tree), and it is why turning detection off only ever ADDS records.
   const fields = listBuf.toString("utf8").split("\0");
   const staged: { path: string; mode: string; status: string }[] = [];
   let i = 0;

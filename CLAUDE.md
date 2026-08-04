@@ -18,7 +18,7 @@ never rendered.
 
 ## Status
 
-- **DEID-1…DEID-10 shipped — the roadmap is complete.** Pre-alpha `0.0.x`, not yet published to npm.
+- **DEID-1…DEID-10 shipped, and the roadmap is complete.** Pre-alpha `0.0.x`, published to npm.
   `src/` carries the format-agnostic core (DEID-1: the policy engine `deidentify` / `SAFE_HARBOR_POLICY`
   / `defineDeidPolicy`, the five `node:crypto`-backed transforms, the 18-category Safe Harbor model, the
   fail-closed rule, the value-free manifest) plus **all six per-format adapters** on the core's generic
@@ -47,19 +47,19 @@ never rendered.
   `createDeidContext` with a per-format `deidentify*` no longer throws a fail-closed `DEID_NO_KEY`); and
   two date-shift fixes (timezone-independent ISO-datetime shifting; `maxShiftDays: 0` now fails closed
   with `DEID_CONTEXT_INVALID`). **Third-party runtime deps: zero (`node:crypto` only).**
-- **The repo is already PUBLIC; the package is still unpublished.** Those two are independent here and
-  neither implies the other, so do not infer one from the other. `gh api repos/cosyte/deid --jq .visibility`
-  reports `public` (checked 2026-07-28), so the flip described above as a pending gate has happened, and
-  the "pre `PUB-FLIP`" note on the vendored tarballs is stale as a reason even though the vendoring is
-  still real. `npm publish` remains the one standing gate: the registry returns 404 for
-  `@cosyte/deid`. **No rejection of this package's own name is recorded anywhere, and no publish
-  attempt is recorded either** (`version` is still `0.0.0`, there are no tags, and `CHANGELOG.md` has
-  no released section) - note that a failed publish and a never-attempted one both leave a bare 404,
-  so the registry cannot tell you which. The hold is a sequencing decision: it waits on the
-  name-similarity rejection npm returned for `@cosyte/fhir`, which this package lists as an
-  **optional** peer dependency, so nothing mechanically stops a publish. That rejection is specific
-  to that one name, not to the `@cosyte` scope, which carries other published packages.
-  No version is quoted in this file on purpose; `npm view @cosyte/deid version` is the authority.
+- **The repo is PUBLIC and the package IS published.** Those two are independent here and neither
+  implies the other, so do not infer one from the other. Check each. `gh api repos/cosyte/deid --jq
+.visibility` reports `public`, so the flip once described here as a pending gate has happened, and
+  the "pre `PUB-FLIP`" note on the vendored tarballs is stale as a reason even though the vendoring
+  is still real. **The whole "still unpublished" paragraph that stood here was FALSE and is deleted
+  rather than reworded**: it said the registry returns 404 for `@cosyte/deid`, that no publish
+  attempt was recorded, that `version` was still `0.0.0` and that there were no tags. The registry
+  serves this package under several versions, `git tag` lists a release tag for each, and the hold it
+  described as waiting on the `@cosyte/fhir` name rejection was never a hold on this name at all:
+  that rejection is specific to that one name, not to the `@cosyte` scope. **No version is quoted in
+  this file on purpose**, and adding one is how the paragraph above went stale;
+  `npm view @cosyte/deid version` and `git tag` are the authorities. `npm publish` is waived by
+  standing founder directive; **flipping a repo public is not, and that gate is spent here anyway.**
 
 ## Tech Stack (the shared `@cosyte/*` standard)
 
@@ -285,10 +285,23 @@ repos/cosyte/deid/rulesets/19907854`, not off this file):
   changelog claimed it refused one. A conformance gate caught exactly that here. `T` also buys the
   reverse typechange, a link replaced by a real file bearing PHI.
   **`--staged`'s boundary is the `--diff-filter` as well as the path set**, so "refuses mode
-  `120000`" holds only of the records the filter admits: `R`/`C` are not enumerated at all, and
-  renaming an already-tracked symlink is an `R` record with a `120000` destination that this route
-  reads clean (the all-mode walk refuses that same worktree). Pre-existing and disclosed, not closed
-  — admitting `R`/`C` needs the two-path record shape handled. **A REFUSAL NAMES THE ENTRY'S OWN
+  `120000`" holds only of the records the filter admits, and `R`/`C` were returned by none of `AM`,
+  `AMT` or `AMTU`, so `git mv <tracked link>` into a scan root staged as `:120000 120000 <sha> <sha>
+R100` and this route printed its clean line (measured on git 2.39.5; the all-mode walk refused that
+  same worktree, so **the hole was at PRE-COMMIT and the sweep was the backstop**). It was never only
+  a MODE gap either: a rename that also SUBSTITUTES a value stages as `R052` and its new content went
+  unread the same way.
+  **▶ CLOSED BY `--no-renames`, AND THE "needs the two-path record shape, a scope decision" FRAMING
+  THIS FILE CARRIED IS WITHDRAWN, NOT DEFERRED AGAIN. IT WAS FALSE.** With detection off git emits
+  no `R` and no `C` at all: the destination arrives as a single-path `A` and the source as a `D` the
+  filter drops, so the enumeration is a SUPERSET of the previous one (EQUAL when git emitted no
+  `R` and no `C`, LARGER when it did), the two-field record
+  stride is untouched, and the stride becomes STRUCTURAL rather than conditional on the caller's
+  config. Measured across `diff.renames=true|copies|false|1` with `renameLimit=1`: zero `R`/`C`
+  records survive in any of them, and a real `C100` under `diff.renames=copies` is pinned separately
+  because a copy is a distinct enumeration shape from a rename, not a spelling of it. Pinned in
+  `test/scripts/phi-scan.test.ts`; **4 of the 5 new cases run red against the pre-fix scanner**, and
+  the fifth is the no-regression control that is green on both. **A REFUSAL NAMES THE ENTRY'S OWN
   REPO-RELATIVE PATH AND AN ENGINE-OWNED KIND TOKEN, NEVER THE LINK TARGET**, which is working-tree
   text that can itself carry PHI; that is why no example target path appears in the docblock, the
   CHANGELOG or the changeset either — a diagnostic about a PHI leak is itself a PHI surface, and so
@@ -353,7 +366,8 @@ repos/cosyte/deid/rulesets/19907854`, not off this file):
   existing regular file inside a scan root or the scan refuses, and every applied bypass prints a
   `BYPASSED` line. **Real PHI pasted into that one file is not caught — that is the stated cost.**
   **▶ `U` IS NOW IN THE `--diff-filter` AND IS REFUSED, NOT READ** (`:100644 000000 <sha> 0000000 U`,
-  measured on git 2.39.5; single path, so the record stride is unchanged). `R`/`C` remain open.
+  measured on git 2.39.5; single path, so the record stride is unchanged). `R`/`C` are closed too,
+  by `--no-renames` rather than by the filter. See the bullet above.
   **▶ EXIT 1 MEANS HITS AND NOTHING ELSE MAY SPEND IT.** `loadAllowList()` and `readdirSync` used to
   escape as uncaught exceptions, which Node exits **1** for — a gate that could not read its own
   allow-list reporting "I found PHI in your corpus". Failure is the default path now; do not go back
