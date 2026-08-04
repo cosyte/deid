@@ -35,14 +35,9 @@
     },
     {
       "type": "category",
-      "label": "Limitations & Honesty",
-      "collapsed": false,
-      "items": ["limitations"]
-    },
-    {
-      "type": "category",
       "label": "Troubleshooting",
-      "items": ["troubleshooting"]
+      "collapsed": false,
+      "items": ["troubleshooting", "limitations"]
     }
   ]
 }
