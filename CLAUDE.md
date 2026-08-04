@@ -4,8 +4,10 @@
 > **verbatim** on 2026-08-04, nothing deleted. Each line here is the imperative; the anchor after it is
 > the case that earned it (the measurement, the sha, the negative control). **Read the section before
 > you touch the thing it guards.** This file is always-read for every worker that `cd`s in, so it is
-> bounded (uniform 90,000-byte cap, ADR 0023 amendment 2026-08-04); the notes are read on demand.
-> **The remedy for size is relocation, never deleting a trap.**
+> budgeted at write time by the umbrella's `.claude/hooks/doc-budget.mjs` (ADR 0023, amended
+> 2026-08-04); the notes are read on demand. **The number lives in that hook, not here** — the ADR and
+> the hook do not currently agree on it, so read the hook. **The remedy for size is always relocation,
+> never deleting a trap.**
 
 ## Project
 
@@ -25,7 +27,7 @@ never rendered**. Full statement: `documentation/agent-notes.md#project`.
 
 - **DEID-1…DEID-10 shipped; the roadmap is complete.** Pre-alpha on the `0.0.x` ladder. Format-agnostic
   core plus **all six adapters** (`hl7`, `ccda`, `fhir`, `x12`, `ncpdp`, `dicom`), the longitudinal
-  registry, the BYO free-text interface, the Expert-Determination *support* report, and DEID-10 release
+  registry, the BYO free-text interface, the Expert-Determination _support_ report, and DEID-10 release
   hardening (profiles, leak/over-scrub corpus, `pnpm smoke`, the tsup shared-core chunk fix).
   **Third-party runtime deps: zero (`node:crypto` only).** What each phase shipped, and the scoped
   claims that go with it: `documentation/agent-notes.md#shipped-phases-deid-1-through-deid-10`.
@@ -33,6 +35,12 @@ never rendered**. Full statement: `documentation/agent-notes.md#project`.
   structural de-id through the current parser surface.
 - **The DICOM adapter DELEGATES to `@cosyte/dicom`'s PS3.15 Annex E pass: metadata-only, burned-in
   pixels FLAGGED not cleaned.** Never describe it as cleaning pixels.
+- **▶ THE OTHER SCOPED SAFETY CLAIMS, EACH OF WHICH BECOMES A FALSE GUARANTEE IF YOU BROADEN IT.** The
+  free-text interface is **block-by-default**, and a consumer redactor is **consumer-asserted, never
+  re-verified**. `defineDeidProfile` is fail-closed under a **widen-never-narrow** contract. The
+  `DEID_POLICY_INVALID` label guard exists so **date-shift may not wear the `safe-harbor` label**. The
+  registry key is consumer-supplied, fail-closed on `DEID_NO_KEY`, and **rotation is intentional linkage
+  breakage**. → `documentation/agent-notes.md#shipped-phases-deid-1-through-deid-10`
 - **Publish state and repo visibility are INDEPENDENT — check each, never infer one from the other, and
   NEVER QUOTE A VERSION IN THIS FILE.** `npm view @cosyte/deid version`, `git tag` and
   `gh api repos/cosyte/deid --jq .visibility` are the only authorities. **⚠ The publish-state paragraph
@@ -49,8 +57,8 @@ truth is the meta-repo's `documentation/conventions.md`; the full per-line detai
 
 - **Language:** TypeScript strict (full rigor set incl. `noUncheckedIndexedAccess`), **ES2023**,
   `NodeNext`, TS 5.9.x exact-pinned. **Node >= 22** (CI matrix 22 + 24). **pnpm@10.**
-- **Build:** dual ESM + CJS + `.d.ts` via `tsup`. The `attw` script is **`node scripts/attw.mjs
-  --profile node16`, not the bare CLI** — see the guardrail below.
+- **Build:** dual ESM + CJS + `.d.ts` via `tsup`. The `attw` script is
+  **`node scripts/attw.mjs --profile node16`, not the bare CLI** — see the guardrail below.
 - **Lint/format:** ESLint 10 + type-checked `typescript-eslint`, Prettier, `--max-warnings=0`.
 - **Testing:** Vitest 4 + v8 coverage, per-directory >= 90 gates; invariants from `@cosyte/test-utils`.
 - **CI/CD:** thin callers of the reusable `cosyte/.github` workflows. **Runtime deps: zero.** MIT.
@@ -69,15 +77,17 @@ truth is the meta-repo's `documentation/conventions.md`; the full per-line detai
   → `documentation/agent-notes.md#why-scorecard-is-not-required`
 - **Read `ci.yml`'s job-name banner before renaming a job or splitting a step out of `verify`** — a
   required job gates its steps, so promoting one silently un-requires it. **The leak/over-scrub corpus
-  is protected by NO ruleset**: it is glob-selected in `vitest.config.ts`, so narrowing the glob, moving
-  it or `.skip`-ing it drops this repo's headline leak gate with nothing to notice.
+  (`test/corpus/`, the cross-format zero-leak gate, proven non-vacuous) is protected by NO ruleset**: it
+  is glob-selected in `vitest.config.ts`, so narrowing the glob, moving it or `.skip`-ing it drops this
+  repo's headline leak gate with nothing to notice.
   → `documentation/agent-notes.md#job-names-and-what-a-ruleset-cannot-see`
 - **`pnpm smoke` is a real gate; the shared pipeline's `Dual ESM/CJS smoke` step is NOT the same check**
   (root entry only). **Its scope is DERIVED from `package.json`'s `exports` — replacing that with a
-  hand-written array reopens the hole above.** → `documentation/agent-notes.md#the-smoke-gate`
+  hand-written array reopens the hole above.** **Its leak sweep is HL7-ONLY** — the cross-format
+  zero-leak gate is `test/corpus/`, from source. → `documentation/agent-notes.md#the-smoke-gate`
 - **`pnpm check:no-internal-refs`** runs in its own workflow; context is the bare job id
   `no-internal-refs`. **Read a real context name off a live check run, never off a workflow's `name:`.**
-  It gates the *source* of published text, not `dist/`.
+  It gates the _source_ of published text, not `dist/`.
   → `documentation/agent-notes.md#the-no-internal-refs-gate`
 - **`pnpm check:test-selection` gates what the required test job SELECTS.** Context `test-selection` is
   **deliberately NOT in the ruleset yet** — let it run on `main` first. **Its subject is DERIVED from
@@ -127,8 +137,9 @@ truth is the meta-repo's `documentation/conventions.md`; the full per-line detai
 Every line here is clinical-safety content. Full cases: `documentation/agent-notes.md#the-phi-scan`.
 
 - **The scan FOLLOWS NOTHING — a non-regular in-scope entry REFUSES the scan (exit 2). Never "fix" this
-  by following the link.** Both enumerating routes read a symlink as *clean* until 2026-07-28. The
-  narrowing is **structural** on both routes; **the kind tokens are labels with a catch-all arm, never
+  by following the link.** Both enumerating routes read a symlink as **clean** — reproduced on
+  `e040ffc`, and see the notes for which commit closed which route. The narrowing is **structural** on
+  both routes; **the kind tokens are labels with a catch-all arm, never
   the decision — do not turn either into a list of shapes to match.**
   → `documentation/agent-notes.md#phi-scan-follows-nothing`
 - **THE ONE-LETTER TRAP: `--diff-filter` MUST KEEP `T`.** Without it a tracked file replaced by a link
@@ -148,7 +159,7 @@ Every line here is clinical-safety content. Full cases: `documentation/agent-not
   SIBLING'S. DO NOT PORT ONE OVER IT.** The old scopes missed **38 tracked files**, four already
   carrying inline HL7 `PID|…` literals. → `documentation/agent-notes.md#the-scan-roots`
 - **ENUMERATING THE FILES BUYS THE SSN/EMAIL FLOOR AND NOTHING ELSE — a detector has to RECOGNISE the
-  document first, and every recogniser was written for a file that *is* the document.** This repo's
+  document first, and every recogniser was written for a file that _is_ the document.** This repo's
   fixtures are `.ts` string literals, so each file is also scanned as its **decoded, joined literals**;
   four recognisers widened with it (X12's offset-0 `ISA`, a bare `PID|…`, an indented segment, HL7's
   doubled backslash). → `documentation/agent-notes.md#enumerating-the-files-buys-the-floor-only`
@@ -161,7 +172,8 @@ Every line here is clinical-safety content. Full cases: `documentation/agent-not
 - **▶ THE EVIDENCE STANDARD FOR THIS REPO: PROVE EVERY WIDENING WITH A CASE THAT IS RED BEFORE AND GREEN
   AFTER. A recogniser that quietly matches nothing reports "no hits."** This is how a redaction widening
   is accepted here — a claim without a red-before case is not evidence.
-  → `documentation/agent-notes.md#widening-a-recogniser-is-two-sided`
+  → `documentation/agent-notes.md#widening-a-recogniser-is-two-sided` (the per-mechanism form) and
+  `documentation/agent-notes.md#what-is-not-claimed-to-be-reached` (the sentence itself)
 - **None of that claims arbitrary embedded text is reached**; the banner in `scripts/phi-scan.ts`
   enumerates what is not. → `documentation/agent-notes.md#what-is-not-claimed-to-be-reached`
 - **A comment in `scripts/phi-scan.ts` is INSIDE a scan root** — an escaped example decodes into a
@@ -215,7 +227,6 @@ text and every sub-case: `documentation/agent-notes.md#standing-disciplines-ever
    commit, the PR and the roadmap — never in `README.md`, `docs-content/`, the npm `description`, a
    release body, or the JSDoc that compiles into `dist/**/*.d.ts`. Gated by
    `pnpm check:no-internal-refs`. → `documentation/agent-notes.md#no-internal-project-bookkeeping-on-a-public-surface`
-
    - **The gate keys on KNOWN PROJECT PREFIXES, never the `WORD-N` shape — in THIS repo that is not
      stylistic.** `deid` documents the loci of all six standards (`PID-3`, `NM1-03`, `DTP-03`, `CLP-01`,
      `US-SSN`, `ICD-10-CM`, …); a shape rule deletes the coordinates a consumer needs to audit what was
