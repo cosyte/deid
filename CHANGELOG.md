@@ -377,6 +377,40 @@ its public history at `0.0.x`, per the cosyte version ladder (`0.0.x` until firs
 
 ### Fixed
 
+- **The shipped docs sidebar now conforms to the canonical IA spine, and its not conforming was
+  gating `docs.cosyte.com`'s deploy build.** `docs-content/sidebars.json` declared a top-level
+  category **"Limitations & Honesty"**, which is not on the spine (`Overview`, `Installation`,
+  `Quickstart`, `Core Concepts`, `Guides`, `API Reference`, `Troubleshooting`). `docs`'
+  IA-conformance gate grades a non-canonical top-level label `IA040`, promoted from warning to error
+  under the strict default, and that gate runs inside the deploy build. Measured against the gate's
+  own `lintSidebar`, not against the prose describing it: the `v0.0.7` sidebar returns one `IA040`
+  error, this one returns no findings at all.
+  - **What this release does and does not restore, stated precisely, because the tempting summary is
+    wrong twice.** This sidebar only entered the gate's subject set when the docs consumer tier went
+    live (`docs#83`, 2026-08-03); before that `deid` was `enabled: false` and was skipped outright,
+    so it cannot have caused an outage that began earlier. It was first observed on 2026-08-04, once
+    an unrelated out-of-memory failure in an earlier build step stopped masking the gate by killing
+    the build before the gate could run. And it is **one of three strict findings across two
+    packages' current releases**, the other two being on `@cosyte/cli`, so clearing this one is
+    necessary and not sufficient: `@cosyte/cli` must release too before the deploy goes green.
+  - **A RELABELLING, NOT A REMOVAL, AND THE DISTINCTION IS THE POINT.** The `limitations` page ships
+    unchanged and in full, as the second item under **Troubleshooting**. That is where the IA standard
+    explicitly puts _Known Limitations_, and this repo's `troubleshooting` page already opens with
+    the heading "Troubleshooting & Known Limitations", so the two sit together under one accurate
+    label. Nothing
+    the package says about what it does not guarantee is softened, shortened or dropped. Deleting the
+    content to satisfy a lint would have traded a navigation defect for a substantive one.
+  - **Only a new release can clear it.** The gate reads the sidebar bytes out of the released
+    `docs-content.tar.gz`, and releases are immutable, so `v0.0.7` carries the bad category forever
+    and archived tags are left exactly as they are. The escape hatch (`DOCS_IA_LINT_STRICT=0`) was
+    declined by founder decision on 2026-08-04: the gate stays intact.
+  - **Top-level navigation is now** `Overview` (the `intro` doc reference) plus `Installation`,
+    `Quickstart`, `Core Concepts`, `Guides` and `Troubleshooting`, in canonical order, with
+    `API Reference` left to `docs`' resolver as `IA030` requires.
+  - **The status banner on the `Installation` and `Overview` pages is corrected too.** Both told
+    readers the package was "not yet published to npm" and that the install command was only "the
+    shape it will take at first publish", on the public docs surface this very release redeploys. It
+    has been on the registry for several versions. No version number is written into either page.
 - **The PHI commit gate's `--staged` route now enumerates a staged RENAME, and it was blind to one.**
   `R` (rename) and `C` (copy) are returned by none of `AM`, `AMT` or `AMTU`, so with git's rename
   detection on (the default, and `diff.renames` can turn copy detection on too) `git mv` of an
