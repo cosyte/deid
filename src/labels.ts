@@ -29,4 +29,4 @@ export const OUTPUT_LABEL = "Safe-Harbor-transformed per the configured policy";
  * typeof VERSION; // => "string"
  * ```
  */
-export const VERSION: string = "0.0.7";
+export const VERSION: string = "0.0.8";
