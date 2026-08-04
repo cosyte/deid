@@ -4,9 +4,9 @@
 > **verbatim** on 2026-08-04, nothing deleted. Each line here is the imperative; the anchor after it is
 > the case that earned it (the measurement, the sha, the negative control). **Read the section before
 > you touch the thing it guards.** This file is always-read for every worker that `cd`s in, so it is
-> budgeted at write time by the umbrella's `.claude/hooks/doc-budget.mjs` (ADR 0023, amended
-> 2026-08-04); the notes are read on demand. **The number lives in that hook, not here** — the ADR
-> states the policy, the hook states the byte figure, and the hook is what refuses the write. **The
+> budgeted at write time by this repo's entry in `REPO_CLAUDE`, in the umbrella's
+> `.claude/hooks/doc-budget.mjs` (ADR 0023). It is a per-repo ratchet that is LOWERED as relocations
+> land, so **no byte figure is written here** — read the hook. The notes are read on demand. **The
 > remedy for size is always relocation, never deleting a trap.**
 
 ## Project
@@ -91,8 +91,9 @@ truth is the meta-repo's `documentation/conventions.md`; the full per-line detai
   zero-leak gate is `test/corpus/`, from source. → `documentation/agent-notes.md#the-smoke-gate`
 - **`pnpm check:no-internal-refs`** runs in its own workflow; context is the bare job id
   `no-internal-refs`. **Read a real context name off a live check run, never off a workflow's `name:`.**
-  It gates the _source_ of published text, not `dist/`.
-  → `documentation/agent-notes.md#the-no-internal-refs-gate`
+  It gates the _source_ of published text, not `dist/`. **It DELIBERATELY does not scan `CHANGELOG.md`,
+  `.changeset/`, this file, or `//` comments — identifiers BELONG there, so do not "fix" one out of
+  them.** → `documentation/agent-notes.md#the-no-internal-refs-gate`
 - **`pnpm check:test-selection` gates what the required test job SELECTS.** Context `test-selection` is
   **deliberately NOT in the ruleset yet** — let it run on `main` first. **Its subject is DERIVED from
   `exports`; there is no exemption list, because every exemption a sibling offered was walked through by
@@ -102,6 +103,8 @@ truth is the meta-repo's `documentation/conventions.md`; the full per-line detai
   derivations": a diff touching `exportedSourceEntries` or `resolveSpecifier` is reviewed by a person
   against the OK line's counts. DO NOT REMOVE D TO "SIMPLIFY"** — the other three self-tests cannot see
   what it sees. Selection is not execution, and the measured limits are listed, none claimed closed.
+  **The per-rule tallies are absent from this file DELIBERATELY — they went stale before the files they
+  counted existed. The OK line prints the live figures on every run; do not write one back in here.**
   → `documentation/agent-notes.md#the-test-selection-gate`
 - **The ruleset BLOCKS the "Version Packages" PR by design — it needs one push** (an empty commit onto
   `changeset-release/main`), done **last**, immediately before merging. `bypass_actors` is empty on
@@ -162,7 +165,9 @@ Every line here is clinical-safety content. Full cases: `documentation/agent-not
   → `documentation/agent-notes.md#closed-by-no-renames`
 - **THE SCAN ROOTS ARE `src/`, `test/` (ALL of it) AND `scripts/` — A DIFFERENT DECISION FROM EVERY
   SIBLING'S. DO NOT PORT ONE OVER IT.** The old scopes missed **38 tracked files**, four already
-  carrying inline HL7 `PID|…` literals. → `documentation/agent-notes.md#the-scan-roots`
+  carrying inline HL7 `PID|…` literals. **STILL OUT OF SCOPE, AND STATED AS SUCH:** `.github/`,
+  **`docs-content/` — a PUBLISHED consumer surface that this gate does NOT scan for PHI** — `vendor/`,
+  and the root manifests. → `documentation/agent-notes.md#the-scan-roots`
 - **ENUMERATING THE FILES BUYS THE SSN/EMAIL FLOOR AND NOTHING ELSE — a detector has to RECOGNISE the
   document first, and every recogniser was written for a file that _is_ the document.** This repo's
   fixtures are `.ts` string literals, so each file is also scanned as its **decoded, joined literals**;
