@@ -831,6 +831,164 @@ describe("phi-scan: --staged enumerates an UNMERGED entry", () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// Staged RENAMES: the third half of the `--diff-filter` defect
+// ---------------------------------------------------------------------------
+//
+// `R` (rename) and `C` (copy) are returned by none of `AM`, `AMT` or `AMTU`, so
+// with rename detection ON (git's default) an ordinary `git mv` put an entry
+// under a scan root that this route never saw. Two shapes, and the first is the
+// one that reads worst: `git mv <tracked link> <scan root>` stages as `R100` at
+// mode `120000`, so the mode refusal the route already carries was unreachable.
+// The remedy is `--no-renames`, which makes the destination arrive as a
+// single-path `A` and the source as a `D` the filter drops.
+//
+// Every case asserts its PREMISE first (git really does emit `R`, and `AMTU`
+// really does return nothing for it), so none of them can pass by fixture.
+
+/** A file long enough that changing one line leaves git a detectable rename. */
+const RENAMEABLE_CLEAN =
+  [
+    "// A synthetic fixture whose identifying values are all declared in the",
+    "// allow-list, so this file is CLEAN before the rename below.",
+    "export const MESSAGE = [",
+    '  "MSH|^~\\\\&|A|B|C|D|20240101||ADT^A01|M1|P|2.5",',
+    '  "PID|1||ZZMRN001||ZZFAMILY^ZZGIVEN||19900215|F",',
+    '].join("\\r");',
+  ].join("\n") + "\n";
+
+describe("phi-scan: --staged enumerates a staged RENAME", () => {
+  const ID = ["-c", "user.email=t@example.com", "-c", "user.name=t"];
+
+  it("refuses a tracked symlink MOVED into a scan root (exit 2), and reports no PHI", () => {
+    const root = makeRepo();
+    // The link starts OUTSIDE every scan root, so it is only the move that puts
+    // a mode-120000 entry in scope. Its target name carries a synthetic person
+    // name, so an echo of it would be visible.
+    symlinkSync(join(root, TARGET_NAME), join(root, "legacy-link"));
+    git(root, ["add", "legacy-link"]);
+    git(root, [...ID, "commit", "-qm", "base"]);
+    git(root, ["mv", "legacy-link", "src/legacy-link"]);
+
+    // The premise: git raises it as `R100` at mode 120000, and the filter this
+    // route used to run alone returns NOTHING for it.
+    expect(gitOut(root, ["diff", "--cached", "--raw"])).toMatch(/:120000 120000 .* R100\t/);
+    expect(gitOut(root, ["diff", "--cached", "--raw", "--diff-filter=AMTU"]).trim()).toBe("");
+
+    const r = runIn(root, ["--staged"]);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(2);
+    expect(r.stderr).toContain("src/legacy-link");
+    expect(r.stderr).toContain("a symbolic link");
+    expectNoPhi(r.stderr);
+  });
+
+  it("scans a rename that SUBSTITUTES an undeclared value (exit 1), at the destination path", () => {
+    const root = makeRepo();
+    writeFileSync(join(root, "test", "moved.ts"), RENAMEABLE_CLEAN);
+    git(root, ["add", "test/moved.ts"]);
+    git(root, [...ID, "commit", "-qm", "base"]);
+    // The clean baseline: this content is a no-op for the scan before the move.
+    expect(runIn(root, []).code).toBe(0);
+
+    git(root, ["mv", "test/moved.ts", "test/moved-elsewhere.ts"]);
+    writeFileSync(
+      join(root, "test", "moved-elsewhere.ts"),
+      RENAMEABLE_CLEAN.replace("ZZFAMILY^ZZGIVEN", "RIVERA^JUANITA"),
+    );
+    git(root, ["add", "test/moved-elsewhere.ts"]);
+
+    // The premise: a partial rewrite is still an `R` record, so `AMTU` alone
+    // returns nothing and the NEW content is never read.
+    expect(gitOut(root, ["diff", "--cached", "--raw"])).toMatch(/ R\d+\t/);
+    expect(gitOut(root, ["diff", "--cached", "--raw", "--diff-filter=AMTU"]).trim()).toBe("");
+
+    const r = runIn(root, ["--staged"]);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toContain("test/moved-elsewhere.ts");
+    expect(r.stderr).toMatch(/PID-5\.1 value="RIVERA"/);
+  });
+
+  it("refuses whatever the caller's diff.renames / diff.renameLimit say", () => {
+    // The stride and the refusal are STRUCTURAL under `--no-renames`: git cannot
+    // emit an `R` or a `C` for any of these settings, so no two-path record
+    // shape is needed. `copies` is included because `diff.renames` turns COPY
+    // detection on as well, which is the other status carrying a second path.
+    for (const renames of ["true", "copies", "false", "1"]) {
+      const root = makeRepo();
+      symlinkSync(join(root, TARGET_NAME), join(root, "legacy-link"));
+      git(root, ["add", "legacy-link"]);
+      git(root, [...ID, "commit", "-qm", "base"]);
+      git(root, ["mv", "legacy-link", "src/legacy-link"]);
+      git(root, ["config", "diff.renames", renames]);
+      git(root, ["config", "diff.renameLimit", "1"]);
+
+      const r = runIn(root, ["--staged"]);
+      expect(r.code, `diff.renames=${renames} stderr: ${r.stderr}`).toBe(2);
+      expect(r.stderr).toContain("a symbolic link");
+    }
+  });
+
+  it("scans a COPY into a scan root that `diff.renames=copies` hides (exit 1)", () => {
+    // `C` is the OTHER status carrying a second path, and it is a distinct
+    // enumeration shape from `R`, not a spelling of it: copy detection pairs an
+    // ADD with a source that is still present. It needs `diff.renames=copies`
+    // (or `-C`) AND a source modified in the same index, which is why it has its
+    // own case rather than riding on the rename sweep above.
+    //
+    // The leak shape: the source sits OUTSIDE every scan root, so only the COPY
+    // puts the payload in scope. Under `AMTU` alone git pairs them as `C100` and
+    // the destination is never enumerated at all.
+    const root = makeRepo();
+    writeFileSync(join(root, "legacy.txt"), SYNTHETIC_PHI);
+    git(root, ["add", "legacy.txt"]);
+    git(root, [...ID, "commit", "-qm", "base"]);
+    git(root, ["config", "diff.renames", "copies"]);
+
+    copyFileSync(join(root, "legacy.txt"), join(root, "test", "copied.hl7"));
+    writeFileSync(join(root, "legacy.txt"), `${SYNTHETIC_PHI}NTE|2||addendum\n`);
+    git(root, ["add", "legacy.txt", "test/copied.hl7"]);
+
+    // The premise: a real `C100`, and `AMTU` alone returns no record at all for
+    // the destination.
+    expect(gitOut(root, ["diff", "--cached", "--raw"])).toMatch(
+      / C100\tlegacy\.txt\ttest\/copied\.hl7/,
+    );
+    expect(gitOut(root, ["diff", "--cached", "--raw", "--diff-filter=AMTU"])).not.toContain(
+      "test/copied.hl7",
+    );
+
+    const r = runIn(root, ["--staged"]);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toContain("test/copied.hl7");
+    expect(r.stderr).toMatch(/PID-5\.1 value="RIVERA"/);
+    // The source is out of scope on this route, so it is not reported.
+    expect(r.stderr).not.toContain("legacy.txt");
+  });
+
+  it("loses nothing: the rename SOURCE is a `D` the filter drops, and other staged files still scan", () => {
+    // `--no-renames` only ever ADDS records, so the enumeration is a SUPERSET:
+    // equal when git emitted no `R` and no `C`, larger when it did. It is never
+    // smaller. The control is that an ordinary staged violator alongside the
+    // rename is still caught, and that a clean rename is still clean.
+    const root = makeRepo();
+    writeFileSync(join(root, "test", "moved.ts"), RENAMEABLE_CLEAN);
+    git(root, ["add", "test/moved.ts"]);
+    git(root, [...ID, "commit", "-qm", "base"]);
+    git(root, ["mv", "test/moved.ts", "test/moved-elsewhere.ts"]);
+
+    // A clean rename stays clean: the destination is scanned and finds nothing,
+    // and the source path is a deletion with no staged blob to scan.
+    const clean = runIn(root, ["--staged"]);
+    expect(clean.code, `stderr: ${clean.stderr}`).toBe(0);
+
+    writeFileSync(join(root, "src", "violator.ts"), SYNTHETIC_PHI);
+    git(root, ["add", "src/violator.ts"]);
+    const r = runIn(root, ["--staged"]);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toContain("src/violator.ts");
+  });
+});
+
 describe("phi-scan: the whole-file bypass, in the modes that actually run", () => {
   const LOG = (p: string): string =>
     `# phi-scan bypass log\n\n## Entries\n\n### ${p}\n\n- **Reason:** test\n`;

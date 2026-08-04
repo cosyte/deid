@@ -377,6 +377,38 @@ its public history at `0.0.x`, per the cosyte version ladder (`0.0.x` until firs
 
 ### Fixed
 
+- **The PHI commit gate's `--staged` route now enumerates a staged RENAME, and it was blind to one.**
+  `R` (rename) and `C` (copy) are returned by none of `AM`, `AMT` or `AMTU`, so with git's rename
+  detection on (the default, and `diff.renames` can turn copy detection on too) `git mv` of an
+  already-tracked symlink into a scan root staged as `:120000 120000 <sha> <sha> R100`, the filter
+  deleted the record before any mode could be read, and the route reported a clean corpus over a
+  mode-120000 entry inside a scan root. Measured on git 2.39.5. Development tooling only
+  (`scripts/phi-scan.ts` is not in `files` and ships in no tarball); no runtime code, public export,
+  `DEID_*` code, policy, profile, manifest disposition or transformed value changes.
+  - **The gap was at PRE-COMMIT, and the all-mode sweep was the backstop.** The walk refuses that
+    same worktree, so the tree was not clean everywhere; `simple-git-hooks` runs
+    `pnpm phi-scan --staged`, which is the route that missed it.
+  - **It was never only a MODE gap.** A rename that also SUBSTITUTES a value stages as `R052`, and
+    its new content went unread the same way: measured at exit 0, while naming the destination path
+    directly returned the hits.
+  - **The remedy is `--no-renames`, and it costs no stride work.** With detection off git emits no
+    `R` and no `C` at all: the destination arrives as an ordinary single-path `A` and the source as a
+    `D` the filter already drops. So the enumeration is a SUPERSET of the previous one (EQUAL when
+    git emitted no `R` and no `C`, LARGER when it did), the
+    two-field record stride is untouched, and the stride becomes STRUCTURAL rather than conditional
+    on the caller's configuration. Swept across `diff.renames=true|copies|false|1` with
+    `diff.renameLimit=1`: zero `R`/`C` records survive any of them.
+  - **The previous disclosure was WRONG and is withdrawn, not deferred again.** The scanner's own
+    banner and this repo's guide both said closing this needed "the two-path record shape handled,
+    which is a scope decision". It needed one flag and no record-shape work at all.
+  - **Pinned, and non-vacuous.** Five cases in `test/scripts/phi-scan.test.ts`: the moved symlink,
+    the rename-plus-substitution, the configuration sweep, a real `C100` copy under
+    `diff.renames=copies` (a copy is a distinct enumeration shape from a rename, not a spelling of
+    it), and a no-regression control proving the source path's `D` is still dropped and other staged
+    files still scan. Each asserts its premise
+    (that git really emits `R`, and that `AMTU` really returns nothing for it) before asserting the
+    remedy, so none can pass by fixture. **4 of the 5 run red against the previous scanner**; the
+    fifth is the control and is green on both by design.
 - **The PHI commit gate now sweeps all of `test/` and `scripts/`, not just `test/fixtures/` and
   `src/`.** 38 tracked files under `test/` were enumerated by **neither** of the scanner's routes —
   four of them already carrying inline HL7 `PID|…` literals — so a real name, MRN, DOB, SSN or email
