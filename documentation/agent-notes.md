@@ -563,8 +563,91 @@ Mirrors the three disciplines in the meta-repo's `documentation/conventions.md` 
    docs are: this repo's docs content (`README.md`, `docs-content/`), the meta-repo
    `documentation/repos/deid.md` (bump its "last verified" date), and the `ecosystem-map.md`
    status table.
-2. **Version + changelog** — a Changeset (`patch` on the `0.0.x` ladder) + a `CHANGELOG.md`
-   `[Unreleased]` entry per meaningful change. Renaming a stable warning code is a **breaking change**.
+2. **Version + changelog** — a Changeset (`patch` on the `0.0.x` ladder) per meaningful change.
+   **The changeset summary IS the changelog entry.** `.changeset/config.json` names a `changelog`
+   generator, so the release writes the version heading and the entry itself, above
+   `## Released before this file was generated`. **Do not hand-edit `CHANGELOG.md`, and do not
+   reintroduce a hand-maintained `[Unreleased]` heading**: see the section below for why. Renaming a
+   stable warning code is a **breaking change**.
+
+### The changelog generator, and why the `[Unreleased]` heading may not come back
+
+`CHANGELOG.md` is in `package.json#files`, so it ships inside every tarball. For the whole of this
+package's published history `.changeset/config.json` set `"changelog": false`, so no release ever
+wrote a version heading into it. The file was hand-maintained under one `[Unreleased]` heading that
+nothing rolled over, beneath a preamble promising that the first pre-alpha release "will ship" the
+API surface listed under it — a surface that had already shipped, several versions earlier, in that
+same file. Every installed copy carried a changelog calling its own contents unreleased.
+
+**The fix was the flag, not the prose** (founder decision, 2026-08-05): correcting the sentence by
+hand leaves the mechanism that wrote it and it drifts again at the next release.
+
+What the fix depends on, each pinned by `test/scripts/changelog-generation.test.ts`. **No case count
+and no red-on-parent tally is written here, deliberately** — the same rule `CLAUDE.md` states for the
+`check:test-selection` figures. A count went stale inside the very commit that added it (a remedy
+added a bullet and a case, and left "five things / 9 of 15" standing), and a stale count is worse than
+none: it certifies a suite that has lost a case as correct. **Run the file and read the number.**
+
+- **Exactly one line may sit above generated output.** Changesets prepends a release by replacing
+  the FIRST newline in the document, so a preamble on line 3 splices every future release between
+  the H1 and it. The rule is stated as **"nothing but the H1 above the first heading"**, and
+  asserted against the RELEASED document too. It is deliberately not "the archive heading comes
+  second": the first real release puts `## <version>` exactly there, and that assertion would wedge
+  it. `prepublishOnly` runs this suite under `changeset publish`, so a wedge is discovered after the
+  changeset has already been consumed on `main`.
+- **`## 0.0.1` is a substring of `## 0.0.10`,** and this package has published past that pair. **Every
+  assertion that a version heading IS or IS NOT present** is a whole-heading match against a heading
+  list, never `indexOf` or a substring `toContain`. **Stated as a rule about VERSION headings, and
+  deliberately not as a census of substring calls in the file** — a census is falsified by the next
+  legitimate one, which is the rot this bullet is about. Substring matching is right elsewhere and is
+  used: the `[Unreleased]` check is `h.includes("[Unreleased]")` precisely so it still catches
+  `## [Unreleased] - 2026-08-06`, the collision **exhibit** asserts a substring search *is* satisfied
+  by a heading the document does not have (that is the defect being demonstrated on real generator
+  output), and one anchor is on `## <version>\n### Patch Changes`, where the trailing newline already
+  makes it a whole-line match. A rule written as the absolute is false in its own exhibit, which is how a trap sentence rots when
+  it is ported to the next repo.
+- **THE ARCHIVED HISTORY IS FROZEN AND PINNED TO A DIGEST, because every other assertion here is
+  blind to a hand-edit.** The rest of the suite compares an archive a release PRODUCED against the
+  archive in the working tree, and a hand-edit moves both sides together, so it cancels out and the
+  suite stays green while the defect walks back in. The digest is the one assertion whose other side
+  is a constant. **If it reds, work out whether it was a hand-edit that should have been a changeset,
+  or a formatter reflowing published text, before you touch the constant.** `.changeset/README.md` is
+  the file a contributor actually reads when they run `pnpm changeset`, so it carries the same rule;
+  keep the two in step, since it once stated the exact opposite of the config sitting beside it.
+  **THE SCOPE OF THE DIGEST, STATED SO NOBODY READS IT AS MORE: it covers the archive BELOW the
+  divider and nothing else.** A hand-written `## 0.0.99` / `### Patch Changes` block inserted between
+  the H1 and the divider passes **every** case here — measured, by inserting one. That would ship a
+  tarball announcing a release that never happened. It is an **untested region, not a guarded one**,
+  and the region above the divider is generated territory precisely so nobody writes there by hand.
+  **Do not upgrade this sentence to a claim; either close it with a case or leave it stated.**
+- **A hand-maintained `[Unreleased]` heading is now WORSE than before, not merely stale**: with
+  generation on the release prepends its version section ABOVE it, so released content would sit
+  under "Unreleased" permanently, in the tarball. The heading, its link definition and the one empty
+  section stub are gone and a case asserts they stay gone.
+- **The Prettier pass is left ON here (no `"prettier"` key), and that value is DERIVED, not copied.**
+  The discriminator is this repo's own markdown-formatting scope: there is **no `.prettierignore` at
+  all**, and `format:check` globs `"*.{json,md,yml}"`, so root `CHANGELOG.md` is inside this repo's
+  formatting gate and its archived history is already Prettier-canonical. Both arms are measured:
+  with the pass ON the archived history comes through **byte identical** and the released document
+  passes `format:check`; with it OFF `changeset version` writes `## <version>` and `### Patch
+  Changes` on adjacent lines, which this repo's Prettier rejects. **A sibling whose `.prettierignore`
+  lists `*.md` needs the opposite value** — there the pass rewrites already-published text that was
+  never Prettier-canonical, and it has eaten characters out of a shipped tarball. **Never resync this
+  value between repos.** Stated honestly, because this repo differs from every sibling: the `version`
+  script ends with `prettier --write ... CHANGELOG.md`, a second net no sibling has, so the OFF arm
+  would be repaired by a later link in the chain. The argument for ON is therefore **not** "otherwise
+  CI reds" but that the tool writing the file should write a correct file, and the ON arm is
+  measurably free. That trailing link is pinned by its own case so its removal is visible here.
+- **Changesets swallows a changelog-write failure with `console.warn`.** A tree whose declared
+  Prettier config cannot be resolved bumps the version, consumes the changeset, and writes **no
+  changelog at all**. **A release that publishes with an unchanged changelog is that failure, not a
+  flag that quietly reverted** — do not diagnose it as the flag. Nothing in this repo guards it.
+
+**A changeset summary must never open a line at column 0 with an ATX heading.** `getReleaseLine`
+indents continuation lines by two spaces, exactly the `- ` bullet's content column, so a `## …` line
+in a summary renders as a **second heading inside the published release section, permanently**. Write
+the divider as an inline code span. The test's probe does the unsafe thing on purpose, to prove the
+whole-line anchoring survives it; that is what makes it safe there and unsafe in a real changeset.
 3. **Crew + knowledgebase loop** — if this parser's public API or warning codes change, flag/update
    the matching `crew` healthcare skill + the KB product doc.
 

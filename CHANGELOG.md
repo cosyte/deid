@@ -1,16 +1,27 @@
 # Changelog
 
-All notable changes to this project will be documented in this file.
+## Released before this file was generated
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-Versions and publishing are managed with [Changesets](https://github.com/changesets/changesets);
-this file is maintained by hand (Changesets handles the version bump and publish only).
+Every release section above this heading is written by
+[Changesets](https://github.com/changesets/changesets) from the changesets in `.changeset/`, newest
+release first. The release writes its own version heading and its own entries, so nothing above this
+line is maintained by hand: a change is recorded by adding a changeset, and that changeset's summary
+is the entry a reader sees here.
 
-## [Unreleased]
+Everything below this heading was maintained by hand. It sat under a single `[Unreleased]` heading
+that no release ever rolled over, under a preamble promising that a first pre-alpha release would
+ship the public API surface listed beneath it. That surface had already shipped, several versions
+earlier, inside this same file: `CHANGELOG.md` is in `package.json`'s `files`, so every installed
+copy of this package carried a changelog describing its own contents as unreleased. The entries are
+left exactly as they were written rather than re-sorted into version sections, because the file
+never recorded which release each one went out in, and this is the text installed copies already
+have on disk. Only the scaffolding for the hand-written workflow was dropped: the `[Unreleased]`
+heading itself, its link definition at the foot of the file, and the one empty section stub that
+existed to receive the next hand-written entry. No entry was reworded, re-sorted or removed.
 
-The first pre-alpha release (`0.0.1`) will ship the initial public API surface. The package begins
-its public history at `0.0.x`, per the cosyte version ladder (`0.0.x` until first alpha).
+The entries below follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this package
+versions on the cosyte `0.0.x` ladder, which is [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
+held at `0.0.x` until first alpha.
 
 ### Added
 
@@ -367,8 +378,6 @@ its public history at `0.0.x`, per the cosyte version ladder (`0.0.x` until firs
 - Replaced the parser-template scaffold stubs (`parseDeid`, `WARNING_CODES`) with the de-identification
   engine surface. `@cosyte/deid` is a de-identifier, not a parser — the public API and docs reflect the
   inverted (fail-closed) reflex.
-
-### Deprecated
 
 ### Removed
 
@@ -913,5 +922,3 @@ its public history at `0.0.x`, per the cosyte version ladder (`0.0.x` until firs
 - Pseudonymization/keyed-hash are **keyed** (HMAC-SHA-256) by design: an unsalted hash of an identifier
   is re-identifiable (§164.514(c)). The engine never falls back to an unkeyed transform; the key and the
   per-patient date-shift offset never appear in the output or manifest.
-
-[Unreleased]: https://github.com/cosyte/deid/commits/main
