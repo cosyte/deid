@@ -4,10 +4,11 @@
 
 The Expert-Determination support report reads more plainly, and one of its statements is now harder
 to misread. `EXPERT_DETERMINATION_DISCLAIMER` is the prominent non-certification text: it is a
-public export, the report's `disclaimer` field, and the first line of the rendered document. Its
-wording changed, and the sentence disclaiming what this library can see now names its own scope
-outright rather than leaning on a dash to carry it, so the clause cannot be read as covering only
-the last item of the list it follows. It still emits no risk score and still reaches no conclusion.
+public export, the report's `disclaimer` field, and what leads the rendered document under its
+title. Its wording changed, and the sentence disclaiming what this library can see now names its
+own scope outright rather than leaning on a dash to carry it, so the clause cannot be read as
+covering only the last item of the list it follows. It still emits no risk score and still reaches
+no conclusion.
 
 Five further rendered positions changed wording. A Safe Harbor category the pass did not act on
 prints `none` in the Transforms column; each retained quasi-identifier prints its locus and its
@@ -25,7 +26,8 @@ unchanged.
 Editorial punctuation is brought into line with the house style across every published surface: the
 npm description, `README.md`, the guides, and the JSDoc that compiles into the shipped declaration
 files. Where a heading was reworded its anchor moves with it, so a link saved into one of these
-documents from outside the package may need updating; every link within the package was recomputed.
+documents from outside the package may need updating; no link inside the package was broken by the
+change, though three in `limitations.md` were already dangling and remain so.
 Two rows of the HL7 v2 and C-CDA locus tables that record a retained, never-swept region now read
 `n/a` in the Loci column, which is what the mark they replaced meant. Those regions are documented
 in the same guides as still carrying dates, identifiers and provider names that the pass does not
