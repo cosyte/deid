@@ -1,40 +1,40 @@
 /**
- * `@cosyte/deid/x12` — the **X12 EDI de-identification adapter**. The X12 binding of the
+ * `@cosyte/deid/x12`: the **X12 EDI de-identification adapter**. The X12 binding of the
  * format-agnostic core: it locates PHI **structurally** in a parsed `@cosyte/x12`
  * interchange, applies the configured de-identification policy, and returns the de-identified X12 byte
  * stream plus the core's value-free manifest.
  *
- * **`@cosyte/x12` is an optional peer dependency**, consumed only from this subpath — a consumer who
+ * **`@cosyte/x12` is an optional peer dependency**, consumed only from this subpath: a consumer who
  * only de-identifies X12 installs it alongside `@cosyte/deid`; the core stays third-party-dep-free. The
  * adapter reaches X12 data **only** through `@cosyte/x12`'s own exported model (`X12Interchange` /
- * `X12Segment`, the 1-indexed `elements`, `delimiters`) and its `parseX12` / `serializeX12` codec — it
+ * `X12Segment`, the 1-indexed `elements`, `delimiters`) and its `parseX12` / `serializeX12` codec: it
  * never touches a third-party substrate, so `@cosyte/deid` declares no third-party runtime dependency.
  *
  * **What it covers (HIPAA 005010).** Across the subscriber (2000B/2010BA) and patient (2000C/2010CA)
  * loops of 837 / 835 / 270-271 and the other v1 transactions:
- * - **`NM1`** — entity-classified: a subscriber / patient / dependent name (`NM1-03..07`) is removed and
+ * - **`NM1`**, entity-classified: a subscriber / patient / dependent name (`NM1-03..07`) is removed and
  *   its identifier (`NM1-09`) is routed by the `NM1-08` qualifier (SSN removed, member id
  *   pseudonymized); a recognized provider / organization `NM1` is **retained** (non-patient identity,
  *   mirroring the HL7 adapter's provider retention); an **unknown** entity code **fails closed**.
- * - **`N3` / `N4`** — street + city removed, ZIP generalized to its safe 3-digit form, state retained.
- * - **`DMG-02`** — date of birth generalized to year.
- * - **`REF`** — qualifier-classified: a patient / member / subscriber / group / medical-record
+ * - **`N3` / `N4`**: street + city removed, ZIP generalized to its safe 3-digit form, state retained.
+ * - **`DMG-02`**: date of birth generalized to year.
+ * - **`REF`**, qualifier-classified: a patient / member / subscriber / group / medical-record
  *   identifier is removed (SSN) or pseudonymized; a recognized administrative / provider reference is
  *   retained; an **unknown REF qualifier** **fails closed** (Safe Harbor category (R)).
- * - **`PER`** — contact name and communication numbers removed.
- * - **`DTP-03` / `DTM-02`** — dates generalized to year.
- * - **`CLM-01` / `CLP-01`** — the patient account number pseudonymized to a consistent surrogate.
+ * - **`PER`**: contact name and communication numbers removed.
+ * - **`DTP-03` / `DTM-02`**: dates generalized to year.
+ * - **`CLM-01` / `CLP-01`**: the patient account number pseudonymized to a consistent surrogate.
  *
  * **Fail closed.** A segment that is neither mapped nor on the recognized clinical / financial retain
  * list is blocked element-by-element; an unknown `NM1` entity or `REF` qualifier is blocked. Clinical
- * and financial values — diagnosis / procedure / revenue codes, monetary amounts, quantities, NDCs —
+ * and financial values (diagnosis / procedure / revenue codes, monetary amounts, quantities, NDCs)
  * are **retained untouched** (the over-scrub guard). The honesty line is unchanged: the output is
  * **"Safe-Harbor-transformed per the configured policy"**, never "de-identified".
  *
  * **Known limitations.** Provider / organization identity is **retained** as non-patient identity, and
  * there is **no** option to suppress it: the retention is structural, in the extractor, not a
  * per-category policy choice. Retained clinical segments may carry residual patient-related dates the
- * map does not surface as `DTP` / `DTM` (a documented limitation, mirroring the HL7 adapter) — forgetting one
+ * map does not surface as `DTP` / `DTM` (a documented limitation, mirroring the HL7 adapter): forgetting one
  * fails **safe** (retained, not leaked, but conversely a residual date is not generalized). NCPDP SCRIPT
  * de-identification is deferred; NCPDP Telecom ships alongside this adapter at `@cosyte/deid/ncpdp`.
  *
@@ -61,7 +61,7 @@ import { extractX12Loci } from "./extract.js";
  * const ix = parseX12(raw);
  * const result: X12DeidResult = deidentifyX12(ix, { context: createDeidContext({ key: "secret" }) });
  * result.x12;      // de-identified X12 text
- * result.manifest; // value-free audit — category + locus, never a value
+ * result.manifest; // value-free audit: category + locus, never a value
  * ```
  */
 export interface X12DeidResult {
@@ -73,15 +73,15 @@ export interface X12DeidResult {
 
 /**
  * De-identify a parsed X12 interchange under a policy (Safe Harbor by default). PHI is located
- * structurally from the `@cosyte/x12` model — the subscriber / patient / dependent `NM1` / `N3` / `N4` /
+ * structurally from the `@cosyte/x12` model: the subscriber / patient / dependent `NM1` / `N3` / `N4` /
  * `DMG` / `REF` / `PER` / `DTP` loci and the `CLM` / `CLP` account number; the input interchange is
  * never mutated (the de-identified stream is re-serialized from a reconstruction).
  *
- * The output is **"Safe-Harbor-transformed per the configured policy"** — it is not certified
+ * The output is **"Safe-Harbor-transformed per the configured policy"**: it is not certified
  * de-identified, and Expert Determination is not rendered.
  *
  * @param interchange - The parsed X12 interchange (`parseX12(raw)`).
- * @param options - The policy and (for keyed transforms — identifier pseudonymization) the key context.
+ * @param options - The policy and (for keyed transforms, identifier pseudonymization) the key context.
  *   A keyed transform with no context is a fatal `DEID_NO_KEY`, never an unkeyed fallback.
  * @returns The de-identified X12 stream and the value-free manifest.
  * @throws {@link "@cosyte/deid".DeidError} `DEID_NO_KEY` when a keyed transform is required for a

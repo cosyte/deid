@@ -1,6 +1,6 @@
 /**
  * Stability tripwires for the public code + category surfaces. A rename/removal shows up as a failing
- * snapshot diff — a deliberate, reviewable breaking-change signal.
+ * snapshot diff: a deliberate, reviewable breaking-change signal.
  */
 
 import { describe, expect, it } from "vitest";

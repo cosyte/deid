@@ -1,5 +1,5 @@
 /**
- * Property-based conformance tests for the DEID-7 **longitudinal** layer — the corpus registry.
+ * Property-based conformance tests for the DEID-7 **longitudinal** layer: the corpus registry.
  *
  * The load-bearing longitudinal invariants, asserted over arbitrary corpora:
  * - **Cross-document consistency:** the same patient shifts by the same offset (same input date → same
@@ -8,8 +8,8 @@
  * - **Interval preservation:** the number of days between two of a patient's dates is unchanged.
  * - **Collision-resistance:** distinct identifiers never share a pseudonym.
  * - **Secret absence:** the key never appears in the output, and the value-free manifest never carries
- *   the original absolute date. (The per-patient offset is a return-only integer — never stored on the
- *   context, never exported, never written to a manifest — so there is no channel through which to
+ *   the original absolute date. (The per-patient offset is a return-only integer, never stored on the
+ *   context, never exported, never written to a manifest, so there is no channel through which to
  *   assert it "absent"; its non-emission is a structural property of the context module, covered there.)
  */
 

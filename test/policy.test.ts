@@ -1,5 +1,5 @@
 /**
- * Tests for the policy engine — the Safe Harbor default assignment, `defineDeidPolicy` (deviate from
+ * Tests for the policy engine: the Safe Harbor default assignment, `defineDeidPolicy` (deviate from
  * the safe default, never forget a category), and `resolvePolicy`.
  */
 
@@ -69,7 +69,7 @@ describe("resolvePolicy", () => {
   });
 });
 
-describe("the key/label contract — date-shift is not Safe Harbor", () => {
+describe("the key/label contract, date-shift is not Safe Harbor", () => {
   it("defineDeidPolicy rejects a date-shift policy that claims the safe-harbor label", () => {
     expect(() =>
       defineDeidPolicy({ name: "safe-harbor", transforms: { [C.DATES]: "date-shift" } }),

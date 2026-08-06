@@ -3,9 +3,9 @@
  *
  * - **Leak invariant:** for arbitrary synthetic tokens injected at the FHIR PHI loci (names,
  *   identifiers, telecom, a local extension, a nested Bundle/contact relative, a narrative div), no
- *   token survives the serialized output — an un-handleable locus fails closed, never passes through.
+ *   token survives the serialized output: an un-handleable locus fails closed, never passes through.
  * - **Value-free invariant:** no injected token, and no keyed surrogate/key, ever appears in the
- *   manifest — the audit trail records loci, never values or secrets.
+ *   manifest: the audit trail records loci, never values or secrets.
  */
 
 import { describe, expect, it } from "vitest";
@@ -51,7 +51,7 @@ function buildBundle(t: {
   });
 }
 
-describe("deidentifyFhir — property: fail-safe leak + value-free invariants", () => {
+describe("deidentifyFhir, property: fail-safe leak + value-free invariants", () => {
   it("never leaves an injected token in the output or the manifest, for arbitrary inputs", () => {
     fc.assert(
       fc.property(

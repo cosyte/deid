@@ -1,5 +1,5 @@
 /**
- * Tests for the de-identification context — the secret-material holder. The headline gate: the key
+ * Tests for the de-identification context: the secret-material holder. The headline gate: the key
  * never leaks through any stringify channel (via `@cosyte/test-utils`' `assertNoSecretLeak`).
  */
 

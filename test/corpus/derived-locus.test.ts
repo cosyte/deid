@@ -271,7 +271,7 @@ describe("derived-identifier loci: two refused identifiers stay distinguishable"
 
   it("ccda: two unrecognizable siblings in the body descent produce two distinct loci", () => {
     // Both descents compose their segments the same way, and a refused name always carries its index
-    // among the refused siblings — `<withheld>` names nothing, so the index is the only "where" left.
+    // among the refused siblings: `<withheld>` names nothing, so the index is the only "where" left.
     const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <ClinicalDocument xmlns="urn:hl7-org:v3">
   <recordTarget><patientRole><patient><name use="L"><given>ZZGIVEN</given></name></patient></patientRole></recordTarget>
@@ -306,7 +306,7 @@ describe("derived-identifier loci: two refused identifiers stay distinguishable"
   });
 
   it("ccda: a lone refused sibling still carries its index", () => {
-    // Not needed for distinctness — needed because `<withheld>` names nothing, so without the index
+    // Not needed for distinctness: needed because `<withheld>` names nothing, so without the index
     // the locus says only "somewhere under this parent".
     const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <ClinicalDocument xmlns="urn:hl7-org:v3">

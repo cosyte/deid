@@ -1,11 +1,11 @@
 /**
- * The **pseudonymization** and **keyed-hash** transforms — replace an identifier with a **consistent**
+ * The **pseudonymization** and **keyed-hash** transforms: replace an identifier with a **consistent**
  * surrogate so records still link, without the surrogate being reversible.
  *
- * Both are **keyed HMAC-SHA-256** (`node:crypto`). The key is the secret salt — held by the consumer,
+ * Both are **keyed HMAC-SHA-256** (`node:crypto`). The key is the secret salt: held by the consumer,
  * per-deployment, and **never emitted**. This is the direct implementation of §164.514(c): a
  * re-identification code must be "not derived from … the individual" and "not otherwise capable of
- * being translated" — a keyed HMAC satisfies both, whereas an **unsalted hash of an MRN is
+ * being translated": a keyed HMAC satisfies both, whereas an **unsalted hash of an MRN is
  * re-identifiable** (the identifier space is small and enumerable, so an attacker hashes every
  * candidate and matches). {@link unkeyedHash} exists **only** to demonstrate that hazard in tests; it
  * is non-conforming and never used by the engine.
@@ -62,18 +62,18 @@ export function keyedHash(value: string, ctx: DeidContext): string {
 }
 
 /**
- * A **plain, unsalted SHA-256** digest — **NON-CONFORMING** to §164.514(c) and never used by the
+ * A **plain, unsalted SHA-256** digest: **NON-CONFORMING** to §164.514(c) and never used by the
  * engine. It is re-identifiable for a small, enumerable identifier space (an attacker hashes every
  * candidate and matches). Exported solely so the test suite can *prove* the reversibility hazard the
  * keyed path avoids. **Do not use this to de-identify anything.**
  *
  * @param value - The value to hash.
- * @returns The lowercase-hex SHA-256 of `value` — reversible for a small input space.
+ * @returns The lowercase-hex SHA-256 of `value`: reversible for a small input space.
  * @example
  * ```ts
  * import { unkeyedHash } from "@cosyte/deid";
  *
- * // Deterministic and unsalted — this is the footgun, shown so tests can assert against it.
+ * // Deterministic and unsalted: this is the footgun, shown so tests can assert against it.
  * unkeyedHash("a") === unkeyedHash("a"); // => true
  * ```
  */

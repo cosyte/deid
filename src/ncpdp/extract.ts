@@ -1,5 +1,5 @@
 /**
- * The NCPDP Telecom **extractor** — walks a parsed `@cosyte/ncpdp` `TelecomTransaction` (its fixed
+ * The NCPDP Telecom **extractor**: walks a parsed `@cosyte/ncpdp` `TelecomTransaction` (its fixed
  * header plus its ordered segments of `{ id, value }` fields) and produces the format-agnostic
  * {@link GenericLocus} list the core engine transforms, plus a **parallel coordinate list**
  * ({@link TelecomCoord}) telling the applier exactly which field (or the header date) to rewrite. Loci
@@ -31,7 +31,7 @@ import {
 } from "./locus-map.js";
 
 /**
- * A write-back coordinate — the structural location of one extracted locus in the transaction. Either
+ * A write-back coordinate: the structural location of one extracted locus in the transaction. Either
  * the fixed header's Date of Service, or the field at `fieldIndex` of the segment at `segmentIndex`.
  * Carries no value.
  */
@@ -146,7 +146,7 @@ export function extractTelecomLoci(tx: TelecomTransaction): TelecomExtraction {
       const coord: TelecomCoord = { target: "field", segmentIndex, fieldIndex };
       const fieldPath = codeSegment(field.id, fieldIndex);
 
-      // Free text fails closed wherever it sits — including inside a retained clinical/response segment.
+      // Free text fails closed wherever it sits, including inside a retained clinical/response segment.
       if (TELECOM_FREE_TEXT_FIELDS.has(field.id)) {
         push(
           out,
@@ -168,14 +168,14 @@ export function extractTelecomLoci(tx: TelecomTransaction): TelecomExtraction {
           return;
         }
         // Fail closed INSIDE a PHI segment: a populated field that is neither scrubbed nor on the
-        // segment's explicit non-identifier retain list is a candidate identifier (Safe Harbor (R)) —
+        // segment's explicit non-identifier retain list is a candidate identifier (Safe Harbor (R)):
         // blocked, never passed through. This closes the "unmapped identifier field" leak: a Patient
         // e-mail (350-HN), a Medigap id (359-2A), or any un-enumerated id cannot ride through in the clear.
         if (retainFields !== undefined && retainFields.has(field.id)) return; // recognized non-identifier
         blockField(out, segPath, fieldPath, field.value, coord);
         return;
       }
-      if (isRetained) return; // recognized clinical / financial segment — retained untouched
+      if (isRetained) return; // recognized clinical / financial segment: retained untouched
       blockField(out, segPath, fieldPath, field.value, coord); // unknown segment → fail closed
     });
   });

@@ -19,8 +19,8 @@ import { cosyteVitest } from "@cosyte/vitest-config";
  * check rather than passing quietly. Widen this glob freely; narrowing it is the thing to think
  * twice about, and the gate will make you. Note the scope: the name-independent rules are "imports
  * a published entry point" and "references the PHI scanner", and they reach all but TWO of this
- * repo's test files. For those two — `test/docs-content.test.ts` and `test/scripts/attw-gate.test.ts`,
- * neither of which imports this package — the `.test.`/`.spec.` filename shape is the only rule.
+ * repo's test files. For those two: `test/docs-content.test.ts` and `test/scripts/attw-gate.test.ts`,
+ * neither of which imports this package, the `.test.`/`.spec.` filename shape is the only rule.
  * Narrowing this glob is caught either way. The counts that used to be written here are not, because
  * they were already stale by one when this line was next read; `pnpm check:test-selection` prints the
  * live ones on every run.

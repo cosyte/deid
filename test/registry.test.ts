@@ -1,5 +1,5 @@
 /**
- * Tests for the DEID-7 **corpus registry** — cross-document longitudinal consistency and the key
+ * Tests for the DEID-7 **corpus registry**: cross-document longitudinal consistency and the key
  * contract. The load-bearing guarantees: the same patient shifts by the same offset and the same
  * identifier maps to the same pseudonym across documents and runs; different inputs do not collide;
  * the key never leaks; and an absent key fails closed.
@@ -38,7 +38,7 @@ function daysBetween(a: string, b: string): number {
   return Math.round((Date.parse(b) - Date.parse(a)) / 86_400_000);
 }
 
-describe("createDeidRegistry — the key contract", () => {
+describe("createDeidRegistry, the key contract", () => {
   it("fails closed on an empty key (no default/weak key)", () => {
     expect(() => createDeidRegistry({ key: "" })).toThrowError(
       expect.objectContaining({ code: FATAL_CODES.DEID_NO_KEY }),
@@ -67,7 +67,7 @@ describe("createDeidRegistry — the key contract", () => {
   });
 });
 
-describe("DeidRegistry.forPatient — cross-document date-shift consistency", () => {
+describe("DeidRegistry.forPatient, cross-document date-shift consistency", () => {
   it("memoizes: the same patient key returns the identical context handle", () => {
     const registry = createDeidRegistry({ key: "secret" });
     expect(registry.forPatient("p1")).toBe(registry.forPatient("p1"));
@@ -132,14 +132,14 @@ describe("DeidRegistry.forPatient — cross-document date-shift consistency", ()
         policy: RESEARCH,
         context: r.forPatient("p1"),
       }).document.loci[0]?.value ?? null;
-    // Overwhelmingly likely to differ — rotation severs linkage. (Offsets live in a 731-day space, so
+    // Overwhelmingly likely to differ: rotation severs linkage. (Offsets live in a 731-day space, so
     // a rare coincidental match is possible; assert on the pseudonym channel too, which cannot collide.)
     expect(oldReg.pseudonym("MRN-1")).not.toBe(newReg.pseudonym("MRN-1"));
     void shift;
   });
 });
 
-describe("DeidRegistry.pseudonym / remapUid — corpus-wide identifier consistency", () => {
+describe("DeidRegistry.pseudonym / remapUid, corpus-wide identifier consistency", () => {
   it("same identifier → same pseudonym; different identifiers → different pseudonyms", () => {
     const registry = createDeidRegistry({ key: "secret" });
     expect(registry.pseudonym("MRN-1")).toBe(registry.pseudonym("MRN-1"));

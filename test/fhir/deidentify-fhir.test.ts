@@ -1,5 +1,5 @@
 /**
- * FHIR adapter tests — the two headline gates (the **leak test** and the **over-scrub test**), the
+ * FHIR adapter tests: the two headline gates (the **leak test** and the **over-scrub test**), the
  * per-category structured behavior across the person resources and the universal vectors, the
  * narrative / extension / unknown-structure fail-closed defaults, the keyed-context fatal, and
  * immutability.
@@ -43,8 +43,8 @@ function deid(name: string, options = { context: ctx }) {
 /**
  * Every PHI sentinel seeded across the Bundle's person resources, universal vectors (identifier /
  * narrative / extension / reference display), the nested `Patient.contact` relative, and a contained
- * `RelatedPerson`. Every one must be GONE after a de-id pass. Retained-by-design values — the clinical
- * `Observation`/`Encounter` codes, values, units, statuses, and reference wiring — are deliberately not
+ * `RelatedPerson`. Every one must be GONE after a de-id pass. Retained-by-design values (the clinical
+ * `Observation`/`Encounter` codes, values, units, statuses, and reference wiring) are deliberately not
  * in this list (they are the over-scrub guard).
  */
 const SENTINELS: readonly string[] = [
@@ -93,7 +93,7 @@ const SENTINELS: readonly string[] = [
 /** Clinical / structural values that must SURVIVE (the over-scrub guard + reference-wiring invariant). */
 const CLINICAL: readonly string[] = [
   "2951-2", // LOINC sodium observation code
-  "Sodium [Moles/volume] in Serum or Plasma", // code display — a coded term, not a person label
+  "Sodium [Moles/volume] in Serum or Plasma", // code display, a coded term, not a person label
   "140", // sodium result value
   "mmol/L", // unit
   "135", // reference-range low
@@ -106,17 +106,17 @@ const CLINICAL: readonly string[] = [
   "Patient/pat1", // reference wiring preserved structurally after identifier handling
   "Practitioner/prac1", // reference wiring preserved
   "902", // Patient ZIP generalized to safe 3-digit prefix
-  "MA", // state — permitted, retained
+  "MA", // state, permitted, retained
 ];
 
-describe("deidentifyFhir — the leak test (zero surviving sentinels across every resource)", () => {
+describe("deidentifyFhir, the leak test (zero surviving sentinels across every resource)", () => {
   it("removes every seeded PHI sentinel across person resources, universal vectors, contact + contained", () => {
     const { wire } = deid("bundle");
     expect(SENTINELS.filter((s) => wire.includes(s))).toEqual([]);
   });
 });
 
-describe("deidentifyFhir — the over-scrub test (clinical values + wiring survive)", () => {
+describe("deidentifyFhir, the over-scrub test (clinical values + wiring survive)", () => {
   it("retains coded values, units, statuses, coded displays, ZIP prefix, and reference wiring", () => {
     const { wire } = deid("bundle");
     expect(CLINICAL.filter((s) => !wire.includes(s))).toEqual([]);
@@ -134,7 +134,7 @@ describe("deidentifyFhir — the over-scrub test (clinical values + wiring survi
   });
 });
 
-describe("deidentifyFhir — structured per-category behavior", () => {
+describe("deidentifyFhir, structured per-category behavior", () => {
   it("pseudonymizes the patient MRN by system (keeping system) and removes an SSN-system identifier", () => {
     const { document, manifest } = deid("bundle");
     const patient = firstResource(document, "Patient");
@@ -194,7 +194,7 @@ describe("deidentifyFhir — structured per-category behavior", () => {
   });
 });
 
-describe("deidentifyFhir — fail closed on narrative, extensions, and unknown structure", () => {
+describe("deidentifyFhir, fail closed on narrative, extensions, and unknown structure", () => {
   it("blocks the narrative text.div (rendered PHI), leaving the Narrative status", () => {
     const { document, wire, manifest } = deid("bundle");
     expect(wire).not.toContain("ZZPATNARRATIVE");
@@ -206,7 +206,7 @@ describe("deidentifyFhir — fail closed on narrative, extensions, and unknown s
     );
   });
 
-  it("blocks extension values at any nesting (an MRN in a local extension, a nested extension) — url kept", () => {
+  it("blocks extension values at any nesting (an MRN in a local extension, a nested extension), url kept", () => {
     const { wire, manifest } = deid("bundle");
     expect(wire).not.toContain("ZZEXTMRN");
     expect(wire).not.toContain("ZZNESTEDEXTPHI");
@@ -291,7 +291,7 @@ describe("deidentifyFhir — fail closed on narrative, extensions, and unknown s
     // The consumer supplies the detector; the library bundles none. Scrub the seeded sentinels.
     const redactor = ({ text }: { text: string }) => ({ text: text.replace(/ZZ\w+/g, "[X]") });
     const { json: out, manifest } = deidentifyFhirJson(json, { context: ctx, redactor });
-    // Redacted prose is written back in place, not dropped — the document carries the redactor's output.
+    // Redacted prose is written back in place, not dropped: the document carries the redactor's output.
     expect(out).toContain("[X]");
     // Every seeded sentinel is gone from the wire (including the Annotation author folded into the unit).
     expect(out).not.toContain("ZZNOTEPROSE");
@@ -359,7 +359,7 @@ describe("deidentifyFhir — fail closed on narrative, extensions, and unknown s
   });
 });
 
-describe("deidentifyFhir — fatal + policy + immutability + value-free manifest", () => {
+describe("deidentifyFhir, fatal + policy + immutability + value-free manifest", () => {
   it("throws DEID_NO_KEY when a keyed transform is needed but no context is supplied", () => {
     expect(() => deidentifyFhir(parseResource(loadFixture("bundle")).resource, {})).toThrowError(
       expect.objectContaining({ code: FATAL_CODES.DEID_NO_KEY }),
@@ -375,7 +375,7 @@ describe("deidentifyFhir — fatal + policy + immutability + value-free manifest
     const patient = firstResource(document, "Patient");
     const birth = strValue(patient, "birthDate");
     expect(birth).not.toBe("1990-02-15"); // actually shifted
-    expect(birth).not.toBe("1990"); // not generalized — a full shifted date
+    expect(birth).not.toBe("1990"); // not generalized: a full shifted date
     expect(birth).toMatch(/^\d{4}-\d{2}-\d{2}/);
   });
 

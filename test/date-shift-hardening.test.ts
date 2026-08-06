@@ -1,10 +1,10 @@
 /**
  * Release-hardening tests for the two date-shift nits fixed in DEID-10:
  *
- * 1. **ISO-datetime timezone dependence.** The shift must be a pure calendar-date operation — the
- *    time-of-day and zone travel through verbatim — so the same input yields the same output on every
+ * 1. **ISO-datetime timezone dependence.** The shift must be a pure calendar-date operation: the
+ *    time-of-day and zone travel through verbatim, so the same input yields the same output on every
  *    host regardless of the machine `TZ`. (The old path parsed a zoneless datetime as *local* time and
- *    re-emitted UTC via `toISOString()`, so the result — and sometimes the day — moved with `TZ`.)
+ *    re-emitted UTC via `toISOString()`, so the result, and sometimes the day, moved with `TZ`.)
  * 2. **The `maxShiftDays: 0` degenerate offset.** A bound flooring to 0 pinned every offset to 0, so a
  *    date-shift policy silently emitted the original real dates. It now fails closed at construction.
  *
@@ -70,7 +70,7 @@ describe("date-shift maxShiftDays:0 fails closed (nit #2)", () => {
   it("accepts maxShiftDays >= 1 and still shifts", () => {
     const tight = createDeidContext({ key: "k", patientId: "p1", maxShiftDays: 1 });
     const out = dateShift("2020-06-15", tight);
-    // Within [-1, +1] days of the original — but a valid, defined value, not a rejected context.
+    // Within [-1, +1] days of the original, but a valid, defined value, not a rejected context.
     expect(out).toMatch(/^2020-06-1[456]$/);
   });
 

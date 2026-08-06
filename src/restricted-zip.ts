@@ -1,5 +1,5 @@
 /**
- * The **restricted three-digit ZIP prefixes** for HIPAA Safe Harbor — 45 CFR §164.514(b)(2)(i)(B).
+ * The **restricted three-digit ZIP prefixes** for HIPAA Safe Harbor: 45 CFR §164.514(b)(2)(i)(B).
  *
  * Safe Harbor retains the **initial three digits of a ZIP code** *only if*, according to the current
  * publicly available Census data, the geographic unit formed by those three digits contains **more

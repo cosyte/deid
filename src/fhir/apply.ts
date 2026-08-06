@@ -1,23 +1,23 @@
 /**
- * The FHIR **applier** — rebuilds a fresh, de-identified `@cosyte/fhir` resource tree from the engine's
+ * The FHIR **applier**: rebuilds a fresh, de-identified `@cosyte/fhir` resource tree from the engine's
  * transformed loci and the extractor's write-back coordinates. The `@cosyte/fhir` model is **immutable**
- * (every node is deeply `readonly`), so — unlike the HL7 / C-CDA appliers, which edit a cloned mutable
- * tree — this applier **reconstructs** the tree: it recurses the original nodes and, guided by a
+ * (every node is deeply `readonly`), so, unlike the HL7 / C-CDA appliers, which edit a cloned mutable
+ * tree, this applier **reconstructs** the tree: it recurses the original nodes and, guided by a
  * node-identity map, emits new {@link "@cosyte/fhir".FhirComplex} / `FhirList` / `FhirPrimitive` nodes.
  * The caller's model is therefore never touched.
  *
  * Each coordinate names the exact node to rewrite and how:
  *
- * - `drop` — with a `null` value the node is omitted (a redacted `name`/`telecom`/`photo`, a blocked
+ * - `drop`, with a `null` value the node is omitted (a redacted `name`/`telecom`/`photo`, a blocked
  *   extension value, a blocked `Reference.display`, a blocked narrative `div`, a blocked unknown person
  *   string, a redacted SSN `Identifier.value`). A dropped property vanishes from its complex; a dropped
  *   list item from its list; a list that empties is dropped in turn. With a **non-null** value the locus
- *   is a **BYO-redacted free-text** locus — the redacted prose is written back in place
+ *   is a **BYO-redacted free-text** locus: the redacted prose is written back in place
  *   (a `contentString`/`valueString` primitive stays a primitive; a `note` Annotation/array becomes a
  *   `text`-only Annotation, dropping author/time).
- * - `set-primitive` — the primitive's value becomes the transformed string (a generalized date, a
+ * - `set-primitive`: the primitive's value becomes the transformed string (a generalized date, a
  *   pseudonymized `Identifier.value`); a `null` result degrades to a drop.
- * - `address` — the `Address` complex is rebuilt to `state` + `country` + the generalized 3-digit
+ * - `address`: the `Address` complex is rebuilt to `state` + `country` + the generalized 3-digit
  *   `postalCode`, dropping every finer geographic component.
  *
  * **Primitive-extension guard.** A FHIR primitive can carry an `extension` (the JSON `_`-sibling) that
@@ -62,7 +62,7 @@ interface Edit {
 
 /** Re-emit a primitive without its `extension` side-channel (fail-closed), keeping value + `id`. */
 function stripPrimitive(node: FhirPrimitive): FhirNode {
-  if (node.extension === undefined) return node; // nothing to strip — preserve identity exactly
+  if (node.extension === undefined) return node; // nothing to strip: preserve identity exactly
   return node.id === undefined ? primitive(node.value) : primitive(node.value, { id: node.id });
 }
 
@@ -80,17 +80,17 @@ function rebuildAddress(node: FhirComplex, zip: string | null): Rebuilt {
   return props.length === 0 ? REMOVE : complex(props);
 }
 
-/** An `Annotation` reduced to its redacted `text` only — author / time (potential PHI) are dropped. */
+/** An `Annotation` reduced to its redacted `text` only: author / time (potential PHI) are dropped. */
 function textAnnotation(value: string): FhirComplex {
   return complex([{ name: "text", value: primitive(value) }]);
 }
 
 /**
- * Write a BYO-redacted free-text value back in place, faithful to the node's kind — a redacted
+ * Write a BYO-redacted free-text value back in place, faithful to the node's kind: a redacted
  * string primitive (`contentString` / `valueString`) stays a primitive; a `note` Annotation (complex)
  * or a `note` array (list) becomes a `text`-only Annotation carrying the redacted prose. Reached only
  * for a `freetext` locus with a non-null value (the caller gates on `kind`), so a name/telecom locus
- * that a custom policy pseudonymized — which shares the `drop` edit — is never routed through here; it
+ * that a custom policy pseudonymized, which shares the `drop` edit, is never routed through here; it
  * drops as before.
  */
 function writeFreeText(node: FhirNode, value: string): Rebuilt {
@@ -106,7 +106,7 @@ function applyEdit(node: FhirNode, edit: Edit): Rebuilt {
       // A BYO-redacted free-text locus (§Phase 8) with a non-null value → write the redacted prose back
       // in place. Gated on `kind`, so a name/telecom locus a custom policy pseudonymized (which shares
       // the `drop` edit) still drops rather than being written through the free-text path. Every other
-      // case — a removed/blocked locus, or a null value — omits the node.
+      // case (a removed/blocked locus, or a null value) omits the node.
       return edit.kind === "freetext" && edit.value !== null
         ? writeFreeText(node, edit.value)
         : REMOVE;

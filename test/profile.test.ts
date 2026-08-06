@@ -50,7 +50,7 @@ describe("built-in profiles", () => {
   });
 });
 
-describe("defineDeidProfile — the widen-never-narrow contract", () => {
+describe("defineDeidProfile, the widen-never-narrow contract", () => {
   it("accepts an override that TIGHTENS a category (pseudonymize -> redact)", () => {
     const strict = defineDeidProfile({
       name: "site-strict",
@@ -75,11 +75,11 @@ describe("defineDeidProfile — the widen-never-narrow contract", () => {
   });
 
   it("rejects reclaiming a reserved standard label that does not match the base", () => {
-    // "limited-data-set" while deriving from the Safe Harbor base — a label mismatch, rejected.
+    // "limited-data-set" while deriving from the Safe Harbor base: a label mismatch, rejected.
     expect(() => defineDeidProfile({ name: "limited-data-set" })).toThrowError(
       expect.objectContaining({ code: FATAL_CODES.DEID_PROFILE_INVALID }),
     );
-    // "safe-harbor" while deriving from the LDS base — also a mismatch, rejected.
+    // "safe-harbor" while deriving from the LDS base: also a mismatch, rejected.
     expect(() =>
       defineDeidProfile({ name: "safe-harbor", base: LIMITED_DATA_SET_PROFILE }),
     ).toThrowError(expect.objectContaining({ code: FATAL_CODES.DEID_PROFILE_INVALID }));

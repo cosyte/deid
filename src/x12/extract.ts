@@ -1,5 +1,5 @@
 /**
- * The X12 **extractor** — walks a parsed `@cosyte/x12` interchange (Interchange → FunctionalGroup →
+ * The X12 **extractor**: walks a parsed `@cosyte/x12` interchange (Interchange → FunctionalGroup →
  * TransactionSet → Segment) and produces the format-agnostic {@link GenericLocus} list the core engine
  * transforms, plus a **parallel coordinate list** ({@link X12Coord}) telling the applier exactly which
  * element(s) of which raw segment to rewrite. Loci and coordinates are produced in the same order, so
@@ -8,7 +8,7 @@
  * PHI is located **structurally**, per the cited {@link "./locus-map.js"}: `NM1` names + identifiers
  * (entity-classified), `N3` / `N4` address, `DMG` date of birth, `PER` telecom, `REF` identifiers
  * (qualifier-classified), `DTP` / `DTM` dates, and the `CLM-01` / `CLP-01` patient account number.
- * Everything else is either a recognized clinical / financial segment (retained untouched — the
+ * Everything else is either a recognized clinical / financial segment (retained untouched, the
  * over-scrub guard) or an **unknown segment**, which **fails closed** (every populated element blocked).
  *
  * The `@cosyte/x12` model is immutable and its serializer reconstructs from the verbatim `rawSegments`
@@ -37,7 +37,7 @@ import {
 } from "./locus-map.js";
 
 /**
- * A write-back coordinate — the structural location of one extracted locus in the interchange. The
+ * A write-back coordinate: the structural location of one extracted locus in the interchange. The
  * applier resolves `groups[groupIndex].transactions[txIndex]` and rewrites `elements[e]` (for each `e`
  * in {@link elements}) of the segment at `segIndex` in that transaction's raw stream. Carries no value.
  */
@@ -163,10 +163,10 @@ function emitId(
 /** Handle an `NM1`: entity-classified name (03–07) + identifier (09 routed by the 08 qualifier). */
 function handleNm1(out: X12Extraction, seg: X12Segment, pos: SegPos): void {
   const disposition = classifyNm1Entity(el(seg, 1));
-  if (disposition === "provider") return; // recognized provider / organization — retained (§5)
+  if (disposition === "provider") return; // recognized provider / organization: retained (§5)
 
   // Name components NM1-03..07. A patient entity redacts (category NAMES); an unknown entity fails
-  // closed (blocked) — an unrecognized entity could be the patient, so its name is never passed through.
+  // closed (blocked): an unrecognized entity could be the patient, so its name is never passed through.
   const nameElements = [3, 4, 5, 6, 7].filter((n) => has(seg, n));
   if (nameElements.length > 0) {
     if (disposition === "patient") {
@@ -210,7 +210,7 @@ function handleNm1(out: X12Extraction, seg: X12Segment, pos: SegPos): void {
  */
 function handleN1(out: X12Extraction, seg: X12Segment, pos: SegPos): void {
   const disposition = classifyNm1Entity(el(seg, 1));
-  if (disposition === "provider") return; // recognized org / payer / provider party — retained
+  if (disposition === "provider") return; // recognized org / payer / provider party: retained
 
   if (has(seg, 2)) {
     if (disposition === "patient") {
@@ -254,7 +254,7 @@ function handleAccount(out: X12Extraction, seg: X12Segment, pos: SegPos): void {
 /**
  * Handle a **geographic** segment (`N3` / `N4`) with a fail-closed sweep: every populated element is
  * either applied by its mapped rule (city removed, ZIP generalized), retained if on the segment's
- * non-identifier safe list (`N4-02` state, `N4-04` country), or **blocked** — so an un-enumerated
+ * non-identifier safe list (`N4-02` state, `N4-04` country), or **blocked**, so an un-enumerated
  * location identifier (`N4-06`) can never ride through in the clear.
  */
 function handleGeoSegment(
@@ -278,7 +278,7 @@ function handleGeoSegment(
 }
 
 /**
- * Block the free-text element(s) of a message segment (`MSG` / `III` / `K3` / `NTE`) — free text can
+ * Block the free-text element(s) of a message segment (`MSG` / `III` / `K3` / `NTE`): free text can
  * carry any of the 18 categories in prose, so it fails closed (never a naive scrub). The segment's other
  * (coded) elements are retained (the over-scrub guard).
  */
@@ -344,7 +344,7 @@ function handleSegment(out: X12Extraction, seg: X12Segment, pos: SegPos): void {
     for (const rule of universal) emitRule(out, seg, pos, rule);
     return;
   }
-  if (X12_RETAIN_SEGMENTS.has(id)) return; // recognized clinical / financial / control — retained
+  if (X12_RETAIN_SEGMENTS.has(id)) return; // recognized clinical / financial / control: retained
   handleUnknown(out, seg, pos); // fail closed
 }
 
@@ -375,7 +375,7 @@ export function extractX12Loci(interchange: X12Interchange): X12Extraction {
       const stId = safeLocusToken(tx.st.elements[1] ?? "", "x12TransactionSetId");
       const occ = new Map<string, number>();
       tx.segments.forEach((seg, segIndex) => {
-        if (seg.id === "ST" || seg.id === "SE") return; // envelope control — no patient PHI
+        if (seg.id === "ST" || seg.id === "SE") return; // envelope control, no patient PHI
         const segId = safeLocusToken(seg.id, "x12SegmentId");
         const n = occ.get(segId) ?? 0;
         occ.set(segId, n + 1);

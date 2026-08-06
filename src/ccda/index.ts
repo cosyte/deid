@@ -1,33 +1,33 @@
 /**
- * `@cosyte/deid/ccda` — the **C-CDA de-identification adapter**. The C-CDA binding of the
+ * `@cosyte/deid/ccda`: the **C-CDA de-identification adapter**. The C-CDA binding of the
  * format-agnostic core: it locates PHI **structurally** in an HL7 CDA R2.1 document,
  * applies the configured de-identification policy, and returns a transformed `CcdaDocument` plus the
  * core's value-free manifest.
  *
- * **`@cosyte/ccda` is an optional peer dependency**, consumed only from this subpath — a consumer who
+ * **`@cosyte/ccda` is an optional peer dependency**, consumed only from this subpath: a consumer who
  * only de-identifies C-CDA installs it alongside `@cosyte/deid`; the core stays third-party-dep-free.
  * The adapter reaches the CDA DOM **only** through `@cosyte/ccda`'s exported, XXE-hardened
- * `parseSecureXml` and re-serializes through the DOM node the parser hands back — it never imports the
+ * `parseSecureXml` and re-serializes through the DOM node the parser hands back: it never imports the
  * XML substrate (`@xmldom/xmldom`, the parser's own ratified dependency) directly, so
  * `@cosyte/deid` declares no third-party runtime dependency of its own.
  *
- * **What it covers.** The structured PHI loci of the CDA **header participations** — `recordTarget`
+ * **What it covers.** The structured PHI loci of the CDA **header participations**: `recordTarget`
  * (patient) + the nested `guardian`, and `author` / `informant` / `authenticator` /
  * `legalAuthenticator` / `dataEnterer` / `participant` / `custodian` / `documentationOf` /
- * `componentOf` (relatives / providers / contacts) — via the cited {@link CCDA_LOCUS_MAP}:
+ * `componentOf` (relatives / providers / contacts): via the cited {@link CCDA_LOCUS_MAP}:
  * person `<name>` and `<telecom>` removed; person-role `<id>` pseudonymized (assigning root retained,
  * SSN-rooted ids redacted); `<addr>` reduced to the safe 3-digit ZIP; `<birthTime>` / participation and
  * encounter dates generalized to year. **Fail closed** everywhere else: section narrative `<text>`
  * blocks and the unstructured `nonXMLBody` are blocked (no naive scrub); an element carrying a value
  * that is neither mapped PHI nor recognized coded/administrative structure is blocked; foreign / `sdtc`
- * elements are blocked. Coded clinical structure — the **structuredBody** entries' codes, values,
- * units, and statuses — is **retained untouched** (the over-scrub guard); a `<name>` there is a drug or
+ * elements are blocked. Coded clinical structure (the **structuredBody** entries' codes, values,
+ * units, and statuses) is **retained untouched** (the over-scrub guard); a `<name>` there is a drug or
  * material name, never a person, and survives. The honesty line is unchanged: the output is
  * **"Safe-Harbor-transformed per the configured policy"**, never "de-identified".
  *
  * **Known limitations.** Narrative is block-only (no semantic narrative de-id).
  * Within the **retained** clinical body, entry-level service dates (`effectiveTime`), entry ids,
- * in-entry performer names, and family-history relative demographics are **not** de-identified —
+ * in-entry performer names, and family-history relative demographics are **not** de-identified:
  * exactly mirroring the HL7 v2 adapter's retained-clinical-segment boundary; forgetting one fails
  * **safe** (retained), never leaked, because the leak surface this adapter covers is the header +
  * narrative. The
@@ -62,7 +62,7 @@ const XML_DECLARATION = '<?xml version="1.0" encoding="UTF-8"?>';
  * ```
  */
 export interface CcdaDeidResult {
-  /** The de-identified document — a fresh, independent {@link CcdaDocument}; the input is never mutated. */
+  /** The de-identified document: a fresh, independent {@link CcdaDocument}; the input is never mutated. */
   readonly document: CcdaDocument;
   /** The value-free audit of every action, in locus order (never a value, never a key). */
   readonly manifest: readonly DeidManifestEntry[];
@@ -73,11 +73,11 @@ export interface CcdaDeidResult {
  * structurally from the CDA header participations and the section narrative; the input document is
  * never mutated (the adapter re-parses its serialized form into a fresh, independent DOM to edit).
  *
- * The output is **"Safe-Harbor-transformed per the configured policy"** — it is not certified
+ * The output is **"Safe-Harbor-transformed per the configured policy"**: it is not certified
  * de-identified, and Expert Determination is not rendered.
  *
  * @param doc - The parsed C-CDA document to de-identify (produced by `@cosyte/ccda`'s `parseCcda`).
- * @param options - The policy and (for keyed transforms — id pseudonymization) the key context. A keyed
+ * @param options - The policy and (for keyed transforms: id pseudonymization) the key context. A keyed
  *   transform with no context is a fatal `DEID_NO_KEY`, never an unkeyed fallback.
  * @returns The de-identified document and the value-free manifest.
  * @throws {@link DeidError} `EMPTY_INPUT` when the document carries no serializable `ClinicalDocument`
@@ -97,7 +97,7 @@ export interface CcdaDeidResult {
 export function deidentifyCcda(doc: CcdaDocument, options: DeidOptions = {}): CcdaDeidResult {
   // The parser retains the source XML; re-parsing it yields a fresh DOM independent of the caller's
   // model, so nothing the caller holds is ever mutated. `toString()` throws only for a hand-constructed
-  // document (never one from parseCcda) — a documented, acceptable precondition.
+  // document (never one from parseCcda): a documented, acceptable precondition.
   const source = doc.toString();
   const dom = parseSecureXml(source, resolveLimits(undefined), () => {
     /* de-id re-parses spec-clean source; parse warnings are not part of the de-id contract */

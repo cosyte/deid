@@ -2,9 +2,9 @@
  * Property-based invariants for the C-CDA adapter (the fail-safe reflex):
  *
  * - **Leak invariant:** for arbitrary synthetic person tokens injected at the header PHI loci, no token
- *   survives the serialized output — an un-handleable locus fails closed, never passes through.
+ *   survives the serialized output: an un-handleable locus fails closed, never passes through.
  * - **Value-free invariant:** no injected token, and no keyed surrogate/offset, ever appears in the
- *   manifest — the audit trail records loci, never values or secrets.
+ *   manifest: the audit trail records loci, never values or secrets.
  */
 
 import { describe, expect, it } from "vitest";
@@ -42,7 +42,7 @@ function buildDoc(t: {
 </ClinicalDocument>`;
 }
 
-describe("deidentifyCcda — property: fail-safe leak + value-free invariants", () => {
+describe("deidentifyCcda, property: fail-safe leak + value-free invariants", () => {
   it("never leaves an injected token in the output or the manifest, for arbitrary inputs", () => {
     fc.assert(
       fc.property(

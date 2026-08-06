@@ -81,7 +81,7 @@ function transactionArb(): fc.Arbitrary<ReturnType<typeof buildTelecomRequest>> 
     });
 }
 
-describe("deidentifyTelecom — fail-safe invariants", () => {
+describe("deidentifyTelecom, fail-safe invariants", () => {
   it("never throws a non-fatal, never leaks a scrub-locus sentinel, manifest is value-free", () => {
     fc.assert(
       fc.property(transactionArb(), (tx) => {

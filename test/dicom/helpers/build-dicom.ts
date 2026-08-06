@@ -1,5 +1,5 @@
 /**
- * Programmatic Part 10 fixture builder — internal test utility.
+ * Programmatic Part 10 fixture builder: internal test utility.
  *
  * D-37 / D-38: this helper lives in `test/helpers/` and is NOT exported from
  * `src/index.ts`.
@@ -12,7 +12,7 @@
  * per-VR byte-swap) plus SQ item encoding (FFFE markers, defined- and
  * undefined-length forms, encapsulated pixel data fragments).
  * Plan 02-05 adds the Deflated Explicit VR LE branch (`zlib.deflateRawSync`
- * applied to an Explicit-LE-encoded element body — symmetric counterpart
+ * applied to an Explicit-LE-encoded element body: symmetric counterpart
  * to `parseDeflatedLE`'s `zlib.inflateRawSync` per CONTEXT D-26 /
  * PITFALLS §1.4).
  *
@@ -49,7 +49,7 @@ const LONG_FORM_VRS = new Set<VR>([
 /**
  * Per-VR byte-stride for Explicit VR Big Endian byte-swap (mirror of the
  * production `BE_VR_STRIDE` in `src/parser/endian.ts`). Duplicated here so
- * the test helper has no runtime dependency on the source-code constant —
+ * the test helper has no runtime dependency on the source-code constant:
  * a regression in either copy is caught by the `endian.test.ts` table tests
  * + the BE round-trip tests in `explicit-be.test.ts`.
  *
@@ -137,7 +137,7 @@ export interface BuildDicomSqElement {
   readonly items: readonly BuildDicomSqItem[];
   /** Default `false`. When true, fragments are emitted as raw Buffer items. */
   readonly encapsulatedPixelData?: boolean;
-  /** Required when `encapsulatedPixelData === true` — fragment byte streams. */
+  /** Required when `encapsulatedPixelData === true`: fragment byte streams. */
   readonly encapsulatedFragments?: readonly Buffer[];
   /**
    * When `encapsulatedPixelData === true`, override the on-wire VR. Defaults
@@ -187,7 +187,7 @@ export interface BuildDicomOptions {
 }
 
 /**
- * Build a Part 10 buffer. Internal — do NOT export from `src/index.ts`.
+ * Build a Part 10 buffer. Internal: do NOT export from `src/index.ts`.
  */
 export function buildDicom(opts: BuildDicomOptions): Buffer {
   const parts: Buffer[] = [];
@@ -197,7 +197,7 @@ export function buildDicom(opts: BuildDicomOptions): Buffer {
     parts.push(Buffer.from("DICM", "ascii"));
   }
 
-  // Build File Meta body (Explicit VR LE — hard-wired per FM-01 / D-17).
+  // Build File Meta body (Explicit VR LE, hard-wired per FM-01 / D-17).
   const fileMetaElements: Buffer[] = [];
   if (opts.skipTransferSyntaxUID !== true) {
     fileMetaElements.push(buildExplicitLeElement("00020010", "UI", padUI(opts.transferSyntax)));
@@ -247,7 +247,7 @@ export function buildDicom(opts: BuildDicomOptions): Buffer {
 
   // Dataset elements per the requested transfer syntax.
   // TS-04 (Deflated Explicit VR LE) is the symmetric counterpart of
-  // `parseDeflatedLE` — encode as Explicit VR LE first, then deflate
+  // `parseDeflatedLE`: encode as Explicit VR LE first, then deflate
   // the concatenation via `zlib.deflateRawSync` (RFC 1951 raw deflate,
   // matching `inflateRawSync` on the parser side per CONTEXT D-26 /
   // PITFALLS §1.4). File Meta is NOT deflated (FM-01).
@@ -333,7 +333,7 @@ function buildExplicitBeElement(tag: Tag, vr: VR, value: Buffer): Buffer {
   // Per D-23 / D-24: swap value bytes per the per-VR stride before emit.
   // OB / UN stride = 0 → no swap (D-24).
   // AT stride=2: caller-supplied bytes are interpreted as a contiguous run
-  // of group/element 16-bit halves, each emitted BE — total swap count is
+  // of group/element 16-bit halves, each emitted BE: total swap count is
   // value.length/2.
   const swapped = swapBytes(value, BE_VR_STRIDE_LOCAL[vr] ?? 0);
   if (LONG_FORM_VRS.has(vr)) {
@@ -361,7 +361,7 @@ const UNDEFINED_LENGTH = 0xffffffff;
  * Build a 4-byte FFFE marker tag. Identical layout under Implicit/Explicit
  * LE (group/element 16-bit LE); mirrored to BE under Explicit BE per D-25.
  *
- * The `littleEndian` flag matches the dataset cursor's endianness — the
+ * The `littleEndian` flag matches the dataset cursor's endianness: the
  * canonical FFFE-under-BE bug per PITFALLS §2.3 is exactly the case where
  * a parser fails to honor this rule.
  */
@@ -484,7 +484,7 @@ function encodeSqHeader(
   const length = undefinedLength ? UNDEFINED_LENGTH : body.length;
 
   if (ts === "1.2.840.10008.1.2") {
-    // Implicit VR LE — no on-wire VR field.
+    // Implicit VR LE, no on-wire VR field.
     const groupBuf = Buffer.alloc(2);
     groupBuf.writeUInt16LE(group, 0);
     const elementBuf = Buffer.alloc(2);
@@ -494,7 +494,7 @@ function encodeSqHeader(
     return Buffer.concat([groupBuf, elementBuf, lengthBuf, body]);
   }
 
-  // Explicit VR LE / BE — long-form header (SQ/OB/UN are all in LONG_FORM_VRS).
+  // Explicit VR LE / BE: long-form header (SQ/OB/UN are all in LONG_FORM_VRS).
   const littleEndian = tsLittleEndian(ts);
   const groupBuf = Buffer.alloc(2);
   const elementBuf = Buffer.alloc(2);
@@ -513,7 +513,7 @@ function encodeSqHeader(
   return Buffer.concat([groupBuf, elementBuf, vrBuf, reserved, lengthBuf, body]);
 }
 
-/** Top-level encoder dispatch — picks per-TS strategy and SQ vs primitive. */
+/** Top-level encoder dispatch: picks per-TS strategy and SQ vs primitive. */
 function encodeAnyElement(el: BuildDicomElement | BuildDicomSqElement, ts: string): Buffer {
   if (isSqElement(el)) return encodeSqElement(el, ts);
   return encodeElement(el, ts);
@@ -523,11 +523,11 @@ function encodeElement(el: BuildDicomElement, ts: string): Buffer {
   if (ts === "1.2.840.10008.1.2") return buildImplicitLeElement(el.tag, el.value);
   if (ts === "1.2.840.10008.1.2.1") return buildExplicitLeElement(el.tag, el.vr, el.value);
   if (ts === "1.2.840.10008.1.2.2") return buildExplicitBeElement(el.tag, el.vr, el.value);
-  // TS-04 (Deflated Explicit VR LE) is handled at the buildDicom level —
+  // TS-04 (Deflated Explicit VR LE) is handled at the buildDicom level:
   // dataset elements are encoded as Explicit VR LE, then the entire
   // dataset is deflated. encodeElement is never reached for TS-04.
   throw new Error(
-    `buildDicom: encodeElement is not used for transferSyntax="${ts}" — Deflated TS encodes at the buildDicom level (caller bug).`,
+    `buildDicom: encodeElement is not used for transferSyntax="${ts}": Deflated TS encodes at the buildDicom level (caller bug).`,
   );
 }
 

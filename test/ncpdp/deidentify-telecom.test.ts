@@ -1,5 +1,5 @@
 /**
- * NCPDP Telecom adapter tests — the two headline gates (the **leak test** and the **over-scrub test**),
+ * NCPDP Telecom adapter tests: the two headline gates (the **leak test** and the **over-scrub test**),
  * the per-segment field behavior (Patient `01` / Prescriber `03` / Insurance `04` / COB `05`), the
  * header Date-of-Service generalization, the free-text and unknown-segment fail-closed defaults, the
  * keyed-context fatal, the value-free manifest, and immutability.
@@ -36,7 +36,7 @@ function loadRaw(): string {
 
 const ctx = createDeidContext({ key: "ncpdp-test-key", patientId: "patient-ncpdp-1" });
 
-/** The synthetic PHI sentinels seeded into `telecom-b1.ncpdp` — every one must be GONE after de-id. */
+/** The synthetic PHI sentinels seeded into `telecom-b1.ncpdp`: every one must be GONE after de-id. */
 const SENTINELS = [
   "ZZPATFIRST",
   "ZZPATLAST",
@@ -56,12 +56,12 @@ const SENTINELS = [
   "ZZDURPHI",
   "ZZUNKNOWNSEG",
   "20260115", // header Date of Service → generalized to 2026
-  // Unmapped identifier fields INSIDE PHI segments — must fail closed, not ride through:
+  // Unmapped identifier fields INSIDE PHI segments, must fail closed, not ride through:
   "ZZPATEMAIL", // 350-HN Patient E-Mail (Patient segment, unmapped)
   "ZZALTPATID", // an alternate patient id (Patient segment, unmapped)
   "ZZMEDIGAP", // 359-2A Medigap ID (Insurance segment, unmapped)
   "ZZPRESCRIBERNAME", // Prescriber name (Prescriber segment, unmapped → blocked, provider identity)
-  "ZZFQPHI", // 526-FQ Additional Message Information free text — blocked (was retained)
+  "ZZFQPHI", // 526-FQ Additional Message Information free text, blocked (was retained)
 ];
 
 /** Synthetic clinical / financial values that MUST survive byte-identical. */
@@ -74,8 +74,8 @@ const SURVIVORS = [
   "1985", // DOB generalized to year
 ];
 
-describe("NCPDP Telecom de-identification — leak + over-scrub gates", () => {
-  it("removes every seeded PHI sentinel (the leak test — must be ZERO survivors)", () => {
+describe("NCPDP Telecom de-identification, leak + over-scrub gates", () => {
+  it("removes every seeded PHI sentinel (the leak test, must be ZERO survivors)", () => {
     const { telecom } = deidentifyTelecomString(loadRaw(), { context: ctx });
     expect(SENTINELS.filter((s) => telecom.includes(s))).toEqual([]);
   });
@@ -114,7 +114,7 @@ describe("NCPDP Telecom structured + fail-closed behavior", () => {
   it("fails closed on an UNMAPPED identifier field inside a PHI segment (the DEID-5 leak fix)", () => {
     const { telecom, manifest } = deidentifyTelecomString(loadRaw(), { context: ctx });
     // A Patient e-mail (HN), an alternate patient id (CW), and a Medigap id (2A) are not in the scrub
-    // map — before the fix they rode through; now each is blocked.
+    // map: before the fix they rode through; now each is blocked.
     for (const [locus] of [["01/HN"], ["01/CW"], ["04/2A"]]) {
       expect(manifest.some((e) => e.locus === locus && e.disposition === "blocked")).toBe(true);
     }

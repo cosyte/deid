@@ -1,5 +1,5 @@
 /**
- * The **policy engine** — a policy maps each of the 18 Safe Harbor categories to the transform the
+ * The **policy engine**: a policy maps each of the 18 Safe Harbor categories to the transform the
  * engine applies. `safe-harbor` is the built-in default; `defineDeidPolicy` derives a custom policy
  * from it. A policy picks the safest defensible transform per category, grounded in
  * §164.514(b)(2).
@@ -19,7 +19,7 @@ const SAFE_HARBOR_LABEL = "safe-harbor";
  * ZIP / age).
  *
  * `byo-redact` is **not** a policy-assignable Safe Harbor transform and **not** something the library
- * performs — it is the manifest marker the engine records when a **consumer-supplied free-text
+ * performs: it is the manifest marker the engine records when a **consumer-supplied free-text
  * redactor** redacts a free-text locus. The library bundles no redactor; the
  * consumer brings the detector. Assigning `byo-redact` to a category in a policy has no effect beyond
  * the fail-closed default (the engine blocks it), because free-text redaction is driven by the
@@ -60,7 +60,7 @@ export const KEYED_TRANSFORMS: ReadonlySet<TransformName> = new Set([
  * ```
  */
 export interface DeidPolicy {
-  /** The policy name — surfaced in output labelling ("Safe-Harbor-transformed per the configured policy"). */
+  /** The policy name: surfaced in output labelling ("Safe-Harbor-transformed per the configured policy"). */
   readonly name: string;
   /** The transform applied to each Safe Harbor category. */
   readonly transforms: Readonly<Record<SafeHarborCategory, TransformName>>;
@@ -69,7 +69,7 @@ export interface DeidPolicy {
 /**
  * The built-in **Safe Harbor** policy. Direct identifiers with no analytic value are redacted; MRN /
  * beneficiary / account numbers are pseudonymized (consistent surrogates); geography and dates are
- * generalized; the open-ended catch-all (R) is **blocked** (fail-closed). Dates generalize to year —
+ * generalized; the open-ended catch-all (R) is **blocked** (fail-closed). Dates generalize to year:
  * date-shift is an Expert-Determination mode, not Safe Harbor.
  *
  * @example
@@ -154,7 +154,7 @@ export function defineDeidPolicy(spec: DeidPolicySpec): DeidPolicy {
 /**
  * Enforce the key/label contract on a policy, **failing closed** if it is violated: a policy that
  * applies the interval-preserving `date-shift` transform must **not** carry the reserved `safe-harbor`
- * label, because a shifted-but-real date is still a date element (§164.514(b)(2)(i)(C)) — date-shift is
+ * label, because a shifted-but-real date is still a date element (§164.514(b)(2)(i)(C)): date-shift is
  * an Expert-Determination technique, not Safe Harbor. Enforced both when a policy is minted
  * ({@link defineDeidPolicy}) and, so a hand-built {@link DeidPolicy} object cannot slip past, at the
  * point of use ({@link resolvePolicy}).

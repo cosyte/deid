@@ -1,15 +1,15 @@
 #!/usr/bin/env tsx
 /**
- * `@cosyte/deid` PHI scanner — the CI / pre-commit half of the PHI commit-gate.
+ * `@cosyte/deid` PHI scanner: the CI / pre-commit half of the PHI commit-gate.
  *
  * Pure Node. Zero runtime deps. `git` is the only subprocess, always via
  * `execFileSync` with array args (never shell-form). Sweeps `src/`, `test/` and
  * `scripts/` and REFUSES anything that looks like real PHI, so a developer
- * cannot commit a real-looking fixture — or a real-looking inline literal in a
- * test — by accident.
+ * cannot commit a real-looking fixture, or a real-looking inline literal in a
+ * test, by accident.
  *
  * ===========================================================================
- * ██  COVERAGE — READ BEFORE YOU RELY ON THIS  ██████████████████████████████
+ * ██  COVERAGE: READ BEFORE YOU RELY ON THIS  ██████████████████████████████
  * ===========================================================================
  *
  *   Two layers run on every target:
@@ -18,23 +18,23 @@
  *       a non-test domain.
  *     HL7 v2 STRUCTURED (`scanHl7Structured`): every PID/NK1/GT1/IN1/IN2 PHI
  *       field (names, DOB, SSN, MRN/member id, street/city, phone) is checked
- *       against the synthetic allow-list — a real value there is a HARD HIT.
+ *       against the synthetic allow-list: a real value there is a HARD HIT.
  *     C-CDA STRUCTURED (`scanCcdaStructured`): every header person-name / address
  *       element (given/family/prefix/suffix/name/street/city/county) and
- *       `birthTime` is checked against the allow-list — a real value there is a
+ *       `birthTime` is checked against the allow-list: a real value there is a
  *       HARD HIT. Scoped to the header (a body `<name>` can be a drug name).
  *     X12 STRUCTURED (`scanX12Structured`): the patient-entity NM1 name/id, DMG
- *       DOB, and PHI-qualified REF value are checked against the allow-list — a
+ *       DOB, and PHI-qualified REF value are checked against the allow-list: a
  *       real value there is a HARD HIT. Provider-entity NM1 names are retained
  *       and NOT checked (a provider/org name is not the individual's PHI).
  *     NCPDP TELECOM STRUCTURED (`scanTelecomStructured`): each patient /
  *       cardholder / prescriber PHI field (by its globally-unique 2-char id) is
- *       checked against the allow-list — a real value there is a HARD HIT.
+ *       checked against the allow-list: a real value there is a HARD HIT.
  *
  *   ⚠  Still-open gaps (do NOT treat green as "no PHI" for these): HL7 free text
  *      (OBX-5 / NTE-3 narrative), C-CDA narrative `<text>` blocks and `<id>`
  *      extensions, X12 free-text / retained-segment residuals, NCPDP SCRIPT (XML,
- *      de-id deferred), and FHIR / DICOM have NO structured detector yet — add one
+ *      de-id deferred), and FHIR / DICOM have NO structured detector yet: add one
  *      with each format's phase (roadmap §7, the eventual union scanner). Add
  *      positive tests proving each new detector CATCHES real names / DOBs / ids.
  *
@@ -57,10 +57,10 @@
  *          rejoined), but a segment broken across two SOURCE LITERALS is not
  *          rejoined.
  *      When you widen a recogniser, prove it with a case that is RED before and
- *      GREEN after — a recogniser that quietly matches nothing reports "no hits".
+ *      GREEN after: a recogniser that quietly matches nothing reports "no hits".
  *
  *   Worked examples of structured, format-aware detection live in the sibling
- *   parsers — read one before you start:
+ *   parsers. Read one before you start:
  *       ../hl7/scripts/phi-scan.ts     (segment → field → component aware)
  *       ../x12/scripts/phi-scan.ts     (ISA-delimited NM1 / DMG / PER aware)
  *       ../dicom/scripts/phi-scan.ts   (binary tag-aware)
@@ -68,7 +68,7 @@
  *       ../ncpdp/scripts/phi-scan.ts   (fixed-field aware)
  *
  *   The mechanism for declaring genuinely-synthetic identifiers is the
- *   allow-list (`scripts/phi-allow-list.txt`) — a positive declaration that a
+ *   allow-list (`scripts/phi-allow-list.txt`): a positive declaration that a
  *   fixture's identifiers are fake. Byte-strict formats cannot carry an inline
  *   `# synthetic: true` header, so the allow-list is the proven substitute
  *   (same approach every sibling uses). A whole-file bypass needs
@@ -87,18 +87,18 @@
  *   (no args)                - scan all in-scope working-tree files
  *
  * Exit codes: 0 (clean), 1 (HITS FOUND), 2 (the scan could not be performed).
- * Exit 1 is a claim about the corpus and NOTHING but a hit may spend it — see
+ * Exit 1 is a claim about the corpus and NOTHING but a hit may spend it: see
  * the contract note on `main`, which is where a missing allow-list and an
  * unreadable directory used to leak out as an uncaught exception (exit 1).
  *
  * ---------------------------------------------------------------------------
  * THE SCAN ROOTS ARE `src/`, `test/` AND `scripts/`, ON BOTH ROUTES, AND THAT IS
- * A WIDENING — the other half of the narrowing the non-regular-entry refusal
+ * A WIDENING: the other half of the narrowing the non-regular-entry refusal
  * below performed. Previously the walk covered `test/fixtures/` + `src/`, and
  * `--staged` covered `test/fixtures/**` + `src/**.ts`. This repo keeps its
  * document text INLINE IN `.ts` TEST MODULES rather than in `test/fixtures/`, so
- * 38 tracked files under `test/` — four of them already carrying HL7 `PID|…`
- * literals — were enumerated by NEITHER route, and a real name or MRN pasted
+ * 38 tracked files under `test/` (four of them already carrying HL7 `PID|…`
+ * literals) were enumerated by NEITHER route, and a real name or MRN pasted
  * into one committed with both gates green, in the de-identification package.
  * `SCAN_ROOT_NAMES` carries the full derivation, including what is still out of
  * scope and why a sibling's root list must not be pasted over it.
@@ -130,14 +130,14 @@
  * `isDirectory()` and `isFile()` and refuses whatever is left; `--staged` admits
  * exactly the two regular blob modes and refuses whatever is left. The kind
  * tokens below are labels ON that decision, each with a catch-all arm, so an
- * entry kind nobody enumerated is still refused — it just gets a duller name.
+ * entry kind nobody enumerated is still refused: it just gets a duller name.
  *
  * "In scope" is `isUnderScanRoot` on both routes now, and the walk still
  * excludes a gitignored entry (the same rule that already excludes a gitignored
  * file, so links do not get a second, stricter boundary of their own).
  *
  * ⚠ THE SCAN ROOT ITSELF is not enumerated by `readdir` and so is not a `Dirent`
- * at all — the refusal above could not see it, and `existsSync`/`readdirSync`
+ * at all: the refusal above could not see it, and `existsSync`/`readdirSync`
  * both FOLLOW, so replacing `src`, `test` or `scripts` with a link to a
  * directory made the sweep read a tree the repository does not contain. The
  * root now gets the same lstat-based decision every entry under it gets; see
@@ -166,7 +166,7 @@
  *
  * A refusal names the entry's own repo-relative path and an engine-owned token
  * for its kind. IT NEVER REPORTS THE LINK TARGET, which is text off the working
- * tree and can itself carry PHI — a target path of the shape
+ * tree and can itself carry PHI: a target path of the shape
  * `../patients/<surname>-<given>-<dob>.txt` is the whole reason. The shape is
  * written out rather than an example, because a diagnostic ABOUT a PHI leak is
  * itself a PHI surface, and that applies to the prose explaining it too.
@@ -186,29 +186,29 @@ const ALLOW_LIST_PATH = join(REPO_ROOT, "scripts", "phi-allow-list.txt");
 const OVERRIDE_LOG_PATH = join(REPO_ROOT, "phi-scan-overrides.md");
 
 /**
- * The scan roots — ONE list, shared by BOTH enumerating routes, so a path is in
+ * The scan roots: ONE list, shared by BOTH enumerating routes, so a path is in
  * scope for the pre-commit hook exactly when it is in scope for the all-mode
  * sweep. They previously disagreed (`test/fixtures` + all of `src` for the walk,
  * `test/fixtures/**` + `src/**.ts` for `--staged`) AND both stopped short of
  * `test/` itself, which is re-derived here rather than inherited from a sibling:
  *
  *   - `test/` WHOLE, not `test/fixtures/`. Every one of this repo's test modules
- *     is a hand-written `.ts` that embeds document text inline — HL7 `PID|…`
- *     segments, C-CDA headers, X12 interchanges, Telecom field tokens — as
+ *     is a hand-written `.ts` that embeds document text inline (HL7 `PID|…`
+ *     segments, C-CDA headers, X12 interchanges, Telecom field tokens) as
  *     string literals rather than as files under `test/fixtures/`. A real name
  *     or MRN pasted into one of those committed with BOTH gates green, in the
  *     de-identification package. Sweeping only the data directory is therefore
  *     not this repo's corpus boundary; sweeping `test/` is.
- *   - `src/` — hand-written code, whose JSDoc `@example` snippets must not carry
+ *   - `src/`: hand-written code, whose JSDoc `@example` snippets must not carry
  *     real PHI either.
- *   - `scripts/` — including `scripts/phi-allow-list.txt`, the file that DECLARES
+ *   - `scripts/`, including `scripts/phi-allow-list.txt`, the file that DECLARES
  *     identifiers synthetic. A real dashed SSN or a real email typed in there was
  *     read by nothing.
  *
  * ▶ DO NOT PORT A SIBLING'S ROOTS OR ITS EXCLUSIONS INTO THIS LIST. `mllp` walks
  * `test/` too but EXCLUDES `.ts` sources from it, because there its corpus is
  * data files and the `.ts` under `test/` are tests carrying deliberate violator
- * literals. Copying that exclusion here would close none of the 38 files above —
+ * literals. Copying that exclusion here would close none of the 38 files above:
  * they are all `.ts`. `ccda` roots at the repo root, which is `ccda`'s answer and
  * not this one: this tree carries `vendor/*.tgz` (third-party binary tarballs)
  * and a lockfile, and walking from the root also descends `node_modules/`,
@@ -253,18 +253,18 @@ interface Hit {
 
 interface AllowList {
   /**
-   * Uppercase synthetic person-name tokens. UNUSED by the starter floor — the
+   * Uppercase synthetic person-name tokens. UNUSED by the starter floor: the
    * structured name detector you add in the TODO section consumes these.
    */
   names: Set<string>;
   /**
    * Synthetic dates of birth (raw, format-normalized as you choose). UNUSED by
-   * the starter floor — your structured DOB detector consumes these.
+   * the starter floor: your structured DOB detector consumes these.
    */
   dobs: Set<string>;
   /**
    * Synthetic id values (SSN / MRN / member-id shapes). UNUSED by the starter
-   * floor — your structured id detector consumes these.
+   * floor: your structured id detector consumes these.
    */
   ids: Set<string>;
   /** Allowed email domains (anything else is a hit). Used by the starter floor. */
@@ -328,7 +328,7 @@ function parseArgs(argv: string[]): Args {
   // An `--allow-fixture` path is a *subtractive* acknowledgement on a broader
   // scan, never a scan target on its own. It used to ALSO seed the positional
   // path set, so that `--allow-fixture X` alone meant "scan X, but allow it"
-  // rather than a silent no-op — necessary while the roots were narrow enough
+  // rather than a silent no-op: necessary while the roots were narrow enough
   // that X was usually outside every one of them. It is not necessary now, and
   // it was actively in the way: it forced the flag into `paths` mode, so the two
   // modes CI and the pre-commit hook actually run (`all` and `--staged`) had no
@@ -360,7 +360,7 @@ function loadAllowList(): AllowList {
     raw = readFileSync(ALLOW_LIST_PATH, "utf8");
   } catch (err) {
     // Present but unreadable (permissions, a directory in its place, a vanished
-    // file between the check and the read). An INVOCATION error — exit 2 — never
+    // file between the check and the read). An INVOCATION error, exit 2, never
     // the exit 1 that means "hits found". See the exit-code note in `main`.
     throw new InvocationError(
       `could not read the allow-list at ${ALLOW_LIST_PATH}: ${
@@ -455,14 +455,14 @@ function validateAllowFixtures(allowFixtures: string[]): void {
   // The anti-rot half, and the reason the flag no longer has to seed `paths`
   // mode to avoid being a no-op: a bypass must name a real regular file inside a
   // scan root. A logged path that has been renamed, deleted, or typed with a
-  // stale prefix REFUSES instead of quietly subtracting nothing — a bypass that
+  // stale prefix REFUSES instead of quietly subtracting nothing: a bypass that
   // silently stops applying is indistinguishable from one that silently applies
   // to the wrong file. Directories are refused by the same rule (a directory is
   // not a regular file), so a bypass can never widen past one named file.
   // `.md` is excluded here for the same reason a missing path is: documentation
   // under a scan root is never a scan TARGET, so bypassing one subtracts nothing
   // and prints nothing. That is precisely the silent no-op this check exists to
-  // refuse — a reviewer reading the log would believe a bypass was in force.
+  // refuse: a reviewer reading the log would believe a bypass was in force.
   const unusable = normalized.filter(
     (p) =>
       !isUnderScanRoot(p) || isDocFile(p) || !existsSync(join(REPO_ROOT, p)) || !isRegularFile(p),
@@ -543,7 +543,7 @@ function walk(dir: string, out: string[], unscannable: Unscannable[]): void {
   } catch (err) {
     // A directory the walk reached and could not read (permissions, a vanished
     // directory, a non-directory in its place). It used to escape `main` as an
-    // ordinary Error and exit 1 — the code that means "hits found" — reporting a
+    // ordinary Error and exit 1, the code that means "hits found", reporting a
     // FAILED sweep in the vocabulary of a completed one. It is an invocation
     // error: the scan could not be performed. See the exit-code note in `main`.
     throw new InvocationError(
@@ -592,7 +592,7 @@ function gitIgnored(paths: string[]): Set<string> {
   const ignored = new Set<string>();
   if (paths.length === 0) return ignored;
   try {
-    // SECURITY: array-form execFileSync, no shell. Default (Buffer) encoding —
+    // SECURITY: array-form execFileSync, no shell. Default (Buffer) encoding:
     // `encoding: "buffer"` with `input` is rejected by Node.
     const out = execFileSync("git", ["check-ignore", "--stdin", "-z"], {
       input: paths.map(normalizePath).join("\0"),
@@ -602,15 +602,15 @@ function gitIgnored(paths: string[]): Set<string> {
       if (p.length > 0) ignored.add(p);
     }
   } catch {
-    // `git check-ignore` exits 1 when nothing matches — treat as none ignored.
+    // `git check-ignore` exits 1 when nothing matches: treat as none ignored.
   }
   return ignored;
 }
 
 /**
  * Enter one scan root. THE ROOT ITSELF IS NEVER A `Dirent`, so `walk`'s
- * refusal — which reads the predicates `readdir` returns for entries INSIDE a
- * directory — could not see it: `walk` opened the root with `existsSync` +
+ * refusal, which reads the predicates `readdir` returns for entries INSIDE a
+ * directory, could not see it: `walk` opened the root with `existsSync` +
  * `readdirSync`, and BOTH FOLLOW, so replacing `src`, `test` or `scripts` with a
  * symbolic link to a directory made the sweep read straight through it and
  * report on a tree the repository does not contain. The root gets the same
@@ -630,14 +630,14 @@ function enterRoot(
   try {
     st = lstatSync(full);
   } catch {
-    return; // absent — nothing to walk, and nothing to refuse
+    return; // absent, nothing to walk, and nothing to refuse
   }
   if (st.isDirectory()) {
     walk(full, out, unscannable);
     return;
   }
   // `direntKind`'s catch-all arm reads "not a regular file", which is the right
-  // sentence about an ENTRY and the wrong one about a ROOT — a root that IS a
+  // sentence about an ENTRY and the wrong one about a ROOT: a root that IS a
   // regular file is exactly as unwalkable as one that is a FIFO.
   badRoots.push({
     path: name,
@@ -653,7 +653,7 @@ function buildTargetsForAll(): Target[] {
 
   // A bad ROOT and a bad ENTRY get separate remedies. They shared one before,
   // and it told the reader of a root that is a regular file to "replace it with
-  // a regular file" — which the very next run refuses.
+  // a regular file", which the very next run refuses.
   refuseUnscannable(
     badRoots,
     "A scan root must be a directory the walk can enumerate.",
@@ -703,7 +703,7 @@ function gitModeKind(mode: string, status: string): string {
   return `a git mode-${mode} entry`;
 }
 
-/** `:<srcmode> <dstmode> <srcsha> <dstsha> <status>` — the info half of a `--raw -z` record. */
+/** `:<srcmode> <dstmode> <srcsha> <dstsha> <status>`, the info half of a `--raw -z` record. */
 const RAW_RECORD = /^:(?:\d{6}) (\d{6}) [0-9a-f]+ [0-9a-f]+ ([A-Z]\d*)$/;
 
 function buildTargetsForStaged(): Target[] {
@@ -716,19 +716,19 @@ function buildTargetsForStaged(): Target[] {
     //
     // `T` (TYPECHANGE) IS IN THE FILTER, AND LEAVING IT OUT MADE THE MODE CHECK
     // BELOW UNREACHABLE WHENEVER THE FILE WAS ALREADY TRACKED. Replacing a TRACKED
-    // regular file with a link is not an add and not a modify — git raises it as
+    // regular file with a link is not an add and not a modify: git raises it as
     // `T` (`:100644 120000 <sha> <sha> T`, measured on git 2.39.5), so
     // `--diff-filter=AM` deleted the record before any mode could be read and the
     // pre-commit hook passed the link green. Typechange carries a single path,
     // exactly like `A` and `M`, so admitting it costs the two-field stride below
-    // nothing — and it also scans the REVERSE typechange, a link replaced by a
+    // nothing, and it also scans the REVERSE typechange, a link replaced by a
     // real file, as the file it became.
     //
     // `U` (UNMERGED) IS IN THE FILTER FOR THE SAME REASON `T` IS: neither `AM`
     // nor `AMT` enumerates it, so an in-scope path left conflicted by a merge was
     // seen by this route at all. git raises it as
-    // `:100644 000000 <sha> 0000000 U` (measured on git 2.39.5) — a SINGLE path,
-    // so the two-field stride below is unchanged — and the all-zero destination
+    // `:100644 000000 <sha> 0000000 U` (measured on git 2.39.5), a SINGLE path,
+    // so the two-field stride below is unchanged, and the all-zero destination
     // mode is not a regular blob, so it lands in the refusal below rather than
     // being read. That is the honest answer: `git show :<path>` on an unmerged
     // path fails, because the content lives at stages 1/2/3 and there is no
@@ -811,7 +811,7 @@ function buildTargetsForStaged(): Target[] {
     i += 2;
   }
 
-  // The SAME boundary the walk uses — one `isUnderScanRoot`, not a second
+  // The SAME boundary the walk uses: one `isUnderScanRoot`, not a second
   // hand-written prefix test. The two used to disagree: this route looked at
   // `test/fixtures/**` and `src/**.ts`, so a staged `src/**.json`, anything under
   // `test/` outside `fixtures/`, and all of `scripts/` were enumerated by
@@ -844,7 +844,7 @@ function buildTargetsForStaged(): Target[] {
 }
 
 // ---------------------------------------------------------------------------
-// Cross-cutting shape checks — the format-agnostic FLOOR
+// Cross-cutting shape checks: the format-agnostic FLOOR
 // ---------------------------------------------------------------------------
 
 function scanCommonShapes(path: string, content: string, allow: AllowList, hits: Hit[]): void {
@@ -869,7 +869,7 @@ function scanCommonShapes(path: string, content: string, allow: AllowList, hits:
 // specific components that carry a name / DOB / SSN / MRN / phone / street /
 // city value. Mirrors src/hl7/locus-map.ts. Each listed component's value must
 // be positively declared synthetic in the allow-list (NAME / ID / DOB), or it
-// is a hit — so a real name/DOB/MRN cannot ride into a fixture unnoticed.
+// is a hit, so a real name/DOB/MRN cannot ride into a fixture unnoticed.
 // (State/ZIP/type-code components are intentionally omitted: they are not the
 // identifying tokens and would be noise.)
 const HL7_PHI_FIELDS: Readonly<Record<string, ReadonlyArray<{ field: number; comps: number[] }>>> =
@@ -949,7 +949,7 @@ const HL7_PHI_FIELDS: Readonly<Record<string, ReadonlyArray<{ field: number; com
  * chain of JS identifiers is allowed. No quotes, so `${"SMITH"}` is still a hit.
  * No spaces or operators, so `${a + "SMITH"}` is still a hit. Nothing outside the
  * braces, so `${t.given} SMITH` is still a hit. A bare identifier chain cannot
- * itself be a person's name, a DOB or an MRN — it is a reference to one.
+ * itself be a person's name, a DOB or an MRN: it is a reference to one.
  */
 const SUBSTITUTION_SITE = /^\$\{[A-Za-z_$][A-Za-z0-9_$]*(?:\.[A-Za-z_$][A-Za-z0-9_$]*)*\}$/;
 
@@ -969,7 +969,7 @@ function syntheticTokens(allow: AllowList): Set<string> {
 /**
  * Structured HL7 v2 PHI scan: for every PID/NK1/GT1/IN1/IN2 PHI field, check each identifying
  * component value against the synthetic allow-list. Anything not positively declared synthetic is a
- * hit. Pure string splitting — no parser dependency (matches every sibling scanner).
+ * hit. Pure string splitting, no parser dependency (matches every sibling scanner).
  */
 function scanHl7Structured(
   path: string,
@@ -982,7 +982,7 @@ function scanHl7Structured(
   // The MSH header is found ANYWHERE on its line, not only at column 0. In a
   // `.ts` test module the message opens mid-line, inside a quote, so a column-0
   // anchor answered "not an HL7 v2 message" for every inline literal in this
-  // repo — which is where this repo's HL7 text actually lives.
+  // repo, which is where this repo's HL7 text actually lives.
   //
   // THE MATCH REQUIRES A WHOLE MSH-1 + MSH-2 SHAPE, not merely the letters MSH:
   // a field separator, two to eight non-alphanumeric encoding characters, then
@@ -1006,7 +1006,7 @@ function scanHl7Structured(
   //   - a BARE `PID|…` line with no MSH above it read clean, and that is the
   //     single most likely thing to be pasted out of a ticket into a test;
   //   - the strict anchor above rejects an MSH-2 of length 0 or 1, a truncated
-  //     header with no closing separator, and an MSH-2 longer than eight — all
+  //     header with no closing separator, and an MSH-2 longer than eight: all
   //     of which the older column-0 `startsWith("MSH")` accepted. Every one of
   //     those still uses `|`, so the defaults read them correctly.
   //
@@ -1030,7 +1030,7 @@ function scanHl7Structured(
   for (const lineRaw of lines) {
     // Leading WHITESPACE is stripped before the segment id is read, IN THE
     // SOURCE-LITERAL VIEW ONLY. A message written as an indented multi-line
-    // template literal — what prettier produces inside a nested block — puts
+    // template literal, what prettier produces inside a nested block, puts
     // every segment at column 2 or more, and a column-0 `slice(0, 3)` read those
     // files as containing no segments at all. Doing it in the RAW view as well
     // re-opened the defect that taking the literals was introduced to fix: a
@@ -1075,7 +1075,7 @@ function scanHl7Structured(
 
 // C-CDA header person-PHI elements whose *text* must be a declared-synthetic token. Scoped to the
 // document header (everything before the clinical body) because a `<name>` there is always a person or
-// organization name — a `<name>` inside the clinical body can be a drug / material name, so scanning it
+// organization name: a `<name>` inside the clinical body can be a drug / material name, so scanning it
 // would false-positive on legitimate clinical content. Mirrors src/ccda/locus-map.ts (the person loci).
 // (Person-role `<id>` extensions are intentionally NOT checked structurally: a regex cannot tell a
 // patient MRN from a `templateId` / `typeId` / document-envelope id without the parser, so ids are
@@ -1093,9 +1093,9 @@ const CCDA_HEADER_TEXT_ELEMENTS: readonly string[] = [
 
 /**
  * Structured C-CDA PHI scan: within the document **header** (before `<structuredBody>` /
- * `<nonXMLBody>`), check each person-name / address-part element's text — and each `birthTime@value` —
+ * `<nonXMLBody>`), check each person-name / address-part element's text, and each `birthTime@value`,
  * against the synthetic allow-list. Anything not positively declared synthetic is a hit. Pure string
- * scanning — no parser dependency (matches every sibling scanner).
+ * scanning, no parser dependency (matches every sibling scanner).
  */
 function scanCcdaStructured(path: string, content: string, allow: AllowList, hits: Hit[]): void {
   if (!content.includes("urn:hl7-org:v3")) return; // not a C-CDA / CDA R2 document
@@ -1123,7 +1123,7 @@ function scanCcdaStructured(path: string, content: string, allow: AllowList, hit
   };
 
   for (const el of CCDA_HEADER_TEXT_ELEMENTS) {
-    // Only the element's DIRECT text (`[^<]*`) — an element with child elements (a `<name>` wrapping
+    // Only the element's DIRECT text (`[^<]*`): an element with child elements (a `<name>` wrapping
     // `<given>`/`<family>`) yields empty/whitespace here and is checked via those children instead.
     const re = new RegExp(`<(?:\\w+:)?${el}\\b[^>]*>([^<]*)</(?:\\w+:)?${el}>`, "g");
     for (const m of header.matchAll(re)) check(m[1] ?? "", `<${el}>`);
@@ -1138,7 +1138,7 @@ function scanCcdaStructured(path: string, content: string, allow: AllowList, hit
 // ---------------------------------------------------------------------------
 
 // X12 NM1-01 entity codes whose NM1-03..04 name + NM1-09 id are the covered individual's PHI. Mirrors
-// src/x12/locus-map.ts PATIENT_ENTITY_CODES — a provider-entity NM1 name is retained and NOT checked
+// src/x12/locus-map.ts PATIENT_ENTITY_CODES: a provider-entity NM1 name is retained and NOT checked
 // (checking it would false-positive on legitimate provider/organization names in fixtures).
 const X12_PATIENT_ENTITY_CODES = new Set<string>(["IL", "QC", "03", "QD", "GD", "74", "S1", "S3"]);
 // REF-01 qualifiers whose REF-02 value is a patient identifier (SSN / member / subscriber / group /
@@ -1159,11 +1159,11 @@ const X12_REF_PHI_QUALIFIERS = new Set<string>([
  * Structured X12 PHI scan: detect the ISA envelope, read its element separator (fixed byte 3) and
  * segment terminator (fixed byte 105), and check the identifying values of the patient-entity `NM1`
  * (name NM1-03/04, id NM1-09), `DMG` (DOB DMG-02), and PHI-qualified `REF` (REF-02) segments against the
- * synthetic allow-list. Anything not positively declared synthetic is a hit. Pure string splitting — no
+ * synthetic allow-list. Anything not positively declared synthetic is a hit. Pure string splitting, no
  * parser dependency (matches every sibling scanner).
  */
 function scanX12Structured(path: string, content: string, allow: AllowList, hits: Hit[]): void {
-  // Inter-segment CRLF is not semantic in X12 (the parser normalizes it away) — strip it so a
+  // Inter-segment CRLF is not semantic in X12 (the parser normalizes it away): strip it so a
   // pretty-printed fixture, and the joined source-literal view, split on the segment terminator
   // exactly as the wire form does.
   const src = content.trimStart();
@@ -1172,12 +1172,12 @@ function scanX12Structured(path: string, content: string, allow: AllowList, hits
   // module never begins with `ISA`: its first bytes are an import statement, and
   // the joined source-literal view begins with the first string literal in the
   // file (an import specifier). Three files this gate newly sweeps carry inline
-  // patient-entity interchanges, and all three read clean — measured, with the
+  // patient-entity interchanges, and all three read clean: measured, with the
   // identical bytes as a `test/fixtures/*.edi` returning five hard hits.
   //
   // The offset-0 rule was doing two jobs and only one of them is load-bearing:
   // it kept a source that merely MENTIONS "ISA" in prose from having delimiters
-  // read out of it. That job is done here instead, off ISA's own FIXED WIDTHS —
+  // read out of it. That job is done here instead, off ISA's own FIXED WIDTHS:
   // an `ISA` on a non-alphanumeric boundary; a non-alphanumeric, non-space
   // element separator at offset 3; the SAME separator again at offset 6, because
   // ISA01 is exactly two characters wide in 005010 and no prose satisfies that;
@@ -1187,7 +1187,7 @@ function scanX12Structured(path: string, content: string, allow: AllowList, hits
   // delimiters" WOULD BE AN OVERCLAIM WITHOUT IT. A gate measured the case:
   // `"an ISA-IEA envelope"` earlier in the same file satisfied the boundary and
   // the terminator offset, captured `-` as the element separator, and took a
-  // real inline interchange below it from four hits to one — or to ZERO with the
+  // real inline interchange below it from four hits to one, or to ZERO with the
   // same words in a comment as well. What is left is stated rather than claimed
   // closed: prose that ALSO happens to put the same byte at offsets 3 and 6 and
   // a non-alphanumeric at 105 would still capture them.
@@ -1198,7 +1198,7 @@ function scanX12Structured(path: string, content: string, allow: AllowList, hits
   //
   // THE BOUNDARY IS TESTED BEFORE THE NEWLINES ARE STRIPPED, NOT AFTER, and that
   // ordering is load-bearing: `sourceLiteralDocument` joins literals with CRLF,
-  // so stripping first glued the preceding literal onto the header — an import
+  // so stripping first glued the preceding literal onto the header: an import
   // specifier ending `index.js` put an alphanumeric immediately before `ISA` and
   // the boundary never matched. The newlines are then stripped from the
   // CANDIDATE, which is what makes the fixed-offset delimiter read sound.
@@ -1243,7 +1243,7 @@ function scanX12Structured(path: string, content: string, allow: AllowList, hits
   };
 
   // ▶ EACH TERMINATOR-DELIMITED PIECE IS OFFERED TWICE, AND "IN ADDITION TO"
-  // RATHER THAN "INSTEAD OF" IS THE WHOLE POINT — replacing one with the other
+  // RATHER THAN "INSTEAD OF" IS THE WHOLE POINT: replacing one with the other
   // loses real hits in BOTH directions, each measured:
   //
   //   - EVERY LINE of the piece. Without this, an interchange assembled from
@@ -1360,8 +1360,8 @@ function scanTelecomStructured(path: string, content: string, allow: AllowList, 
  *
  * ▶ THIS IS WHAT MAKES THE WIDENED `test/` ROOT WORTH HAVING, AND THE ENUMERATION
  * ALONE WAS NOT. Every HL7 message and NCPDP transmission in this repo lives in a
- * `.ts` module as a single-line string literal — an MSH header, a backslash-`r`,
- * then the next segment, all inside one pair of quotes — so the bytes on disk
+ * `.ts` module as a single-line string literal: an MSH header, a backslash-`r`,
+ * then the next segment, all inside one pair of quotes, so the bytes on disk
  * carry a BACKSLASH and an `r`, not a carriage return. (The escape is spelled out
  * in words here rather than shown: this file is itself inside a scan root now,
  * and a written-out example would decode into a segment the detector then reads
@@ -1376,7 +1376,7 @@ function scanTelecomStructured(path: string, content: string, allow: AllowList, 
  * them, so a wrong decode can only ever ADD a hit. That is the safe direction
  * for a PHI gate: the cost of over-decoding is a false red a developer can read
  * and answer, and the cost of under-decoding is the silence this closes.
- * `\\` is deliberately NOT handled — HL7's own escape sequences are
+ * `\\` is deliberately NOT handled: HL7's own escape sequences are
  * backslash-delimited (`\F\`, `\S\`, `\X0D\`) and none of them collide with the
  * set below, so there is nothing to unescape and a general unescaper would have
  * mangled real fixture bytes.
@@ -1404,7 +1404,7 @@ function decodeSourceEscapes(text: string): string {
  *
  *   - the closing quote and comma of the source line RODE ALONG on the last
  *     field of the last segment, so an allow-listed DOB arrived as the DOB plus
- *     two characters of TypeScript and was reported as an undeclared value — a
+ *     two characters of TypeScript and was reported as an undeclared value: a
  *     false red on a fixture that is entirely synthetic;
  *   - the delimiters were taken from the FIRST MSH-shaped text anywhere in the
  *     file, so an `MSH-9` in a comment or a test title set the field separator
@@ -1413,8 +1413,8 @@ function decodeSourceEscapes(text: string): string {
  * Taking the literals instead fixes both at the source: a literal's content is
  * the wire text and nothing else, and prose in a comment is not a literal. They
  * are JOINED rather than scanned one by one, because a message here is routinely
- * built by CONCATENATING literals — the header in one, further segments in the
- * next — and a `PID` literal on its own has no MSH to take delimiters from.
+ * built by CONCATENATING literals: the header in one, further segments in the
+ * next, and a `PID` literal on its own has no MSH to take delimiters from.
  *
  * The regex is the usual approximation (a literal ends at the first unescaped
  * quote of its own kind); it does NOT parse TypeScript. That is acceptable in
@@ -1475,7 +1475,7 @@ function scanTarget(target: Target, allow: AllowList, hits: Hit[]): void {
  * `literalView` says which view this is, and exactly one detector needs to know:
  * indented segments are a fact about text taken OUT of a source literal, and
  * stripping indentation in the RAW view re-opens the "source syntax rides along"
- * false red that taking the literals was introduced to fix — a template literal
+ * false red that taking the literals was introduced to fix: a template literal
  * whose closing backtick sits on its last segment line reported a declared DOB
  * with two characters of TypeScript attached, unanswerable except by
  * allow-listing a token containing TypeScript. Nothing is lost by the
@@ -1495,29 +1495,29 @@ function scanViews(
   scanCommonShapes(target.path, text, allow, hits);
 
   // The deid-specific gate: HL7 v2 structured, field-level PHI detection. Runs on any HL7 message
-  // (MSH-led) among src JSDoc snippets and test/fixtures — checks every PID/NK1/GT1/IN1/IN2 PHI field
+  // (MSH-led) among src JSDoc snippets and test/fixtures: checks every PID/NK1/GT1/IN1/IN2 PHI field
   // against the synthetic allow-list. A real name / DOB / MRN in a fixture is a hard hit.
   //
   // NOTE: free-text narrative (OBX-5 / NTE-3) is NOT structurally checkable and is covered only by the
   // floor above (SSN/email) plus the synthetic-fixture discipline; per-format C-CDA/FHIR/X12/NCPDP/DICOM
-  // detectors land with their phases (roadmap §7 — the eventual union scanner).
+  // detectors land with their phases (roadmap §7, the eventual union scanner).
   scanHl7Structured(target.path, text, allow, hits, literalView);
 
   // The deid-specific C-CDA gate (DEID-3): structured, header-element PHI detection. Runs on any CDA R2
-  // document (HL7 v3 namespace) among src JSDoc snippets and test/fixtures — checks every header
+  // document (HL7 v3 namespace) among src JSDoc snippets and test/fixtures: checks every header
   // person-name / address-part element and birthTime against the synthetic allow-list. A real name /
   // DOB in a C-CDA header is a hard hit. (Narrative body text and ids are the known gaps, covered by
   // the floor + synthetic discipline, per the union-scanner roadmap.)
   scanCcdaStructured(target.path, text, allow, hits);
 
   // The deid-specific X12 gate (DEID-5): structured, element-level PHI detection. Runs on any X12
-  // interchange (106-byte ISA head) — checks the patient-entity NM1 name/id, DMG DOB, and PHI-qualified
+  // interchange (106-byte ISA head): checks the patient-entity NM1 name/id, DMG DOB, and PHI-qualified
   // REF value against the synthetic allow-list. Provider-entity NM1 names are retained and not checked.
   scanX12Structured(target.path, text, allow, hits);
 
   // The deid-specific NCPDP Telecom gate (DEID-5): structured, field-id PHI detection. Runs on any
-  // control-char-framed Telecom transmission — checks each patient / cardholder / prescriber PHI field
-  // value against the synthetic allow-list. (SCRIPT XML de-id is deferred — see src/ncpdp/index.ts.)
+  // control-char-framed Telecom transmission: checks each patient / cardholder / prescriber PHI field
+  // value against the synthetic allow-list. (SCRIPT XML de-id is deferred, see src/ncpdp/index.ts.)
   scanTelecomStructured(target.path, text, allow, hits);
 }
 
@@ -1527,7 +1527,7 @@ function scanViews(
 
 function report(hits: Hit[]): void {
   if (hits.length === 0) {
-    process.stdout.write("[phi-scan] OK — no hits\n");
+    process.stdout.write("[phi-scan] OK, no hits\n");
     return;
   }
   const byPath = new Map<string, Hit[]>();
@@ -1577,7 +1577,7 @@ function run(): number {
   if (allowed.size > 0 && targets.length < before) {
     for (const p of [...allowed].sort()) {
       process.stderr.write(
-        `[phi-scan] BYPASSED (logged in phi-scan-overrides.md): ${p} — NOT scanned\n`,
+        `[phi-scan] BYPASSED (logged in phi-scan-overrides.md): ${p}, NOT scanned\n`,
       );
     }
   }
@@ -1596,7 +1596,7 @@ function run(): number {
  *
  * It used to. `loadAllowList()` sat outside every handler, and `readdirSync`
  * inside the walk threw a plain `Error` that no `instanceof InvocationError` arm
- * matched — so a missing allow-list and an unreadable directory both escaped as
+ * matched, so a missing allow-list and an unreadable directory both escaped as
  * an uncaught exception, which Node exits **1** for. A gate that cannot read its
  * own allow-list reported the exit code that means "I read your corpus and found
  * PHI in it", and a caller distinguishing 1 from 2 was told the opposite of the
@@ -1611,7 +1611,7 @@ function main(): number {
       process.stderr.write(`[phi-scan] ${err.message}\n`);
       return 2;
     }
-    // Unexpected — still exit 2, and still say so loudly. The stack is printed
+    // Unexpected: still exit 2, and still say so loudly. The stack is printed
     // because a silent 2 is as unhelpful as a wrong 1; it names code paths and
     // repo-relative files, never scanned content.
     process.stderr.write(

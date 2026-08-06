@@ -17,7 +17,7 @@ configuration.
 ## Prerequisites
 
 - **Node.js >= 22** (the whole `@cosyte/*` suite targets ES2023 / Node 22+).
-- A package manager — `pnpm`, `npm`, or `yarn`.
+- A package manager: `pnpm`, `npm`, or `yarn`.
 
 ## Install
 

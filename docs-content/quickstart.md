@@ -8,12 +8,12 @@ sidebar_position: 1
 
 De-identify a structurally-located model under a policy and read the value-free manifest.
 `@cosyte/deid` **fails closed**: anything it cannot confidently handle is **blocked**, never passed
-through as safe. The result is **"Safe-Harbor-transformed per the configured policy"** — never
+through as safe. The result is **"Safe-Harbor-transformed per the configured policy"**, never
 "de-identified".
 
 ## De-identify a model
 
-The core operates on a **generic locus model** — a flat list of structurally-located candidate values.
+The core operates on a **generic locus model**: a flat list of structurally-located candidate values.
 The per-format adapters for HL7 v2, C-CDA, FHIR, X12, NCPDP and DICOM live behind their own subpath
 exports.
 
@@ -36,12 +36,12 @@ manifest[0].disposition; // => "removed"
 ```
 
 Each **manifest** entry records the category acted on, the transform applied, the **locus** (a path,
-never a value), a count, a disposition, and a stable code — the auditable record of *what* was acted
+never a value), a count, a disposition, and a stable code: the auditable record of *what* was acted
 on, never *what the value was*.
 
 ## Keyed transforms
 
-Pseudonymization and keyed hashing use a **keyed HMAC** — the key is the consumer's and never leaves
+Pseudonymization and keyed hashing use a **keyed HMAC**: the key is the consumer's and never leaves
 the process. Supply it through a context:
 
 ```ts
@@ -57,10 +57,10 @@ const result = deidentify(
 ```
 
 > **About runnable examples.** The first block above is tagged ```` ```ts runnable ````: the docs
-> build extracts it, runs it against the package, and asserts the `// =>` result — so a documented
+> build extracts it, runs it against the package, and asserts the `// =>` result, so a documented
 > example can never silently drift from the code.
 
 ## Next
 
-- [Core Concepts](./concepts-archetype) — the policy engine, the transforms, and fail-closed.
-- **API Reference** — every export, generated from source.
+- [Core Concepts](./concepts-archetype): the policy engine, the transforms, and fail-closed.
+- **API Reference**: every export, generated from source.

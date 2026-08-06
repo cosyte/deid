@@ -1,5 +1,5 @@
 /**
- * The **de-identification registry** — the corpus-level entry point that makes a **longitudinal**
+ * The **de-identification registry**: the corpus-level entry point that makes a **longitudinal**
  * record stay linkable after de-identification. It layers cross-document
  * **consistency** on the format-agnostic core: the same patient, and the same identifier, map to the
  * **same** de-identified surrogates across every document, message, and run in a corpus, while
@@ -9,7 +9,7 @@
  * - **Same patient → same date-shift offset.** {@link DeidRegistry.forPatient} returns a
  *   {@link DeidContext} scoped to a patient key; the per-patient offset is *derived* deterministically
  *   from the registry's date-shift seed and the patient key (never stored, never random), so the same
- *   patient's dates shift by the same amount everywhere — intervals are preserved across the whole
+ *   patient's dates shift by the same amount everywhere: intervals are preserved across the whole
  *   corpus. The context is memoized, so repeated lookups return the same handle.
  * - **Same identifier → same pseudonym.** {@link DeidRegistry.pseudonym} is a corpus-wide,
  *   patient-independent keyed-HMAC surrogate: the same MRN maps to the same token in every document.
@@ -18,12 +18,12 @@
  *
  * **The key contract (supply, rotation, fail-closed).** The consumer supplies the HMAC key (and,
  * optionally, a distinct date-shift seed). It is **held only in a module-private registry keyed by the
- * instance** — the registry handle carries no enumerable secret field and redacts itself through every
+ * instance**: the registry handle carries no enumerable secret field and redacts itself through every
  * stringify channel, exactly like {@link DeidContext}. There is **no default/weak key**: an absent or
  * empty key is a fatal `DEID_NO_KEY`, never a silent fallback. **Rotation is intentional linkage
- * breakage** — a new key deterministically produces *different* offsets and *different* pseudonyms, so
+ * breakage**: a new key deterministically produces *different* offsets and *different* pseudonyms, so
  * a rotated key un-links a corpus from records de-identified under the old key. That is the point:
- * rotate to sever linkage, keep the key to preserve it. The library holds **no persistent key store** —
+ * rotate to sever linkage, keep the key to preserve it. The library holds **no persistent key store**:
  * key custody and lifetime are the consumer's, by design.
  *
  * @packageDocumentation
@@ -39,7 +39,7 @@ const REDACTED = "[DeidRegistry:redacted]";
 /** Domain separator so a remapped UID never collides with a pseudonym of the same input. */
 const UID_DOMAIN = "uid-remap";
 
-/** Module-private registry state — the base (patient-less) context + the per-patient context memo. */
+/** Module-private registry state: the base (patient-less) context + the per-patient context memo. */
 interface RegistryState {
   readonly base: DeidContext;
   readonly memo: Map<string, DeidContext>;
@@ -50,7 +50,7 @@ const STATE = new WeakMap<DeidRegistry, RegistryState>();
 
 /**
  * Specification for {@link createDeidRegistry}. Mirrors {@link DeidContextSpec} minus the per-patient
- * scope — the registry mints patient scopes itself via {@link DeidRegistry.forPatient}.
+ * scope: the registry mints patient scopes itself via {@link DeidRegistry.forPatient}.
  *
  * @example
  * ```ts
@@ -73,7 +73,7 @@ export interface DeidRegistrySpec {
 
 /**
  * The corpus-level consistency handle. Construct it with {@link createDeidRegistry}. It holds the
- * consumer's key in a module-private registry — the handle exposes **no** secret field and redacts
+ * consumer's key in a module-private registry: the handle exposes **no** secret field and redacts
  * itself through every stringify channel.
  *
  * @example
@@ -84,7 +84,7 @@ export interface DeidRegistrySpec {
  * // Same patient across documents shifts by the same offset:
  * const a = registry.forPatient("patient-1");
  * const b = registry.forPatient("patient-1");
- * a === b; // => true (memoized — same handle, same offset)
+ * a === b; // => true (memoized, same handle, same offset)
  * ```
  */
 export class DeidRegistry {
@@ -110,11 +110,11 @@ export class DeidRegistry {
 
   /**
    * Return the {@link DeidContext} scoped to `patientKey`, minting and memoizing it on first use. The
-   * same key always yields the same context — hence the same deterministic date-shift offset — so a
+   * same key always yields the same context, hence the same deterministic date-shift offset, so a
    * patient's dates shift consistently across every document in the corpus. Pass this context as
    * `DeidOptions.context` to {@link deidentify} (or a per-format adapter) for that patient's documents.
    *
-   * @param patientKey - A stable per-patient key (an MRN, an enterprise patient id — the consumer's
+   * @param patientKey - A stable per-patient key (an MRN, an enterprise patient id, the consumer's
    *   choice, provided it is the same across that patient's documents).
    * @returns The patient-scoped, self-redacting context.
    * @example
@@ -137,7 +137,7 @@ export class DeidRegistry {
   }
 
   /**
-   * Map an identifier to its corpus-wide **consistent pseudonym** — a keyed-HMAC surrogate that is the
+   * Map an identifier to its corpus-wide **consistent pseudonym**: a keyed-HMAC surrogate that is the
    * same for the same input everywhere and not reversible without the key. Patient-independent: the
    * same MRN maps to the same token regardless of which patient scope processes it, so records link.
    *
@@ -192,7 +192,7 @@ function stateOf(registry: DeidRegistry): RegistryState {
 
 /**
  * Create a {@link DeidRegistry} from consumer-held key material. **Fails closed** on an absent/empty
- * key — there is no default or weak key (the underlying {@link createDeidContext} throws `DEID_NO_KEY`).
+ * key: there is no default or weak key (the underlying {@link createDeidContext} throws `DEID_NO_KEY`).
  * The key is stored only in the module-private state, never on the returned handle.
  *
  * @param spec - The key, optional date-shift seed, and optional offset bound.
@@ -206,7 +206,7 @@ function stateOf(registry: DeidRegistry): RegistryState {
  * ```
  */
 export function createDeidRegistry(spec: DeidRegistrySpec): DeidRegistry {
-  // Delegate key validation to the context factory — it fails closed on an empty key/seed. Build the
+  // Delegate key validation to the context factory: it fails closed on an empty key/seed. Build the
   // spec without explicit `undefined` (exactOptionalPropertyTypes) so omitted options take defaults.
   const base = createDeidContext({
     key: spec.key,

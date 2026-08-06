@@ -1,12 +1,12 @@
 /**
- * Tests for scripts/attw.mjs — the wrapper that makes the `attw` publish gate
+ * Tests for scripts/attw.mjs: the wrapper that makes the `attw` publish gate
  * report its own failure.
  *
  * WHAT THESE PIN, AND WHY EACH ONE IS HERE:
  *
  *  1. THE UPSTREAM BEHAVIOUR THE WRAPPER EXISTS FOR. `attw` prints "This package
  *     does not contain types." and exits **0**. If a future `attw` upgrade fixes
- *     that exit code or rewords the sentence, this test reds — which is the point.
+ *     that exit code or rewords the sentence, this test reds, which is the point.
  *     A guard that silently stops matching is worse than no guard, and this is the
  *     one net in `attw.mjs` that depends on a string.
  *  2. That the wrapper turns that exit 0 into a failure.
@@ -18,16 +18,16 @@
  *     wrapper is transparent: same exit status as `attw` itself, and green. A gate
  *     that only ever fails is not a gate, and a false red here would cost every
  *     later run an hour.
- *  5. THE GATE'S MOST BASIC OBLIGATION — that a real `attw` failure still fails.
+ *  5. THE GATE'S MOST BASIC OBLIGATION, that a real `attw` failure still fails.
  *     Without this, every other test here would pass on a wrapper that swallowed
  *     attw's own exit status, because net 2 reds the untyped fixture regardless.
  *  6. THAT `--profile node16` STILL MEANS WHAT IT MEANT. This package's `attw`
  *     script has always carried that flag and the port must not quietly drop it.
  *     "The wrapper accepts the flag" proves nothing, so the fixture used here is
  *     one whose VERDICT depends on it: exit 1 without, exit 0 with. Its shape is
- *     this package's own — subpath exports pointing into a directory, which node10
+ *     this package's own: subpath exports pointing into a directory, which node10
  *     resolution cannot follow and the node16 profile ignores.
- *  7. The refusals that keep net 2 readable — AND THE BLINDING ITSELF, re-run here
+ *  7. The refusals that keep net 2 readable, AND THE BLINDING ITSELF, re-run here
  *     rather than asserted in a comment. `--quiet`, `-q`, `--format json`, `-f json`,
  *     `--format=json` and a `.attw.json` config key each make bare `attw` hand back
  *     exit 0 with the untyped sentence unreadable, which is the exact false green
@@ -38,7 +38,7 @@
  *
  * WHY THE FIXTURES ARE THROWAWAY PACKAGES AND NOT THIS REPO'S `dist/`. Reading the
  * real build would make the suite depend on a build having happened and race any
- * build running beside it — the very window the gate exists for. Nothing here
+ * build running beside it: the very window the gate exists for. Nothing here
  * touches `dist/`. `attw` is invoked with `--no-definitely-typed` so the runs stay
  * offline; the wrapper forwards arguments, which is what makes that possible.
  *
@@ -87,11 +87,11 @@ let root: string;
 let typesNotPacked: string;
 /** A package whose `package.json` points at a `dist/` that was never built. */
 let noBuild: string;
-/** A well-formed dual ESM/CJS package — the negative control. */
+/** A well-formed dual ESM/CJS package: the negative control. */
 let wellFormed: string;
 /** A package with a real attw problem: `require` resolves to ESM. */
 let attwFails: string;
-/** Declarations present, JS entry point missing — attw itself is green on this. */
+/** Declarations present, JS entry point missing: attw itself is green on this. */
 let jsMissing: string;
 /** Subpath exports into a directory: node10 cannot resolve them, node16 ignores that. */
 let subpathPkg: string;
@@ -380,7 +380,7 @@ describe("the refusals that keep the post-check readable", () => {
   // file out of view rather than blind the output directly, and no run of it was
   // taken. So this case pins only the refusal, and deliberately asserts nothing about
   // what bare attw would do with it. Do not "complete" it by adding a bare-attw leg
-  // that was never measured — that is how a claim outgrows its evidence.
+  // that was never measured, that is how a claim outgrows its evidence.
   it("refuses --config-path, on inference rather than a measurement", () => {
     const r = runWrapper(typesNotPacked, [...OFFLINE, ...NODE16, "--config-path", "other.json"]);
     expect(r.code).not.toBe(0);
@@ -407,7 +407,7 @@ describe("the refusals that keep the post-check readable", () => {
           ".attw.json": JSON.stringify({ quiet: true }),
         },
       );
-      // Bare attw takes the config and goes silent — exit 0 over an untyped pack.
+      // Bare attw takes the config and goes silent: exit 0 over an untyped pack.
       const bare = runAttw(dir, [...OFFLINE, ...NODE16]);
       expect(bare.code).toBe(0);
       expect(bare.out).not.toContain(UNTYPED);

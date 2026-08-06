@@ -1,5 +1,5 @@
 /**
- * FHIR locus-map unit tests — the cited, structural routing decisions the extractor relies on: the
+ * FHIR locus-map unit tests, the cited, structural routing decisions the extractor relies on: the
  * person-resource set, identifier-system → category routing (SSN vs MRN), the date-value knife-edge
  * (a real calendar date is generalized; a clinical code that merely looks date-ish is not), and the
  * demographic element map.
@@ -42,7 +42,7 @@ describe("categoryForIdentifierSystem", () => {
   });
 });
 
-describe("isFhirDateValue — the date/over-scrub knife-edge", () => {
+describe("isFhirDateValue, the date/over-scrub knife-edge", () => {
   it("recognizes real calendar dates, dateTimes, and instants (month precision or finer)", () => {
     for (const v of [
       "2019-03",
@@ -55,9 +55,9 @@ describe("isFhirDateValue — the date/over-scrub knife-edge", () => {
   });
 
   it("does NOT treat a bare year, a code, or an impossible date as a date (no over-scrub)", () => {
-    expect(isFhirDateValue("1985")).toBe(false); // year only — already Safe-Harbor-safe
+    expect(isFhirDateValue("1985")).toBe(false); // year only: already Safe-Harbor-safe
     expect(isFhirDateValue("2951-2")).toBe(false); // a LOINC code (one-digit tail)
-    expect(isFhirDateValue("1234-56")).toBe(false); // impossible month 56 — a local code, not a date
+    expect(isFhirDateValue("1234-56")).toBe(false); // impossible month 56: a local code, not a date
     expect(isFhirDateValue("2020-13-01")).toBe(false); // impossible month 13
     expect(isFhirDateValue("2020-06-40")).toBe(false); // impossible day 40
     expect(isFhirDateValue("140")).toBe(false); // a numeric result value

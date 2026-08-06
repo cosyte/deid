@@ -3,7 +3,7 @@
  * ZIP-000 threshold, age-90 aggregation, unsalted-hash reversibility (proving the keyed path is not
  * reversible without the key), and date-shift interval preservation.
  *
- * All fixtures are **synthetic, tagged sentinels** — never realistic PHI.
+ * All fixtures are **synthetic, tagged sentinels**, never realistic PHI.
  */
 
 import { describe, expect, it } from "vitest";
@@ -43,7 +43,7 @@ describe("generalizeDate", () => {
   });
 });
 
-describe("generalizeZip — the mandatory ZIP-000 threshold", () => {
+describe("generalizeZip, the mandatory ZIP-000 threshold", () => {
   it("retains the 3-digit prefix for a populous area (residual)", () => {
     expect(generalizeZip("90210")).toEqual({ value: "902", residual: true });
     expect(generalizeZip("10001-1234")?.value).toBe("100");
@@ -79,7 +79,7 @@ describe("generalizeZip — the mandatory ZIP-000 threshold", () => {
   });
 });
 
-describe("generalizeAge — the mandatory age-90 aggregation", () => {
+describe("generalizeAge, the mandatory age-90 aggregation", () => {
   it("aggregates every age over 89 to 90+ (fully suppressed)", () => {
     for (const age of [90, 91, 92, 105, 120]) {
       expect(generalizeAge(age)).toEqual({ value: "90+", residual: false });
@@ -95,7 +95,7 @@ describe("generalizeAge — the mandatory age-90 aggregation", () => {
   });
 });
 
-describe("pseudonymize / keyedHash — consistency + domain separation", () => {
+describe("pseudonymize / keyedHash, consistency + domain separation", () => {
   const ctx = createDeidContext({ key: "unit-key" });
 
   it("is consistent: same id + same key → same surrogate", () => {
@@ -111,7 +111,7 @@ describe("pseudonymize / keyedHash — consistency + domain separation", () => {
 });
 
 describe("the mandatory unsalted-hash reversibility gate", () => {
-  // A small, enumerable identifier space — the exact condition that makes an unsalted hash
+  // A small, enumerable identifier space: the exact condition that makes an unsalted hash
   // re-identifiable.
   const space = Array.from({ length: 1000 }, (_, i) => `MRN-${String(i).padStart(4, "0")}`);
   const secretMrn = "MRN-0742";
@@ -120,13 +120,13 @@ describe("the mandatory unsalted-hash reversibility gate", () => {
     const digest = unkeyedHash(secretMrn);
     // Attacker builds a rainbow table over the small space and recovers the MRN from the digest.
     const table = new Map(space.map((mrn) => [unkeyedHash(mrn), mrn]));
-    expect(table.get(digest)).toBe(secretMrn); // reversed — this is the footgun
+    expect(table.get(digest)).toBe(secretMrn); // reversed: this is the footgun
   });
 
   it("the keyed HMAC path is NOT reversible by the same enumeration without the key", () => {
     const ctx = createDeidContext({ key: "server-held-secret" });
     const surrogate = pseudonymize(secretMrn, ctx);
-    // Attacker without the key can only try unsalted hashes — no match.
+    // Attacker without the key can only try unsalted hashes, no match.
     const unsaltedTable = new Map(space.map((mrn) => [unkeyedHash(mrn), mrn]));
     expect(unsaltedTable.has(surrogate)).toBe(false);
     // Even enumerating with a WRONG key recovers nothing.
@@ -136,7 +136,7 @@ describe("the mandatory unsalted-hash reversibility gate", () => {
   });
 });
 
-describe("dateShift — the mandatory interval-preservation gate", () => {
+describe("dateShift, the mandatory interval-preservation gate", () => {
   const ctx = createDeidContext({ key: "shift-key", patientId: "patient-1" });
 
   it("preserves the interval between two dates of the same patient", () => {
@@ -186,7 +186,7 @@ describe("dateShift — the mandatory interval-preservation gate", () => {
 
 describe("keyed transforms reject a foreign (unbound) context", () => {
   it("throws DEID_NO_KEY when the context carries no bound key material", () => {
-    // A directly-constructed context is not registered with key material — fail closed.
+    // A directly-constructed context is not registered with key material: fail closed.
     const foreign = new DeidContext();
     expect(() => pseudonymize("x", foreign)).toThrowError(
       expect.objectContaining({ code: FATAL_CODES.DEID_NO_KEY }),

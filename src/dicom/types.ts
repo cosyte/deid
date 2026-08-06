@@ -13,11 +13,11 @@ import type { DeidPolicy } from "../policy.js";
  * Options controlling a DICOM de-identification run. Extends the unified options with the two DICOM-only
  * knobs that make **relationships survive** de-identification: a shared UID cache and a UID root.
  *
- * The `context` (HMAC key) carried by the unified {@link "@cosyte/deid".DeidOptions} is **not used** here —
+ * The `context` (HMAC key) carried by the unified {@link "@cosyte/deid".DeidOptions} is **not used** here:
  * PS3.15 Annex E dummying and content-derived UID remapping do not consume a keyed-transform key. It is
  * accepted only for API uniformity with the other adapters. The `policy` selects the output **label** and
  * guarantees the fail-closed posture; the DICOM de-identification itself is **always** the full Basic
- * Application Level Confidentiality Profile (the delegated Annex E action map is authoritative — this
+ * Application Level Confidentiality Profile (the delegated Annex E action map is authoritative, this
  * adapter orchestrates, it does not reimplement).
  *
  * @example
@@ -45,7 +45,7 @@ export interface DicomDeidOptions {
 
 /**
  * A value-free de-identification warning surfaced from the delegated Annex E pass. Carries a stable code
- * and a PHI-free message — never a decoded pixel or attribute value.
+ * and a PHI-free message, never a decoded pixel or attribute value.
  *
  * @example
  * ```ts
@@ -67,7 +67,7 @@ export interface DicomDeidWarning {
  * value-free manifest, the safety warnings, and the honest **metadata-only** stance.
  *
  * The input dataset is never mutated. **`metadataOnly` is always `true`**: this is a *metadata*
- * de-identifier — it cannot inspect or clean pixels, so recognizable text **burned into the image** is not
+ * de-identifier: it cannot inspect or clean pixels, so recognizable text **burned into the image** is not
  * removed. When {@link burnedInAnnotationHazard} is `true`, the output must be treated as **not safe to
  * share** until the pixels are reviewed by a pixel-capable tool (a future `@cosyte/dicom-pixel`).
  *
@@ -76,7 +76,7 @@ export interface DicomDeidWarning {
  * import { deidentifyDicom } from "@cosyte/deid/dicom";
  *
  * const { dataset, manifest, burnedInAnnotationHazard, metadataOnly } = deidentifyDicom(parsed);
- * metadataOnly; // => true — always
+ * metadataOnly; // => true: always
  * if (burnedInAnnotationHazard) {
  *   // do NOT release: pixels may carry burned-in PHI this metadata-only pass cannot remove
  * }
@@ -85,14 +85,14 @@ export interface DicomDeidWarning {
 export interface DicomDeidResult {
   /** The de-identified dataset (a fresh `@cosyte/dicom` `Dataset`; the input is never mutated). */
   readonly dataset: Dataset;
-  /** The value-free audit of every attribute acted on — category + locus + action, never a value. */
+  /** The value-free audit of every attribute acted on: category + locus + action, never a value. */
   readonly manifest: readonly DeidManifestEntry[];
   /** Value-free safety warnings from the delegated Annex E pass (notably burned-in annotation). */
   readonly warnings: readonly DicomDeidWarning[];
-  /** Always `true` — this is a metadata-only de-identifier; pixels are not inspected or cleaned. */
+  /** Always `true`: this is a metadata-only de-identifier; pixels are not inspected or cleaned. */
   readonly metadataOnly: true;
   /**
-   * `true` when Pixel Data is present and not affirmatively marked free of burned-in annotation — the
+   * `true` when Pixel Data is present and not affirmatively marked free of burned-in annotation: the
    * output may still carry recognizable text in the image and is **not** safe to release on metadata alone.
    */
   readonly burnedInAnnotationHazard: boolean;
@@ -122,7 +122,7 @@ export interface DicomBufferDeidResult {
   readonly manifest: readonly DeidManifestEntry[];
   /** Value-free safety warnings from the delegated Annex E pass. */
   readonly warnings: readonly DicomDeidWarning[];
-  /** Always `true` — metadata-only de-identification. */
+  /** Always `true`: metadata-only de-identification. */
   readonly metadataOnly: true;
   /** `true` when the image may carry burned-in PHI this metadata-only pass cannot remove. */
   readonly burnedInAnnotationHazard: boolean;

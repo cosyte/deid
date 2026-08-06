@@ -1,5 +1,5 @@
 /**
- * The **consolidated leak / over-scrub corpus** (roadmap §Phase 10, §6) — one CI-gating suite that
+ * The **consolidated leak / over-scrub corpus** (roadmap §Phase 10, §6): one CI-gating suite that
  * exercises the two headline gates across **all six** format adapters in a single place:
  *
  * - **Leak gate (must be ZERO):** after a de-id pass, sweep the *entire serialized output* AND the
@@ -10,13 +10,13 @@
  *   wire is structurally blind to that; `derived-locus.test.ts` attacks it directly, and this adds the
  *   same sentinels to the same sweep so the headline gate is not the one that misses it.
  * - **Over-scrub gate:** the clinical/financial survivor values must remain present (the over-scrub
- *   harm, §4) — the library must not degenerate into a "safe but useless" blanket scrubber.
+ *   harm, §4): the library must not degenerate into a "safe but useless" blanket scrubber.
  *
  * **Non-vacuity is proven two ways**, so a green result is never a green *scanner*:
  *
- * 1. **Pre-condition:** every sentinel is asserted **present in the ORIGINAL** (un-de-identified) wire —
+ * 1. **Pre-condition:** every sentinel is asserted **present in the ORIGINAL** (un-de-identified) wire,
  *    a sentinel the corpus can't even find before de-id would make its post-de-id absence meaningless.
- * 2. **Tamper:** a sentinel re-injected into the de-identified wire is **caught** by the same sweep —
+ * 2. **Tamper:** a sentinel re-injected into the de-identified wire is **caught** by the same sweep,
  *    proving the sweep has teeth (it is not vacuously passing on an empty/broken haystack).
  *
  * Plus a **pipeline fuzz** gate: truncated / byte-flipped fixtures fed to the parse→de-id→serialize
@@ -24,7 +24,7 @@
  * value-free result), never hang or OOM.
  *
  * Every fixture value is a synthetic, tagged sentinel; fixtures are declared synthetic in
- * `scripts/phi-allow-list.txt`. The per-format adapters keep their own detailed tests — this suite is
+ * `scripts/phi-allow-list.txt`. The per-format adapters keep their own detailed tests: this suite is
  * the unified, adversarial, non-vacuous gate over them.
  */
 
@@ -65,7 +65,7 @@ interface CorpusCase {
   readonly deidWire: string;
   /** The value-free manifest the pass produced; swept for the same sentinels as the wire. */
   readonly manifest: readonly DeidManifestEntry[];
-  /** The serialized ORIGINAL (un-de-identified) wire — used to prove the sentinels are really present. */
+  /** The serialized ORIGINAL (un-de-identified) wire: used to prove the sentinels are really present. */
   readonly originalWire: string;
   /** Synthetic PHI sentinels that must be ABSENT from `deidWire` and PRESENT in `originalWire`. */
   readonly sentinels: readonly string[];
@@ -185,7 +185,7 @@ function fhirCase(): CorpusCase {
       "1990-02-15",
       "2019-03-14",
     ],
-    // Distinctive clinical survivors only — bare short numerics (140/135/145) are deliberately excluded
+    // Distinctive clinical survivors only: bare short numerics (140/135/145) are deliberately excluded
     // here, since a coincidental recurrence elsewhere in the JSON could mask a selective destruction of
     // exactly that value. LOINC / unit / status / reference wiring are unique; the FHIR adapter's own
     // test owns the byte-exact over-scrub check on the numeric values.
@@ -248,7 +248,7 @@ function ncpdpCase(): CorpusCase {
       "ZZPATEMAIL",
       "ZZPRESCRIBERNAME",
     ],
-    // Distinctive survivors only — the NDC, payer, and pharmacy IDs (bare 441/1985 could recur).
+    // Distinctive survivors only: the NDC, payer, and pharmacy IDs (bare 441/1985 could recur).
     survivors: ["00071015527", "PAYERID99", "PHARM123"],
   };
 }
@@ -276,12 +276,12 @@ const CASES: readonly CorpusCase[] = [
   dicomCase(),
 ];
 
-/** The one leak sweep every gate uses — deliberately the SAME function the tamper test attacks. */
+/** The one leak sweep every gate uses: deliberately the SAME function the tamper test attacks. */
 function leaks(wire: string, sentinels: readonly string[]): string[] {
   return sentinels.filter((s) => wire.includes(s));
 }
 
-describe("consolidated leak corpus — every format, zero leak", () => {
+describe("consolidated leak corpus, every format, zero leak", () => {
   for (const c of CASES) {
     it(`${c.name}: no seeded PHI sentinel survives the de-id pass`, () => {
       expect(leaks(c.deidWire, c.sentinels)).toEqual([]);
@@ -298,7 +298,7 @@ describe("consolidated leak corpus — every format, zero leak", () => {
   }
 });
 
-describe("corpus non-vacuity — the sweep and the corpus both have teeth", () => {
+describe("corpus non-vacuity, the sweep and the corpus both have teeth", () => {
   for (const c of CASES) {
     it(`${c.name}: every sentinel is present in the ORIGINAL wire (pre-condition)`, () => {
       const missing = c.sentinels.filter((s) => !c.originalWire.includes(s));
@@ -322,7 +322,7 @@ describe("corpus non-vacuity — the sweep and the corpus both have teeth", () =
   }
 });
 
-describe("consolidated over-scrub corpus — clinical/financial values survive", () => {
+describe("consolidated over-scrub corpus, clinical/financial values survive", () => {
   for (const c of CASES) {
     if (c.survivors.length > 0) {
       it(`${c.name}: every clinical survivor value remains present`, () => {
@@ -337,7 +337,7 @@ describe("consolidated over-scrub corpus — clinical/financial values survive",
 });
 
 // ── Pipeline fuzz: truncated / mutated fixtures never leak a full sentinel and always terminate ─────
-describe("pipeline fuzz — mutated fixtures never leak and always terminate", () => {
+describe("pipeline fuzz, mutated fixtures never leak and always terminate", () => {
   const ctx = createDeidContext({ key: "fuzz-key", patientId: "p-fuzz" });
 
   interface FuzzTarget {
@@ -368,7 +368,7 @@ describe("pipeline fuzz — mutated fixtures never leak and always terminate", (
     },
   ];
 
-  // Property 1 — TRUNCATION never leaks. A prefix of a well-framed message keeps the framing/segment
+  // Property 1: TRUNCATION never leaks. A prefix of a well-framed message keeps the framing/segment
   // order intact, so any FULL sentinel that survives truncation sits in a locus the adapter still
   // recognizes and scrubs (or the sentinel is cut mid-token and no longer whole). This isolates the
   // de-identifier's own fail-closed behavior from parser-framing robustness.
@@ -392,8 +392,8 @@ describe("pipeline fuzz — mutated fixtures never leak and always terminate", (
     });
   }
 
-  // Property 2 — BYTE-FLIP robustness. Flipping arbitrary bytes can corrupt a parser's framing (a
-  // separator, the HL7 encoding characters) — that is the parsers' own fuzz domain, so here we require
+  // Property 2: BYTE-FLIP robustness. Flipping arbitrary bytes can corrupt a parser's framing (a
+  // separator, the HL7 encoding characters), that is the parsers' own fuzz domain, so here we require
   // only that the pipeline TERMINATES with a string or a bounded throw, never a hang / OOM / non-Error.
   for (const t of targets) {
     it(`${t.name}: arbitrary byte-flips terminate with a string or a bounded rejection`, () => {

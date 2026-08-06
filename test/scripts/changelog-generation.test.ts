@@ -55,7 +55,7 @@
  *     contain it. The rule, stated so it survives being ported: EVERY ASSERTION THAT
  *     A VERSION HEADING IS OR IS NOT PRESENT is an exact match against that list.
  *     It is deliberately a rule about VERSION headings and NOT a census of the
- *     substring calls in this file — a census is falsified by the next legitimate
+ *     substring calls in this file: a census is falsified by the next legitimate
  *     one, which is exactly the rot being described. Substring matching is right
  *     elsewhere and is used here: the `[Unreleased]` check is `includes` precisely
  *     so it still catches `## [Unreleased] - 2026-08-06`; the collision EXHIBIT

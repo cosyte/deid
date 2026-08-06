@@ -1,5 +1,5 @@
 /**
- * HL7 v2 adapter tests — the two headline gates (the **leak test** and the **over-scrub test**), the
+ * HL7 v2 adapter tests: the two headline gates (the **leak test** and the **over-scrub test**), the
  * per-category structured behavior, the free-text / Z-segment fail-closed defaults, the keyed-context
  * fatal, and immutability.
  *
@@ -38,8 +38,8 @@ const ctx = createDeidContext({ key: "hl7-test-key", patientId: "patient-1" });
 
 /**
  * The patient / relative / guarantor / insured PHI sentinels seeded across `adt-a01.hl7`. Every one
- * must be GONE after a de-id pass. (Retained-by-design values — the MSH/EVN envelope timestamps, the
- * PV1 provider, the insurer org name/address, the OBR order numbers — are deliberately not `ZZ`-tagged
+ * must be GONE after a de-id pass. (Retained-by-design values, the MSH/EVN envelope timestamps, the
+ * PV1 provider, the insurer org name/address and the OBR order numbers, are deliberately not `ZZ`-tagged
  * and are not in this list; provider/order loci are an explicit Phase-2 scope boundary.)
  */
 const ADT_SENTINELS: readonly string[] = [
@@ -113,7 +113,7 @@ const ORU_SENTINELS: readonly string[] = [
   "900000010",
 ];
 
-describe("deidentifyHl7 — the leak test (zero surviving sentinels)", () => {
+describe("deidentifyHl7, the leak test (zero surviving sentinels)", () => {
   it("removes every seeded PHI sentinel across PID/NK1/GT1/IN1/IN2 + free text + Z-segment (ADT^A01)", () => {
     const wire = deidentifyHl7(parseHL7(loadFixture("adt-a01")), {
       context: ctx,
@@ -131,7 +131,7 @@ describe("deidentifyHl7 — the leak test (zero surviving sentinels)", () => {
   });
 });
 
-describe("deidentifyHl7 — the over-scrub test (clinical values survive byte-identical)", () => {
+describe("deidentifyHl7, the over-scrub test (clinical values survive byte-identical)", () => {
   it("retains OBX values, units, codes, statuses, and reference ranges unchanged (ORU^R01)", () => {
     const original = parseHL7(loadFixture("oru-r01"));
     const { document } = deidentifyHl7(original, { context: ctx });
@@ -160,7 +160,7 @@ describe("deidentifyHl7 — the over-scrub test (clinical values survive byte-id
   });
 });
 
-describe("deidentifyHl7 — structured per-category behavior", () => {
+describe("deidentifyHl7, structured per-category behavior", () => {
   it("pseudonymizes the MRN (keeping the assigning authority) and redacts the SSN in a PID-3 list", () => {
     const msg = parseHL7(
       "MSH|^~\\&|A|B|C|D|20200101||ADT^A01|M1|P|2.5\rPID|1||ZZMRN001^^^HOSP^MR~900000001^^^SSA^SS",
@@ -240,7 +240,7 @@ describe("deidentifyHl7 — structured per-category behavior", () => {
   });
 });
 
-describe("deidentifyHl7 — fail closed on free text and unknown structure", () => {
+describe("deidentifyHl7, fail closed on free text and unknown structure", () => {
   it("retains a numeric OBX-5 (NM) but fails closed on narrative (TX), String (ST), and empty OBX-2", () => {
     const msg = parseHL7(
       "MSH|^~\\&|A|B|C|D|20200101||ORU^R01|M1|P|2.5\r" +
@@ -305,7 +305,7 @@ describe("deidentifyHl7 — fail closed on free text and unknown structure", () 
   });
 
   it("fails closed on a KNOWN segment carrying patient identity but absent from the map (MRG merge)", () => {
-    // A merge/move ADT carries the patient's PRIOR name + MRN in MRG — patient PHI, not provider.
+    // A merge/move ADT carries the patient's PRIOR name + MRN in MRG: patient PHI, not provider.
     // MRG is a recognized segment but not on the retain-list, so it must block, not pass through.
     const msg = parseHL7(
       "MSH|^~\\&|A|B|C|D|20200101||ADT^A40|M1|P|2.5\r" +
@@ -326,7 +326,7 @@ describe("deidentifyHl7 — fail closed on free text and unknown structure", () 
     expect(wire.includes("ZZRELATIVEPHI")).toBe(false);
   });
 
-  it("leaves recognized clinical/administrative segments (PV1) untouched — retain-list, not blanket-scrub", () => {
+  it("leaves recognized clinical/administrative segments (PV1) untouched, retain-list, not blanket-scrub", () => {
     const msg = parseHL7("MSH|^~\\&|A|B|C|D|20200101||ADT^A01|M1|P|2.5\rPV1|1|I|WARD^ROOM^BED");
     const { document, manifest } = deidentifyHl7(msg, { context: ctx });
     expect(document.get("PV1.3.1")).toBe("WARD");
@@ -334,7 +334,7 @@ describe("deidentifyHl7 — fail closed on free text and unknown structure", () 
   });
 });
 
-describe("deidentifyHl7 — fatal + policy + immutability", () => {
+describe("deidentifyHl7, fatal + policy + immutability", () => {
   it("throws DEID_NO_KEY when the message needs a keyed transform but no context is supplied", () => {
     const msg = parseHL7("MSH|^~\\&|A|B|C|D|20200101||ADT^A01|M1|P|2.5\rPID|1||ZZMRN001^^^HOSP^MR");
     expect(() => deidentifyHl7(msg, {})).toThrowError(

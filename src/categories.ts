@@ -1,11 +1,11 @@
 /**
- * The **18 HIPAA Safe Harbor identifier categories** — 45 CFR §164.514(b)(2)(i)(A)–(R) — modelled as
+ * The **18 HIPAA Safe Harbor identifier categories**, 45 CFR §164.514(b)(2)(i)(A)–(R), modelled as
  * typed categories, including the open-ended catch-all (R).
  *
  * These are the categories of identifiers that Safe Harbor de-identification requires be removed or
  * transformed out, **of the individual and of the individual's relatives, employers, and household
- * members**. The list is enumerated firsthand from the regulation text; category (R) — "any other
- * unique identifying number, characteristic, or code" — is why de-identification must **fail closed**
+ * members**. The list is enumerated firsthand from the regulation text; category (R), "any other
+ * unique identifying number, characteristic, or code", is why de-identification must **fail closed**
  * (an allow-list of 17 concrete types can never satisfy an open-ended (R)).
  *
  * @packageDocumentation
@@ -14,7 +14,7 @@
 /**
  * The stable registry of the 18 Safe Harbor identifier categories. `key === value` so the set
  * survives an `Object.values(...)` snapshot into a stability tripwire. Renaming a category is a
- * **breaking change** — consumers branch on these in policies and manifests.
+ * **breaking change**: consumers branch on these in policies and manifests.
  *
  * @example
  * ```ts
@@ -24,9 +24,9 @@
  * ```
  */
 export const SAFE_HARBOR_CATEGORIES = {
-  /** (A) Names — patient, relatives, employers, household members. */
+  /** (A) Names: patient, relatives, employers, household members. */
   NAMES: "NAMES",
-  /** (B) All geographic subdivisions smaller than a state — street, city, county, precinct, ZIP, geocodes. */
+  /** (B) All geographic subdivisions smaller than a state: street, city, county, precinct, ZIP, geocodes. */
   GEOGRAPHIC: "GEOGRAPHIC",
   /** (C) All elements of dates (except year) directly related to the individual, and all ages > 89. */
   DATES: "DATES",
@@ -58,12 +58,12 @@ export const SAFE_HARBOR_CATEGORIES = {
   BIOMETRIC: "BIOMETRIC",
   /** (Q) Full-face photographs and any comparable images. */
   FULL_FACE_PHOTO: "FULL_FACE_PHOTO",
-  /** (R) Any other unique identifying number, characteristic, or code — the open-ended catch-all. */
+  /** (R) Any other unique identifying number, characteristic, or code (the open-ended catch-all). */
   OTHER_UNIQUE_ID: "OTHER_UNIQUE_ID",
 } as const;
 
 /**
- * A value from {@link SAFE_HARBOR_CATEGORIES} — the type a policy and a manifest entry carry.
+ * A value from {@link SAFE_HARBOR_CATEGORIES}: the type a policy and a manifest entry carry.
  *
  * @example
  * ```ts

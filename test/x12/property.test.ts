@@ -53,7 +53,7 @@ function interchangeArb(): fc.Arbitrary<string> {
     .map((r) => `${HEAD}${r.name}${r.addr}${r.dmg}${r.ref}${r.per}${r.clm}${r.zseg}${TAIL}`);
 }
 
-describe("deidentifyX12 — fail-safe invariants", () => {
+describe("deidentifyX12, fail-safe invariants", () => {
   it("never throws a non-fatal, never leaks a scrub-locus sentinel, manifest is value-free", () => {
     fc.assert(
       fc.property(interchangeArb(), (raw) => {

@@ -1,5 +1,5 @@
 /**
- * The HL7 v2 **applier** — writes the engine's transformed loci back onto a **deep clone** of the
+ * The HL7 v2 **applier**: writes the engine's transformed loci back onto a **deep clone** of the
  * message's raw segment tree and reconstructs a fresh, independent {@link Hl7Message}. The caller's
  * input message is never mutated; every field the extractor did not touch is cloned **byte-faithfully**
  * (escape overlay included), so structured clinical values survive the over-scrub test unchanged.
@@ -62,7 +62,7 @@ function singleValueField(value: string): MutField {
   return { isNull: false, repetitions: [{ components: [{ subcomponents: [value] }] }] };
 }
 
-/** An empty component (`{ subcomponents: [""] }`) — a placeholder slot in a rebuilt composite. */
+/** An empty component (`{ subcomponents: [""] }`): a placeholder slot in a rebuilt composite. */
 function emptyComponent(): MutComponent {
   return { subcomponents: [""] };
 }

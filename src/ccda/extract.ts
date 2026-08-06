@@ -1,5 +1,5 @@
 /**
- * The C-CDA **extractor** — walks a parsed CDA DOM (the hardened `@xmldom/xmldom` tree the sibling
+ * The C-CDA **extractor**: walks a parsed CDA DOM (the hardened `@xmldom/xmldom` tree the sibling
  * `@cosyte/ccda` parser produces via `parseSecureXml`) and produces the format-agnostic
  * {@link GenericLocus} list the core engine transforms, plus a **parallel coordinate list** ({@link
  * CcdaCoord}) holding a direct handle to the DOM node each locus came from, so the applier writes each
@@ -13,7 +13,7 @@
  * included). The **fail-closed** rule governs everything else: section narrative `<text>`
  * blocks and the unstructured `nonXMLBody` are blocked; an element carrying a value that is neither a
  * mapped PHI element nor a recognized coded/administrative one is blocked; the clinical
- * **structuredBody** entries are retained untouched (the over-scrub guard) — a `<name>` there is a drug
+ * **structuredBody** entries are retained untouched (the over-scrub guard): a `<name>` there is a drug
  * or material name, not a person, so it must survive.
  *
  * @packageDocumentation
@@ -35,7 +35,7 @@ import type { Element } from "@xmldom/xmldom";
 
 /** DOM `Node.TEXT_NODE`. @internal */
 const TEXT_NODE = 3 as const;
-/** `xsi:type` prefixes that denote a periodic/dosing interval — NOT a calendar date, never generalized. */
+/** `xsi:type` prefixes that denote a periodic/dosing interval, NOT a calendar date, never generalized. */
 const PERIOD_TYPES: readonly string[] = ["PIVL", "EIVL", "SXPR", "PPD"];
 
 /** How the applier writes one transformed locus back onto the CDA DOM node it came from. */
@@ -49,7 +49,7 @@ export type CcdaEditKind =
   | "block-text";
 
 /**
- * A write-back coordinate — a direct handle to the DOM node one extracted locus came from, plus how to
+ * A write-back coordinate: a direct handle to the DOM node one extracted locus came from, plus how to
  * write the transformed value back onto it. Carries no value.
  */
 export interface CcdaCoord {
@@ -91,7 +91,7 @@ function hasAttr(el: Element, name: string): boolean {
 }
 
 /**
- * Build the value-free path segment for every element child of `parent` — **the one place a CDA path
+ * Build the value-free path segment for every element child of `parent`: **the one place a CDA path
  * segment is composed**, used by both the header sweep and the body narrative descent.
  *
  * The element's local name is **bounded before it becomes a path segment** ({@link safeLocusToken}):
@@ -111,8 +111,8 @@ function hasAttr(el: Element, name: string): boolean {
  * Three consequences worth stating, because each has been mis-read:
  *
  * - **It counts document siblings, not manifest rows, so the indices in a manifest can be gapped.** A
- *   sibling that yields no locus — an empty `<text>`, an `<entry>` whose narrative is a `<reference>`
- *   into the section, a `nullFlavor`-only `<id>` — contributes no row, and the surviving rows keep
+ *   sibling that yields no locus (an empty `<text>`, an `<entry>` whose narrative is a `<reference>`
+ *   into the section, a `nullFlavor`-only `<id>`) contributes no row, and the surviving rows keep
  *   their document indices. `component[2]` alone means two siblings had nothing to record, not that
  *   rows went missing. Do not document it as a counter derivable from the manifest alone.
  * - The counter keys on the **printed** name, not on `namespaceURI|name`. A path prints no namespace,
@@ -147,7 +147,7 @@ function join(base: string, seg: string): string {
   return base === "" ? seg : `${base}/${seg}`;
 }
 
-/** Extract a person `<name>` locus — redacted (whole element cleared). */
+/** Extract a person `<name>` locus: redacted (whole element cleared). */
 function actName(out: CcdaExtraction, el: Element, path: string): void {
   push(
     out,
@@ -156,7 +156,7 @@ function actName(out: CcdaExtraction, el: Element, path: string): void {
   );
 }
 
-/** Extract a `<telecom>` locus — redacted (its `@value` cleared). */
+/** Extract a `<telecom>` locus: redacted (its `@value` cleared). */
 function actTelecom(out: CcdaExtraction, el: Element, path: string): void {
   push(
     out,
@@ -170,7 +170,7 @@ function actTelecom(out: CcdaExtraction, el: Element, path: string): void {
   );
 }
 
-/** Extract an `<addr>` locus — generalized to the safe 3-digit ZIP; finer geography dropped by apply. */
+/** Extract an `<addr>` locus: generalized to the safe 3-digit ZIP; finer geography dropped by apply. */
 function actAddr(out: CcdaExtraction, el: Element, path: string): void {
   const postal = children(el, "postalCode")[0];
   const zip = postal === undefined ? "" : (text(postal) ?? "");
@@ -181,12 +181,12 @@ function actAddr(out: CcdaExtraction, el: Element, path: string): void {
   );
 }
 
-/** Extract a person-role `<id>` locus — pseudonymized (SSN-rooted → redacted); assigning root retained. */
+/** Extract a person-role `<id>` locus: pseudonymized (SSN-rooted → redacted); assigning root retained. */
 function actId(out: CcdaExtraction, el: Element, path: string): void {
   const root = attr(el, "root");
   const ext = attr(el, "extension");
   const value = ext !== undefined ? ext : (root ?? "");
-  if (value.length === 0) return; // nullFlavor-only id — nothing to transform
+  if (value.length === 0) return; // nullFlavor-only id, nothing to transform
   push(
     out,
     { path, kind: "identifier", category: categoryForIdRoot(root), value },
@@ -194,7 +194,7 @@ function actId(out: CcdaExtraction, el: Element, path: string): void {
   );
 }
 
-/** Extract calendar-date loci from a `<birthTime>` / `<time>` / `<effectiveTime>` — generalized to year. */
+/** Extract calendar-date loci from a `<birthTime>` / `<time>` / `<effectiveTime>`: generalized to year. */
 function actDate(out: CcdaExtraction, el: Element, path: string): void {
   const xt = xsiType(el);
   if (xt !== undefined && PERIOD_TYPES.some((p) => xt.startsWith(p))) return; // dosing period, not a date
@@ -220,7 +220,7 @@ function actDate(out: CcdaExtraction, el: Element, path: string): void {
 }
 
 /**
- * Fail closed on **direct character text** carried by a recognized coded/structural element — its own
+ * Fail closed on **direct character text** carried by a recognized coded/structural element: its own
  * coded attributes (`@code` / `@root` / `@extension`) are structure and stay, but a CD/CE element in
  * conformant HL7 v3 has no direct text, so any that appears is unrecognized content and is blocked. This
  * keeps the fail-closed guarantee uniform: a retained element passes through neither an unhandled child
@@ -236,7 +236,7 @@ function blockRetainedText(out: CcdaExtraction, el: Element, path: string): void
 function blockUnknown(out: CcdaExtraction, el: Element, path: string): void {
   const dt = directText(el);
   const hasVal = hasAttr(el, "value") || hasAttr(el, "extension") || hasAttr(el, "root");
-  if (dt.length === 0 && !hasVal) return; // pure structural wrapper — nothing to block here
+  if (dt.length === 0 && !hasVal) return; // pure structural wrapper, nothing to block here
   // Omit the category to force the engine's fail-closed block (category R).
   push(out, { path, kind: "unknown", value: dt }, { node: el, edit: "block" });
 }
@@ -249,7 +249,7 @@ function sweep(out: CcdaExtraction, el: Element, path: string): void {
   for (const { el: childEl, path: seg } of childSegments(el)) {
     const childPath = join(path, seg);
     if (childEl.namespaceURI !== V3_NS) {
-      // Foreign / sdtc namespace — unrecognized structure. Fail closed on any value, then descend.
+      // Foreign / sdtc namespace: unrecognized structure. Fail closed on any value, then descend.
       blockUnknown(out, childEl, childPath);
       sweep(out, childEl, childPath);
       continue;
@@ -274,12 +274,12 @@ function sweep(out: CcdaExtraction, el: Element, path: string): void {
           actId(out, childEl, childPath);
           break;
       }
-      continue; // mapped element handled as a unit — do not descend
+      continue; // mapped element handled as a unit: do not descend
     }
     if (isRetainedCcdaElement(ln)) {
       // Recognized coded/structural element: its coded attributes are retained (over-scrub guard), but
-      // (a) block any stray direct text on it — a conformant CD/CE has none, so it is unrecognized
-      // content — and (b) descend, since a `<code>` may wrap a free-text `<originalText>` and a `*Code`
+      // (a) block any stray direct text on it: a conformant CD/CE has none, so it is unrecognized
+      // content, and (b) descend, since a `<code>` may wrap a free-text `<originalText>` and a `*Code`
       // could nest a `<name>`; neither may ride through because their parent was recognized.
       blockRetainedText(out, childEl, childPath);
       sweep(out, childEl, childPath);
@@ -292,8 +292,8 @@ function sweep(out: CcdaExtraction, el: Element, path: string): void {
 }
 
 /**
- * Fail closed on **every** narrative `<text>` element anywhere in the body — section-level, nested
- * subsection, and entry-level alike — while retaining all coded clinical structure (codes, values,
+ * Fail closed on **every** narrative `<text>` element anywhere in the body: section-level, nested
+ * subsection, and entry-level alike, while retaining all coded clinical structure (codes, values,
  * units, statuses, dosing periods) untouched. Blocking a `<text>` never touches the coded siblings that
  * carry the clinical meaning, so this is strictly leak-safe and never an over-scrub: a `<text>` holds
  * human-readable narrative (or a reference into it), never a clinical value.
@@ -317,8 +317,8 @@ function blockNarrative(out: CcdaExtraction, el: Element, path: string): void {
     }
     // Descend to reach nested / entry-level narrative, over segments composed exactly as the header
     // sweep composes its own ({@link childSegments}). This descent runs over the clinical body, which
-    // is where same-named siblings are the norm — a `structuredBody` is a run of `<component>`s and a
-    // `<section>` a run of `<entry>`s — so without the shared index every section's narrative
+    // is where same-named siblings are the norm: a `structuredBody` is a run of `<component>`s and a
+    // `<section>` a run of `<entry>`s, so without the shared index every section's narrative
     // aggregates into a single manifest row and the artifact stops saying *which* narratives were
     // blocked.
     blockNarrative(out, child, childPath);
@@ -351,7 +351,7 @@ function handleBody(out: CcdaExtraction, componentEl: Element, path: string): vo
 /**
  * Walk a parsed CDA document element (`ClinicalDocument`) and extract every PHI-bearing (or fail-closed)
  * locus, structurally, from the CDA header participations and the section narrative. Never mutates the
- * tree — the applier writes onto it after the engine transforms the loci.
+ * tree: the applier writes onto it after the engine transforms the loci.
  *
  * @param root - The `ClinicalDocument` DOM element (from `parseSecureXml(...).documentElement`).
  * @returns The loci (for the engine) and their index-aligned write-back coordinates.
@@ -378,7 +378,7 @@ export function extractCcdaLoci(root: Element): CcdaExtraction {
       actDate(out, el, path); // the document (service-related) date
       continue;
     }
-    if (CCDA_ENVELOPE_ELEMENTS.has(ln)) continue; // document envelope — retained (like HL7 MSH)
+    if (CCDA_ENVELOPE_ELEMENTS.has(ln)) continue; // document envelope: retained (like HL7 MSH)
     if (ln === "component") {
       handleBody(out, el, path);
       continue;

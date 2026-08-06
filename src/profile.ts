@@ -1,13 +1,13 @@
 /**
- * **Policy profiles** — named, reusable de-identification presets a site adopts once and applies
+ * **Policy profiles**: named, reusable de-identification presets a site adopts once and applies
  * everywhere. A {@link DeidProfile} bundles a {@link DeidPolicy} with an optional
  * default free-text redactor and the honest metadata that governs how its output may be used.
  *
  * Two presets ship:
  *
- * - {@link SAFE_HARBOR_PROFILE} — the fail-closed default: the built-in Safe Harbor policy, dates
+ * - {@link SAFE_HARBOR_PROFILE}, the fail-closed default: the built-in Safe Harbor policy, dates
  *   generalized to year, the catch-all (R) blocked.
- * - {@link LIMITED_DATA_SET_PROFILE} — a **research / longitudinal** preset that **date-shifts** dates
+ * - {@link LIMITED_DATA_SET_PROFILE}: a **research / longitudinal** preset that **date-shifts** dates
  *   (interval-preserving) instead of generalizing them, so time-series utility survives. It is
  *   deliberately **less** protective than Safe Harbor for dates, so it is **not** labelled
  *   `safe-harbor`, it requires a keyed per-patient context, and it is **not** a certified de-identified
@@ -16,7 +16,7 @@
  * {@link defineDeidProfile} derives a per-site profile from a base, under a **widen-never-narrow**
  * contract: a site may move a category to an equal-or-**stronger** transform (more removal), but may
  * **never** re-weaken a category the base scrubs. A site preset can therefore only ever *tighten* the
- * base standard — never quietly loosen it (fail-closed, {@link FATAL_CODES.DEID_PROFILE_INVALID}).
+ * base standard, never quietly loosen it (fail-closed, {@link FATAL_CODES.DEID_PROFILE_INVALID}).
  *
  * @packageDocumentation
  */
@@ -35,11 +35,11 @@ import {
 import { type FreeTextRedactor } from "./redactor.js";
 
 /**
- * The **protection rank** of a transform — higher means the residual is *less* identifying, so the
+ * The **protection rank** of a transform: higher means the residual is *less* identifying, so the
  * transform is *stronger* de-identification. Used to enforce the widen-never-narrow contract:
  * `block` (value withheld) is strongest; `date-shift` (a full-precision shifted **real** date) is the
  * weakest transform that still acts. `byo-redact` is ranked with `block` because the policy map never
- * performs it — it fails closed to a block.
+ * performs it: it fails closed to a block.
  */
 const TRANSFORM_RANK: Readonly<Record<TransformName, number>> = Object.freeze({
   block: 5,
@@ -68,12 +68,12 @@ export type DeidStandard = "safe-harbor" | "limited-data-set" | "custom";
 export interface DeidProfile {
   /** The profile name (also the policy name). */
   readonly name: string;
-  /** The standard this profile targets — governs how its output may honestly be described. */
+  /** The standard this profile targets: governs how its output may honestly be described. */
   readonly standard: DeidStandard;
   /** The concrete policy the engine applies. */
   readonly policy: DeidPolicy;
   /**
-   * A one-line honest description of what the profile does and does **not** guarantee — surfaced in
+   * A one-line honest description of what the profile does and does **not** guarantee: surfaced in
    * docs and tooling so a preset is never adopted without its caveats.
    */
   readonly description: string;
@@ -89,7 +89,7 @@ export interface DeidProfile {
 const C = SAFE_HARBOR_CATEGORIES;
 
 /**
- * The **Safe Harbor** profile — the fail-closed default. Wraps {@link SAFE_HARBOR_POLICY}: direct
+ * The **Safe Harbor** profile: the fail-closed default. Wraps {@link SAFE_HARBOR_POLICY}: direct
  * identifiers removed, MRN/beneficiary/account pseudonymized, geography and dates generalized, the
  * catch-all (R) blocked. Output is **"Safe-Harbor-transformed per the configured policy"**, never
  * "de-identified".
@@ -114,7 +114,7 @@ export const SAFE_HARBOR_PROFILE: DeidProfile = Object.freeze({
 /**
  * The **Limited Data Set / longitudinal research** profile. Identical to Safe Harbor **except** dates
  * are **date-shifted** (a single consistent per-patient offset, intervals preserved) rather than
- * generalized to year — so time-series analysis survives.
+ * generalized to year, so time-series analysis survives.
  *
  * **This is deliberately less protective than Safe Harbor and is NOT Safe Harbor.** A shifted-but-real
  * date is still "an element of a date" (§164.514(b)(2)(i)(C)), so this profile:
@@ -122,7 +122,7 @@ export const SAFE_HARBOR_PROFILE: DeidProfile = Object.freeze({
  * - is **not** labelled `safe-harbor` (the reserved-label guard would reject it);
  * - **requires** a keyed per-patient {@link DeidContext} (an absent key is a fatal `DEID_NO_KEY`);
  * - produces an **Expert-Determination-supporting** dataset, **not** a certified de-identification, and
- *   **not**, on its own, a HIPAA §164.514(e) Limited Data Set — disclosing an actual Limited Data Set
+ *   **not**, on its own, a HIPAA §164.514(e) Limited Data Set: disclosing an actual Limited Data Set
  *   additionally requires a Data Use Agreement, which is the consumer's responsibility.
  *
  * @example
@@ -141,7 +141,7 @@ export const LIMITED_DATA_SET_PROFILE: DeidProfile = Object.freeze({
   }),
   description:
     "Longitudinal research preset: Safe-Harbor identifier handling, but dates are DATE-SHIFTED " +
-    "(interval-preserving), not generalized. Retains shifted real dates — Expert-Determination " +
+    "(interval-preserving), not generalized. Retains shifted real dates: Expert-Determination " +
     "territory, NOT Safe Harbor, NOT a certified de-identification. Requires a keyed per-patient context.",
   requiresContext: true,
 });
@@ -182,7 +182,7 @@ const RESERVED_NAMES: ReadonlySet<string> = new Set(["safe-harbor", "limited-dat
 /**
  * Derive a per-site {@link DeidProfile} from a base profile (Safe Harbor by default), enforcing the
  * **widen-never-narrow** contract: every override must move its category to an equal-or-**stronger**
- * transform than the base's. A weakening override — or reclaiming a reserved standard label — is
+ * transform than the base's. A weakening override, or reclaiming a reserved standard label, is
  * **rejected** ({@link FATAL_CODES.DEID_PROFILE_INVALID}), so a site preset can only tighten, never
  * loosen, the base standard's protection.
  *
@@ -222,7 +222,7 @@ export function defineDeidProfile(spec: DeidProfileSpec): DeidProfile {
       throw new DeidError(
         FATAL_CODES.DEID_PROFILE_INVALID,
         `override for category "${category}" ("${transform}") is weaker than the base ` +
-          `("${baseTransform}"); a profile may only widen (tighten) — never narrow — de-identification`,
+          `("${baseTransform}"); a profile may only widen (tighten), never narrow, de-identification`,
       );
     }
   }

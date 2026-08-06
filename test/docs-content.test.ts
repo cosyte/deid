@@ -7,12 +7,12 @@ import { docSnippetSuite } from "@cosyte/vitest-config/snippets";
 
 /**
  * Doc/code-agreement gate. Every ```` ```ts runnable ```` block in `docs-content/` is extracted,
- * compiled, and executed, and its inline `// =>` assertions are checked — so a documented example can
+ * compiled, and executed, and its inline `// =>` assertions are checked, so a documented example can
  * never silently drift from the shipped code (the documentation analog of the conformance runners).
  * Blocks tagged ` ```ts runnable throws ` must throw; plain ` ```ts ` blocks are illustrative and are
  * not executed.
  *
- * Snippets import the package the way a consumer does — against the **built** ESM artifact, not the
+ * Snippets import the package the way a consumer does: against the **built** ESM artifact, not the
  * source tree. The harness executes each block as a standalone ES module, so it can't resolve the
  * source's internal `.js`→`.ts` imports; the bundled `dist/index.mjs` is self-contained and is also
  * exactly what an installer loads. The shared CI gate runs `test` before `build`, so we provision

@@ -1,18 +1,18 @@
 /**
  * Fold a `@cosyte/dicom` **PS3.15 Annex E** de-identification report into the unified value-free manifest.
- * The DICOM layer is authoritative for *what was done* to each attribute — this module only re-expresses
+ * The DICOM layer is authoritative for *what was done* to each attribute: this module only re-expresses
  * its report in the shared {@link DeidManifestEntry} shape so a DICOM manifest reads like every other
  * format's.
  *
  * **Value-free, always.** An entry carries the Safe Harbor category, the transform, the **locus** (the DICOM
- * tag + keyword + any sequence context path) and a count — **never** a decoded value. The source→replacement
+ * tag + keyword + any sequence context path) and a count, **never** a decoded value. The source→replacement
  * UID map is deliberately *not* folded in: a source UID is a removed value and re-linking vector, so it never
  * appears in the manifest (a caller who needs cross-file consistency owns the shared `uidMap`).
  *
  * **The category is a coarse audit label, not a claim of precision.** Each acted-on attribute is classified
  * to its obvious Safe Harbor category where the keyword makes it plain (a person-name element → Names, a
  * birth/study date → Dates, an institution/address → Geographic, a UID → the catch-all), and **everything
- * else falls closed to category (R) — "any other unique identifying number, characteristic, or code"**
+ * else falls closed to category (R): "any other unique identifying number, characteristic, or code"**
  * (§164.514(b)(2)(i)(R)). Defaulting the unclassified to (R) mirrors the core's documented posture and never
  * *under*-labels PHI. The authoritative de-id action is the delegated Annex E action, preserved in the
  * entry's transform/disposition.
@@ -54,31 +54,31 @@ interface Mapped {
 }
 
 const APPLIED_MAP: Readonly<Record<Exclude<AppliedAction, "kept">, Mapped>> = {
-  // `X` — the attribute was deleted outright.
+  // `X`: the attribute was deleted outright.
   removed: {
     transform: "redact",
     disposition: "removed",
     code: DEID_DISPOSITION_CODES.DEID_CATEGORY_REMOVED,
   },
-  // `Z` — replaced with a zero-length value; the value is gone.
+  // `Z`: replaced with a zero-length value; the value is gone.
   emptied: {
     transform: "redact",
     disposition: "removed",
     code: DEID_DISPOSITION_CODES.DEID_CATEGORY_REMOVED,
   },
-  // `D` — replaced with a non-identifying dummy; the PHI value is gone, a placeholder remains.
+  // `D`: replaced with a non-identifying dummy; the PHI value is gone, a placeholder remains.
   dummied: {
     transform: "redact",
     disposition: "transformed",
     code: DEID_DISPOSITION_CODES.DEID_CATEGORY_REMOVED,
   },
-  // `U` — replaced with an internally-consistent surrogate UID (a keyed-style consistent surrogate).
+  // `U`: replaced with an internally-consistent surrogate UID (a keyed-style consistent surrogate).
   "uid-remapped": {
     transform: "pseudonymize",
     disposition: "transformed",
     code: DEID_DISPOSITION_CODES.DEID_CATEGORY_PSEUDONYMIZED,
   },
-  // `C` — conservatively blanked because a safe similar-meaning value cannot be synthesised: fail-closed.
+  // `C`, conservatively blanked because a safe similar-meaning value cannot be synthesised: fail-closed.
   cleaned: {
     transform: "block",
     disposition: "blocked",
@@ -86,14 +86,14 @@ const APPLIED_MAP: Readonly<Record<Exclude<AppliedAction, "kept">, Mapped>> = {
   },
 };
 
-/** Person-name keyword qualifiers — an element is a *person* name only alongside one of these. */
+/** Person-name keyword qualifiers: an element is a *person* name only alongside one of these. */
 const PERSON_NAME_QUALIFIER =
   /patient|physician|operator|person|author|performer|referring|requesting|responsible|guardian|mother|reviewer|reading|verifying|scheduled|admitting|consulting/;
 /** Equipment/organization "…Name" elements that are NOT a person's name. */
 const NON_PERSON_NAME = /institution|station|model|manufacturer|application|scheme|codemeaning/;
 
 /**
- * Classify an acted-on DICOM attribute into its Safe Harbor category — precise where the keyword makes the
+ * Classify an acted-on DICOM attribute into its Safe Harbor category: precise where the keyword makes the
  * category plain, and **falling closed to (R)** (`OTHER_UNIQUE_ID`) for everything else. A coarse audit
  * label: it never under-labels PHI, and the authoritative action is the delegated Annex E action.
  *
