@@ -221,8 +221,8 @@ function redactedProse(result: unknown): string | null {
 
 /**
  * Handle a free-text locus. **Fail closed** by default: with no consumer redactor the prose is blocked.
- * With a BYO redactor, invoke it and treat a returned redaction as *consumer-asserted*
- *, but still fail closed if it throws or returns nothing, so a redactor failure never leaks free text.
+ * With a BYO redactor, invoke it and treat a returned redaction as *consumer-asserted*, but still
+ * fail closed if it throws or returns nothing, so a redactor failure never leaks free text.
  */
 function handleFreeText(locus: GenericLocus, redactor: FreeTextRedactor | undefined): LocusOutcome {
   const category = locus.category ?? SAFE_HARBOR_CATEGORIES.OTHER_UNIQUE_ID;

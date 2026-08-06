@@ -17,8 +17,8 @@
  * *dates* (OBR observation date, DG1 diagnosis date, PV1 admit/discharge date, SPM collection date) and
  * *visit identifiers* (PV1-19), and *provider* names (PV1-7/8, OBR-16). Selective scrubbing of those loci
  * is **not** performed; this adapter covers the PID-family patient/relative demographics and the
- * free-text / unknown-structure fail-closed defaults. Forgetting a clinical segment here fails **safe**
- *: it is blocked, not leaked.
+ * free-text / unknown-structure fail-closed defaults. Forgetting a clinical segment here fails
+ * **safe**: it is blocked, not leaked.
  *
  * @packageDocumentation
  */

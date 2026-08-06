@@ -16,11 +16,11 @@ quasi-identifier statistics heading are reworded. The first two previously carri
 punctuation mark, which a reader could take either as "no transform was applied here" or as a
 rendering artefact, and a value-free audit report is the last place that ambiguity belongs.
 
-Two other strings a running program can observe move with them: the de-identification method text
-written into DICOM `(0012,0063)`, and the description carried on the limited data set profile,
-alongside the message on the error raised when a profile override would weaken a category. The tag
-written to, that profile's transform set and the `DEID_PROFILE_INVALID` code accompanying the error
-are all unchanged.
+Three other strings a running program can observe move with them: the de-identification method text
+written into DICOM `(0012,0063)`, the description carried on the limited data set profile, and the
+message on the error raised when a profile override would weaken a category. The tag written to,
+that profile's transform set and the `DEID_PROFILE_INVALID` code accompanying the error are all
+unchanged.
 
 Editorial punctuation is brought into line with the house style across every published surface: the
 npm description, `README.md`, the guides, and the JSDoc that compiles into the shipped declaration

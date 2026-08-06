@@ -47,7 +47,7 @@ surrogate.
 | **OBX-5, NTE-3** | narrative / ambiguous free text (OBX-5 unless OBX-2 types it structured) | **fail closed**: blocked, never regex-scrubbed |
 | **MRG / ACC / FAM / PEO / PDA** | known patient-identity / relative / geographic segments absent from the map | **fail closed**: blocked (e.g. a merge message's prior name + MRN) |
 | **Z-segments / unknown structure** | every populated field | **fail closed**: blocked |
-| Retained clinical/administrative segments (an explicit allow-list, OBR, ORC, AL1, DG1, PV1, RX*, …) | n/a | **retained untouched** (the over-scrub guard) |
+| Retained clinical/administrative segments (an explicit allow-list: OBR, ORC, AL1, DG1, PV1, RX*, …) | n/a | **retained untouched** (the over-scrub guard) |
 
 A recognized segment is retained **only** if it is on the explicit retain-list; anything else fails
 closed. OBX-5 is retained only when OBX-2 positively types it as a structured clinical value (numeric,

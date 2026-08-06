@@ -7,8 +7,8 @@
  */
 
 /**
- * The label the library applies to its output. Deliberately **not** "de-identified" / "HIPAA-compliant"
- *: the certification is always the consumer's.
+ * The label the library applies to its output. Deliberately **not** "de-identified" /
+ * "HIPAA-compliant": the certification is always the consumer's.
  *
  * @example
  * ```ts

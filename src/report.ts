@@ -12,9 +12,10 @@
  * - carries `determination: null` and leads with {@link EXPERT_DETERMINATION_DISCLAIMER}.
  *
  * "The risk is very small" is a contextual judgment about a specific dataset, its recipient, and the
- * other data reasonably available to that recipient, none of which this library sees. Over-claiming here
- * would be a real compliance harm, so the report is deliberately **descriptive, never prescriptive**: it
- * says *"here is what was done and what remains,"* and hands that to the expert.
+ * other data reasonably available to that recipient. This library sees none of those three.
+ * Over-claiming here would be a real compliance harm, so the report is deliberately **descriptive,
+ * never prescriptive**: it says *"here is what was done and what remains,"* and hands that to the
+ * expert.
  *
  * **Value-free, still.** Like the manifest it summarizes, the report carries **loci / categories /
  * dispositions / counts**, **never a PHI value**. The one optional quasi-identifier statistic it can
@@ -513,7 +514,7 @@ export function formatExpertDeterminationSupportReport(
   );
   const d = report.dispositionSummary;
   lines.push(
-    `- Dispositions, transformed: ${String(d.transformed)}, removed: ${String(d.removed)}, blocked: ${String(d.blocked)}` +
+    `- Dispositions: transformed: ${String(d.transformed)}, removed: ${String(d.removed)}, blocked: ${String(d.blocked)}` +
       ` (free-text blocked: ${String(d.freeTextBlocked)}, consumer-redacted: ${String(d.freeTextConsumerRedacted)})`,
   );
   lines.push("");
@@ -546,7 +547,7 @@ export function formatExpertDeterminationSupportReport(
     );
   } else {
     lines.push(
-      "These are residual identifying elements the pass kept for utility, an actual-knowledge",
+      "These are residual identifying elements the pass kept for utility. They are an actual-knowledge",
     );
     lines.push("(§164.514(b)(2)(ii)) consideration for the determiner:");
     lines.push("");

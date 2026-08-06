@@ -44,8 +44,8 @@ report.disclaimer.includes("NOT a determination"); // => true
 ```
 
 "The risk is very small" is a judgment about a dataset _and_ its recipient _and_ the other data
-reasonably available to that recipient, none of which this library sees. Over-claiming here would be a
-real compliance harm, so the report is deliberately descriptive.
+reasonably available to that recipient. This library sees none of those three. Over-claiming here
+would be a real compliance harm, so the report is deliberately descriptive.
 
 ## What the report contains
 
