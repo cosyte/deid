@@ -53,7 +53,7 @@ can be a drug or material name, so the body is deliberately never swept.
 | **componentOf / documentationOf** | encounter / service-event `id`, `effectiveTime` | ids surrogated; dates → **year** |
 | **section `<text>` narrative, `nonXMLBody`** | every narrative block | **fail closed**: blocked, never regex-scrubbed |
 | **unknown / `sdtc` / foreign elements carrying a value** | any value-bearing element that is neither mapped PHI nor recognized coded structure | **fail closed**: blocked |
-| **structuredBody clinical entries** (codes, values, units, statuses, dosing periods) | none located | **retained untouched** (the over-scrub guard) |
+| **structuredBody clinical entries** (codes, values, units, statuses, dosing periods) | n/a | **retained untouched** (the over-scrub guard) |
 
 An `id`'s Safe Harbor category is read from its assigning-authority `root` OID: the SSN OID
 (`2.16.840.1.113883.4.1`) routes to **removed**, every other person/organization id to a **consistent

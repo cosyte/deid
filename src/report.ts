@@ -48,7 +48,7 @@ export const EXPERT_DETERMINATION_DISCLAIMER =
   "determination that the data is de-identified. @cosyte/deid does not, and cannot, render or " +
   "certify HIPAA Expert Determination (45 CFR §164.514(b)(1)): that is a qualified statistician's " +
   "contextual judgment about a specific dataset, its anticipated recipient, and the other information " +
-  "reasonably available to that recipient, none of which this library sees. This report emits no " +
+  "reasonably available to that recipient. This library sees none of those three. This report emits no " +
   "re-identification risk score and reaches no conclusion. It is descriptive input a determiner " +
   "consumes and documents, never the determination itself.";
 
