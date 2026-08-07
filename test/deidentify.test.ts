@@ -1,5 +1,5 @@
 /**
- * Engine tests for `deidentify` — the Safe Harbor policy application, the fail-closed rule, the
+ * Engine tests for `deidentify`: the Safe Harbor policy application, the fail-closed rule, the
  * over-scrub (clinical-retained) guard, the value-free manifest, and the mandatory
  * **offset/key-never-leak** gate.
  *
@@ -25,7 +25,7 @@ function loc(partial: GenericLocus): GenericLocus {
   return partial;
 }
 
-describe("deidentify — Safe Harbor per-category defaults", () => {
+describe("deidentify, Safe Harbor per-category defaults", () => {
   const ctx = createDeidContext({ key: "engine-key", patientId: "p1" });
 
   it("redacts direct identifiers (names, phone, fax, email, ssn, url, ip, device, …)", () => {
@@ -77,7 +77,7 @@ describe("deidentify — Safe Harbor per-category defaults", () => {
   });
 });
 
-describe("deidentify — fail closed", () => {
+describe("deidentify, fail closed", () => {
   const ctx = createDeidContext({ key: "engine-key", patientId: "p1" });
 
   it("blocks an unclassified PHI-bearing locus as category (R)", () => {
@@ -166,7 +166,7 @@ describe("deidentify — fail closed", () => {
   });
 });
 
-describe("deidentify — the keyed-hash transform", () => {
+describe("deidentify, the keyed-hash transform", () => {
   it("replaces a value with a consistent keyed digest under a hash policy", () => {
     const ctx = createDeidContext({ key: "k" });
     const hashPolicy = defineDeidPolicy({ name: "hashy", transforms: { [C.ACCOUNT]: "hash" } });
@@ -179,7 +179,7 @@ describe("deidentify — the keyed-hash transform", () => {
   });
 });
 
-describe("deidentify — over-scrub guard (clinical survives)", () => {
+describe("deidentify, over-scrub guard (clinical survives)", () => {
   it("retains a clinical value byte-identical, with no manifest action", () => {
     const clinicalValue = "5.4 mmol/L";
     const out = deidentify(
@@ -197,7 +197,7 @@ describe("deidentify — over-scrub guard (clinical survives)", () => {
   });
 });
 
-describe("deidentify — fatal conditions", () => {
+describe("deidentify, fatal conditions", () => {
   it("throws EMPTY_INPUT for a null model or a model without loci", () => {
     expect(() => deidentify(null as never, {})).toThrowError(
       expect.objectContaining({ code: FATAL_CODES.EMPTY_INPUT }),
@@ -231,7 +231,7 @@ describe("deidentify — fatal conditions", () => {
   });
 });
 
-describe("deidentify — manifest shape + aggregation + empty model", () => {
+describe("deidentify, manifest shape + aggregation + empty model", () => {
   it("aggregates repeated identical loci into a single entry with a count", () => {
     const ctx = createDeidContext({ key: "k" });
     const out = deidentify(
@@ -263,7 +263,7 @@ describe("deidentify — manifest shape + aggregation + empty model", () => {
   });
 });
 
-describe("deidentify — the mandatory offset/key-never-leak gate", () => {
+describe("deidentify, the mandatory offset/key-never-leak gate", () => {
   it("never emits the key, the seed, or the raw shift material in the output or manifest", () => {
     const key = "SUPERSECRET-HMAC-KEY-9f3a";
     const seed = "SUPERSECRET-SHIFT-SEED-b71c";

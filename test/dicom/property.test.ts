@@ -19,7 +19,7 @@ import { deidentifyDicom } from "../../src/dicom/index.js";
 import { buildDicom, type BuildDicomElement } from "./helpers/build-dicom.js";
 import { pad, TS_EXPLICIT_LE } from "./helpers/fixtures.js";
 
-/** A tagged synthetic sentinel — obviously fake, never realistic. */
+/** A tagged synthetic sentinel: obviously fake, never realistic. */
 const sentinelText = fc
   .integer({ min: 0, max: 1_000_000 })
   .map((n) => `ZZFUZZSENTINEL${String(n).padStart(7, "0")}`);
@@ -35,7 +35,7 @@ const phiElement: fc.Arbitrary<BuildDicomElement & { readonly sentinel: string }
       "00080050", // Accession Number (SH)
       "00101000", // Other Patient IDs (LO)
       "00101040", // Patient's Address (LO)
-      "00100050", // hypothetical extra — modeled as LO
+      "00100050", // hypothetical extra, modeled as LO
     ),
     sentinelText,
   )

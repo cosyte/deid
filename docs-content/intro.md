@@ -7,24 +7,24 @@ sidebar_position: 1
 # @cosyte/deid
 
 Apply a HIPAA-grounded **de-identification policy** to a healthcare document's structurally-located
-model and get back a transformed model plus a **value-free manifest** of everything acted on — without
+model and get back a transformed model plus a **value-free manifest** of everything acted on, without
 reading 45 CFR §164.514 or hand-writing a scrubber.
 
 `@cosyte/deid` is a consumer-tier library, **not a parser**. It borrows the cosyte parser archetype's
 disciplines (typed diagnostics, immutable output, a policy/profile system) but **inverts the parser's
-reflex**: where a parser is liberal on input (Postel's Law), a de-identifier is conservative — it
+reflex**: where a parser is liberal on input (Postel's Law), a de-identifier is conservative; it
 **fails closed**. An unrecognized structure or an un-locatable identifier is **blocked**, never passed
 through as safe.
 
 > **The honesty line that governs the whole library.** Results are **"Safe-Harbor-transformed per the
-> configured policy"** — never "de-identified" and never "HIPAA-compliant". Safe Harbor is implemented
+> configured policy"**, never "de-identified" and never "HIPAA-compliant". Safe Harbor is implemented
 > mechanically; the §164.514(b)(2)(ii) actual-knowledge condition is the consumer's; Expert
 > Determination (§164.514(b)(1)) is *supported*, never *rendered* or certified. The
 > certification is always the consumer's.
 
 > **Status:** pre-alpha (`0.0.x`), published to npm. This release ships the **format-agnostic
 > core** (policy engine, five transforms, 18-category Safe Harbor model, fail-closed rule, value-free
-> manifest) **plus six format bindings** — HL7 v2 (`@cosyte/deid/hl7`), C-CDA (`@cosyte/deid/ccda`),
+> manifest) **plus six format bindings**: HL7 v2 (`@cosyte/deid/hl7`), C-CDA (`@cosyte/deid/ccda`),
 > FHIR R4 (`@cosyte/deid/fhir`), X12 EDI (`@cosyte/deid/x12`), NCPDP Telecom (`@cosyte/deid/ncpdp`) and
 > DICOM (`@cosyte/deid/dicom`). NCPDP SCRIPT is **not** supported.
 
@@ -48,6 +48,6 @@ const { document, manifest } = deidentify(
 
 ## Next
 
-- [Quickstart](./quickstart) — de-identify a model and read the manifest.
-- [De-identifying HL7 v2](./guides-hl7) — the first end-to-end format adapter (`@cosyte/deid/hl7`).
-- [Core Concepts](./concepts-archetype) — the policy engine, the transforms, and fail-closed.
+- [Quickstart](./quickstart): de-identify a model and read the manifest.
+- [De-identifying HL7 v2](./guides-hl7): the first end-to-end format adapter (`@cosyte/deid/hl7`).
+- [Core Concepts](./concepts-archetype): the policy engine, the transforms, and fail-closed.

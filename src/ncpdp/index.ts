@@ -1,32 +1,32 @@
 /**
- * `@cosyte/deid/ncpdp` — the **NCPDP de-identification adapter**. The NCPDP binding of the
+ * `@cosyte/deid/ncpdp`: the **NCPDP de-identification adapter**. The NCPDP binding of the
  * format-agnostic core: it locates PHI **structurally** in a parsed `@cosyte/ncpdp`
  * **Telecommunication (vD.0)** transaction, applies the configured de-identification policy, and returns
  * the de-identified Telecom byte stream plus the core's value-free manifest.
  *
- * **`@cosyte/ncpdp` is an optional peer dependency**, consumed only from this subpath — a consumer who
+ * **`@cosyte/ncpdp` is an optional peer dependency**, consumed only from this subpath: a consumer who
  * only de-identifies NCPDP installs it alongside `@cosyte/deid`; the core stays third-party-dep-free. The
  * adapter reaches NCPDP data **only** through `@cosyte/ncpdp`'s own exported Telecom model
  * (`TelecomTransaction` / `TelecomSegment` / `TelecomField`) and its `parseTelecom` / `serializeTelecom`
- * codec — it never touches a third-party substrate.
+ * codec: it never touches a third-party substrate.
  *
  * **What it covers (Telecom vD.0).** The Patient (`01`), Prescriber (`03`), Insurance (`04`), and
  * Coordination-of-Benefits (`05`) segments, plus the header's Date of Service:
- * - **Patient (`01`)** — name (`CA`/`CB`) and phone (`CQ`) removed; street (`CM`) and city (`CN`)
+ * - **Patient (`01`)**: name (`CA`/`CB`) and phone (`CQ`) removed; street (`CM`) and city (`CN`)
  *   removed; ZIP (`CP`) generalized to its safe 3-digit form; date of birth (`C4`) generalized to year;
  *   patient id (`CY`) pseudonymized. Gender and state retained.
- * - **Insurance (`04`)** — cardholder id (`C2`) and group id (`C1`) pseudonymized; cardholder name
+ * - **Insurance (`04`)**: cardholder id (`C2`) and group id (`C1`) pseudonymized; cardholder name
  *   (`CC`/`CD`) removed. Person code retained.
- * - **Prescriber (`03`)** — the prescriber id (`DB`) removed (prescriber identifiers are in scope for
- *   NCPDP — the deliberate asymmetry with the X12 adapter, which retains provider identity).
- * - **Coordination of Benefits (`05`)** — the other-payer cardholder id (`NU`) and group id (`MJ`)
+ * - **Prescriber (`03`)**: the prescriber id (`DB`) removed (prescriber identifiers are in scope for
+ *   NCPDP: the deliberate asymmetry with the X12 adapter, which retains provider identity).
+ * - **Coordination of Benefits (`05`)**: the other-payer cardholder id (`NU`) and group id (`MJ`)
  *   pseudonymized; the other-payer date (`E8`) generalized to year.
- * - **Header** — Date of Service generalized to year.
+ * - **Header**: Date of Service generalized to year.
  *
  * **Fail closed.** A free-text field (`544-FY` DUR free text, `504-F4` response message) is blocked
  * wherever it appears; a segment that is neither mapped nor on the recognized clinical / financial retain
  * list (including a response Patient / Insurance segment) is blocked field-by-field. Clinical and
- * financial values — NDC drug codes, quantities, days supply, pricing amounts, DUR reason codes — are
+ * financial values (NDC drug codes, quantities, days supply, pricing amounts, DUR reason codes) are
  * **retained untouched** (the over-scrub guard). The output is **"Safe-Harbor-transformed per the
  * configured policy"**, never "de-identified".
  *
@@ -35,7 +35,7 @@
  * `serializeScript` emits **only the modeled fields** (a parse → serialize round-trip drops every
  * unmodeled XML element), and the SCRIPT `Patient` model carries **no address, phone, or patient-id**
  * field. Performing a partial de-id through that surface would silently drop unmodeled content and leave
- * unmodeled patient identifiers unhandled — a false-safety hazard, which the fail-closed posture
+ * unmodeled patient identifiers unhandled: a false-safety hazard, which the fail-closed posture
  * forbids. SCRIPT de-identification therefore waits for a parser surface that preserves the full
  * document, rather than shipping an unfaithful pass here.
  *
@@ -64,7 +64,7 @@ import { extractTelecomLoci } from "./extract.js";
  *   context: createDeidContext({ key: "secret" }),
  * });
  * result.telecom;  // de-identified NCPDP Telecom text
- * result.manifest; // value-free audit — category + locus, never a value
+ * result.manifest; // value-free audit: category + locus, never a value
  * ```
  */
 export interface TelecomDeidResult {
@@ -76,15 +76,15 @@ export interface TelecomDeidResult {
 
 /**
  * De-identify a parsed NCPDP Telecom transaction under a policy (Safe Harbor by default). PHI is located
- * structurally from the `@cosyte/ncpdp` Telecom model — the Patient / Prescriber / Insurance / COB
+ * structurally from the `@cosyte/ncpdp` Telecom model: the Patient / Prescriber / Insurance / COB
  * segment fields and the header Date of Service; the input transaction is never mutated (the
  * de-identified stream is re-serialized from a reconstruction).
  *
- * The output is **"Safe-Harbor-transformed per the configured policy"** — it is not certified
+ * The output is **"Safe-Harbor-transformed per the configured policy"**: it is not certified
  * de-identified, and Expert Determination is not rendered.
  *
  * @param tx - The parsed Telecom transaction (`parseTelecom(raw)`).
- * @param options - The policy and (for keyed transforms — identifier pseudonymization) the key context.
+ * @param options - The policy and (for keyed transforms, identifier pseudonymization) the key context.
  *   A keyed transform with no context is a fatal `DEID_NO_KEY`, never an unkeyed fallback.
  * @returns The de-identified Telecom stream and the value-free manifest.
  * @throws {@link "@cosyte/deid".DeidError} `DEID_NO_KEY` when a keyed transform is required for a

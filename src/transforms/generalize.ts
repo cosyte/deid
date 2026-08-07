@@ -1,5 +1,5 @@
 /**
- * The **generalization** transforms — reduce precision until a value is no longer identifying. The
+ * The **generalization** transforms: reduce precision until a value is no longer identifying. The
  * three regulation-mandated generalizations of 45 CFR §164.514(b)(2)(i):
  *
  * - **date → year** (C): keep only the four-digit year.
@@ -7,7 +7,7 @@
  *   ≤ 20,000 people (the cited restricted list), in which case the prefix becomes `000`.
  * - **age → `90+`** (C): any age over 89 is aggregated to `"90+"`.
  *
- * Each function **fails closed** — it returns `null` when it cannot confidently generalize, so the
+ * Each function **fails closed**: it returns `null` when it cannot confidently generalize, so the
  * engine blocks the locus rather than passing an unreduced value through as safe.
  *
  * @packageDocumentation
@@ -42,8 +42,8 @@ function extractYear(value: string): string | null {
 }
 
 /**
- * Generalize a date to its **year** (§164.514(b)(2)(i)(C)). Accepts common encodings — ISO
- * `YYYY-MM-DD` / `YYYY-MM-DDThh:mm:ss`, HL7 `YYYYMMDD` — anything beginning with a plausible
+ * Generalize a date to its **year** (§164.514(b)(2)(i)(C)). Accepts common encodings: ISO
+ * `YYYY-MM-DD` / `YYYY-MM-DDThh:mm:ss`, HL7 `YYYYMMDD`, anything beginning with a plausible
  * four-digit year. Fails closed (`null`) when no year can be extracted; the retained year is a
  * residual.
  *
@@ -72,7 +72,7 @@ export function generalizeDate(value: string): GeneralizeOutcome | null {
  * (`null`) when three leading digits cannot be read.
  *
  * @param zip - The ZIP code (5-digit, ZIP+4, or any form beginning with digits).
- * @returns The `{ value, residual }` outcome — `residual: false` for `000`, `true` for a kept prefix —
+ * @returns The `{ value, residual }` outcome (`residual: false` for `000`, `true` for a kept prefix),
  *   or `null` if fewer than three leading digits are present.
  * @example
  * ```ts
@@ -89,7 +89,7 @@ export function generalizeZip(zip: string): GeneralizeOutcome | null {
   }
   const prefix = digits.slice(0, 3);
   if (RESTRICTED_ZIP3.has(prefix)) {
-    // Fully suppressed — no identifying residual remains.
+    // Fully suppressed, no identifying residual remains.
     return { value: "000", residual: false };
   }
   return { value: prefix, residual: true };
@@ -100,7 +100,7 @@ export function generalizeZip(zip: string): GeneralizeOutcome | null {
  * retained (a residual). Fails closed (`null`) for a non-finite or negative age.
  *
  * @param age - The age in years.
- * @returns The `{ value, residual }` outcome — `residual: false` for `"90+"`, `true` for a kept age —
+ * @returns The `{ value, residual }` outcome (`residual: false` for `"90+"`, `true` for a kept age),
  *   or `null` if the age is not a finite non-negative number.
  * @example
  * ```ts

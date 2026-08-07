@@ -1,6 +1,6 @@
 /**
  * Synthetic DICOM fixtures for the `@cosyte/deid/dicom` tests. **Everything is synthetic and built in
- * memory** by the vendored `build-dicom` Part 10 encoder — the repo ships zero `.dcm` files and no real
+ * memory** by the vendored `build-dicom` Part 10 encoder: the repo ships zero `.dcm` files and no real
  * (or de-identified-real) study. The `ZZSENTINEL*` values are obviously-fake, tagged sentinels whose only
  * purpose is to prove they are *gone* from the de-identified output; they are declared synthetic in
  * `scripts/phi-allow-list.txt`.
@@ -22,7 +22,7 @@ export function pad(s: string): Buffer {
 
 export const TS_EXPLICIT_LE = "1.2.840.10008.1.2.1";
 
-/** Obviously-synthetic, tagged PHI sentinels — each must be absent from the de-identified output. */
+/** Obviously-synthetic, tagged PHI sentinels, each must be absent from the de-identified output. */
 export const SENTINEL = {
   patientName: "ZZSENTINELNAME^SYNTH",
   patientId: "ZZ-SENTINEL-MRN-0001",
@@ -44,7 +44,7 @@ export const UID = {
 
 /** Clinical/technical values that must **survive** byte-identical (the over-scrub guard). */
 export const CLINICAL = {
-  sopClassUid: "1.2.840.10008.5.1.4.1.1.2", // CT Image Storage — identifies the object type, not the instance
+  sopClassUid: "1.2.840.10008.5.1.4.1.1.2", // CT Image Storage, identifies the object type, not the instance
   modality: "CT",
   photometric: "MONOCHROME2",
 } as const;
@@ -102,5 +102,5 @@ export function buildPhiDataset(
   );
 }
 
-/** Every sentinel string in one array — for the whole-output leak sweep. */
+/** Every sentinel string in one array, for the whole-output leak sweep. */
 export const ALL_SENTINELS: readonly string[] = Object.freeze(Object.values(SENTINEL));

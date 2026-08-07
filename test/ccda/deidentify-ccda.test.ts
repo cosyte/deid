@@ -1,5 +1,5 @@
 /**
- * C-CDA adapter tests — the two headline gates (the **leak test** and the **over-scrub test**), the
+ * C-CDA adapter tests: the two headline gates (the **leak test** and the **over-scrub test**), the
  * per-category structured behavior across the header participations, the narrative / unknown-structure
  * fail-closed defaults, the keyed-context fatal, and immutability.
  *
@@ -41,8 +41,8 @@ function deid(name: string, options = { context: ctx }) {
 /**
  * The patient / guardian / author / informant / custodian / encounter PHI sentinels seeded across the
  * header + narrative of `ccd.xml`. Every one must be GONE after a de-id pass. Retained-by-design values
- * — the clinical body's coded values, the body service date `20190505`, the drug name `ZZDRUGNAME`, the
- * dosing period — are deliberately not in this list (the clinical body is the over-scrub guard and the
+ * (the clinical body's coded values, the body service date `20190505`, the drug name `ZZDRUGNAME`, the
+ * dosing period) are deliberately not in this list (the clinical body is the over-scrub guard and the
  * documented Phase-3 boundary).
  */
 const CCD_SENTINELS: readonly string[] = [
@@ -88,23 +88,23 @@ const CCD_CLINICAL: readonly string[] = [
   "mmol/L", // unit
   "completed", // result status
   "314076", // RxNorm medication code
-  "ZZDRUGNAME", // drug material name — a body <name>, never a person: must survive the header sweep
+  "ZZDRUGNAME", // drug material name, a body <name>, never a person: must survive the header sweep
   "PIVL_TS", // dosing-period datatype
-  "20190505", // in-entry service date — retained-by-design (Phase-3 clinical-body boundary)
+  "20190505", // in-entry service date, retained-by-design (Phase-3 clinical-body boundary)
 ];
 
-describe("deidentifyCcda — the leak test (zero surviving header/narrative sentinels)", () => {
+describe("deidentifyCcda, the leak test (zero surviving header/narrative sentinels)", () => {
   it("removes every seeded PHI sentinel across recordTarget/guardian/author/informant/custodian/encounter + narrative", () => {
     const { wire } = deid("ccd");
     expect(CCD_SENTINELS.filter((s) => wire.includes(s))).toEqual([]);
   });
 });
 
-describe("deidentifyCcda — the over-scrub test (clinical values survive byte-identical)", () => {
+describe("deidentifyCcda, the over-scrub test (clinical values survive byte-identical)", () => {
   it("retains coded observation/medication values, units, status, drug name, and dosing period", () => {
     const { wire, manifest } = deid("ccd");
     expect(CCD_CLINICAL.filter((s) => !wire.includes(s))).toEqual([]);
-    // No manifest entry ever touches a clinical-body locus — only its narrative <text> is blocked.
+    // No manifest entry ever touches a clinical-body locus: only its narrative <text> is blocked.
     const bodyActs = manifest.filter(
       (m) => m.locus.includes("observation") || m.locus.includes("manufactured"),
     );
@@ -112,7 +112,7 @@ describe("deidentifyCcda — the over-scrub test (clinical values survive byte-i
   });
 });
 
-describe("deidentifyCcda — structured per-category behavior", () => {
+describe("deidentifyCcda, structured per-category behavior", () => {
   it("pseudonymizes the patient MRN (keeping the assigning root) and redacts an SSN-rooted id", () => {
     const { document, manifest } = deid("ccd");
     const ids = document.getPatient()?.identifiers ?? [];
@@ -161,13 +161,13 @@ describe("deidentifyCcda — structured per-category behavior", () => {
   it("generalizes header participation + encounter dates to their year", () => {
     const { manifest } = deid("ccd");
     const dateLoci = manifest.filter((m) => m.category === C.DATES);
-    // document effectiveTime, author time, encounter low/high, patient birthTime — all generalized.
+    // document effectiveTime, author time, encounter low/high, patient birthTime: all generalized.
     expect(dateLoci.length).toBeGreaterThanOrEqual(4);
     expect(dateLoci.every((m) => m.transform === "generalize")).toBe(true);
   });
 });
 
-describe("deidentifyCcda — fail closed on narrative and unknown structure", () => {
+describe("deidentifyCcda, fail closed on narrative and unknown structure", () => {
   it("blocks section narrative <text> by default (no naive scrub)", () => {
     const { manifest } = deid("ccd");
     const narrative = manifest.filter((m) => m.code === D.DEID_FREETEXT_BLOCKED);
@@ -185,7 +185,7 @@ describe("deidentifyCcda — fail closed on narrative and unknown structure", ()
       redactor,
     });
     const wire = document.toString();
-    // Redacted narrative is written back in place — the redactor's prose is in the output document…
+    // Redacted narrative is written back in place: the redactor's prose is in the output document…
     expect(wire).toContain("[REDACTED]");
     // …and the manifest records it as consumer-asserted, not blocked, and matches the document.
     const redacted = manifest.filter((m) => m.code === D.DEID_FREETEXT_CONSUMER_REDACTED);
@@ -300,7 +300,7 @@ describe("deidentifyCcda — fail closed on narrative and unknown structure", ()
   });
 
   it("does not generalize a dosing-period (PIVL_TS) effectiveTime that sits at a header participation", () => {
-    // Defensive: a PIVL period is a duration, not a calendar date — it must never be treated as a date.
+    // Defensive: a PIVL period is a duration, not a calendar date, it must never be treated as a date.
     const xml = `<?xml version="1.0"?><ClinicalDocument xmlns="urn:hl7-org:v3" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
       <documentationOf><serviceEvent>
         <effectiveTime xsi:type="PIVL_TS"><period value="8" unit="h"/></effectiveTime>
@@ -372,7 +372,7 @@ describe("deidentifyCcda — fail closed on narrative and unknown structure", ()
   });
 });
 
-describe("deidentifyCcda — fatal + policy + immutability", () => {
+describe("deidentifyCcda, fatal + policy + immutability", () => {
   it("throws DEID_NO_KEY when a keyed transform is needed but no context is supplied", () => {
     expect(() => deidentifyCcda(parseCcda(loadFixture("ccd")), {})).toThrowError(
       expect.objectContaining({ code: FATAL_CODES.DEID_NO_KEY }),
@@ -387,7 +387,7 @@ describe("deidentifyCcda — fatal + policy + immutability", () => {
     });
     const birth = document.getPatient()?.birthTime?.raw ?? "";
     expect(birth).not.toBe("19900215"); // actually shifted
-    expect(birth).not.toBe("1990"); // not generalized — a full shifted date
+    expect(birth).not.toBe("1990"); // not generalized: a full shifted date
     expect(birth).toMatch(/^\d{8}/);
     expect(manifest.find((m) => m.locus.endsWith("birthTime"))?.code).toBe(
       D.DEID_CATEGORY_DATE_SHIFTED,
@@ -422,14 +422,14 @@ describe("deidentifyCcda — fatal + policy + immutability", () => {
   });
 });
 
-describe("deidentifyCcda — one manifest row per position (the path index base)", () => {
+describe("deidentifyCcda, one manifest row per position (the path index base)", () => {
   // A manifest is the evidence that a de-identification happened, so it has to say *which* positions
   // were acted on. `ManifestBuilder` aggregates entries agreeing on all five of category, transform,
-  // locus, disposition and code — which two narratives blocked the same way always do — so two
+  // locus, disposition and code, which two narratives blocked the same way always do, so two
   // narrative positions printing the same path became one row with `count: 2` and the artifact
   // stopped naming them. The header sweep and the body narrative descent now compose a segment the
-  // same way: the bounded local name, plus `[n]` — the index among the *document* siblings printing
-  // that same name — whenever more than one sibling prints it, and always when the name was refused.
+  // same way: the bounded local name, plus `[n]`, the index among the *document* siblings printing
+  // that same name, whenever more than one sibling prints it, and always when the name was refused.
   // The index is a document position, not a row number; the gap tests below pin that.
 
   it("gives each section narrative its own row (the shipped two-section fixture)", () => {
@@ -507,7 +507,7 @@ describe("deidentifyCcda — one manifest row per position (the path index base)
   it("aggregates on the whole entry, not on the locus alone", () => {
     // The premise the index rule rests on, pinned in the honest direction: two positions printing one
     // path merge only when they also agree on category, transform, disposition and code. Two
-    // narratives blocked alike always do — which is why the index matters — but a locus is not by
+    // narratives blocked alike always do, which is why the index matters, but a locus is not by
     // itself an aggregation key.
     const xml = `<?xml version="1.0"?><ClinicalDocument xmlns="urn:hl7-org:v3">
       <componentOf><encompassingEncounter><effectiveTime>

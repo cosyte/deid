@@ -3,7 +3,7 @@
 This file logs every `--allow-fixture <path>` bypass invocation of
 `scripts/phi-scan.ts`. The scanner refuses to honor a `--allow-fixture <path>`
 flag UNLESS this file contains a `### <path>` subsection referencing the same
-path. The committed log is intentionally annoying — it discourages bypass and
+path. The committed log is intentionally annoying: it discourages bypass and
 creates an audit trail. Prefer extending `scripts/phi-allow-list.txt` (a
 token-level, reviewed declaration) over a whole-file bypass, which silences
 _every_ check for that file.
@@ -20,7 +20,7 @@ scanner enforces them:
   run, as a `BYPASSED (logged in phi-scan-overrides.md)` line naming the path.
   Read a CI log and you can see what the gate did not read.
 
-> **The scan roots are `src/`, `test/` and `scripts/`** — the whole of `test/`,
+> **The scan roots are `src/`, `test/` and `scripts/`**: the whole of `test/`,
 > not `test/fixtures/`, because this repo keeps its document text inline in `.ts`
 > test modules. `scripts/phi-scan.ts` carries the derivation and what is still
 > outside it. Prefer a token in `scripts/phi-allow-list.txt` over an entry here.
@@ -44,12 +44,12 @@ Each entry is a markdown subsection:
 
 - **Date:** 2026-08-03
 - **Reason:** This is the scanner's own test suite, so its POSITIVE cases are
-  necessarily real-looking violator literals — a dashed SSN, an email at a
+  necessarily real-looking violator literals, a dashed SSN, an email at a
   non-test domain, and a `John`/`Smith` C-CDA header. Every one of them exists to
   prove the detector CATCHES that shape; a suite that could pass its own scan
   would be asserting nothing. This is the one file the widened `test/` root
   cannot sweep, and the cost is stated rather than hidden: real PHI pasted into
-  THIS file is not caught by the gate. Nothing else under `test/` is bypassed —
+  THIS file is not caught by the gate. Nothing else under `test/` is bypassed:
   the other inline literals are declared token-by-token in
   `scripts/phi-allow-list.txt` instead.
 - **Approved by:** Noah Schatz

@@ -1,5 +1,5 @@
 /**
- * X12 adapter tests — the two headline gates (the **leak test** and the **over-scrub test**), the
+ * X12 adapter tests: the two headline gates (the **leak test** and the **over-scrub test**), the
  * per-segment structured behavior (`NM1` entity classification, `REF` qualifier classification, `N3` /
  * `N4` / `DMG` / `PER` / `DTP` / `CLM`), the unknown-segment / unknown-qualifier fail-closed defaults,
  * the keyed-context fatal, the value-free manifest, and immutability.
@@ -39,7 +39,7 @@ function load(name: string): string {
 
 const ctx = createDeidContext({ key: "x12-test-key", patientId: "patient-x12-1" });
 
-/** The synthetic PHI sentinels seeded into `837p.edi` — every one must be GONE after a de-id pass. */
+/** The synthetic PHI sentinels seeded into `837p.edi`: every one must be GONE after a de-id pass. */
 const SENTINELS = [
   "ZZSUBLAST",
   "ZZSUBFIRST",
@@ -60,14 +60,14 @@ const SENTINELS = [
   "ZZUNKNOWNREF",
   "ZZWEIRDPHI",
   "20260601",
-  "ZZLOCID", // N4-06 location identifier — an unmapped geographic element, fails closed
-  "ZZCHAMPUSID", // REF*1H CHAMPUS/TRICARE beneficiary id — reclassified as PHI, pseudonymized away
-  "ZZPOLICY777", // SBR-03 insured group/policy number — pseudonymized (was silently retained)
-  "ZZGROUPNAME", // SBR-04 insured group name — removed (employer/plan name)
-  "ZZNTEPHI", // NTE-02 note free text — blocked (was unhandled)
-  "ZZMSGPHI", // MSG-01 message free text — blocked (was retained wholesale)
-  "ZZIIIPHI", // III-04 free-form message text — blocked (III codes retained)
-  "ZZK3PHI", // K3-01 file information free text — blocked
+  "ZZLOCID", // N4-06 location identifier: an unmapped geographic element, fails closed
+  "ZZCHAMPUSID", // REF*1H CHAMPUS/TRICARE beneficiary id: reclassified as PHI, pseudonymized away
+  "ZZPOLICY777", // SBR-03 insured group/policy number: pseudonymized (was silently retained)
+  "ZZGROUPNAME", // SBR-04 insured group name: removed (employer/plan name)
+  "ZZNTEPHI", // NTE-02 note free text: blocked (was unhandled)
+  "ZZMSGPHI", // MSG-01 message free text: blocked (was retained wholesale)
+  "ZZIIIPHI", // III-04 free-form message text: blocked (III codes retained)
+  "ZZK3PHI", // K3-01 file information free text: blocked
   // Provider address / submitter contact are universally scrubbed (a safe over-reach, never a leak).
   "PROVIDER RD",
   "PROVCITY",
@@ -90,12 +90,12 @@ const SURVIVORS = [
   "2026", // service date generalized to year
   "1985", // DOB generalized to year
   "2021",
-  "COMMERCIALPAYER", // N1*PR payer org name — retained (org identity, not the individual)
-  "PAYERID12345", // N1*PR payer id — retained
+  "COMMERCIALPAYER", // N1*PR payer org name: retained (org identity, not the individual)
+  "PAYERID12345", // N1*PR payer id: retained
 ];
 
-describe("X12 de-identification — leak + over-scrub gates", () => {
-  it("removes every seeded PHI sentinel (the leak test — must be ZERO survivors)", () => {
+describe("X12 de-identification, leak + over-scrub gates", () => {
+  it("removes every seeded PHI sentinel (the leak test, must be ZERO survivors)", () => {
     const { x12 } = deidentifyX12String(load("837p"), { context: ctx });
     const leaked = SENTINELS.filter((s) => x12.includes(s));
     expect(leaked).toEqual([]);
@@ -137,7 +137,7 @@ describe("X12 structured behavior", () => {
     });
     expect(classifyRefQualifier("F8")).toEqual({ kind: "retain" });
     expect(classifyRefQualifier("ZZ")).toEqual({ kind: "block" });
-    // REF*1H (CHAMPUS/TRICARE beneficiary id) is the individual's — PHI, not a retained admin reference
+    // REF*1H (CHAMPUS/TRICARE beneficiary id) is the individual's: PHI, not a retained admin reference
     // (the DEID-5 refuter finding).
     expect(classifyRefQualifier("1H")).toEqual({
       kind: "phi",
@@ -235,7 +235,7 @@ function wrap(body: string): string {
 }
 
 describe("X12 edge cases (branch coverage of the fail-closed frontier)", () => {
-  it("fails closed on an unknown NM1 entity — name AND identifier are blocked (removed)", () => {
+  it("fails closed on an unknown NM1 entity, name AND identifier are blocked (removed)", () => {
     const raw = wrap("NM1*ZQ*1*UNKNOWNPERSON*FIRST****QQ*SECRETID~");
     const { x12, manifest } = deidentifyX12String(raw, { context: ctx });
     expect(x12).not.toContain("UNKNOWNPERSON");
@@ -281,17 +281,17 @@ describe("X12 edge cases (branch coverage of the fail-closed frontier)", () => {
   });
 
   it("entity-classifies N1: recognized org retained, patient-side scrubbed, unknown fails closed", () => {
-    // Recognized payer org — retained wholesale.
+    // Recognized payer org: retained wholesale.
     const org = deidentifyX12String(wrap("N1*PR*ACME PAYER*PI*PID999~"), { context: ctx });
     expect(org.x12).toContain("ACME PAYER");
     expect(org.x12).toContain("PID999");
-    // Unknown entity code — name and id fail closed (blocked).
+    // Unknown entity code: name and id fail closed (blocked).
     const unknown = deidentifyX12String(wrap("N1*ZQ*MYSTERY PARTY*XX*SECRETNPI~"), {
       context: ctx,
     });
     expect(unknown.x12).not.toContain("MYSTERY PARTY");
     expect(unknown.x12).not.toContain("SECRETNPI");
-    // Patient-side party — name removed, id (N1-04) routed by the N1-03 qualifier and pseudonymized.
+    // Patient-side party: name removed, id (N1-04) routed by the N1-03 qualifier and pseudonymized.
     const patient = deidentifyX12String(wrap("N1*IL*PATIENT PARTY*MI*PATMEMBER~"), {
       context: ctx,
     });

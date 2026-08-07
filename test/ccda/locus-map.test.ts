@@ -1,5 +1,5 @@
 /**
- * Unit tests for the cited C-CDA locus map — the element-type rules, the retain (over-scrub) predicate,
+ * Unit tests for the cited C-CDA locus map: the element-type rules, the retain (over-scrub) predicate,
  * the document-envelope set, and the SSN-vs-MRN id-root routing.
  */
 
@@ -27,7 +27,7 @@ describe("CCDA_LOCUS_MAP", () => {
   });
 });
 
-describe("isRetainedCcdaElement — the over-scrub guard", () => {
+describe("isRetainedCcdaElement, the over-scrub guard", () => {
   it("retains coded/administrative elements untouched", () => {
     for (const el of [
       "code",
@@ -65,7 +65,7 @@ describe("CCDA_ENVELOPE_ELEMENTS", () => {
   });
 });
 
-describe("categoryForIdRoot — structural SSN-vs-MRN routing", () => {
+describe("categoryForIdRoot, structural SSN-vs-MRN routing", () => {
   it("routes the SSN assigning-authority OID to the SSN category", () => {
     expect(categoryForIdRoot("2.16.840.1.113883.4.1")).toBe(C.SSN);
   });

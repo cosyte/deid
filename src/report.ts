@@ -1,23 +1,24 @@
 /**
- * The **Expert-Determination support report** — a structured, value-free account of
+ * The **Expert-Determination support report**: a structured, value-free account of
  * *what a de-identification pass did and what it left in place*, built from the value-free
  * {@link DeidManifestEntry} manifest every adapter emits. It exists to **support** a qualified
  * statistician's HIPAA **Expert Determination** (45 CFR §164.514(b)(1)) with the residual-risk-relevant
- * facts they reason about — it does **not**, and **cannot**, render or certify one.
+ * facts they reason about: it does **not**, and **cannot**, render or certify one.
  *
  * **The hard boundary (the whole point of this module).** `@cosyte/deid` makes **no determination**. This
  * report:
  * - **never** asserts the output "is de-identified" or "meets Expert Determination";
- * - **never** computes or fabricates a re-identification **risk score** — it reaches no conclusion;
+ * - **never** computes or fabricates a re-identification **risk score**: it reaches no conclusion;
  * - carries `determination: null` and leads with {@link EXPERT_DETERMINATION_DISCLAIMER}.
  *
  * "The risk is very small" is a contextual judgment about a specific dataset, its recipient, and the
- * other data reasonably available to that recipient — none of which this library sees. Over-claiming here
- * would be a real compliance harm, so the report is deliberately **descriptive, never prescriptive**: it
- * says *"here is what was done and what remains,"* and hands that to the expert.
+ * other data reasonably available to that recipient. This library sees none of those three.
+ * Over-claiming here would be a real compliance harm, so the report is deliberately **descriptive,
+ * never prescriptive**: it says *"here is what was done and what remains,"* and hands that to the
+ * expert.
  *
  * **Value-free, still.** Like the manifest it summarizes, the report carries **loci / categories /
- * dispositions / counts** — **never a PHI value**. The one optional quasi-identifier statistic it can
+ * dispositions / counts**, **never a PHI value**. The one optional quasi-identifier statistic it can
  * surface (a k-anonymity **indicator**) is computed **only** over equivalence-class sizes the *consumer*
  * supplies (they hold the values; the library counts what it is given), and is labelled a descriptive
  * input, never a risk verdict.
@@ -45,18 +46,18 @@ import type { DeidPolicy, TransformName } from "./policy.js";
  */
 export const EXPERT_DETERMINATION_DISCLAIMER =
   "This report describes what a de-identification pass did and what it left in place. It is NOT a " +
-  "determination that the data is de-identified. @cosyte/deid does not — and cannot — render or " +
+  "determination that the data is de-identified. @cosyte/deid does not, and cannot, render or " +
   "certify HIPAA Expert Determination (45 CFR §164.514(b)(1)): that is a qualified statistician's " +
   "contextual judgment about a specific dataset, its anticipated recipient, and the other information " +
-  "reasonably available to that recipient — none of which this library sees. This report emits no " +
+  "reasonably available to that recipient. This library sees none of those three. This report emits no " +
   "re-identification risk score and reaches no conclusion. It is descriptive input a determiner " +
   "consumes and documents, never the determination itself.";
 
-/** A manifest disposition — the three outcomes a locus can have. */
+/** A manifest disposition: the three outcomes a locus can have. */
 export type ReportDisposition = "transformed" | "removed" | "blocked";
 
 /**
- * Per-category coverage — for one of the 18 Safe Harbor categories (45 CFR §164.514(b)(2)(i)(A)–(R)),
+ * Per-category coverage, for one of the 18 Safe Harbor categories (45 CFR §164.514(b)(2)(i)(A)–(R)),
  * whether the pass acted on it and how. Present for **all 18** categories in the report (in regulatory
  * order A→R), so a reader sees the categories **not** acted on as plainly as those that were.
  *
@@ -96,7 +97,7 @@ export interface CategoryCoverage {
 }
 
 /**
- * One entry in the **retained-quasi-identifier residual inventory** — a coarse identifying element the
+ * One entry in the **retained-quasi-identifier residual inventory**: a coarse identifying element the
  * pass **deliberately kept** for analytic utility and **recorded** as `DEID_RESIDUAL_RETAINED`: a
  * year-only date, a retained safe 3-digit ZIP prefix, an exact age ≤ 89. These are exactly the residuals
  * an expert reasons about under the §164.514(b)(2)(ii) actual-knowledge test.
@@ -113,7 +114,7 @@ export interface CategoryCoverage {
  * ```
  */
 export interface RetainedQuasiIdentifier {
-  /** The format-neutral locus (segment/field index · path · tag) — **never** a value. */
+  /** The format-neutral locus (segment/field index · path · tag), **never** a value. */
   readonly locus: string;
   /** The Safe Harbor category of the retained residual. */
   readonly category: SafeHarborCategory;
@@ -122,7 +123,7 @@ export interface RetainedQuasiIdentifier {
 }
 
 /**
- * A roll-up of how many values landed in each disposition across the whole report — the one-glance
+ * A roll-up of how many values landed in each disposition across the whole report: the one-glance
  * posture of the pass. Every field is a count; none is a value.
  *
  * @example
@@ -152,7 +153,7 @@ export interface DispositionSummary {
 }
 
 /**
- * **Consumer-supplied** quasi-identifier equivalence-class data. The library never derives this — it has
+ * **Consumer-supplied** quasi-identifier equivalence-class data. The library never derives this: it has
  * no view of the quasi-identifier **values**. The consumer, who holds the values, groups their records by
  * the chosen quasi-identifier set (e.g. 3-digit ZIP × birth year × sex) and supplies the size of each
  * distinct group; the report echoes descriptive counts over those sizes (see {@link QuasiIdentifierStatistics}).
@@ -171,18 +172,18 @@ export interface DispositionSummary {
 export interface QuasiIdentifierClassInput {
   /** A human label for the quasi-identifier set the sizes were computed over. No PHI. */
   readonly quasiIdentifierSet?: string;
-  /** One size per distinct quasi-identifier combination — the record count in that equivalence class. */
+  /** One size per distinct quasi-identifier combination: the record count in that equivalence class. */
   readonly equivalenceClassSizes: readonly number[];
 }
 
 /**
- * Descriptive statistics over **consumer-supplied** equivalence-class sizes — including the smallest
+ * Descriptive statistics over **consumer-supplied** equivalence-class sizes, including the smallest
  * class size, the widely-used **k-anonymity indicator**.
  *
  * **This is not a risk score and not a determination.** It is arithmetic over sizes the consumer
  * supplied: the library counts what it is given, applies no threshold, draws no `k ≥ n ⇒ safe`
  * conclusion, and emits no verdict. A statistician documents an indicator like this *as one input* to a
- * §164.514(b)(1) determination — the determination remains theirs. See {@link note}.
+ * §164.514(b)(1) determination: the determination remains theirs. See {@link note}.
  *
  * @example
  * ```ts
@@ -202,7 +203,7 @@ export interface QuasiIdentifierStatistics {
   readonly distinctCombinations: number;
   /** Total records across all classes = the sum of the supplied sizes. */
   readonly totalRecords: number;
-  /** The smallest equivalence-class size — the **k-anonymity indicator**. Descriptive only. */
+  /** The smallest equivalence-class size: the **k-anonymity indicator**. Descriptive only. */
   readonly minimumEquivalenceClassSize: number;
   /** How many records fall in a class of size 1 (sample-uniques on the chosen set). Descriptive only. */
   readonly uniqueRecords: number;
@@ -212,7 +213,7 @@ export interface QuasiIdentifierStatistics {
 
 /** Options for {@link buildExpertDeterminationSupportReport}. */
 export interface ExpertDeterminationReportOptions {
-  /** The policy applied (or its name) — surfaced as the report's policy label. */
+  /** The policy applied (or its name): surfaced as the report's policy label. */
   readonly policy?: DeidPolicy | string;
   /** Consumer-supplied quasi-identifier equivalence-class sizes for the descriptive k-indicator. */
   readonly quasiIdentifiers?: QuasiIdentifierClassInput;
@@ -242,7 +243,7 @@ export interface ExpertDeterminationSupportReport {
   readonly determination: null;
   /** The prominent non-certification statement ({@link EXPERT_DETERMINATION_DISCLAIMER}). */
   readonly disclaimer: string;
-  /** The output label the pass applied — "Safe-Harbor-transformed per the configured policy". */
+  /** The output label the pass applied: "Safe-Harbor-transformed per the configured policy". */
   readonly outputLabel: string;
   /** The policy name applied, or `null` if not supplied. */
   readonly policy: string | null;
@@ -259,7 +260,7 @@ export interface ExpertDeterminationSupportReport {
   };
   /** The disposition roll-up. */
   readonly dispositionSummary: DispositionSummary;
-  /** Every acted-on locus, aggregated and in a deterministic order — the value-free manifest, structured. */
+  /** Every acted-on locus, aggregated and in a deterministic order: the value-free manifest, structured. */
   readonly perLocus: readonly DeidManifestEntry[];
   /** Coverage for all 18 Safe Harbor categories, in regulatory order (A→R). */
   readonly categoryCoverage: readonly CategoryCoverage[];
@@ -413,8 +414,8 @@ function quasiIdentifierStats(
  * de-identification passes. Deterministic; the input is never mutated; the result is deeply frozen.
  *
  * Accepts either a **single** manifest (`readonly DeidManifestEntry[]`) or a **corpus** (an array of
- * manifests). Counts for identical loci are summed across the corpus. The report is **value-free** — it
- * carries categories, dispositions, loci, and counts, **never a PHI value** — and it renders **no
+ * manifests). Counts for identical loci are summed across the corpus. The report is **value-free**: it
+ * carries categories, dispositions, loci, and counts, **never a PHI value**, and it renders **no
  * determination**: `determination` is `null` and the disclaimer leads.
  *
  * @param manifests - A single manifest, or an array of manifests (a corpus).
@@ -483,12 +484,12 @@ export function buildExpertDeterminationSupportReport(
 }
 
 /**
- * Render an {@link ExpertDeterminationSupportReport} as a human-readable Markdown document — the same
+ * Render an {@link ExpertDeterminationSupportReport} as a human-readable Markdown document: the same
  * value-free facts as the structured object, led by the non-certification disclaimer. Suitable to hand
  * to a statistician alongside the machine-readable report.
  *
  * @param report - A report from {@link buildExpertDeterminationSupportReport}.
- * @returns A Markdown string (value-free: categories, dispositions, loci, counts — never a value).
+ * @returns A Markdown string (value-free: categories, dispositions, loci, counts, never a value).
  * @example
  * ```ts
  * import { buildExpertDeterminationSupportReport, formatExpertDeterminationSupportReport } from "@cosyte/deid";
@@ -513,7 +514,7 @@ export function formatExpertDeterminationSupportReport(
   );
   const d = report.dispositionSummary;
   lines.push(
-    `- Dispositions — transformed: ${String(d.transformed)}, removed: ${String(d.removed)}, blocked: ${String(d.blocked)}` +
+    `- Dispositions: transformed: ${String(d.transformed)}, removed: ${String(d.removed)}, blocked: ${String(d.blocked)}` +
       ` (free-text blocked: ${String(d.freeTextBlocked)}, consumer-redacted: ${String(d.freeTextConsumerRedacted)})`,
   );
   lines.push("");
@@ -524,7 +525,7 @@ export function formatExpertDeterminationSupportReport(
   for (const c of report.categoryCoverage) {
     lines.push(
       `| ${c.letter} | ${c.title} | ${c.actedOn ? "yes" : "no"} | ${String(c.totalCount)} | ${
-        c.transforms.length > 0 ? c.transforms.join(", ") : "—"
+        c.transforms.length > 0 ? c.transforms.join(", ") : "none"
       } |`,
     );
   }
@@ -546,18 +547,18 @@ export function formatExpertDeterminationSupportReport(
     );
   } else {
     lines.push(
-      "These are residual identifying elements the pass kept for utility — an actual-knowledge",
+      "These are residual identifying elements the pass kept for utility. They are an actual-knowledge",
     );
     lines.push("(§164.514(b)(2)(ii)) consideration for the determiner:");
     lines.push("");
     for (const r of report.retainedQuasiIdentifiers) {
-      lines.push(`- ${r.locus} — ${r.category} (×${String(r.count)})`);
+      lines.push(`- ${r.locus}: ${r.category} (×${String(r.count)})`);
     }
   }
   const qi = report.quasiIdentifierStatistics;
   if (qi !== null) {
     lines.push("");
-    lines.push("## Quasi-identifier statistics (caller-supplied — descriptive, not a verdict)");
+    lines.push("## Quasi-identifier statistics (caller-supplied, descriptive, not a verdict)");
     lines.push("");
     lines.push(`- Quasi-identifier set: ${qi.quasiIdentifierSet ?? "(unlabelled)"}`);
     lines.push(

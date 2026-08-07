@@ -1,20 +1,20 @@
 /**
- * Public entry point for `@cosyte/deid` — a healthcare **de-identification** engine.
+ * Public entry point for `@cosyte/deid`: a healthcare **de-identification** engine.
  *
  * `@cosyte/deid` is **not** a parser. It is a consumer-tier library: it applies a HIPAA-grounded
  * de-identification **policy** (Safe Harbor by default) to a structurally-located model of a healthcare
  * document and returns a transformed model plus a **value-free manifest** of what it acted on. It
  * borrows the parser archetype's disciplines (typed diagnostics, immutable output, a policy/profile
- * system) but **inverts the parser's reflex**: it **fails closed** — an unrecognized structure or an
+ * system) but **inverts the parser's reflex**: it **fails closed**, an unrecognized structure or an
  * un-locatable identifier is blocked, never passed through as safe.
  *
  * **Honesty line (governs the whole library).** Results are **"Safe-Harbor-transformed per the
- * configured policy"** — never "de-identified" and never "HIPAA-compliant". Safe Harbor is implemented
+ * configured policy"**, never "de-identified" and never "HIPAA-compliant". Safe Harbor is implemented
  * mechanically; the §164.514(b)(2)(ii) actual-knowledge condition is the consumer's; Expert
  * Determination (§164.514(b)(1)) is *supported*, never *rendered* or certified here.
  *
  * The root entry ships the **format-agnostic core**: the policy engine, the five transforms, the
- * 18-category Safe Harbor model, the fail-closed rule, and the value-free manifest — tested against a
+ * 18-category Safe Harbor model, the fail-closed rule, and the value-free manifest: tested against a
  * generic locus model. The per-format locus maps (HL7 v2, C-CDA, FHIR, X12, NCPDP, DICOM) live behind
  * the matching subpath exports.
  *
@@ -102,14 +102,14 @@ export { type DeidManifestEntry, type DeidResult } from "./manifest.js";
 // ── The engine.
 export { deidentify, type DeidOptions } from "./deidentify.js";
 
-// ── The BYO free-text redaction interface (DEID-8) — the library ships the interface, never a detector.
+// ── The BYO free-text redaction interface (DEID-8): the library ships the interface, never a detector.
 export {
   type FreeTextRedactor,
   type FreeTextRedactionRequest,
   type FreeTextRedactionResult,
 } from "./redactor.js";
 
-// ── The Expert-Determination *support* report (DEID-9) — supports a determination, never renders one.
+// ── The Expert-Determination *support* report (DEID-9): supports a determination, never renders one.
 export {
   EXPERT_DETERMINATION_DISCLAIMER,
   buildExpertDeterminationSupportReport,

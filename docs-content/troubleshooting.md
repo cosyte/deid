@@ -17,7 +17,7 @@ transform it cannot apply to that locus. The block is recorded in the manifest w
 ## A keyed transform threw `DEID_NO_KEY`
 
 Pseudonymize, keyed-hash, and date-shift are **keyed**. Supply a `context`
-(`createDeidContext({ key })`) — the engine **never** falls back to an unkeyed transform, because an
+(`createDeidContext({ key })`): the engine **never** falls back to an unkeyed transform, because an
 unkeyed hash of an identifier is re-identifiable. Date-shift additionally needs a `patientId` scope.
 
 ## `deidentify` threw `EMPTY_INPUT`
@@ -54,7 +54,7 @@ or the raw document; it carries protected health information.
 > unbounded, so a malformed document could put document content into the manifest and into
 > `buildExpertDeterminationSupportReport`'s output. See the changelog entry for the full detail.
 
-## Known Limitations (this release — the format-agnostic core)
+## Known Limitations (this release, the format-agnostic core)
 
 The library's promise is **narrow and honest**. Do **not** over-trust it:
 
@@ -63,21 +63,21 @@ The library's promise is **narrow and honest**. Do **not** over-trust it:
   consumer's; Expert Determination is not rendered.
 - **The root entry is the generic core.** `@cosyte/deid` itself is the transform/policy/manifest core
   over a **generic locus model**, so the caller supplies each locus's `path`, `kind`, and `category`.
-  The per-format locus maps (HL7 v2, C-CDA, FHIR, X12, NCPDP, DICOM) — which is where "the parser knows
-  where the name is" becomes automatic — live behind the matching subpath exports.
+  The per-format locus maps (HL7 v2, C-CDA, FHIR, X12, NCPDP, DICOM), which is where "the parser knows
+  where the name is" becomes automatic, live behind the matching subpath exports.
 - **DOB vs. age is not linked in the core.** Under the default policy a date generalizes to its
   **year**, and a year is retained as a `DEID_RESIDUAL_RETAINED` residual. A birth-date *indicative of
   an age over 89* is **not** aggregated to `90+` by the generic core, because resolving DOB→age needs a
   reference date the core does not have. Surface the residual and apply the age-90 rule at the format
   layer (or via a profile) when a DOB is known to indicate age > 89.
 - **`GEOGRAPHIC` is generalized as a ZIP.** A locus of category `GEOGRAPHIC` is treated as a ZIP code
-  (initial-3-digit or `000`). Street/city/county elements should be **removed** — mark them for
+  (initial-3-digit or `000`). Street/city/county elements should be **removed**: mark them for
   redaction (or a non-ZIP kind) rather than relying on ZIP generalization, which would keep a leading
   digit fragment (recorded as a residual, never silently). The per-format locus maps classify these
   precisely.
-- **Free text is block-only.** A `freetext` locus is blocked by default — no naive regex scrub (a
+- **Free text is block-only.** A `freetext` locus is blocked by default, no naive regex scrub (a
   false-safety hazard). A bring-your-own redaction interface is available via the `redactor` option.
 - **Date-shift is not Safe Harbor.** It is an Expert-Determination-supporting mode; a shifted real date
   is still a date. The `safe-harbor` policy generalizes dates to year instead.
 
-The **API Reference** always reflects exactly what this release ships — treat it as the source of truth.
+The **API Reference** always reflects exactly what this release ships: treat it as the source of truth.

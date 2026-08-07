@@ -3,13 +3,13 @@
  *
  * DICOM is the one format `deid` **delegates rather than reimplements**: `@cosyte/dicom` already ships the
  * PS3.15 **Basic Application Level Confidentiality Profile** and the metadata-affecting Annex E Options.
- * This module resolves the unified {@link DeidOptions} into a `@cosyte/dicom` `DeidentifyOptions` — and it
+ * This module resolves the unified {@link DeidOptions} into a `@cosyte/dicom` `DeidentifyOptions`, and it
  * does so **fail-closed**: the default `safe-harbor` policy always applies the **full Basic Profile with no
  * Retain/Clean deviations** (maximal removal), so every private tag is removed and every UID is consistently
  * remapped. There is no per-category auto-derivation, on purpose: the Annex E option model is coarser than
  * the 18-category Safe Harbor model, so auto-relaxing it from a policy would risk *under*-removal. A
  * deviation that retains identifying metadata is an Expert-Determination choice this adapter does not
- * offer — it cannot be talked into keeping PHI.
+ * offer: it cannot be talked into keeping PHI.
  *
  * @packageDocumentation
  */
@@ -39,7 +39,7 @@ export interface ResolvedDicomOptions {
 /**
  * Resolve the unified de-id options into the concrete `@cosyte/dicom` de-identification options: the
  * full Basic Profile (no Retain/Clean options), consistent UID remapping, and a policy-named
- * De-identification Method string. The `context` (HMAC key) is intentionally unused — Annex E dummying and
+ * De-identification Method string. The `context` (HMAC key) is intentionally unused: Annex E dummying and
  * content-derived UID remapping do not consume the keyed-transform key; it is accepted only for API
  * uniformity with the other adapters.
  *
@@ -51,7 +51,7 @@ export function resolveDicomOptions(options: DicomDeidOptions): ResolvedDicomOpt
   const policy = resolvePolicy(options.policy);
   const base: ResolvedDicomOptions = {
     retain: [],
-    deidentificationMethod: `Cosyte @cosyte/deid — PS3.15 Basic Application Level Confidentiality Profile (metadata only); policy "${policy.name}"`,
+    deidentificationMethod: `Cosyte @cosyte/deid, PS3.15 Basic Application Level Confidentiality Profile (metadata only); policy "${policy.name}"`,
   };
   return {
     ...base,

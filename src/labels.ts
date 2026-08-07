@@ -1,5 +1,5 @@
 /**
- * The library's output **labels** and version — factored into their own module so any internal module
+ * The library's output **labels** and version: factored into their own module so any internal module
  * (the report builder, the format adapters) can read them without importing the public barrel
  * (`index.ts`) and creating an import cycle.
  *
@@ -7,8 +7,8 @@
  */
 
 /**
- * The label the library applies to its output. Deliberately **not** "de-identified" / "HIPAA-compliant"
- * — the certification is always the consumer's.
+ * The label the library applies to its output. Deliberately **not** "de-identified" /
+ * "HIPAA-compliant": the certification is always the consumer's.
  *
  * @example
  * ```ts

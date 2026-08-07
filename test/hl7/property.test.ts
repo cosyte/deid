@@ -50,7 +50,7 @@ function messageArb(): fc.Arbitrary<string> {
     });
 }
 
-describe("deidentifyHl7 — fail-safe invariants", () => {
+describe("deidentifyHl7, fail-safe invariants", () => {
   it("never throws a non-fatal, never leaks the sentinel except in a retained clinical value, manifest is value-free", () => {
     fc.assert(
       fc.property(messageArb(), (raw) => {
@@ -63,7 +63,7 @@ describe("deidentifyHl7 — fail-safe invariants", () => {
         }
         const wire = result.document.toString();
         // The ONLY place the sentinel may survive is a clinical OBX-5 whose OBX-2 typed it non-narrative
-        // (NM/ST) — a retained clinical value, never a name/id/date/address/free-text locus.
+        // (NM/ST): a retained clinical value, never a name/id/date/address/free-text locus.
         if (wire.includes(SENTINEL)) {
           const obx5 = result.document.get("OBX[0].5") ?? "";
           expect(obx5.includes(SENTINEL)).toBe(true);

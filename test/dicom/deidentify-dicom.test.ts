@@ -1,7 +1,7 @@
 /**
  * DICOM de-identification adapter tests (`@cosyte/deid/dicom`, roadmap §Phase 6).
  *
- * The two headline gates: the **leak test** (every seeded sentinel is gone from the serialized output —
+ * The two headline gates: the **leak test** (every seeded sentinel is gone from the serialized output,
  * zero survivors) and the **over-scrub test** (clinical/technical values survive byte-identical). Plus:
  * consistent UID remapping, private-tag removal, the burned-in-pixel hazard, the value-free manifest, and
  * immutability. Everything is synthetic and built in memory (see `helpers/fixtures`).
@@ -38,7 +38,7 @@ function deidToText(ds: ReturnType<typeof buildPhiDataset>): string {
   return serializeDicom(dataset).toString("latin1");
 }
 
-describe("the leak test — every sentinel is gone (zero survivors)", () => {
+describe("the leak test, every sentinel is gone (zero survivors)", () => {
   it("removes every seeded PHI sentinel from the serialized metadata", () => {
     const out = deidToText(buildPhiDataset());
     for (const sentinel of ALL_SENTINELS) {
@@ -68,7 +68,7 @@ describe("the leak test — every sentinel is gone (zero survivors)", () => {
   });
 });
 
-describe("the over-scrub test — clinical/technical values survive byte-identical", () => {
+describe("the over-scrub test, clinical/technical values survive byte-identical", () => {
   it("retains modality, photometric interpretation, and the SOP Class UID byte-identical", () => {
     const { dataset } = deidentifyDicom(buildPhiDataset());
     // Assert on the actual element values (not a whole-stream substring), so a short value like
@@ -91,7 +91,7 @@ describe("the over-scrub test — clinical/technical values survive byte-identic
   });
 });
 
-describe("consistent UID remapping — relationships survive", () => {
+describe("consistent UID remapping, relationships survive", () => {
   it("maps the same source UID to the same replacement across two files (shared cache)", () => {
     const uidMap = new Map<string, string>();
     const a = deidentifyDicom(buildPhiDataset(), { uidMap });
@@ -135,7 +135,7 @@ describe("consistent UID remapping — relationships survive", () => {
   });
 });
 
-describe("the burned-in-annotation pixel hazard — flagged, never cleaned", () => {
+describe("the burned-in-annotation pixel hazard, flagged, never cleaned", () => {
   it("flags the hazard when Pixel Data is present and not marked annotation-free", () => {
     const result = deidentifyDicom(buildPhiDataset({ pixelData: true }));
     expect(result.metadataOnly).toBe(true);

@@ -6,7 +6,7 @@ sidebar_position: 10
 
 # De-identifying DICOM
 
-The `@cosyte/deid/dicom` adapter is the DICOM binding of the de-identification core — and the one adapter
+The `@cosyte/deid/dicom` adapter is the DICOM binding of the de-identification core, and the one adapter
 that **delegates rather than reimplements**. `@cosyte/dicom` already ships the **PS3.15 Annex E**
 de-identification (the Basic Application Level Confidentiality Profile), so this adapter **orchestrates**
 that pass under the unified policy and **folds its value-free report into the unified manifest**. It never
@@ -34,7 +34,7 @@ const { dataset, manifest, burnedInAnnotationHazard, metadataOnly } = deidentify
 const { bytes } = deidentifyDicomBuffer(part10Bytes);
 
 manifest; // value-free audit: category + "(gggg,eeee) Keyword" + disposition, never a value
-metadataOnly; // => true — always (see the pixel hazard below)
+metadataOnly; // => true: always (see the pixel hazard below)
 ```
 
 No key context is required: Annex E dummying and content-derived UID remapping do not use the
@@ -52,13 +52,13 @@ default `safe-harbor` policy applies it in full, with no Retain/Clean deviations
 | Dates and times directly related to the individual           | removed / dummied per Annex E                                                                    |
 | Accession, device serial, and other identifiers              | removed                                                                                          |
 | **Study / Series / SOP Instance UIDs**                       | **consistently remapped** (`U`) so the study/series/image relationships survive                 |
-| **Private tags**                                             | **removed** (fail-closed — kept only when a known-safe retain list names them; empty by default) |
-| Modality, image geometry, coded technique, pixel bytes       | **retained untouched** — the clinical/technical payload survives                                |
+| **Private tags**                                             | **removed** (fail-closed, kept only when a known-safe retain list names them; empty by default) |
+| Modality, image geometry, coded technique, pixel bytes       | **retained untouched**: the clinical/technical payload survives                                |
 
 The output carries the mandated `Patient Identity Removed = YES` marker and a De-identification Method
 naming the profile and the policy.
 
-## UID remapping — keeping relationships
+## UID remapping: keeping relationships
 
 Study/Series/SOP Instance UIDs are replaced with internally-consistent surrogates: the **same** source UID
 always maps to the **same** replacement, so images still group into series and series into studies. The
@@ -79,10 +79,10 @@ for (const file of studyFiles) {
 The source→replacement map is **never** surfaced in the value-free result (a source UID is a re-linking
 vector). If you need it for your own re-identification key store, you own the `uidMap` you pass in.
 
-## The burned-in-pixel hazard — flagged, never cleaned
+## The burned-in-pixel hazard: flagged, never cleaned
 
 This is a **metadata-only** de-identifier: `metadataOnly` is always `true`. It cannot inspect or clean
-pixels, so recognizable text **burned into the image** (Safe Harbor category Q — full-face photographs and
+pixels, so recognizable text **burned into the image** (Safe Harbor category Q, full-face photographs and
 comparable images) is **not** removed. When Pixel Data is present and not affirmatively marked free of
 burned-in annotation, the result flags it:
 
@@ -91,7 +91,7 @@ import { deidentifyDicom, BURNED_IN_ANNOTATION_CODE } from "@cosyte/deid/dicom";
 
 const { burnedInAnnotationHazard, warnings } = deidentifyDicom(dataset);
 if (burnedInAnnotationHazard) {
-  // do NOT release the image on metadata alone — pixels may carry burned-in PHI.
+  // do NOT release the image on metadata alone: pixels may carry burned-in PHI.
   warnings.some((w) => w.code === BURNED_IN_ANNOTATION_CODE); // true
 }
 ```
@@ -101,7 +101,7 @@ warns rather than giving a false sense of safety.
 
 ## Known limitations
 
-- **Metadata only** — pixels are never inspected; a burned-in-annotation hazard is *flagged*, never
+- **Metadata only**: pixels are never inspected; a burned-in-annotation hazard is *flagged*, never
   cleaned.
-- **No Retain/Clean deviations** — the full Basic Profile always applies (maximal removal).
+- **No Retain/Clean deviations**: the full Basic Profile always applies (maximal removal).
   Expert-Determination retain options are **not** offered.

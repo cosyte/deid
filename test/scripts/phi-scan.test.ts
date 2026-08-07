@@ -1,9 +1,9 @@
 /**
- * Unit tests for scripts/phi-scan.ts — the STARTER PHI commit-gate.
+ * Unit tests for scripts/phi-scan.ts: the STARTER PHI commit-gate.
  *
  * These exercise the SHARED MACHINERY, the cross-cutting SSN/email FLOOR, and the
  * four structured detectors this repo added on top of it (HL7 v2, C-CDA, X12,
- * NCPDP Telecom) — each with a positive case proving it CATCHES a real-looking
+ * NCPDP Telecom), each with a positive case proving it CATCHES a real-looking
  * name / DOB / id, and a negative one proving it does not scrub legitimate
  * clinical content. A weak scanner is worse than none, so a new detector without
  * a positive case here is not finished. (This header used to say the opposite,
@@ -60,7 +60,7 @@ function runScanner(args: string[]): RunResult {
   return { code: r.status ?? -1, stdout: r.stdout ?? "", stderr: r.stderr ?? "" };
 }
 
-/** Write a file to the temp dir and scan it by path (paths mode — no git needed). */
+/** Write a file to the temp dir and scan it by path (paths mode, no git needed). */
 function scan(name: string, content: string): RunResult {
   const path = join(dir, name);
   writeFileSync(path, content);
@@ -95,7 +95,7 @@ describe("phi-scan starter: clean + allow-listed content passes", () => {
   it("a clean file with no PHI shapes exits 0", () => {
     const r = scan("clean.txt", "just some ordinary text, no identifiers here\n");
     expect(r.code, `stderr: ${r.stderr}`).toBe(0);
-    expect(r.stdout).toMatch(/OK — no hits/);
+    expect(r.stdout).toMatch(/OK, no hits/);
   });
 
   it("honors the allow-list: an email at a reserved test domain passes (exit 0)", () => {
@@ -245,7 +245,7 @@ describe("phi-scan starter: the override-log gate", () => {
 // neither a file nor a directory; `--staged` reads content with
 // `git show :<path>`, and git stores a link as its TARGET PATH under mode
 // 120000. A link under a scan root pointing at a PHI-bearing file therefore used
-// to scan CLEAN on both — in the package whose whole job is removing PHI. These
+// to scan CLEAN on both: in the package whose whole job is removing PHI. These
 // cases pin the refusal on each route, the negative controls that keep ordinary
 // files scanned on each route, and the rule that a refusal never echoes what is
 // on the other side of the link.
@@ -328,7 +328,7 @@ afterAll(() => {
 });
 
 describe("phi-scan: the scanner under test, and the payload, are what this file claims", () => {
-  it("is THIS package's scanner — not a sibling's", () => {
+  it("is THIS package's scanner, not a sibling's", () => {
     // A negative control on the fixture wiring itself: every case below asserts
     // behaviour of `scripts/phi-scan.ts` as resolved from `process.cwd()`, so if
     // the suite were ever pointed at another repo's tree the assertions would
@@ -360,7 +360,7 @@ describe("phi-scan: the scanner under test, and the payload, are what this file 
     const root = makeRepo();
     const r = runIn(root, []);
     expect(r.code, `stderr: ${r.stderr}`).toBe(0);
-    expect(r.stdout).toMatch(/OK — no hits/);
+    expect(r.stdout).toMatch(/OK, no hits/);
   });
 });
 
@@ -466,7 +466,7 @@ describe("phi-scan: the --staged route refuses a staged non-regular entry", () =
     expectNoPhi(r.stderr);
   });
 
-  it("refuses a TYPECHANGE — a tracked regular file replaced by a link (exit 2)", () => {
+  it("refuses a TYPECHANGE, a tracked regular file replaced by a link (exit 2)", () => {
     // The shape `--diff-filter=AM` used to delete before any mode could be read.
     // Replacing a TRACKED file with a link is neither an add nor a modify: git
     // raises `:100644 120000 <sha> <sha> T`, and without `T` in the filter the
@@ -491,7 +491,7 @@ describe("phi-scan: the --staged route refuses a staged non-regular entry", () =
     expectNoPhi(r.stderr);
   });
 
-  it("scans the other direction of a typechange — a link replaced by a real file (exit 1)", () => {
+  it("scans the other direction of a typechange, a link replaced by a real file (exit 1)", () => {
     const root = makeRepo();
     symlinkSync("ordinary.ts", join(root, "src", "link.ts"));
     git(root, ["add", "src/link.ts"]);
@@ -541,7 +541,7 @@ describe("phi-scan: the --staged route refuses a staged non-regular entry", () =
     git(root, ["add", "src/ordinary.ts"]);
     const r = runIn(root, ["--staged"]);
     expect(r.code, `stderr: ${r.stderr}`).toBe(0);
-    expect(r.stdout).toMatch(/OK — no hits/);
+    expect(r.stdout).toMatch(/OK, no hits/);
   });
 
   it("a staged link OUTSIDE the route's scope is left alone (the scope is unchanged)", () => {
@@ -608,7 +608,7 @@ describe("phi-scan: the all-mode walk covers src/, test/ and scripts/", () => {
     }
   });
 
-  it("does NOT reach outside those roots — the residual, pinned rather than implied", () => {
+  it("does NOT reach outside those roots, the residual, pinned rather than implied", () => {
     // `.github/`, `docs-content/`, `vendor/` and the root-level manifests are not
     // claimed covered. If a later change widens to the repo root, this is the
     // case that should be REWRITTEN, not deleted quietly.
@@ -620,7 +620,7 @@ describe("phi-scan: the all-mode walk covers src/, test/ and scripts/", () => {
     expect(r.code, `stderr: ${r.stderr}`).toBe(0);
   });
 
-  it("skips .md under a root — documentation may describe violator values", () => {
+  it("skips .md under a root, documentation may describe violator values", () => {
     const root = makeRepo();
     writeFileSync(join(root, "test", "NOTES.md"), SYNTHETIC_PHI);
 
@@ -694,7 +694,7 @@ describe("phi-scan: a scan ROOT that is not a directory refuses the sweep", () =
     expect(r.stderr).toMatch(/- src \(a regular file where a scan root is expected\)/);
   });
 
-  it("a root that is absent is not an error — the scanner is shared across repos", () => {
+  it("a root that is absent is not an error, the scanner is shared across repos", () => {
     const root = makeRepo();
     rmSync(join(root, "test"), { recursive: true });
 
@@ -704,7 +704,7 @@ describe("phi-scan: a scan ROOT that is not a directory refuses the sweep", () =
 });
 
 describe("phi-scan: the source-literal view reaches the inline wire text", () => {
-  it("the premise — the bytes on disk carry a backslash, not a carriage return", () => {
+  it("the premise, the bytes on disk carry a backslash, not a carriage return", () => {
     // If this stopped holding, the decode below would be solving a problem that
     // no longer exists, and the structured detectors would need no second view.
     expect(INLINE_HL7).not.toContain("\r");
@@ -754,7 +754,7 @@ describe("phi-scan: a ${…} substitution site is a hole, not a value", () => {
     `<name><given>${given}</given></name>` +
     "</patient></patientRole></recordTarget></ClinicalDocument>\n";
 
-  it("does not flag a bare identifier chain — the value is not in the file", () => {
+  it("does not flag a bare identifier chain, the value is not in the file", () => {
     const r = scan("tpl.xml", ccda("${t.given}"));
     expect(r.code, `stderr: ${r.stderr}`).toBe(0);
   });
@@ -775,7 +775,7 @@ describe("phi-scan: a ${…} substitution site is a hole, not a value", () => {
   });
 });
 
-describe("phi-scan: the exit-code contract — 1 means HITS, and nothing else may spend it", () => {
+describe("phi-scan: the exit-code contract, 1 means HITS, and nothing else may spend it", () => {
   it("a missing allow-list exits 2, not the 1 that means 'hits found'", () => {
     const root = makeRepo();
     rmSync(join(root, "scripts", "phi-allow-list.txt"));
@@ -1005,7 +1005,7 @@ describe("phi-scan: the whole-file bypass, in the modes that actually run", () =
     expect(r.stderr).toContain("test/violator.test.ts");
   });
 
-  it("subtracts it from --staged too — the route the pre-commit hook runs", () => {
+  it("subtracts it from --staged too, the route the pre-commit hook runs", () => {
     const root = makeRepo();
     writeFileSync(join(root, "test", "violator.test.ts"), SYNTHETIC_PHI);
     writeFileSync(join(root, "phi-scan-overrides.md"), LOG("test/violator.test.ts"));
@@ -1015,7 +1015,7 @@ describe("phi-scan: the whole-file bypass, in the modes that actually run", () =
     expect(runIn(root, ["--staged", "--allow-fixture", "test/violator.test.ts"]).code).toBe(0);
   });
 
-  it("refuses a logged path that no longer exists — a bypass may not rot silently", () => {
+  it("refuses a logged path that no longer exists, a bypass may not rot silently", () => {
     const root = makeRepo();
     writeFileSync(join(root, "phi-scan-overrides.md"), LOG("test/renamed-away.test.ts"));
 
@@ -1106,7 +1106,7 @@ describe("phi-scan: the X12 recogniser finds an ISA header that is not at offset
     expect(r.stderr).toMatch(/DMG-02 value="19780314"/);
   });
 
-  it("the same WIRE as a fixture was always caught — so this was the container, not the format", () => {
+  it("the same WIRE as a fixture was always caught, so this was the container, not the format", () => {
     const root = makeRepo();
     writeFileSync(
       join(root, "test", "fixtures", "inline.edi"),
@@ -1135,7 +1135,7 @@ describe("phi-scan: the X12 recogniser finds an ISA header that is not at offset
 });
 
 describe("phi-scan: the HL7 recogniser reads a segment without a usable MSH above it", () => {
-  it("catches a BARE PID line with no MSH at all — the shape pasted out of a ticket", () => {
+  it("catches a BARE PID line with no MSH at all, the shape pasted out of a ticket", () => {
     const root = makeRepo();
     writeFileSync(
       join(root, "test", "bare.test.ts"),
@@ -1163,7 +1163,7 @@ describe("phi-scan: the HL7 recogniser reads a segment without a usable MSH abov
   });
 
   it("reads a header whose MSH-2 is too short for the strict anchor (a detection REGRESSION guard)", () => {
-    // `MSH|^|…` — one encoding character. The strict anchor that derives
+    // `MSH|^|…`: one encoding character. The strict anchor that derives
     // non-default delimiters rejects it; falling back to the HL7 defaults is
     // what keeps it scanned, and an earlier draft of this slice lost it.
     const root = makeRepo();
@@ -1233,7 +1233,7 @@ describe("phi-scan: a bypass that would subtract nothing is refused, not accepte
 });
 
 // ---------------------------------------------------------------------------
-// The remedy for the recogniser widening — each case a REGRESSION guard
+// The remedy for the recogniser widening, each case a REGRESSION guard
 // ---------------------------------------------------------------------------
 //
 // Widening a recogniser is a two-sided risk, and a conformance gate found the
@@ -1296,7 +1296,7 @@ describe("phi-scan: an X12 segment broken across lines is read BOTH ways", () =>
     // Built to be exactly the shape that slips past a boundary-plus-terminator
     // test: `ISA-` at a non-alphanumeric boundary and a non-alphanumeric at the
     // fixed 105th byte. ISA01's fixed two-character width is the only thing that
-    // rejects it — drop that check and the real interchange below reads clean.
+    // rejects it: drop that check and the real interchange below reads clean.
     const proseIsa = `${"ISA-IEA envelope".padEnd(105, ".")}:`;
     expect(proseIsa).toHaveLength(106);
 

@@ -8,7 +8,7 @@ sidebar_position: 8
 
 Research and analytics need a de-identified record that stays **linkable**: the same patient across a
 whole corpus of documents must map to the same pseudonyms and the same shifted dates, so a longitudinal
-history holds together — while absolute calendar positions and real identifiers are gone. This is the
+history holds together, while absolute calendar positions and real identifiers are gone. This is the
 job of the **registry** (`createDeidRegistry`).
 
 > **Honesty note.** Date-shifting **retains dates in shifted form**, so a shifted-but-real date is still
@@ -21,7 +21,7 @@ job of the **registry** (`createDeidRegistry`).
 
 A `DeidRegistry` holds the consumer's key and mints a per-patient context on demand. The same patient
 key always yields the same deterministic date-shift offset, so a patient's dates shift identically
-across every document — intervals (`3 days later` stays 3 days later) are preserved exactly. The same
+across every document: intervals (`3 days later` stays 3 days later) are preserved exactly. The same
 identifier maps to the same pseudonym corpus-wide.
 
 ```ts runnable
@@ -57,13 +57,13 @@ identifiers (study/series/instance UIDs, GUIDs) you thread across files.
 
 - **You supply the key.** The HMAC key (and an optional distinct date-shift seed) is the consumer's. It
   is held only inside the library and **never** appears in an output document, a manifest, or a thrown
-  error — the registry redacts itself through every stringify channel.
-- **Fail closed — no weak default.** There is no built-in or default key. An absent or empty key is a
+  error: the registry redacts itself through every stringify channel.
+- **Fail closed, no weak default.** There is no built-in or default key. An absent or empty key is a
   fatal `DEID_NO_KEY`, never a silent fallback that would produce a re-identifiable surrogate.
 - **Rotation is intentional linkage breakage.** A new key deterministically produces *different*
   offsets and *different* pseudonyms, so a corpus de-identified under a rotated key **no longer links**
   to records made under the old key. Rotate to sever linkage; keep the key to preserve it. The library
-  holds **no persistent key store** — key custody and lifetime are yours.
+  holds **no persistent key store**: key custody and lifetime are yours.
 
 ```ts runnable throws
 import { createDeidRegistry } from "@cosyte/deid";
@@ -72,12 +72,12 @@ import { createDeidRegistry } from "@cosyte/deid";
 createDeidRegistry({ key: "" });
 ```
 
-A date-shifting policy may not claim the Safe Harbor label — the library rejects the mislabel rather
+A date-shifting policy may not claim the Safe Harbor label: the library rejects the mislabel rather
 than emit shifted real dates under a Safe Harbor claim:
 
 ```ts runnable throws
 import { defineDeidPolicy, SAFE_HARBOR_CATEGORIES } from "@cosyte/deid";
 
-// A shifted real date is still a date element — this is Expert-Determination, not Safe Harbor.
+// A shifted real date is still a date element: this is Expert-Determination, not Safe Harbor.
 defineDeidPolicy({ name: "safe-harbor", transforms: { [SAFE_HARBOR_CATEGORIES.DATES]: "date-shift" } });
 ```

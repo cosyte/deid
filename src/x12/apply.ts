@@ -1,15 +1,15 @@
 /**
- * The X12 **applier** — writes the engine's transformed loci back into a **reconstructed** interchange
+ * The X12 **applier**: writes the engine's transformed loci back into a **reconstructed** interchange
  * and re-serializes it with `@cosyte/x12`'s own `serializeX12`. The caller's input interchange is never
  * mutated.
  *
  * The `@cosyte/x12` serializer is **byte-faithful**: it reconstructs the transaction body from the
  * verbatim `rawSegments` strings, not from the decoded element model. So the applier rewrites at the raw
- * layer — for each affected segment it takes the parser's decoded (1-indexed) `elements`, substitutes
+ * layer, for each affected segment it takes the parser's decoded (1-indexed) `elements`, substitutes
  * the transformed value(s), and re-joins them with the interchange's element separator (the exact
  * inverse of the parser's element split, matching `serializeX12`'s own `substituteElement`). A segment
- * the extractor did not touch keeps its **verbatim** raw string, so every clinical / financial value —
- * diagnosis codes, charge amounts, NDCs — survives the over-scrub test byte-identical.
+ * the extractor did not touch keeps its **verbatim** raw string, so every clinical / financial value
+ * (diagnosis codes, charge amounts, NDCs) survives the over-scrub test byte-identical.
  *
  * Removal is clean: a redacted or blocked element becomes the empty string (it serializes as an empty
  * element between two separators), never a fabricated placeholder. A pseudonymized identifier and a

@@ -1,15 +1,15 @@
 /**
- * The de-identification **engine** — applies a policy's per-category transforms across a
+ * The de-identification **engine**: applies a policy's per-category transforms across a
  * format-agnostic {@link LocusModel}, **failing closed** on anything it cannot confidently handle, and
  * returns the transformed document plus a **value-free manifest**.
  *
  * The reflex is the inverse of a parser's Postel's-Law liberality: an unrecognized structure, an
  * un-locatable identifier, an uncertain field, or a free-text blob is **blocked** (value withheld),
- * never passed through as safe. Clinical values are the mirror guard — a locus marked `clinical` is
+ * never passed through as safe. Clinical values are the mirror guard: a locus marked `clinical` is
  * **retained untouched**, so the engine never degenerates into a blanket-blanking "safe but useless"
  * scrubber.
  *
- * The result is labelled **"Safe-Harbor-transformed per the configured policy"** — never
+ * The result is labelled **"Safe-Harbor-transformed per the configured policy"**, never
  * "de-identified" or "HIPAA-compliant". Expert Determination is not rendered here.
  *
  * @packageDocumentation
@@ -56,7 +56,7 @@ export interface DeidOptions {
    * A **consumer-supplied** free-text redactor. When present, the engine invokes it
    * at each free-text locus instead of blocking, and records its output as **consumer-asserted**
    * (`DEID_FREETEXT_CONSUMER_REDACTED`). The library bundles **no** redactor. **Fail-closed contract:**
-   * when this is omitted — or when the redactor throws or returns nothing — the free-text locus is
+   * when this is omitted, or when the redactor throws or returns nothing, the free-text locus is
    * **blocked** (the safe default), never emitted un-redacted. A returned redaction is trusted as the
    * consumer's; the engine does not re-verify it and does not touch the structural PHI the adapters
    * remove. See {@link FreeTextRedactor}.
@@ -198,7 +198,7 @@ function applyTransform(
     case "byo-redact":
     case "block":
     default:
-      // `byo-redact` is not a category transform — free-text redaction is driven by the `redactor`
+      // `byo-redact` is not a category transform: free-text redaction is driven by the `redactor`
       // option, not the policy map. If a policy assigns it (or `block`, or anything unknown) to a
       // category, fail closed (block).
       return blocked(locus.path, category, DEID_DISPOSITION_CODES.DEID_LOCUS_BLOCKED);
@@ -208,7 +208,7 @@ function applyTransform(
 /**
  * Coerce an arbitrary redactor return into the redacted prose, or `null` to fail closed. A valid result
  * is an object carrying a string `text` (an empty string is a valid "all prose removed" redaction);
- * everything else — `null`, `undefined`, a non-object, or a missing/non-string `text` — is treated as
+ * everything else (`null`, `undefined`, a non-object, or a missing/non-string `text`) is treated as
  * "the redactor returned nothing" and fails closed.
  */
 function redactedProse(result: unknown): string | null {
@@ -221,8 +221,8 @@ function redactedProse(result: unknown): string | null {
 
 /**
  * Handle a free-text locus. **Fail closed** by default: with no consumer redactor the prose is blocked.
- * With a BYO redactor, invoke it and treat a returned redaction as *consumer-asserted*
- * — but still fail closed if it throws or returns nothing, so a redactor failure never leaks free text.
+ * With a BYO redactor, invoke it and treat a returned redaction as *consumer-asserted*, but still
+ * fail closed if it throws or returns nothing, so a redactor failure never leaks free text.
  */
 function handleFreeText(locus: GenericLocus, redactor: FreeTextRedactor | undefined): LocusOutcome {
   const category = locus.category ?? SAFE_HARBOR_CATEGORIES.OTHER_UNIQUE_ID;
@@ -231,7 +231,7 @@ function handleFreeText(locus: GenericLocus, redactor: FreeTextRedactor | undefi
   }
   let prose: string | null;
   try {
-    // Everything that touches the redactor's return — the call AND reading `.text` off it — is inside
+    // Everything that touches the redactor's return, the call AND reading `.text` off it, is inside
     // the try, so even a throwing getter / hostile Proxy fails closed rather than crashing the pass.
     prose = redactedProse(
       redactor({
@@ -268,12 +268,12 @@ function handleLocus(
   context: DeidContext | undefined,
   redactor: FreeTextRedactor | undefined,
 ): LocusOutcome {
-  // Over-scrub guard: a clinical value is not an identifier — retain it untouched.
+  // Over-scrub guard: a clinical value is not an identifier, retain it untouched.
   if (locus.kind === "clinical") {
     return { value: locus.value, disposition: "retained" };
   }
   // Free text can carry any of the 18 categories in prose. Block by default; a BYO redactor (§Phase 8)
-  // may redact it in place, consumer-asserted — but a redactor failure still fails closed.
+  // may redact it in place, consumer-asserted, but a redactor failure still fails closed.
   if (locus.kind === "freetext") {
     return handleFreeText(locus, redactor);
   }
@@ -292,7 +292,7 @@ function handleLocus(
  * De-identify a format-agnostic {@link LocusModel} under a policy. Returns the transformed document
  * and a value-free manifest. The input model is never mutated; the result is deeply frozen.
  *
- * The output is **"Safe-Harbor-transformed per the configured policy"** — it is not certified
+ * The output is **"Safe-Harbor-transformed per the configured policy"**: it is not certified
  * de-identified, and Expert Determination is not rendered.
  *
  * @param model - The located candidate values to de-identify.

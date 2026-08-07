@@ -1,5 +1,5 @@
 /**
- * Stable code registries for the de-identification engine — the fatal codes that halt a pass and the
+ * Stable code registries for the de-identification engine: the fatal codes that halt a pass and the
  * value-free **disposition codes** that describe what the engine did at each locus.
  *
  * Both registries are `key === value` so the full set survives an `Object.values(...)` snapshot into a
@@ -10,7 +10,7 @@
  */
 
 /**
- * **Fatal codes** — conditions that abort a de-identification pass by throwing a {@link DeidError}.
+ * **Fatal codes**: conditions that abort a de-identification pass by throwing a {@link DeidError}.
  * The engine fails **closed**: it never silently degrades a fatal into a pass-through of PHI.
  *
  * @example
@@ -21,16 +21,16 @@
  * ```
  */
 export const FATAL_CODES = {
-  /** The input model was null/undefined or carried no locus list — nothing to de-identify. */
+  /** The input model was null/undefined or carried no locus list, nothing to de-identify. */
   EMPTY_INPUT: "EMPTY_INPUT",
   /**
    * A **keyed** transform (pseudonymize / keyed-hash / date-shift) was required for a category present
    * in the model, but no key (or, for date-shift, no per-patient scope) was supplied. The engine
-   * **never** falls back to an unkeyed transform — an unkeyed hash of an identifier is re-identifiable.
+   * **never** falls back to an unkeyed transform: an unkeyed hash of an identifier is re-identifiable.
    */
   DEID_NO_KEY: "DEID_NO_KEY",
   /**
-   * A policy violates the key/label contract — most importantly, it applies the interval-preserving
+   * A policy violates the key/label contract: most importantly, it applies the interval-preserving
    * **`date-shift`** transform while carrying the reserved **`safe-harbor`** label. A shifted-but-real
    * date is still "an element of a date" under §164.514(b)(2)(i)(C), so date-shift is an
    * Expert-Determination technique, **not** Safe Harbor; labelling it `safe-harbor` would misrepresent
@@ -40,7 +40,7 @@ export const FATAL_CODES = {
   DEID_POLICY_INVALID: "DEID_POLICY_INVALID",
   /**
    * A {@link DeidContext} was configured with an invalid parameter that would silently weaken
-   * de-identification — most importantly a `maxShiftDays` that floors to **0**, which pins **every**
+   * de-identification: most importantly a `maxShiftDays` that floors to **0**, which pins **every**
    * per-patient date-shift offset to zero, so a `date-shift` policy would emit the **original real
    * dates** under a research label. A no-op shift is a leak, so the engine rejects the degenerate
    * configuration at construction rather than silently shipping unshifted dates. The fatal set is
@@ -51,14 +51,14 @@ export const FATAL_CODES = {
    * A {@link DeidProfile} spec violates the **widen-never-narrow** contract: a per-site profile derived
    * from a base profile may only move a category to an **equal-or-stronger** transform (more removal,
    * never less), and may never re-weaken a category the base scrubs. A profile that would *reduce* the
-   * de-identification strength of any category is rejected, so a site preset can only ever tighten — not
-   * quietly loosen — the base standard's protection. The fatal set is additions-only.
+   * de-identification strength of any category is rejected, so a site preset can only ever tighten, not
+   * quietly loosen, the base standard's protection. The fatal set is additions-only.
    */
   DEID_PROFILE_INVALID: "DEID_PROFILE_INVALID",
 } as const;
 
 /**
- * A value from {@link FATAL_CODES} — the code carried by a thrown {@link DeidError}.
+ * A value from {@link FATAL_CODES}: the code carried by a thrown {@link DeidError}.
  *
  * @example
  * ```ts
@@ -70,7 +70,7 @@ export const FATAL_CODES = {
 export type FatalCode = (typeof FATAL_CODES)[keyof typeof FATAL_CODES];
 
 /**
- * **Disposition codes** — the value-free record of what the engine did at a locus. Every manifest
+ * **Disposition codes**: the value-free record of what the engine did at a locus. Every manifest
  * entry carries exactly one. They describe the *action and its residual*, never the value acted on.
  *
  * @example
@@ -101,7 +101,7 @@ export const DEID_DISPOSITION_CODES = {
    * redactor at free-text loci and records the outcome here. This code is **consumer-asserted, never a
    * library guarantee**: "no findings" from a BYO redactor is not an attestation, and a redactor's
    * completeness is the consumer's responsibility (Expert-Determination territory). The
-   * structural PHI removal the format adapters perform is unaffected — this covers only the free *prose*.
+   * structural PHI removal the format adapters perform is unaffected: this covers only the free *prose*.
    */
   DEID_FREETEXT_CONSUMER_REDACTED: "DEID_FREETEXT_CONSUMER_REDACTED",
   /**
@@ -112,7 +112,7 @@ export const DEID_DISPOSITION_CODES = {
 } as const;
 
 /**
- * A value from {@link DEID_DISPOSITION_CODES} — the code every manifest entry carries.
+ * A value from {@link DEID_DISPOSITION_CODES}: the code every manifest entry carries.
  *
  * @example
  * ```ts
@@ -126,7 +126,7 @@ export type DeidDispositionCode =
 
 /**
  * The error thrown on a {@link FATAL_CODES} condition. Carries a stable `code`; its `message` is
- * safe to log — it **never** contains PHI (no value, no key, no offset).
+ * safe to log: it **never** contains PHI (no value, no key, no offset).
  *
  * @example
  * ```ts

@@ -1,18 +1,18 @@
 /**
- * `@cosyte/deid/hl7` — the **HL7 v2 de-identification adapter**. The first end-to-end format binding of
+ * `@cosyte/deid/hl7`: the **HL7 v2 de-identification adapter**. The first end-to-end format binding of
  * the format-agnostic core: it locates PHI **structurally** in the parsed
  * `@cosyte/hl7` model, applies the configured de-identification policy, and returns a transformed
  * `Hl7Message` plus the core's value-free manifest.
  *
- * **`@cosyte/hl7` is an optional peer dependency**, consumed only from this subpath — a consumer who
+ * **`@cosyte/hl7` is an optional peer dependency**, consumed only from this subpath: a consumer who
  * only de-identifies HL7 v2 installs it alongside `@cosyte/deid`; the core stays dependency-free. Import
  * this module as `@cosyte/deid/hl7`.
  *
  * **What it covers.** The structured PHI loci of **PID** (patient), **NK1** / **GT1** / **IN1** / **IN2**
  * (relatives / guarantor / insured) via the cited {@link HL7_LOCUS_MAP}. **Fail closed**
  * everywhere else: a recognized segment is retained only if it is on the explicit {@link RETAIN_SEGMENTS}
- * clinical/administrative list — so a *known* patient-identity segment absent from the map (**MRG** prior
- * name + MRN on a merge, **FAM**, **ACC**, **PEO**, **PDA**) is blocked, not passed through — and
+ * clinical/administrative list, so a *known* patient-identity segment absent from the map (**MRG** prior
+ * name + MRN on a merge, **FAM**, **ACC**, **PEO**, **PDA**) is blocked, not passed through, and
  * Z-segments / structure unknown to the parser are blocked. **OBX-5** is retained only when OBX-2
  * positively types it as a structured clinical value (numeric / coded / date); narrative (`TX`/`FT`),
  * ambiguous String (`ST`), and any empty/unknown OBX-2 fail closed, as do **NTE-3** comments. Structured
@@ -49,7 +49,7 @@ import { extractHl7Loci } from "./extract.js";
  * ```
  */
 export interface Hl7DeidResult {
-  /** The de-identified message — a fresh, independent {@link Hl7Message}; the input is never mutated. */
+  /** The de-identified message: a fresh, independent {@link Hl7Message}; the input is never mutated. */
   readonly document: Hl7Message;
   /** The value-free audit of every action, in locus order (never a value, never a key). */
   readonly manifest: readonly DeidManifestEntry[];
@@ -59,11 +59,11 @@ export interface Hl7DeidResult {
  * De-identify a parsed HL7 v2 message under a policy (Safe Harbor by default). PHI is located
  * structurally from the `@cosyte/hl7` model; the input message is never mutated.
  *
- * The output is **"Safe-Harbor-transformed per the configured policy"** — it is not certified
+ * The output is **"Safe-Harbor-transformed per the configured policy"**: it is not certified
  * de-identified, and Expert Determination is not rendered.
  *
  * @param msg - The parsed HL7 v2 message to de-identify.
- * @param options - The policy and (for keyed transforms — MRN / account / beneficiary pseudonymization)
+ * @param options - The policy and (for keyed transforms, MRN / account / beneficiary pseudonymization)
  *   the key context. A keyed transform with no context is a fatal `DEID_NO_KEY`, never an unkeyed
  *   fallback.
  * @returns The de-identified message and the value-free manifest.

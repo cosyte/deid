@@ -1,5 +1,5 @@
 /**
- * Unit tests for the HL7 v2 locus map — the CX-5 identifier-type routing and the map's shape.
+ * Unit tests for the HL7 v2 locus map: the CX-5 identifier-type routing and the map's shape.
  */
 
 import { describe, expect, it } from "vitest";
@@ -9,7 +9,7 @@ import { HL7_LOCUS_MAP, categoryForIdentifierType } from "../../src/hl7/index.js
 
 const C = SAFE_HARBOR_CATEGORIES;
 
-describe("categoryForIdentifierType — HL7 Table 0203 routing", () => {
+describe("categoryForIdentifierType, HL7 Table 0203 routing", () => {
   it("routes each known identifier-type code to its Safe Harbor category", () => {
     expect(categoryForIdentifierType("SS", C.MRN)).toBe(C.SSN);
     expect(categoryForIdentifierType("MR", C.MRN)).toBe(C.MRN);
@@ -35,7 +35,7 @@ describe("categoryForIdentifierType — HL7 Table 0203 routing", () => {
   });
 });
 
-describe("HL7_LOCUS_MAP — shape", () => {
+describe("HL7_LOCUS_MAP, shape", () => {
   it("maps the five relative-bearing PHI segments and nothing else", () => {
     expect(Object.keys(HL7_LOCUS_MAP).sort()).toEqual(["GT1", "IN1", "IN2", "NK1", "PID"]);
   });

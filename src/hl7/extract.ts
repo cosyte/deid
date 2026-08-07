@@ -1,13 +1,13 @@
 /**
- * The HL7 v2 **extractor** — walks a parsed `@cosyte/hl7` model and produces the format-agnostic
+ * The HL7 v2 **extractor**: walks a parsed `@cosyte/hl7` model and produces the format-agnostic
  * {@link GenericLocus} list the core engine transforms, plus a **parallel coordinate list** that tells
  * the applier exactly where to write each transformed value back. Loci and coordinates are produced in
  * the same order, so `result.document.loci[i]` corresponds to `coords[i]` (the engine preserves input
- * order) — no locus string ever has to be parsed back.
+ * order), no locus string ever has to be parsed back.
  *
  * PHI is located **structurally**: the mapped PHI fields of PID / NK1 / GT1 / IN1 / IN2 (the
  * {@link HL7_LOCUS_MAP}) and the OBX-5 / NTE-3 free text. The **fail-closed** rule governs everything
- * else — a recognized segment is retained only if it is on the explicit {@link RETAIN_SEGMENTS}
+ * else: a recognized segment is retained only if it is on the explicit {@link RETAIN_SEGMENTS}
  * clinical/administrative list, so a *known* patient-identity segment absent from the map (MRG / FAM /
  * ACC / PEO / PDA) is blocked exactly like a Z-segment or a segment unknown to the parser. A non-mapped
  * field inside a mapped segment, and a retained clinical segment, are left untouched (the over-scrub
@@ -28,7 +28,7 @@ import { RETAIN_SEGMENTS } from "./retain.js";
 export type Hl7EditKind = "whole-field" | "id-number" | "address-zip";
 
 /**
- * A write-back coordinate — the exact structural location of one extracted locus in the message's raw
+ * A write-back coordinate: the exact structural location of one extracted locus in the message's raw
  * segment tree. Carries no value.
  */
 export interface Hl7Coord {
@@ -52,9 +52,9 @@ export interface Hl7Extraction {
 
 /**
  * HL7 v2 value types (OBX-2, HL7 Table 0125) that make OBX-5 a **structured clinical value** that must
- * **survive** the over-scrub test — numeric, coded, and date/time types. OBX-5 is retained **only** for
- * these; every other value type — narrative `TX`/`FT`, ambiguous String `ST`, and any **empty or unknown**
- * OBX-2 — **fails closed** and is blocked. This is the inverse (fail-closed) reflex: OBX-5
+ * **survive** the over-scrub test: numeric, coded, and date/time types. OBX-5 is retained **only** for
+ * these; every other value type (narrative `TX`/`FT`, ambiguous String `ST`, and any **empty or unknown**
+ * OBX-2) **fails closed** and is blocked. This is the inverse (fail-closed) reflex: OBX-5
  * is passed through only when the parser positively types it as a non-narrative clinical value.
  */
 const STRUCTURED_VALUE_TYPES: ReadonlySet<string> = new Set([
@@ -149,7 +149,7 @@ function extractRule(
 
     case "block":
       // Fail closed: a geographic/other identifier with no clean structured generalization is removed
-      // as category (R) — omitting the category forces the engine's fail-closed block.
+      // as category (R): omitting the category forces the engine's fail-closed block.
       push(
         out,
         { path: fieldPath(type, occ, rule.field), kind: "identifier", value: field.value },
@@ -207,7 +207,7 @@ function extractObx(out: Hl7Extraction, seg: Segment, occ: number): void {
   if (!hasContent(seg, 5)) return;
   const valueType = seg.field(2).value.toUpperCase();
   // Over-scrub guard: a positively-typed structured clinical value (NM / coded / date) survives.
-  // Fail closed otherwise — narrative (TX/FT), ambiguous String (ST), and an empty/unknown OBX-2 block.
+  // Fail closed otherwise: narrative (TX/FT), ambiguous String (ST), and an empty/unknown OBX-2 block.
   if (STRUCTURED_VALUE_TYPES.has(valueType)) return;
   push(
     out,
@@ -238,7 +238,7 @@ function extractNte(out: Hl7Extraction, seg: Segment, occ: number): void {
 
 /** Fail closed on an unknown/Z-segment: block every populated field (unrecognized structure). */
 function extractUnknownSegment(out: Hl7Extraction, seg: Segment, type: string, occ: number): void {
-  // fields[0] is the segment-name placeholder — start at HL7 position 1.
+  // fields[0] is the segment-name placeholder: start at HL7 position 1.
   for (let field = 1; field < seg.fields.length; field += 1) {
     if (!hasContent(seg, field)) continue;
     push(
@@ -278,7 +278,7 @@ export function extractHl7Loci(msg: Hl7Message): Hl7Extraction {
     const occ = occurrences.get(type) ?? 0;
     occurrences.set(type, occ + 1);
 
-    if (type === "MSH") continue; // message envelope — no patient PHI
+    if (type === "MSH") continue; // message envelope, no patient PHI
 
     const rules = HL7_LOCUS_MAP[type];
     if (rules !== undefined) {
@@ -294,9 +294,9 @@ export function extractHl7Loci(msg: Hl7Message): Hl7Extraction {
       continue;
     }
     // Fail-closed rule: retain a recognized segment ONLY if it is on the explicit clinical/administrative
-    // retain-list. Everything else — a Z-segment, a segment unknown to the parser, OR a *known*
-    // patient/relative-identity segment absent from the map and the retain-list (MRG / ACC / FAM / PEO /
-    // PDA) — is blocked, so a merge message's prior name + MRN can never ride through in the clear.
+    // retain-list. Everything else is blocked: a Z-segment, a segment unknown to the parser, OR a
+    // *known* patient/relative-identity segment absent from the map and the retain-list (MRG / ACC /
+    // FAM / PEO / PDA). A merge message's prior name + MRN can never ride through in the clear.
     if (RETAIN_SEGMENTS.has(type)) continue;
     extractUnknownSegment(out, seg, type, occ);
   }

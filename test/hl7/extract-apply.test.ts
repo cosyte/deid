@@ -1,5 +1,5 @@
 /**
- * Edge-case coverage for the HL7 extractor and applier — empty repetitions, absent free-text fields,
+ * Edge-case coverage for the HL7 extractor and applier: empty repetitions, absent free-text fields,
  * segment gaps, non-Z unknown segments, and the applier's defensive write-back guards.
  */
 
@@ -13,7 +13,7 @@ import { deidentifyHl7 } from "../../src/hl7/index.js";
 const ctx = createDeidContext({ key: "edge-key", patientId: "p1" });
 const MSH = "MSH|^~\\&|A|B|C|D|20200101||ADT^A01|M1|P|2.5";
 
-describe("extractHl7Loci — edge cases", () => {
+describe("extractHl7Loci, edge cases", () => {
   it("skips an empty repetition in an identifier list (CX.1 blank)", () => {
     const msg = parseHL7(`${MSH}\rPID|1||^^^H^MR~ZZMRN^^^H^MR`);
     const { loci } = extractHl7Loci(msg);
@@ -50,7 +50,7 @@ describe("extractHl7Loci — edge cases", () => {
   });
 });
 
-describe("applyHl7 — defensive write-back guards", () => {
+describe("applyHl7, defensive write-back guards", () => {
   it("ignores coordinates that point past the raw tree, and handles an empty-component id repetition", () => {
     const msg = parseHL7(`${MSH}\rPID|1||ZZMRN^^^H^MR`);
     // Hand-built coords: one out-of-range segment, one out-of-range field, and an id-number edit whose

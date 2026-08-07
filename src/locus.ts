@@ -1,8 +1,8 @@
 /**
- * The **format-agnostic locus model** — the abstraction the de-id core operates on before any parser
+ * The **format-agnostic locus model**: the abstraction the de-id core operates on before any parser
  * is wired. A *locus* is a structurally-located candidate value: **where** it lives (a format-neutral
  * path such as `"PID-5"`, `"recordTarget/patientRole/id"`, `"(0010,0010)"`), **what** kind of value it
- * is, and — when the caller can classify it — which Safe Harbor **category** it belongs to.
+ * is, and, when the caller can classify it, which Safe Harbor **category** it belongs to.
  *
  * Per-format locus maps produce these loci from a parsed model. The core is tested against this
  * generic shape directly, so the policy/transform/fail-closed core is independently shippable.
@@ -13,7 +13,7 @@
 import type { SafeHarborCategory } from "./categories.js";
 
 /**
- * The kind of value at a locus — drives which generalization applies and whether the engine must
+ * The kind of value at a locus: drives which generalization applies and whether the engine must
  * fail closed. `clinical` is the over-scrub guard: a clinical value (a lab result, a dose, a code, a
  * status) is **not** an identifier and must survive untouched.
  *
@@ -28,7 +28,7 @@ export type LocusKind = "identifier" | "date" | "age" | "zip" | "freetext" | "cl
 
 /**
  * A single structurally-located candidate value. `category` is omitted when the caller cannot classify
- * the locus — an unclassified PHI-bearing locus is treated as catch-all (R) and **fails closed**.
+ * the locus: an unclassified PHI-bearing locus is treated as catch-all (R) and **fails closed**.
  *
  * @example
  * ```ts
@@ -92,7 +92,7 @@ export interface TransformedLocus {
 }
 
 /**
- * The transformed document — the same loci with de-identified values. Format-specific documents
+ * The transformed document: the same loci with de-identified values. Format-specific documents
  * replace this `unknown`-shaped placeholder; the core returns this generic shape.
  *
  * @example

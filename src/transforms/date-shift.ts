@@ -1,11 +1,11 @@
 /**
- * The **date-shifting** transform — shift every date for a patient by a **single consistent
+ * The **date-shifting** transform: shift every date for a patient by a **single consistent
  * per-patient offset**, preserving intervals while destroying the absolute calendar position (the
  * MIMIC longitudinal-research methodology).
  *
  * The offset is **deterministic per patient** (derived from the context's key/seed and patient scope,
  * so the same patient shifts identically across every document and run) and the **offset is never
- * leaked** — it is applied here and never returned to the caller or written to the manifest.
+ * leaked**: it is applied here and never returned to the caller or written to the manifest.
  *
  * **Honesty note (§164.514):** a shifted-but-real date is still "an element of a date," so
  * date-shifting is an **Expert-Determination-supporting** technique, **not** Safe Harbor. Under a
@@ -39,7 +39,7 @@ function pad2(n: number): string {
 /**
  * Parse a supported date encoding, or `null` (fail closed) if unsupported. Recognizes ISO
  * `YYYY-MM-DD`, HL7 `YYYYMMDD`, and an ISO datetime `YYYY-MM-DDThh:mm[:ss[.sss]][Z|±hh:mm]`. The
- * datetime's time-and-zone remainder is captured verbatim and never interpreted — the shift is a pure
+ * datetime's time-and-zone remainder is captured verbatim and never interpreted: the shift is a pure
  * calendar-date operation, so the machine timezone can never move the result across a day boundary.
  */
 function parseDate(value: string): ParsedDate | null {
@@ -96,7 +96,7 @@ const MS_PER_DAY = 86_400_000;
  * same output on every host regardless of the machine's `TZ`. Because the offset is a whole number of
  * days and the clock/zone are untouched, intervals are preserved exactly.
  *
- * The **offset is not returned** — only the shifted value is. Two dates for the same patient move by
+ * The **offset is not returned**: only the shifted value is. Two dates for the same patient move by
  * the same amount, so the number of days between them is unchanged.
  *
  * @param value - The date value to shift.

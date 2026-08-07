@@ -1,12 +1,12 @@
 /**
- * The NCPDP Telecom **applier** — writes the engine's transformed loci back onto a **fresh
+ * The NCPDP Telecom **applier**: writes the engine's transformed loci back onto a **fresh
  * reconstruction** of the transaction and re-serializes it with `@cosyte/ncpdp`'s `serializeTelecom`.
  * The caller's input transaction is never mutated.
  *
  * `serializeTelecom` emits from the generic `{ id, value }` field model (and the fixed header), so every
  * field survives the round-trip and a de-identified value is written simply by rebuilding the field with
  * a new value. A field the extractor did not touch keeps its **verbatim** value, so every clinical /
- * financial value — NDC drug codes, quantities, pricing amounts, DUR reason codes — survives the
+ * financial value (NDC drug codes, quantities, pricing amounts, DUR reason codes) survives the
  * over-scrub test unchanged. A removed / blocked field becomes the empty string; the field id is kept so
  * the segment structure is preserved.
  *

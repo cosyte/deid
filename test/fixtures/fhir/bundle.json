@@ -107,7 +107,7 @@
         "effectiveDateTime": "2019-03-14T09:32:00Z",
         "issued": "2019-03-14T10:00:00Z",
         "identifier": [{ "system": "http://hospital.example/accession", "value": "ZZACCESSION1" }],
-        "note": [{ "text": "ZZOBSNOTEPHI — patient called about results", "authorString": "ZZNOTEAUTHOR" }],
+        "note": [{ "text": "ZZOBSNOTEPHI, patient called about results", "authorString": "ZZNOTEAUTHOR" }],
         "valueQuantity": { "value": 140, "unit": "mmol/L", "system": "http://unitsofmeasure.org", "code": "mmol/L" },
         "referenceRange": [{ "low": { "value": 135, "unit": "mmol/L" }, "high": { "value": 145, "unit": "mmol/L" } }]
       }
@@ -119,7 +119,7 @@
         "id": "comm1",
         "status": "completed",
         "subject": { "type": "Patient", "display": "ZZCOMMSUBJECTDISPLAY" },
-        "payload": [{ "contentString": "ZZCONTENTPHI — please call the patient at 555-000-7777" }]
+        "payload": [{ "contentString": "ZZCONTENTPHI, please call the patient at 555-000-7777" }]
       }
     },
     {

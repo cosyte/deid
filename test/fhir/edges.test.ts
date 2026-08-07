@@ -1,5 +1,5 @@
 /**
- * FHIR adapter edge cases — the branches the headline fixtures do not hit: a single (non-list)
+ * FHIR adapter edge cases, the branches the headline fixtures do not hit: a single (non-list)
  * datatype occurrence, an un-generalizable address, a `modifierExtension`, a non-narrative `text`
  * string, a resource with no `resourceType`, and a person date carried in a list. Each is a fail-safe
  * corner where the wrong branch would either leak or over-scrub.
@@ -17,7 +17,7 @@ function run(resource: unknown) {
   return deidentifyFhirJson(JSON.stringify(resource), { context: ctx });
 }
 
-describe("deidentifyFhir — edge branches", () => {
+describe("deidentifyFhir, edge branches", () => {
   it("drops the whole address when the ZIP has no readable 3-digit prefix (fail closed)", () => {
     const { json, manifest } = run({
       resourceType: "Patient",

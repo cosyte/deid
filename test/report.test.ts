@@ -40,7 +40,7 @@ function entry(
   };
 }
 
-describe("buildExpertDeterminationSupportReport — the honesty boundary", () => {
+describe("buildExpertDeterminationSupportReport, the honesty boundary", () => {
   it("renders NO determination and leads with the non-certification disclaimer", () => {
     const report = buildExpertDeterminationSupportReport([]);
     expect(report.kind).toBe("expert-determination-support");
@@ -70,7 +70,7 @@ describe("buildExpertDeterminationSupportReport — the honesty boundary", () =>
   });
 });
 
-describe("buildExpertDeterminationSupportReport — per-locus + category coverage", () => {
+describe("buildExpertDeterminationSupportReport, per-locus + category coverage", () => {
   it("surfaces all 18 categories in regulatory order A→R, with actedOn flags", () => {
     const report = buildExpertDeterminationSupportReport([
       entry({ category: C.NAMES, locus: "PID-5", code: CODES.DEID_CATEGORY_REMOVED }),
@@ -171,8 +171,8 @@ describe("buildExpertDeterminationSupportReport — per-locus + category coverag
   });
 });
 
-describe("buildExpertDeterminationSupportReport — retained quasi-identifiers + disposition summary", () => {
-  it("inventories DEID_RESIDUAL_RETAINED entries (year, 3-digit ZIP, age) — and nothing else", () => {
+describe("buildExpertDeterminationSupportReport, retained quasi-identifiers + disposition summary", () => {
+  it("inventories DEID_RESIDUAL_RETAINED entries (year, 3-digit ZIP, age), and nothing else", () => {
     const report = buildExpertDeterminationSupportReport([
       entry({
         category: C.DATES,
@@ -234,7 +234,7 @@ describe("buildExpertDeterminationSupportReport — retained quasi-identifiers +
   });
 });
 
-describe("buildExpertDeterminationSupportReport — quasi-identifier statistics (consumer-supplied)", () => {
+describe("buildExpertDeterminationSupportReport, quasi-identifier statistics (consumer-supplied)", () => {
   it("computes the k-anonymity indicator correctly on a known corpus", () => {
     const report = buildExpertDeterminationSupportReport([], {
       quasiIdentifiers: {
@@ -272,8 +272,8 @@ describe("buildExpertDeterminationSupportReport — quasi-identifier statistics 
   });
 });
 
-describe("buildExpertDeterminationSupportReport — determinism, immutability, value-freeness", () => {
-  it("is deterministic — same input yields deep-equal output", () => {
+describe("buildExpertDeterminationSupportReport, determinism, immutability, value-freeness", () => {
+  it("is deterministic, same input yields deep-equal output", () => {
     const manifest = [
       entry({
         category: C.MRN,
@@ -327,7 +327,7 @@ describe("buildExpertDeterminationSupportReport — determinism, immutability, v
             value: r.value,
           }));
           // MRN pseudonymize is a keyed transform, so supply a context; the surrogate is a hex digest,
-          // never the input value — the report (built from the manifest) carries no value regardless.
+          // never the input value: the report (built from the manifest) carries no value regardless.
           const ctx = createDeidContext({ key: "report-property-key", patientId: "p1" });
           const { manifest } = deidentify({ loci }, { context: ctx });
           const report = buildExpertDeterminationSupportReport(manifest, { policy: "safe-harbor" });
@@ -366,7 +366,7 @@ describe("buildExpertDeterminationSupportReport — determinism, immutability, v
           );
           const report = buildExpertDeterminationSupportReport(manifest);
           expect(report.determination).toBeNull();
-          // The loci ARE allowed in the report (they are paths, not values) — this asserts the k-indicator
+          // The loci ARE allowed in the report (they are paths, not values): this asserts the k-indicator
           // is never present without consumer sizes, i.e. no risk number is invented from loci alone.
           expect(report.quasiIdentifierStatistics).toBeNull();
         },
@@ -375,7 +375,7 @@ describe("buildExpertDeterminationSupportReport — determinism, immutability, v
   });
 });
 
-describe("formatExpertDeterminationSupportReport — human-readable rendering", () => {
+describe("formatExpertDeterminationSupportReport, human-readable rendering", () => {
   it("leads with the NOT-A-DETERMINATION banner and lists the category table", () => {
     const md = formatExpertDeterminationSupportReport(
       buildExpertDeterminationSupportReport(
@@ -404,7 +404,7 @@ describe("formatExpertDeterminationSupportReport — human-readable rendering", 
     );
     const md = formatExpertDeterminationSupportReport(report);
     expect(md).toContain("Retained quasi-identifiers");
-    expect(md).toContain("PID-7 — DATES");
+    expect(md).toContain("PID-7: DATES");
     expect(md).toContain("k-anonymity indicator): 1");
     expect(md).toContain("descriptive, not a verdict");
   });

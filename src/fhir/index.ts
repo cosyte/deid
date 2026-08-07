@@ -1,27 +1,27 @@
 /**
- * `@cosyte/deid/fhir` — the **FHIR R4 de-identification adapter**. The FHIR binding of the
+ * `@cosyte/deid/fhir`: the **FHIR R4 de-identification adapter**. The FHIR binding of the
  * format-agnostic core: it locates PHI **structurally** in a parsed `@cosyte/fhir`
  * resource, applies the configured de-identification policy, and returns a transformed `FhirComplex`
  * plus the core's value-free manifest.
  *
- * **`@cosyte/fhir` is an optional peer dependency**, consumed only from this subpath — a consumer who
+ * **`@cosyte/fhir` is an optional peer dependency**, consumed only from this subpath: a consumer who
  * only de-identifies FHIR installs it alongside `@cosyte/deid`; the core stays third-party-dep-free. The
  * adapter reaches FHIR data **only** through `@cosyte/fhir`'s own exported model (`FhirComplex` /
  * `FhirList` / `FhirPrimitive`, `getProperty`, `resourceType`, the `complex`/`list`/`primitive`
- * constructors) and its `parseResource` / `serializeResource` codec — it never touches a third-party
+ * constructors) and its `parseResource` / `serializeResource` codec: it never touches a third-party
  * JSON substrate, so `@cosyte/deid` declares no third-party runtime dependency of its own.
  *
  * **What it covers.** FHIR is a **graph of typed resources**, so the map splits by role:
- * - **Person resources** — `Patient` / `RelatedPerson` / `Practitioner` / `Person` (and the nested
+ * - **Person resources**: `Patient` / `RelatedPerson` / `Practitioner` / `Person` (and the nested
  *   `Patient.contact` relative): `name` / `telecom` / `photo` removed; `address` → safe 3-digit
  *   ZIP; `birthDate` and every date → year.
  * - **Every resource (the universal vectors that leak from any type):** `identifier` pseudonymized by
  *   `system` (a US-SSN system removed); PHI-bearing **dates** → year; the narrative **`text.div`** blocked
- *   at any depth; **extension** values blocked (the fail-closed frontier — an unknown extension can carry
+ *   at any depth; **extension** values blocked (the fail-closed frontier, an unknown extension can carry
  *   any PHI, incl. an MRN in a local extension); a `Reference.display` (a person label) blocked.
  * - **Contained resources and `Bundle` entries** are walked, re-deriving each resource's role at its own
  *   `resourceType`; **clinical resources** (`Observation`, `Condition`, …) are otherwise **retained
- *   untouched** (the over-scrub guard) — their codes, values, units, and statuses survive byte-identical.
+ *   untouched** (the over-scrub guard): their codes, values, units, and statuses survive byte-identical.
  *
  * **Fail closed** governs the person sweep and the frontier: a bare unrecognized string at a person
  * resource's top level is blocked (an open-ended allow-list can never satisfy Safe Harbor category (R)),
@@ -29,12 +29,12 @@
  * (the side-channel the structural walk cannot otherwise reach). The honesty line is unchanged: the
  * output is **"Safe-Harbor-transformed per the configured policy"**, never "de-identified".
  *
- * **Known limitations.** Extension values are block-only (no profile-aware retention — a
+ * **Known limitations.** Extension values are block-only (no profile-aware retention, a
  * `us-core-*` demographic extension is dropped, not kept).
  * Reference **wiring** (`Reference.reference` pointers and resource logical `id`s) is preserved
  * structurally; coordinated pseudonymization of resource ids across a corpus is **not** performed here.
  * Structured free-text elements inside clinical resources (`Observation.valueString`, `Annotation.text`)
- * are retained (the over-scrub guard) — narrative free-text de-id is separately scoped (the BYO
+ * are retained (the over-scrub guard): narrative free-text de-id is separately scoped (the BYO
  * redaction interface); only the rendered narrative `text.div` is blocked here.
  *
  * @packageDocumentation
@@ -61,11 +61,11 @@ import { extractFhirLoci } from "./extract.js";
  * const result: FhirDeidResult = deidentifyFhir(resource, {
  *   context: createDeidContext({ key: "secret" }),
  * });
- * result.manifest; // value-free audit — category + locus, never a value
+ * result.manifest; // value-free audit: category + locus, never a value
  * ```
  */
 export interface FhirDeidResult {
-  /** The de-identified resource — a fresh, independent `FhirComplex`; the input is never mutated. */
+  /** The de-identified resource: a fresh, independent `FhirComplex`; the input is never mutated. */
   readonly document: FhirComplex;
   /** The value-free audit of every action, in locus order (never a value, never a key). */
   readonly manifest: readonly DeidManifestEntry[];
@@ -73,15 +73,15 @@ export interface FhirDeidResult {
 
 /**
  * De-identify a parsed FHIR resource (or `Bundle`) under a policy (Safe Harbor by default). PHI is
- * located structurally from the `@cosyte/fhir` model — the person-resource demographics and the
+ * located structurally from the `@cosyte/fhir` model: the person-resource demographics and the
  * universal identifier / date / narrative / extension / reference vectors; the input resource is never
  * mutated (the immutable model is rebuilt into a fresh tree).
  *
- * The output is **"Safe-Harbor-transformed per the configured policy"** — it is not certified
+ * The output is **"Safe-Harbor-transformed per the configured policy"**: it is not certified
  * de-identified, and Expert Determination is not rendered.
  *
  * @param resource - The parsed FHIR resource to de-identify (`parseResource(json).resource`).
- * @param options - The policy and (for keyed transforms — identifier pseudonymization) the key context.
+ * @param options - The policy and (for keyed transforms, identifier pseudonymization) the key context.
  *   A keyed transform with no context is a fatal `DEID_NO_KEY`, never an unkeyed fallback.
  * @returns The de-identified resource and the value-free manifest.
  * @throws {@link "@cosyte/deid".DeidError} `DEID_NO_KEY` when a keyed transform is required for a

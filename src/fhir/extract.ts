@@ -1,5 +1,5 @@
 /**
- * The FHIR **extractor** — walks a parsed `@cosyte/fhir` resource (the generic `FhirComplex` element
+ * The FHIR **extractor**: walks a parsed `@cosyte/fhir` resource (the generic `FhirComplex` element
  * tree the sibling parser produces) and yields the format-agnostic {@link GenericLocus} list the core
  * engine transforms, plus a **parallel coordinate list** ({@link FhirCoord}) holding a direct handle to
  * the exact node each locus came from and how the applier must write it back. Loci and coordinates are
@@ -8,11 +8,11 @@
  * PHI is located **structurally**, per the cited {@link "./locus-map.js"}: the demographic elements
  * (`name` / `telecom` / `address` / `photo` / dates) of the **person resources**
  * (`Patient` / `RelatedPerson` / `Practitioner` / `Person`, plus the nested `Patient.contact`
- * relative), and the **universal** vectors that leak from any resource — `identifier`, PHI-bearing dates,
+ * relative), and the **universal** vectors that leak from any resource: `identifier`, PHI-bearing dates,
  * the narrative `text.div`, extension values, and a `Reference.display`. The **fail-closed** rule
  * governs the person sweep: a value-bearing top-level person-resource property that is neither mapped
- * PHI nor on the recognized allow-list is blocked. Everything else — the codes, values, units, and
- * statuses of the clinical resources — is left untouched (the over-scrub guard). Contained resources and
+ * PHI nor on the recognized allow-list is blocked. Everything else: the codes, values, units, and
+ * statuses of the clinical resources: is left untouched (the over-scrub guard). Contained resources and
  * Bundle entries are walked by re-deriving the resource role at every `resourceType` boundary.
  *
  * The `@cosyte/fhir` model is **immutable**, so the extractor never edits the tree; the applier rebuilds
@@ -47,19 +47,19 @@ import {
 /**
  * How the applier rewrites one extracted locus onto a fresh copy of the node it came from:
  *
- * - `drop` — remove the node entirely (a redacted `name`/`telecom`/`photo` property, a blocked
+ * - `drop`: remove the node entirely (a redacted `name`/`telecom`/`photo` property, a blocked
  *   extension value, a blocked `Reference.display`, a blocked unknown person string, a blocked
  *   narrative `div`, or a redacted SSN `Identifier.value`). The parent complex omits the property; a
  *   parent list omits the item.
- * - `set-primitive` — replace a primitive's value with the transformed string (a generalized date, a
+ * - `set-primitive`: replace a primitive's value with the transformed string (a generalized date, a
  *   pseudonymized `Identifier.value`); a `null` transform result degrades to `drop`.
- * - `address` — rebuild an `Address` complex, keeping `state`/`country` and the generalized 3-digit
+ * - `address`: rebuild an `Address` complex, keeping `state`/`country` and the generalized 3-digit
  *   `postalCode`, dropping every finer geographic component.
  */
 export type FhirEditKind = "drop" | "set-primitive" | "address";
 
 /**
- * A write-back coordinate — a direct handle to the exact model node one extracted locus came from, plus
+ * A write-back coordinate: a direct handle to the exact model node one extracted locus came from, plus
  * how to rewrite it. Node identity ties the coordinate to the tree the applier rebuilds. Carries no value.
  */
 export interface FhirCoord {
@@ -110,15 +110,15 @@ function primitiveString(p: FhirPrimitive): string {
   if (v === undefined) return "";
   if (typeof v === "string") return v;
   if (typeof v === "boolean") return v ? "true" : "false";
-  return v.raw; // FhirDecimal — exact lexical text, never routed through a JS number
+  return v.raw; // FhirDecimal: exact lexical text, never routed through a JS number
 }
 
-/** `true` when a primitive carries a (non-empty) string value — the shape a bare-PHI leak takes. */
+/** `true` when a primitive carries a (non-empty) string value: the shape a bare-PHI leak takes. */
 function isStringPrimitive(node: FhirNode): node is FhirPrimitive {
   return isPrimitive(node) && typeof node.value === "string" && node.value.length > 0;
 }
 
-/** Concatenate every primitive string value in a subtree (for a value-free locus/count — consumed, never emitted). */
+/** Concatenate every primitive string value in a subtree (for a value-free locus/count, consumed, never emitted). */
 function collectText(node: FhirNode): string {
   if (isPrimitive(node)) return primitiveString(node);
   if (isList(node)) return node.items.map(collectText).join(" ");
@@ -126,11 +126,11 @@ function collectText(node: FhirNode): string {
 }
 
 /**
- * `true` when a complex is a FHIR `Coding` — the one element whose `display` is a coded term to retain
+ * `true` when a complex is a FHIR `Coding`: the one element whose `display` is a coded term to retain
  * (`Sodium`), positively identified by a `code` or `system` sibling (the two properties that define a
  * Coding, and that a `Reference` never carries). Every other complex bearing a `display` is treated as a
- * `Reference` — including a **display-only** (`{ display }`) or **type+display** (`{ type, display }`)
- * reference that carries neither `reference` nor `identifier` — so its `display` (a person label) **fails
+ * `Reference`, including a **display-only** (`{ display }`) or **type+display** (`{ type, display }`)
+ * reference that carries neither `reference` nor `identifier`, so its `display` (a person label) **fails
  * closed** and is blocked. Deciding by "is it positively a Coding?" rather than "is it positively a
  * Reference?" is the inverted, fail-closed reflex: an unrecognized `display`-bearing shape is blocked,
  * never passed through.
@@ -150,10 +150,10 @@ function blockNode(out: FhirExtraction, node: FhirNode, path: string): void {
 }
 
 /**
- * Leaf string element names that carry **human free-text prose** — blocked by default:
+ * Leaf string element names that carry **human free-text prose**, blocked by default:
  * a `contentString` (a `Communication`/message body) and a `valueString` (an *uncoded* string result,
  * the direct FHIR analogue of an HL7 OBX-5 typed `ST`, which the sibling HL7 adapter also fails closed
- * on — a structured `valueQuantity` / `valueCodeableConcept` / `valueDateTime` result is retained). A
+ * on: a structured `valueQuantity` / `valueCodeableConcept` / `valueDateTime` result is retained). A
  * free-text field can carry any of the 18 categories in prose, so a naive scrub is a false-safety
  * hazard; the v1 default blocks. `Annotation` free-text (the `note` element) is handled separately.
  */
@@ -188,7 +188,7 @@ function dateEmit(out: FhirExtraction, node: FhirPrimitive, path: string): boole
   return true;
 }
 
-/** Extract one `Identifier` complex — the `value` primitive, routed to SSN (redact) or MRN (pseudonymize). */
+/** Extract one `Identifier` complex: the `value` primitive, routed to SSN (redact) or MRN (pseudonymize). */
 function handleIdentifier(out: FhirExtraction, id: FhirComplex, path: string): void {
   const valueNode = getProperty(id, "value");
   if (valueNode === undefined || !isPrimitive(valueNode)) return; // no value → nothing to transform
@@ -207,7 +207,7 @@ function handleIdentifier(out: FhirExtraction, id: FhirComplex, path: string): v
   );
 }
 
-/** Handle an `identifier` property — one locus per `Identifier` in the list (or a single complex). */
+/** Handle an `identifier` property: one locus per `Identifier` in the list (or a single complex). */
 function handleIdentifiers(out: FhirExtraction, value: FhirNode, path: string): void {
   const items = isList(value) ? value.items : [value];
   items.forEach((item, i) => {
@@ -216,7 +216,7 @@ function handleIdentifiers(out: FhirExtraction, value: FhirNode, path: string): 
   });
 }
 
-/** Handle an `address` property — one generalize locus per `Address` complex (ZIP → safe 3-digit form). */
+/** Handle an `address` property: one generalize locus per `Address` complex (ZIP → safe 3-digit form). */
 function handleAddresses(out: FhirExtraction, value: FhirNode, path: string): void {
   const items = isList(value) ? value.items : [value];
   items.forEach((item, i) => {
@@ -256,7 +256,7 @@ function handleDemographic(out: FhirExtraction, name: string, value: FhirNode, p
  * Fail closed on an `extension` / `modifierExtension` subtree: block every `value[x]` it carries at any
  * nesting, retaining the `url` and the nested `extension` skeleton. An extension can carry any of the 18
  * categories (an MRN in a local extension, a name in a `valueHumanName`, an address in a birthplace
- * extension), and the reader preserves unknown extensions verbatim — so the value is dropped
+ * extension), and the reader preserves unknown extensions verbatim, so the value is dropped
  * unconditionally: fail closed on an unknown extension carrying a value.
  */
 function blockExtension(out: FhirExtraction, value: FhirNode, path: string): void {
@@ -265,7 +265,7 @@ function blockExtension(out: FhirExtraction, value: FhirNode, path: string): voi
     return;
   }
   if (isPrimitive(value)) {
-    // A bare primitive where an extension object is expected is malformed input — fail closed and block
+    // A bare primitive where an extension object is expected is malformed input: fail closed and block
     // it (it could carry any PHI), rather than let the unexpected shape ride through.
     if (primitiveString(value).length > 0) blockNode(out, value, path);
     return;
@@ -274,7 +274,7 @@ function blockExtension(out: FhirExtraction, value: FhirNode, path: string): voi
   value.properties.forEach((prop, i) => {
     if (prop.name === "url") return; // structural: a definitional URI, never PHI
     if (prop.name === "extension" || prop.name === "modifierExtension") {
-      blockExtension(out, prop.value, join(path, prop.name)); // nested extension — recurse
+      blockExtension(out, prop.value, join(path, prop.name)); // nested extension: recurse
       return;
     }
     if (prop.name.startsWith("value")) {
@@ -286,7 +286,7 @@ function blockExtension(out: FhirExtraction, value: FhirNode, path: string): voi
   });
 }
 
-/** Block the `div` of a `Narrative` (rendered PHI) — at any depth (resource-, section-, entry-level). */
+/** Block the `div` of a `Narrative` (rendered PHI): at any depth (resource-, section-, entry-level). */
 function blockNarrativeDiv(out: FhirExtraction, narrative: FhirComplex, path: string): void {
   const div = getProperty(narrative, "div");
   if (div !== undefined && isPrimitive(div)) {
@@ -310,7 +310,7 @@ function walkValue(out: FhirExtraction, node: FhirNode, path: string, personCtx:
     walkList(out, node, path, personCtx);
     return;
   }
-  // a bare primitive reached during descent — generalize it only if it is a date (else retained).
+  // a bare primitive reached during descent: generalize it only if it is a date (else retained).
   dateEmit(out, node, path);
 }
 
@@ -334,7 +334,7 @@ function handleProperty(
     return;
   }
   if (name === "note") {
-    blockFreeText(out, value, path); // Annotation free-text (text + author + time) — fail closed as a unit
+    blockFreeText(out, value, path); // Annotation free-text (text + author + time): fail closed as a unit
     return;
   }
   if (name === "identifier") {
@@ -342,7 +342,7 @@ function handleProperty(
     return;
   }
   if (name === "display" && !parentIsCoding && isPrimitive(value)) {
-    // A `display` that is not on a Coding is a Reference label (a person name) — fail closed. This
+    // A `display` that is not on a Coding is a Reference label (a person name): fail closed. This
     // catches a display-only / type+display Reference that carries neither `reference` nor `identifier`.
     blockNode(out, value, path);
     return;
@@ -394,7 +394,7 @@ function walkComplex(
 
 /**
  * Walk a parsed FHIR resource (or `Bundle`) and extract every PHI-bearing (or fail-closed) locus,
- * structurally, from the `@cosyte/fhir` model. Never mutates the tree — the applier rebuilds a fresh
+ * structurally, from the `@cosyte/fhir` model. Never mutates the tree: the applier rebuilds a fresh
  * tree from the returned coordinates.
  *
  * @param resource - The parsed FHIR resource (`parseResource(json).resource`).

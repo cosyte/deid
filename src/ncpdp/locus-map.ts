@@ -1,5 +1,5 @@
 /**
- * The **NCPDP Telecommunication (vD.0) locus map** — the cited table of *where* the 18 HIPAA Safe
+ * The **NCPDP Telecommunication (vD.0) locus map**: the cited table of *where* the 18 HIPAA Safe
  * Harbor identifier categories live in the `@cosyte/ncpdp` Telecom model, per segment and field. PHI is
  * located **structurally** at the parser's loci: a value is the patient's last name because it sits in
  * field `311-CB` of the Patient segment (`01`), not because a string "looked like" a name.
@@ -7,13 +7,13 @@
  * NCPDP Telecom is a flat sequence of segments (`TelecomSegment { segmentId, fields }`), each field a
  * `{ id, value }` pair keyed by its 2-character NCPDP field id. The 3-character-prefixed field numbers
  * (e.g. `311-CB`) are globally unique in the standard, so keying off the field id is correct and
- * bypass-resistant — a corrupt Segment Identification (`AM`) cannot route a value away from its rule.
+ * bypass-resistant: a corrupt Segment Identification (`AM`) cannot route a value away from its rule.
  *
- * The three PHI-bearing segments — Patient (`01`), Prescriber (`03`), Insurance (`04`), and the other-payer
- * Coordination of Benefits segment (`05`) — carry the individual's and the cardholder's identity. The
+ * The three PHI-bearing segments: Patient (`01`), Prescriber (`03`), Insurance (`04`), and the other-payer
+ * Coordination of Benefits segment (`05`): carry the individual's and the cardholder's identity. The
  * clinical / financial / pharmacy segments (`02`, `07`, `08`, `10`, `11`, `12`, `13`) and the adjudication
- * response segments carry NDC drug codes, quantities, days-supply, pricing, and DUR reason codes — no
- * direct patient identifier — and are **retained untouched** (the over-scrub guard), except a free-text
+ * response segments carry NDC drug codes, quantities, days-supply, pricing, and DUR reason codes, no
+ * direct patient identifier, and are **retained untouched** (the over-scrub guard), except a free-text
  * field, which **fails closed**. A segment id that is neither mapped nor retained is blocked field-by-field.
  *
  * Field positions are grounded in the NCPDP Telecommunication Standard vD.0 segment definitions and the
@@ -27,15 +27,15 @@ import { SAFE_HARBOR_CATEGORIES, type SafeHarborCategory } from "../categories.j
 const C = SAFE_HARBOR_CATEGORIES;
 
 /**
- * How the extractor turns a mapped NCPDP field into a locus and how the applier rewrites it — the same
+ * How the extractor turns a mapped NCPDP field into a locus and how the applier rewrites it: the same
  * mode vocabulary as the X12 adapter (the transform itself is chosen by the engine from the category):
  *
- * - `redact` — a direct identifier with no analytic value (a name, a phone number). Cleared to `""`.
- * - `date` — a date value (date of birth, other-payer date). Generalized to year.
- * - `zip` — a postal code (`325-CP`). Generalized to the safe 3-digit form.
- * - `id` — an identifier value (patient id, cardholder id, group id). Pseudonymized to a consistent
+ * - `redact`: a direct identifier with no analytic value (a name, a phone number). Cleared to `""`.
+ * - `date`: a date value (date of birth, other-payer date). Generalized to year.
+ * - `zip`: a postal code (`325-CP`). Generalized to the safe 3-digit form.
+ * - `id`: an identifier value (patient id, cardholder id, group id). Pseudonymized to a consistent
  *   keyed surrogate (or removed when the category resolves to SSN).
- * - `block` — a value with no clean structured generalization (a street line, a city, a prescriber
+ * - `block`: a value with no clean structured generalization (a street line, a city, a prescriber
  *   identifier). Fails **closed**: removed and recorded as category (R).
  */
 export type TelecomFieldMode = "redact" | "date" | "zip" | "id" | "block";
@@ -52,7 +52,7 @@ export interface TelecomFieldRule {
  * The **Patient segment (`01`)** field map. Name / street / city / phone removed; date of birth and any
  * date generalized to year; ZIP generalized to its safe 3-digit form; the patient identifier
  * pseudonymized to a consistent surrogate. Gender (`305-C5`) and state (`324-CO`) are recognized
- * non-identifying values and are **not** mapped — they are retained.
+ * non-identifying values and are **not** mapped: they are retained.
  */
 const PATIENT_01: Readonly<Record<string, TelecomFieldRule>> = {
   CA: { mode: "redact", category: C.NAMES }, // 310-CA Patient First Name
@@ -100,8 +100,8 @@ const COB_05: Readonly<Record<string, TelecomFieldRule>> = {
 };
 
 /**
- * The full NCPDP Telecom locus map — segment id → its mapped PHI-bearing fields. A segment absent from
- * this map is either a recognized clinical / financial segment (retained — {@link TELECOM_RETAIN_SEGMENTS})
+ * The full NCPDP Telecom locus map: segment id → its mapped PHI-bearing fields. A segment absent from
+ * this map is either a recognized clinical / financial segment (retained, {@link TELECOM_RETAIN_SEGMENTS})
  * or an unknown segment (failed closed by the extractor).
  *
  * @example
@@ -121,18 +121,18 @@ export const TELECOM_LOCUS_MAP: Readonly<
 });
 
 /**
- * The **recognized non-identifier fields** retained within each mapped PHI segment — the positive
+ * The **recognized non-identifier fields** retained within each mapped PHI segment: the positive
  * complement to {@link TELECOM_LOCUS_MAP} that closes the fail-closed frontier *inside* a PHI segment.
  *
  * A Patient / Prescriber / Insurance / COB segment carries many fields; the scrub map names only the
  * identifiers it transforms. Without this list an **unmapped** field in one of those segments would ride
- * through untouched — and the NCPDP standard defines identifier fields the scrub map does not enumerate
+ * through untouched, and the NCPDP standard defines identifier fields the scrub map does not enumerate
  * (e.g. `350-HN` Patient E-Mail, `359-2A` Medigap ID, a `990-MA`-style alternate id). So the extractor
  * treats a populated field in a PHI segment that is **neither** scrubbed **nor** on this retain list as a
  * candidate identifier and **blocks it** (Safe Harbor category (R)). This list therefore enumerates only
- * the fields that are positively **non-identifying** — coded demographics (gender, state, relationship,
+ * the fields that are positively **non-identifying**: coded demographics (gender, state, relationship,
  * place of service, smoker/pregnancy indicators, id-type qualifiers), non-patient payer references, and
- * monetary amounts / counts — so removing anything else can never destroy a clinical/financial value.
+ * monetary amounts / counts, so removing anything else can never destroy a clinical/financial value.
  *
  * Grounded in the NCPDP Telecommunication Standard vD.0 segment field lists and the sibling
  * `@cosyte/ncpdp` `FIELD_NAMES` registry.
@@ -141,19 +141,19 @@ export const TELECOM_LOCUS_MAP: Readonly<
  * ```ts
  * import { TELECOM_SEGMENT_RETAIN_FIELDS } from "@cosyte/deid/ncpdp";
  *
- * TELECOM_SEGMENT_RETAIN_FIELDS["01"]?.has("C5"); // => true  (gender — retained)
- * TELECOM_SEGMENT_RETAIN_FIELDS["01"]?.has("HN"); // => false (patient email — blocked)
+ * TELECOM_SEGMENT_RETAIN_FIELDS["01"]?.has("C5"); // => true  (gender, retained)
+ * TELECOM_SEGMENT_RETAIN_FIELDS["01"]?.has("HN"); // => false (patient email, blocked)
  * ```
  */
 export const TELECOM_SEGMENT_RETAIN_FIELDS: Readonly<Record<string, ReadonlySet<string>>> =
   Object.freeze({
-    // Patient (01): coded demographics / clinical indicators — never an identifier.
+    // Patient (01): coded demographics / clinical indicators, never an identifier.
     "01": new Set<string>([
       "C5", // 305-C5 Patient Gender Code
       "CO", // 324-CO Patient State/Province (the Safe Harbor geographic level that is retained)
       "C6", // 306-C6 Patient Relationship Code
       "C7", // 307-C7 Place of Service
-      "CX", // 331-CX Patient ID Qualifier (the type code for the pseudonymized CY — metadata)
+      "CX", // 331-CX Patient ID Qualifier (the type code for the pseudonymized CY, metadata)
       "2C", // 335-2C Pregnancy Indicator (a coded clinical flag, not an identifier)
       "4X", // 384-4X Patient Residence (a coded residence type, not an address)
     ]),
@@ -166,7 +166,7 @@ export const TELECOM_SEGMENT_RETAIN_FIELDS: Readonly<Record<string, ReadonlySet<
       "CE", // 309-CE Eligibility Clarification Code
     ]),
     // Coordination of Benefits (05): non-patient payer references, qualifiers, counts, and monetary
-    // amounts — the financial/administrative fields that must survive; the patient's other-payer
+    // amounts: the financial/administrative fields that must survive; the patient's other-payer
     // cardholder (NU) and group (MJ) ids and the other-payer date (E8) are scrubbed by the map.
     "05": new Set<string>([
       "4C", // Coordination Of Benefits / Other Payments Count
@@ -183,7 +183,7 @@ export const TELECOM_SEGMENT_RETAIN_FIELDS: Readonly<Record<string, ReadonlySet<
   });
 
 /**
- * NCPDP Telecom **free-text** field ids that carry human prose and therefore any of the 18 categories —
+ * NCPDP Telecom **free-text** field ids that carry human prose and therefore any of the 18 categories:
  * blocked by default, never scrubbed by a naive pass, wherever they appear (including
  * inside an otherwise-retained clinical / response segment). `544-FY` is the DUR free-text message,
  * `504-F4` is the response Message field, and `526-FQ` is the response Additional Message Information.
@@ -192,41 +192,41 @@ export const TELECOM_SEGMENT_RETAIN_FIELDS: Readonly<Record<string, ReadonlySet<
  * ```ts
  * import { TELECOM_FREE_TEXT_FIELDS } from "@cosyte/deid/ncpdp";
  *
- * TELECOM_FREE_TEXT_FIELDS.has("FY"); // => true (DUR free text — fails closed)
+ * TELECOM_FREE_TEXT_FIELDS.has("FY"); // => true (DUR free text, fails closed)
  * ```
  */
 export const TELECOM_FREE_TEXT_FIELDS: ReadonlySet<string> = new Set<string>(["FY", "F4", "FQ"]);
 
 /**
  * The recognized **clinical / financial / pharmacy** Telecom segments retained (passed through
- * untouched) — the positive half of the fail-closed rule (the analogue of the HL7 / X12 retain lists).
- * They carry NDC drug codes, quantities, days-supply, pricing amounts, and DUR reason codes — no direct
- * patient identifier — so their values survive the over-scrub test byte-identical. A free-text field
+ * untouched): the positive half of the fail-closed rule (the analogue of the HL7 / X12 retain lists).
+ * They carry NDC drug codes, quantities, days-supply, pricing amounts, and DUR reason codes, no direct
+ * patient identifier, so their values survive the over-scrub test byte-identical. A free-text field
  * inside one of these still fails closed. A segment id that is neither mapped ({@link TELECOM_LOCUS_MAP})
  * nor on this list is blocked field-by-field.
  *
  * **Documented limitation (mirrors the HL7 / X12 adapters).** A retained segment may carry a
  * residual patient-related date (a `456-EW` associated prescription date, a `530-FU` previous date of
  * fill) or a per-prescription reference (`402-D2` Rx reference number). Selective scrubbing of those
- * residual loci is **not** performed; forgetting a clinical segment here fails **safe** — blocked, not
+ * residual loci is **not** performed; forgetting a clinical segment here fails **safe**: blocked, not
  * leaked.
  *
  * @example
  * ```ts
  * import { TELECOM_RETAIN_SEGMENTS } from "@cosyte/deid/ncpdp";
  *
- * TELECOM_RETAIN_SEGMENTS.has("07"); // => true (Claim — NDC / quantity / pricing retained)
+ * TELECOM_RETAIN_SEGMENTS.has("07"); // => true (Claim, NDC / quantity / pricing retained)
  * ```
  */
 export const TELECOM_RETAIN_SEGMENTS: ReadonlySet<string> = new Set<string>([
-  "02", // Pharmacy Provider (the pharmacy's own id — not the patient)
+  "02", // Pharmacy Provider (the pharmacy's own id, not the patient)
   "07", // Claim (NDC, quantity, days supply, DAW, Rx reference number)
   "08", // DUR / PPS (reason / professional-service / result-of-service codes)
   "10", // Compound (ingredient NDCs, quantities, costs)
-  "11", // Pricing (ingredient cost, dispensing fee, patient pay — monetary)
+  "11", // Pricing (ingredient cost, dispensing fee, patient pay, monetary)
   "12", // Prior Authorization (type / number)
   "13", // Clinical (diagnosis codes, measurements)
-  // Response segments (adjudication results — status / pricing / DUR codes and amounts).
+  // Response segments (adjudication results, status / pricing / DUR codes and amounts).
   "20", // Response Message (free-text 504-F4 still fails closed)
   "21", // Response Status
   "22", // Response Claim

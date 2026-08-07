@@ -107,7 +107,7 @@ describe("deid core conformance (fail-safe invariants)", () => {
           },
           {},
         ),
-      // A frozen loci array must reject a push (throws) — a valid immutable response.
+      // A frozen loci array must reject a push (throws): a valid immutable response.
       mutate: (r) => (r.document.loci as unknown[]).push({ path: "x" }),
       getSnapshot: (r) =>
         r.document.loci.map((l) => `${l.path}:${String(l.value)}:${l.disposition}`),

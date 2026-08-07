@@ -31,12 +31,12 @@ function freetext(value: string, category: SafeHarborCategory = C.OTHER_UNIQUE_I
   return { path: "OBX-5", kind: "freetext", category, value };
 }
 
-/** A redactor that removes the sentinel token — the "handled" case. */
+/** A redactor that removes the sentinel token: the "handled" case. */
 const scrub: FreeTextRedactor = ({ text }) => ({
   text: text.replace(/SENTINEL_\w+/g, "[REDACTED]"),
 });
 
-describe("BYO free-text redactor — fail-closed contract", () => {
+describe("BYO free-text redactor, fail-closed contract", () => {
   it("blocks free text when no redactor is supplied (the safe default is unchanged)", () => {
     const out = deidentify({ loci: [freetext("note SENTINEL_NAME")] }, {});
     expect(out.document.loci[0]?.value).toBeNull();
@@ -68,7 +68,7 @@ describe("BYO free-text redactor — fail-closed contract", () => {
   });
 });
 
-describe("BYO free-text redactor — redacted-in-place path", () => {
+describe("BYO free-text redactor, redacted-in-place path", () => {
   it("writes the redactor's prose back in place and records it as consumer-asserted", () => {
     const out = deidentify({ loci: [freetext("note SENTINEL_NAME here")] }, { redactor: scrub });
     expect(out.document.loci[0]?.value).toBe("note [REDACTED] here");
@@ -103,10 +103,10 @@ describe("BYO free-text redactor — redacted-in-place path", () => {
   });
 });
 
-describe("BYO free-text redactor — scope and safety invariants", () => {
+describe("BYO free-text redactor, scope and safety invariants", () => {
   const ctx = createDeidContext({ key: "k", patientId: "p1" });
 
-  it("touches ONLY free-text loci — structural removal and the clinical guard are unchanged", () => {
+  it("touches ONLY free-text loci, structural removal and the clinical guard are unchanged", () => {
     // A redactor that would emit its input verbatim (an under-redactor) must not affect non-free-text.
     const passthrough: FreeTextRedactor = ({ text }) => ({ text });
     const out = deidentify(
@@ -147,7 +147,7 @@ describe("BYO free-text redactor — scope and safety invariants", () => {
   });
 });
 
-describe("BYO free-text redactor — properties", () => {
+describe("BYO free-text redactor, properties", () => {
   it("a declining/throwing redactor always blocks (never a value survives)", () => {
     fc.assert(
       fc.property(fc.string(), fc.boolean(), (value, doThrow) => {

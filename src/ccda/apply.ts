@@ -1,16 +1,16 @@
 /**
- * The C-CDA **applier** — writes the engine's transformed loci back onto the CDA DOM the extractor
+ * The C-CDA **applier**: writes the engine's transformed loci back onto the CDA DOM the extractor
  * walked (a fresh, independent `@xmldom/xmldom` tree parsed from the input document's serialized form,
  * so the caller's parsed model is never mutated). Each coordinate holds a direct handle to its node, so
  * write-back is a direct DOM edit with no path re-resolution; `transformed` and `coords` are
  * index-aligned (both preserve extraction order).
  *
  * Removal is clean: a redacted name / blocked narrative becomes an empty element (`<name/>`,
- * `<text/>`) — while a **BYO-redacted** narrative keeps the redactor's prose as the element's
+ * `<text/>`), while a **BYO-redacted** narrative keeps the redactor's prose as the element's
  * text; a redacted telecom loses its `@value`; a generalized date keeps only its year; a
  * pseudonymized id replaces only the id value (the assigning-authority `root` retained); a generalized
  * address keeps only the Safe Harbor 3-digit ZIP (state / country retained) and drops every finer
- * geographic child. Elements the extractor did not touch — the clinical `structuredBody` entries — are
+ * geographic child. Elements the extractor did not touch, the clinical `structuredBody` entries, are
  * left byte-faithful, so structured clinical values survive the over-scrub test unchanged.
  *
  * @packageDocumentation
