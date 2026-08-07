@@ -1,5 +1,93 @@
 # Changelog
 
+## 0.0.9
+
+### Patch Changes
+
+- c85da36: The README lockup now links to cosyte.com (`ASSETS`).
+
+  The `<picture>` block above the H1 is wrapped in an anchor to https://cosyte.com, per the founder
+  requirement of 2026-08-06. Nothing inside the block moved: the `<source>`, the `<img>`, the alt text
+  and both tile URLs are byte-identical.
+
+  What the anchor does was measured on both surfaces by `fhir`, not assumed, because fourteen READMEs
+  carry this shape. On GitHub the anchor works and the colour-scheme switch keeps working, because the
+  `<img>` stays a direct child of `<picture>`, which is the condition the HTML spec puts on `<source>`
+  applying at all. On an npm package page the anchor is lost: npm wraps a README image in its own
+  anchor to the image file, a nested anchor is not representable, so the parser closes ours early and
+  the image ends up linked to the image file rather than to cosyte.com. Shipped anyway by founder
+  decision of 2026-08-07: on npm that is no worse than the unlinked lockup it replaces, and GitHub is
+  where these READMEs are read.
+
+- 1a37df5: The changelog shipped inside every tarball no longer describes its own contents as unreleased.
+  `CHANGELOG.md` is listed in `package.json`'s `files`, and its preamble promised that a first
+  pre-alpha release would ship the public API surface set out beneath it, in a package that had
+  already shipped that surface several versions earlier.
+
+  Releases now write the changelog themselves. `.changeset/config.json` set `"changelog": false` for
+  the whole of this package's published history, so no release ever wrote a version heading into the
+  file; it was maintained by hand under a single `[Unreleased]` heading that nothing ever rolled over.
+  It now names the default generator, so each release writes its own version heading and its own
+  entries, newest first, and a changeset summary is the entry a reader sees. Correcting the sentence
+  by hand was declined deliberately: that leaves the mechanism which wrote it, and it drifts again at
+  the next release.
+
+  The hand-written history is preserved verbatim beneath a `Released before this file was generated`
+  divider. Only the scaffolding for the workflow that no longer runs was dropped: the `[Unreleased]`
+  heading, its link definition at the foot of the file, and one empty section stub. No entry was
+  reworded, re-sorted or removed, and no version number was written into the file by hand.
+
+  No runtime code, public export, `DEID_*` code, policy, profile, manifest disposition or transformed
+  value changes.
+
+  What the new configuration depends on is pinned by tests that run the real `changeset version`
+  inside throwaway git repositories rather than against a string fixture. Exactly one line may sit
+  above generated output, because Changesets prepends a release by replacing the first newline, so the
+  asserted rule is that nothing but the H1 precedes the first heading, checked against a released
+  document as well as against this one. Version headings are compared whole, because `## 0.0.1` is a
+  substring of `## 0.0.10` and this package has already published past that pair. The release's
+  Prettier pass is left on, derived from this repository having no `.prettierignore` and a format
+  check that covers root markdown, with both arms measured: with the pass on the archived history
+  comes through byte identical and the released document passes that check; with it off the
+  generator's raw output is not canonical here. That value is not portable between packages and was
+  not copied from one.
+
+- 53faa00: The Expert-Determination support report reads more plainly, and one of its statements is now harder
+  to misread. `EXPERT_DETERMINATION_DISCLAIMER` is the prominent non-certification text: it is a
+  public export, the report's `disclaimer` field, and what leads the rendered document under its
+  title. Its wording changed, and the sentence disclaiming what this library can see now names its
+  own scope outright rather than leaning on a dash to carry it, so the clause cannot be read as
+  covering only the last item of the list it follows. It still emits no risk score and still reaches
+  no conclusion.
+
+  Five further rendered positions changed wording. A Safe Harbor category the pass did not act on
+  prints `none` in the Transforms column; each retained quasi-identifier prints its locus and its
+  category separated by a colon; and the disposition line, the residual-elements sentence and the
+  quasi-identifier statistics heading are reworded. The first two previously carried a bare
+  punctuation mark, which a reader could take either as "no transform was applied here" or as a
+  rendering artefact, and a value-free audit report is the last place that ambiguity belongs.
+
+  Three other strings a running program can observe move with them: the de-identification method text
+  written into DICOM `(0012,0063)`, the description carried on the limited data set profile, and the
+  message on the error raised when a profile override would weaken a category. The tag written to,
+  that profile's transform set and the `DEID_PROFILE_INVALID` code accompanying the error are all
+  unchanged.
+
+  Editorial punctuation is brought into line with the house style across every published surface: the
+  npm description, `README.md`, the guides, and the JSDoc that compiles into the shipped declaration
+  files. Where a heading was reworded its anchor moves with it, so a link saved into one of these
+  documents from outside the package may need updating; no link inside the package was broken by the
+  change, though three in `limitations.md` were already dangling and remain so.
+  Two rows of the HL7 v2 and C-CDA locus tables that record a retained, never-swept region now read
+  `n/a` in the Loci column, which is what the mark they replaced meant. Those regions are documented
+  in the same guides as still carrying dates, identifiers and provider names that the pass does not
+  touch.
+
+  No public export is added, renamed or removed, and no policy, no profile transform set, no warning
+  or disposition code, no locus string and no transformed value changes. Every adapter removes,
+  generalizes, pseudonymizes, shifts and blocks exactly what it did before, at the same loci,
+  recording the same codes.
+
 ## Released before this file was generated
 
 Every release section above this heading is written by
