@@ -420,9 +420,13 @@ R100` and this route printed its clean line (measured on git 2.39.5; the all-mod
   and the index route adds only `sidebars.json`.** A draft of this slice wrote that `docs-content/`
   was "no longer out of scope full stop" and **deleted the sentence that said otherwise** — the
   refuter measured it in one command and it was a **false green about the one surface that ships to
-  docs.cosyte.com**, in the de-identification package. **Nothing here scans a `.md` on any route**
-  (`isDocFile`), which is the pre-existing exemption that decides it; the index scope itself is
-  decided in `buildTargetsForIndex`.
+  docs.cosyte.com**, in the de-identification package. **No `.md` is scanned by either ENUMERATING
+  route or by the index route** (`isDocFile`), which is the pre-existing exemption that decides it;
+  the index scope itself is decided in `buildTargetsForIndex`. **"On any route" would be WIDER THAN
+  THE MEASUREMENT and pass 2 caught it: `buildTargetsForPaths` applies no `isDocFile` filter, so an
+  explicitly named `.md` IS scanned** -- correctly, since a positional path is the caller's own
+  argument rather than this package's corpus. That direction overstates the GAP rather than the
+  coverage, so it was never a false green, and it is corrected rather than softened.
 
 ### Enumerating the files buys the floor only
 

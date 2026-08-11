@@ -243,7 +243,9 @@ const OVERRIDE_LOG_PATH = join(REPO_ROOT, "phi-scan-overrides.md");
  * ▶ SO `docs-content/` IS STILL A PUBLISHED CONSUMER SURFACE THIS GATE DOES NOT
  * SCAN FOR PHI: 16 of its 17 tracked files are `.md`, and the index route adds
  * only `sidebars.json`. Do not read "the index route reads what git carries" as
- * covering it. Nothing here scans a `.md` on any route.
+ * covering it. No `.md` is scanned by either ENUMERATING route or by the index
+ * route -- an explicitly named path IS scanned, whatever it is called, because
+ * that is the caller's own argument rather than this package's corpus.
  */
 const SCAN_ROOT_NAMES: readonly string[] = ["src", "test", "scripts"];
 
@@ -917,9 +919,12 @@ function buildTargetsForStaged(): Target[] {
  *     ROUTES. `SCAN_ROOT_NAMES` is three names, so nothing outside them was
  *     enumerated. Measured on this repo before this route: 25 tracked
  *     non-markdown files sit outside all three roots and neither route had ever
- *     opened one. This route reads every tracked path, so a new top-level
- *     directory's COMMITTED bytes are in scope the moment git tracks something
- *     in it, with nobody remembering to declare it.
+ *     opened one. This route reads every tracked path it can read, so a new
+ *     top-level directory's COMMITTED bytes are in scope the moment git tracks
+ *     something in it, with nobody remembering to declare it -- EXCEPT for the
+ *     two exclusions below. A new top-level directory of `.md`, or one under
+ *     `vendor/`, gets nothing from this route. Do not read this bullet as the
+ *     stronger promise: the exclusions are 40 lines down and they bind here.
  *   - A TRACKED SYMLINK OR GITLINK OUTSIDE EVERY SCAN ROOT. `walk()` classifies
  *     entries INSIDE a root, so such an entry was reached by neither route. It
  *     is refused here BY MODE, through the same `gitModeKind` closed set, and

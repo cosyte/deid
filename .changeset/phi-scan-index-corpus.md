@@ -44,8 +44,9 @@ the mode refusals, so naming a symlink `vendor/x.tgz` or `x.md` cannot buy it a 
 link's target path, which is itself an identifier surface.
 
 What this does not widen, stated because it would be easy to read the other way: markdown is exempt
-on every route, as it already was, so the documentation set remains a published surface this gate
-does not scan. Sixteen of its seventeen tracked files are markdown and this adds only the navigation
+on both enumerating routes and on this one, as it already was, so the documentation set remains a
+published surface this gate does not scan. An explicitly named path is still scanned, whatever it is
+called. Sixteen of its seventeen tracked files are markdown and this adds only the navigation
 config beside them.
 
 One floor hit surfaced, and it is not patient data: the package manifest's `author` field carries a
@@ -57,6 +58,11 @@ declaration, so the same corpus reds at exit 1: the green is earned by the decla
 the file never being opened. The address is deliberately not written out in the allow-list's own
 comment, which sits inside a scan root; an earlier draft that spelled it out made that file red too,
 and a control that reds on two files cannot tell which one it read.
+
+That declaration is also the one place this change makes the gate see less rather than more, so the
+word union is worth pinning down: it is a union of BYTES, not of detections. The sweep gains 19 files
+it never opened, and separately the email floor stops firing on one exact domain, in every file and
+on every route. Both halves are stated where they are decided.
 
 20 cases added, 15 of them red against the previous scanner and the other five negative controls on
 the union and exclusion boundaries. The suite's throwaway-repository helper now commits its baseline,

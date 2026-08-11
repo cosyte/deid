@@ -163,10 +163,11 @@ Every line here is clinical-safety content. Full cases: `documentation/agent-not
   false-green one. → `documentation/agent-notes.md#closed-by-no-renames`
 - **THE WALK ROOTS ARE `src/`, `test/` (ALL of it) AND `scripts/`: A DIFFERENT DECISION FROM EVERY
   SIBLING'S. DO NOT PORT ONE OVER IT.** The old scopes missed **38 tracked files**, four carrying
-  inline HL7 `PID|…` literals. **`.md` IS EXEMPT ON EVERY ROUTE, SO `docs-content/` REMAINS A
-  PUBLISHED CONSUMER SURFACE THIS GATE DOES NOT SCAN FOR PHI**: 16 of its 17 files are `.md`, and
-  the index route adds only `sidebars.json`. `.github/` and the root manifests ARE read there now;
-  `vendor/` is not. → `documentation/agent-notes.md#the-scan-roots`
+  inline `PID|…` literals. **`.md` IS EXEMPT ON BOTH ENUMERATING ROUTES AND ON THE INDEX ROUTE (an
+  explicit path is still scanned), SO `docs-content/` REMAINS A PUBLISHED CONSUMER SURFACE THIS GATE
+  DOES NOT SCAN FOR PHI**: 16 of its 17 files are `.md`; the index adds only `sidebars.json`.
+  `.github/` and the root manifests ARE read there; `vendor/` is not.
+  → `documentation/agent-notes.md#the-scan-roots`
 - **ENUMERATING THE FILES BUYS THE SSN/EMAIL FLOOR AND NOTHING ELSE: a detector has to RECOGNISE the
   document first, and every recogniser was written for a file that _is_ the document.** This repo's
   fixtures are `.ts` string literals, so each file is also scanned as its **decoded, joined
@@ -190,8 +191,7 @@ Every line here is clinical-safety content. Full cases: `documentation/agent-not
 - **EXACTLY ONE FILE IS BYPASSED AND IT NEEDS BOTH HALVES** (`--allow-fixture` **and** a
   `phi-scan-overrides.md` entry): `test/scripts/phi-scan.test.ts`. **Real PHI pasted there is not
   caught: the stated cost.** → `documentation/agent-notes.md#exactly-one-file-is-bypassed`
-- **`U` is in the `--diff-filter` and is REFUSED, not read.**
-  → `documentation/agent-notes.md#unmerged-entries-are-refused`
+- **`U` is in the `--diff-filter` and is REFUSED, not read.** → `documentation/agent-notes.md#unmerged-entries-are-refused`
 - **EXIT 1 MEANS HITS AND NOTHING ELSE MAY SPEND IT.** Failure is the default path; do not go back to
   catching by type. → `documentation/agent-notes.md#exit-1-means-hits`
 - **ALL MODE READS THE BYTES GIT CARRIES, AS A UNION WITH THE WALK.** Five states printed `OK, no
@@ -200,12 +200,12 @@ hits` at exit 0 on base; the decoy at a tracked path is why it exists. **The mec
   swallow a real hit — `makeRepo()` commits its baseline, and `--allow-fixture` is subtracted here
   too: live, not dead code.** → `documentation/agent-notes.md#all-mode-reads-the-bytes-git-carries`
 - **`vendor/` IS EXCLUDED FROM THAT ROUTE, AS A LITERAL PATH** (45 mojibake hits without it). **A
-  "binary blob" PREDICATE was measured and REJECTED: `src/context.ts` and `src/manifest.ts` embed NUL
-  bytes.** **The byte skip MAY NOT normalize line endings**; `.md`/`vendor/` apply LAST, after the
-  mode refusals. → `documentation/agent-notes.md#what-the-index-route-excludes`
+  "binary blob" PREDICATE was measured and REJECTED: two hand-written `src/*.ts` embed NUL bytes.**
+  **The byte skip MAY NOT normalize line endings**; `.md`/`vendor/` apply LAST, after the mode
+  refusals. → `documentation/agent-notes.md#what-the-index-route-excludes`
 - **THE POSITIVE CONTROL STRIKES `EMAILDOMAIN cosyte.com` AND THE SAME CORPUS REDS.** That floor hit
   is `package.json`'s contact address: **published registry metadata, NOT PHI**; an `EMAILDOMAIN`
-  entry is **global and route-blind**. **Never spell the address out in the allow-list — it sits in a
+  entry is **global and route-blind**. **Never spell the address out in the allow-list: it sits in a
   scan root, and a control that reds on two files proves nothing.**
   → `documentation/agent-notes.md#the-positive-control-and-its-floor-hit`
 
