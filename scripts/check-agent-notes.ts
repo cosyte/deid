@@ -482,7 +482,8 @@ function extractHeadings(lines: readonly string[]): Extraction {
     // markdown documentation quotes markdown), after which every hash line in the remainder of the
     // sample is read as a heading and mints an anchor GitHub does not render. That is the
     // false-green direction this gate must never fail in, so the rule is the real one. Verified
-    // against a CommonMark/GFM parser. THE RULE HAS FOUR CONDITIONS AND EACH ONE HAS ITS OWN
+    // against a CommonMark/GFM parser. THE FENCE RULE HAS FOUR CONDITIONS IN ALL -- the three on
+    // the CLOSER above, plus the backtick-info restriction on the OPENER below -- AND EACH HAS ITS OWN
     // SELF-TEST CASE, verified by deleting that conjunct ALONE and confirming this gate refuses at
     // exit 2 on the real tree. That sentence is written this way because TWO EARLIER VERSIONS OF IT
     // WERE FALSE: a review deleted the length condition with everything else green, and a later

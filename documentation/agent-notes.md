@@ -397,11 +397,13 @@ DELETABLE with every other case still green, and the reordering untested.
 **AND A THIRD PASS REFUTED THE FIX TO THE SECOND, WHICH IS THE ENTRY TO READ IF YOU ARE SHORT OF
 TIME.** The remedy above asserted, in the script, in the changeset and in this file, that *"each of
 the three fence conditions has its own self-test case, verified by removing each one and watching the
-gate refuse."* **Measured false.** The closing rule has **four** conditions, and `marker ===
+gate refuse."* **Measured false.** The fence rule has **four** conditions, not three (the closer's
+three, plus the opener's backtick-info restriction), and `marker ===
 fenceMarker` could be deleted with the self-test, the real tree and all fifteen suite cases still
 green — while, with it gone, one input yields a phantom anchor and a lost real anchor at the same
 time. The mutation matrix behind the sentence had removed conditions **in pairs**, which proves
-nothing about either one. All four conditions now have their own case, each verified by deleting that
+nothing about either one. All four conditions of the fence rule — three on the closer, one on the
+opener — now have their own case, each verified by deleting that
 conjunct **alone**; cases 13, 14 and 15 were each verified by reverting their fix and watching the
 case fail.
 
