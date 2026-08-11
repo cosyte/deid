@@ -924,7 +924,9 @@ function buildTargetsForStaged(): Target[] {
  *     something in it, with nobody remembering to declare it -- EXCEPT for the
  *     two exclusions below. A new top-level directory of `.md`, or one under
  *     `vendor/`, gets nothing from this route. Do not read this bullet as the
- *     stronger promise: the exclusions are 40 lines down and they bind here.
+ *     stronger promise: `isDocFile` and `INDEX_EXCLUDED_PREFIXES` bind here.
+ *     (Named rather than counted: a "N lines below" locator went stale between
+ *     two drafts of this very docblock, which is the same defect in miniature.)
  *   - A TRACKED SYMLINK OR GITLINK OUTSIDE EVERY SCAN ROOT. `walk()` classifies
  *     entries INSIDE a root, so such an entry was reached by neither route. It
  *     is refused here BY MODE, through the same `gitModeKind` closed set, and

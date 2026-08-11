@@ -46,8 +46,8 @@ link's target path, which is itself an identifier surface.
 What this does not widen, stated because it would be easy to read the other way: markdown is exempt
 on both enumerating routes and on this one, as it already was, so the documentation set remains a
 published surface this gate does not scan. An explicitly named path is still scanned, whatever it is
-called. Sixteen of its seventeen tracked files are markdown and this adds only the navigation
-config beside them.
+called. Sixteen of the documentation set's seventeen tracked files are markdown, and this adds only
+the navigation config beside them.
 
 One floor hit surfaced, and it is not patient data: the package manifest's `author` field carries a
 company mailbox at our own domain, registry metadata that already ships in every published tarball.
