@@ -23,8 +23,14 @@
  * **Inside a retained segment**, the identifying dates and the encounter / order numbers are carved
  * back out ({@link RETAINED_LOCUS_RULES}): under a Safe-Harbor-labelled policy the admit (PV1-44),
  * discharge (PV1-45), observation (OBR-7) and diagnosis (DG1-5) dates generalize to their **year**, and
- * the visit number (PV1-19) and the placer / filler order numbers (OBR-2/3, ORC-2/3) are **blocked** as
- * the (R) catch-all. A profile that names their retention class keeps them **unchanged and recorded**.
+ * the visit number (PV1-19) and the placer / filler order numbers (OBR-2/3, ORC-2/3) are **removed**. A
+ * profile that names their retention class keeps them **unchanged and recorded**.
+ *
+ * **PV1-19 is a CX list routed by its CX-5 identifier-type code**, exactly like PID-3: a `VN`-typed or
+ * untyped value is the encounter identifier (removed as the (R) catch-all, retainable), while an
+ * `MR`/`AN`/`SS`-typed one is handled as the identifier it really is and is **transformed under both
+ * profiles, never retained** — §164.514(e)(2) names all three, so keeping one would republish in the
+ * clear the identifier the pass pseudonymized at PID-3 in the same message.
  *
  * **Known limitations.** Free text is block-only (no scrub); **every** field of a retained segment that
  * the carve-out does not name is still passed through untouched and unrecorded, which continues to

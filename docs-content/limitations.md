@@ -63,8 +63,13 @@ Two things follow, and the second is the one that surprises people:
 - **The identifying loci inside retained HL7 v2 structures are carved back out and acted on.** Under a
   Safe-Harbor-labelled policy the admit (PV1-44), discharge (PV1-45), observation (OBR-7) and diagnosis
   (DG1-5) dates are reduced to their **year**, and the visit number (PV1-19) with the placer and filler
-  order numbers (OBR-2/3, ORC-2/3) are **blocked** as the (R) catch-all. §164.514(b)(2)(i)(C) names
-  admission and discharge dates in the regulation text itself.
+  order numbers (OBR-2/3, ORC-2/3) are **removed**. §164.514(b)(2)(i)(C) names admission and discharge
+  dates in the regulation text itself.
+- **PV1-19 is routed by its CX-5 identifier-type code**, like PID-3. A `VN`-typed or untyped visit
+  number is the encounter identifier and is removed as the (R) catch-all; an `MR`/`AN`/`SS`-typed one is
+  handled as the medical record / account / social security number it actually is, so it is
+  **transformed under both profiles and is never retained** (§164.514(e)(2) names all three). A kept
+  visit number is therefore only ever one the wire did not type as something stronger.
 - **Every other field of a retained structure is still passed through untouched, and recorded
   nowhere.** The carve-out above narrows this class; it does not close it. Full-precision timestamps
   survive in EVN, PV2, PR1, RXA, RXD, FT1, TXA and SPM, and the attending / referring **provider**
@@ -92,9 +97,10 @@ only when a real de-identified document grounds it.
 
   It also **keeps unchanged** the two classes §164.514(e)(2) permits and Safe Harbor does not: the
   **encounter dates** (admission / discharge / service / diagnosis) and the **encounter and order
-  identifiers** (visit number, placer and filler order numbers). That list of sixteen direct
-  identifiers names no date and has no catch-all, which is exactly why these survive here and are
-  removed under Safe Harbor. Every one is still **recorded** as a `DEID_RESIDUAL_RETAINED` residual and
+  identifiers** (a `VN`-typed or untyped visit number, and the placer and filler order numbers). That
+  list of sixteen direct identifiers names no date and has no catch-all, which is exactly why these
+  survive here and are removed under Safe Harbor. It **does** name medical record, account and social
+  security numbers, so a PV1-19 typed as one of those is transformed here too. Every one is still **recorded** as a `DEID_RESIDUAL_RETAINED` residual and
   appears in the support report's inventory, so nothing is kept silently.
 
 `defineDeidProfile()`'s widen-never-narrow contract covers retention too, and it reads the opposite way
