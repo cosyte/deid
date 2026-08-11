@@ -145,60 +145,69 @@ truth is the meta-repo's `documentation/conventions.md`; the full per-line detai
 
 Every line here is clinical-safety content. Full cases: `documentation/agent-notes.md#the-phi-scan`.
 
-- **The scan FOLLOWS NOTHING: a non-regular in-scope entry REFUSES the scan (exit 2). Never "fix" this
-  by following the link.** Both enumerating routes read a symlink as **clean**; reproduced on
-  `e040ffc`. The narrowing is **structural** on both routes; **the kind tokens are labels with a catch-all arm, never
-  the decision: do not turn either into a list of shapes to match.**
-  → `documentation/agent-notes.md#phi-scan-follows-nothing`
+- **The scan FOLLOWS NOTHING: a non-regular in-scope entry REFUSES the scan (exit 2). Never "fix"
+  this by following the link.** Both routes read a symlink as **clean**; reproduced on `e040ffc`. The
+  narrowing is **structural**; **the kind tokens are labels with a catch-all arm, never the decision:
+  do not turn either into a list of shapes.** → `documentation/agent-notes.md#phi-scan-follows-nothing`
 - **THE ONE-LETTER TRAP: `--diff-filter` MUST KEEP `T`.** Without it a tracked file replaced by a link
   staged green through `pre-commit`. → `documentation/agent-notes.md#the-one-letter-trap-t-in-the-diff-filter`
-- **`R`/`C` are closed by `--no-renames`, not by the filter**: the enumeration is a superset and the
-  record stride becomes structural. **The old "needs the two-path record shape, a scope decision"
-  framing is WITHDRAWN as FALSE, not deferred.** → `documentation/agent-notes.md#closed-by-no-renames`
-- **A REFUSAL NAMES THE ENTRY'S OWN REPO-RELATIVE PATH AND AN ENGINE-OWNED KIND TOKEN, NEVER THE LINK
-  TARGET**: working-tree text that can itself carry PHI. **A diagnostic about a PHI leak is itself a
-  PHI surface, and so is the prose explaining it**: no example target path goes in the docblock, the
-  CHANGELOG or the changeset. → `documentation/agent-notes.md#closed-by-no-renames`
-- **Two things NOT covered, both measured:** explicit-path mode still reads through a link; a file that
-  vanishes between enumeration and read fails **closed** (exit 2): a false-red risk, not a false-green
-  one. The siblings' TOCTOU machinery was deliberately not ported.
+- **`R`/`C` are closed by `--no-renames`, not by the filter**: the enumeration becomes a superset and
+  the stride structural. **The old "needs the two-path record shape, a scope decision" framing is
+  WITHDRAWN as FALSE, not deferred.** → `documentation/agent-notes.md#closed-by-no-renames`
+- **A REFUSAL NAMES THE ENTRY'S OWN PATH AND AN ENGINE-OWNED KIND TOKEN, NEVER THE LINK TARGET.** A
+  diagnostic about a PHI leak is itself a PHI surface, **and so is the prose explaining it**: no
+  example target path in the docblock, CHANGELOG or changeset.
   → `documentation/agent-notes.md#closed-by-no-renames`
-- **THE SCAN ROOTS ARE `src/`, `test/` (ALL of it) AND `scripts/`: A DIFFERENT DECISION FROM EVERY
-  SIBLING'S. DO NOT PORT ONE OVER IT.** The old scopes missed **38 tracked files**, four already
-  carrying inline HL7 `PID|…` literals. **STILL OUT OF SCOPE, AND STATED AS SUCH:** `.github/`,
-  **`docs-content/` (a PUBLISHED consumer surface that this gate does NOT scan for PHI)**, `vendor/`,
-  and the root manifests. → `documentation/agent-notes.md#the-scan-roots`
+- **Two things NOT covered, both measured:** explicit-path mode still reads through a link; a file
+  that vanishes between enumeration and read fails **closed** (exit 2) — a false-red risk, not a
+  false-green one. → `documentation/agent-notes.md#closed-by-no-renames`
+- **THE WALK ROOTS ARE `src/`, `test/` (ALL of it) AND `scripts/`: A DIFFERENT DECISION FROM EVERY
+  SIBLING'S. DO NOT PORT ONE OVER IT.** The old scopes missed **38 tracked files**, four carrying
+  inline HL7 `PID|…` literals. **OUT OF SCOPE FOR THE WALK, AND NO LONGER OUT OF SCOPE FULL STOP:**
+  `.github/`, `docs-content/` and the root manifests are now read **from the index** in all mode;
+  only `vendor/` and `.md` are excluded there. **`docs-content/`'s WORKING-TREE bytes are still
+  unread, so an unstaged edit there is not scanned.** → `documentation/agent-notes.md#the-scan-roots`
 - **ENUMERATING THE FILES BUYS THE SSN/EMAIL FLOOR AND NOTHING ELSE: a detector has to RECOGNISE the
   document first, and every recogniser was written for a file that _is_ the document.** This repo's
-  fixtures are `.ts` string literals, so each file is also scanned as its **decoded, joined literals**;
-  four recognisers widened with it (X12's offset-0 `ISA`, a bare `PID|…`, an indented segment, HL7's
-  doubled backslash). → `documentation/agent-notes.md#enumerating-the-files-buys-the-floor-only`
-- **WIDENING A RECOGNISER IS TWO-SIDED. EVERY MECHANISM IS "IN ADDITION TO", NEVER "INSTEAD OF": DO NOT
-  SIMPLIFY ONE AWAY.** A per-line split silently took a hard-wrapped `NM1*IL` from three patient
-  identifiers to zero. Each piece is read per line **and** rejoined; indentation is stripped in the
-  literal view only. **Each of the four mechanisms has a case that goes RED when it is removed:
+  fixtures are `.ts` string literals, so each file is also scanned as its **decoded, joined
+  literals**; four recognisers widened with it.
+  → `documentation/agent-notes.md#enumerating-the-files-buys-the-floor-only`
+- **WIDENING A RECOGNISER IS TWO-SIDED. EVERY MECHANISM IS "IN ADDITION TO", NEVER "INSTEAD OF": DO
+  NOT SIMPLIFY ONE AWAY.** A per-line split silently took a hard-wrapped `NM1*IL` from three patient
+  identifiers to zero. **Each of the four mechanisms has a case that goes RED when it is removed:
   verified by removing each one, not by reading the code.**
   → `documentation/agent-notes.md#widening-a-recogniser-is-two-sided`
-- **▶ THE EVIDENCE STANDARD FOR THIS REPO: PROVE EVERY WIDENING WITH A CASE THAT IS RED BEFORE AND GREEN
-  AFTER. A recogniser that quietly matches nothing reports "no hits."** This is how a redaction widening
-  is accepted here: a claim without a red-before case is not evidence.
-  → `documentation/agent-notes.md#widening-a-recogniser-is-two-sided` (the per-mechanism form) and
-  `documentation/agent-notes.md#what-is-not-claimed-to-be-reached` (the sentence itself)
+- **▶ THE EVIDENCE STANDARD FOR THIS REPO: PROVE EVERY WIDENING WITH A CASE THAT IS RED BEFORE AND
+  GREEN AFTER. A recogniser that quietly matches nothing reports "no hits."** A claim without a
+  red-before case is not evidence. → `documentation/agent-notes.md#what-is-not-claimed-to-be-reached`
 - **None of that claims arbitrary embedded text is reached**; the banner in `scripts/phi-scan.ts`
   enumerates what is not. → `documentation/agent-notes.md#what-is-not-claimed-to-be-reached`
 - **A comment in `scripts/phi-scan.ts` is INSIDE a scan root**: an escaped example decodes into a
   segment the detector reads as a fixture. It did, on the first draft.
   → `documentation/agent-notes.md#a-comment-in-the-scanner-is-inside-a-scan-root`
-- **`19800101` MUST STAY OUT OF THE ALLOW-LIST**: it is the undeclared DOB four positive tests use;
-  declare it and all four assert nothing.
-  → `documentation/agent-notes.md#the-undeclared-dob-must-stay-out-of-the-allow-list`
+- **`19800101` MUST STAY OUT OF THE ALLOW-LIST**: the undeclared DOB four positive tests use; declare
+  it and all four assert nothing. → `documentation/agent-notes.md#the-undeclared-dob-must-stay-out-of-the-allow-list`
 - **EXACTLY ONE FILE IS BYPASSED AND IT NEEDS BOTH HALVES** (`--allow-fixture` **and** a
-  `phi-scan-overrides.md` entry): `test/scripts/phi-scan.test.ts`. **Real PHI pasted into that one file
-  is not caught: that is the stated cost.** → `documentation/agent-notes.md#exactly-one-file-is-bypassed`
+  `phi-scan-overrides.md` entry): `test/scripts/phi-scan.test.ts`. **Real PHI pasted there is not
+  caught: the stated cost.** → `documentation/agent-notes.md#exactly-one-file-is-bypassed`
 - **`U` is in the `--diff-filter` and is REFUSED, not read.**
   → `documentation/agent-notes.md#unmerged-entries-are-refused`
 - **EXIT 1 MEANS HITS AND NOTHING ELSE MAY SPEND IT.** Failure is the default path; do not go back to
   catching by type. → `documentation/agent-notes.md#exit-1-means-hits`
+- **ALL MODE READS THE BYTES GIT CARRIES, AS A UNION WITH THE WALK.** Five states printed `OK, no
+hits` at exit 0 on base; the decoy at a tracked path is why it exists. **The mechanism is written
+  ONCE, at `buildTargetsForIndex`.** **Refusals run AFTER the walk is scanned — a refusal must not
+  swallow a real hit — `makeRepo()` commits its baseline, and `--allow-fixture` is subtracted here
+  too: live, not dead code.** → `documentation/agent-notes.md#all-mode-reads-the-bytes-git-carries`
+- **`vendor/` IS EXCLUDED FROM THAT ROUTE, AS A LITERAL PATH** (45 mojibake hits without it). **A
+  "binary blob" PREDICATE was measured and REJECTED: `src/context.ts` and `src/manifest.ts` embed NUL
+  bytes.** **The byte skip MAY NOT normalize line endings**; `.md`/`vendor/` apply LAST, after the
+  mode refusals. → `documentation/agent-notes.md#what-the-index-route-excludes`
+- **THE POSITIVE CONTROL STRIKES `EMAILDOMAIN cosyte.com` AND THE SAME CORPUS REDS.** That floor hit
+  is `package.json`'s contact address: **published registry metadata, NOT PHI**; an `EMAILDOMAIN`
+  entry is **global and route-blind**. **Never spell the address out in the allow-list — it sits in a
+  scan root, and a control that reds on two files proves nothing.**
+  → `documentation/agent-notes.md#the-positive-control-and-its-floor-hit`
 
 ### The `attw` gate
 

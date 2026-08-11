@@ -27,6 +27,30 @@ EMAILDOMAIN example.org
 EMAILDOMAIN example.net
 EMAILDOMAIN example.test
 
+# --- This package's own published contact address ---
+# `package.json`'s `author` field carries a mailbox at this domain. It is registry
+# metadata that ships in every published tarball and is already public on the npm
+# page; it is a company mailbox, not a person's, and it is NOT patient data.
+#
+# The ADDRESS ITSELF IS DELIBERATELY NOT WRITTEN OUT HERE. This file sits inside a
+# scan root, so spelling it out would make THIS file red whenever the declaration
+# below is struck -- and striking that declaration is exactly how the scanner's
+# own positive control proves it opened `package.json`. A control that reds on two
+# files cannot tell which one it read.
+#
+# It surfaced only when all mode began reading the bytes git carries: package.json
+# sits outside every scan root, so no route had ever opened it. The declaration is
+# the honest answer rather than narrowing the sweep back to where it could not see
+# the file.
+#
+# ▶ THE COST, STATED RATHER THAN HIDDEN: an EMAILDOMAIN entry is GLOBAL and
+# ROUTE-BLIND. This one stops the floor firing on ANY address at cosyte.com, in
+# any file, on every route -- not just on the manifest. That is the mechanism this
+# allow-list has, and the trade is accepted deliberately: a real patient address
+# would not be at our own corporate domain, and the alternative (a per-path
+# exemption) is the whole-file bypass, which silences every check for that file.
+EMAILDOMAIN cosyte.com
+
 # --- Synthetic person-name / street / city tokens (fixtures under test/fixtures/hl7) ---
 # Patient + relatives + guarantor + insured names, and street/city address parts. All are
 # obviously-synthetic ZZ-tagged tokens, never a real-looking name.
