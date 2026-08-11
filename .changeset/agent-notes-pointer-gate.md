@@ -80,6 +80,20 @@ branch leaves pull requests pending rather than failing, which has cost this rep
 project guide gained its entry within its existing byte budget, by relocating a duplicated toolchain
 summary into the narrative file where the full version already lived.
 
+Four things came out under adversarial review, two of them shapes carried over rather than newly
+written. A rejoining step that retried a failed anchor against the following line was deleted: its
+comment claimed it could not manufacture a pass, which is true only of links that already resolved,
+and it was reproduced reporting everything as resolving over a truncated anchor whose continuation
+supplied the missing character. It rescued none of this tree's real links, so it bought nothing while
+opening the one direction the check must never fail in; a link an editor wrapped now fails, and the
+fix is to unwrap it. A sentence generalising about other packages was removed from three places,
+because such a claim is not checkable from inside this one and the convention it asserted is recorded
+as a per-package decision. The closing rule for a fenced block was wrong: any run of the same
+character ended it, so a nested sample closed the outer block on the inner opener and every heading
+after that minted an anchor no renderer produces; the rule is now same marker, at least as long, no
+info string. And the missing-cursor-file finding was unreachable behind the no-links refusal, which
+answered a modelled break with a misdiagnosis; both are fail-closed, one is legible.
+
 Scope, stated rather than discovered: only the narrative file's basename is compared, so relocating
 it to another directory while the links keep their old prefix passes while every rendered link
 breaks; a file that is not valid UTF-8 is skipped whole and the skip is counted; a link at any other

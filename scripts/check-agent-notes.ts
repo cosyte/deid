@@ -93,13 +93,18 @@
  * THE CORPUS PARTITION IS THE OTHER THING THAT DID NOT PORT, AND GETTING IT WRONG COSTS THREE
  * HAND-WRITTEN SOURCE FILES IN SILENCE.
  *
- * Every sibling copy of this gate skips a file that contains a NUL byte, on the reasoning that a NUL
- * means a compressed vendored tarball nobody can edit to clear a red. THAT REASONING IS FALSE HERE
- * AND WAS MEASURED FALSE BEFORE THIS FILE WAS WRITTEN: this repository tracks HAND-WRITTEN
- * TypeScript sources under `src/` that embed NUL bytes in string literals, and a NUL partition drops
- * every one of them out of both the matcher and the census with nothing to notice. This repository
- * already has that measurement written down, because a "binary blob" predicate was proposed for its
- * PHI scanner and REJECTED for the same reason.
+ * The obvious partition is a NUL byte, on the reasoning that a NUL means a compressed vendored
+ * tarball nobody can edit to clear a red. THAT REASONING IS FALSE HERE AND WAS MEASURED FALSE BEFORE
+ * THIS FILE WAS WRITTEN: this repository tracks HAND-WRITTEN TypeScript sources under `src/` that
+ * embed NUL bytes in string literals, and a NUL partition drops every one of them out of both the
+ * matcher and the census with nothing to notice. This repository already has that measurement
+ * written down, because a "binary blob" predicate was proposed for its PHI scanner and REJECTED for
+ * the same reason.
+ *
+ * ▶ AND SAY NOTHING ABOUT WHAT ANY OTHER REPOSITORY DOES. A draft of this paragraph opened "every
+ * sibling copy of this gate skips on NUL", which is a universal about repositories this script
+ * cannot read, is the exact shape this file's second section refuses, and was refuted in review. The
+ * partition is a per-repo decision every time; what is written here is only what was measured here.
  *
  * GIT'S OWN CLASSIFICATION IS A THIRD, DIFFERENT SET AND IS ALSO WRONG FOR THIS PURPOSE. Measured
  * here: `git grep -I` calls some of those hand-written sources binary and others not, because its
@@ -204,6 +209,11 @@
  *        boundary is still fail-closed, so none is a false green. Disclosed rather than narrowed:
  *        the alternative, scoping the census to the pair, carries the much worse cost that a bare
  *        pointer in a third file is seen by nothing.
+ *  (xiii)[PINNED] A POINTER BROKEN ACROSS A LINE WRAP IS REPORTED AS DANGLING, NOT REJOINED. A
+ *        sibling rejoins the fragment with the next line's leading anchor run; that was REMOVED here
+ *        after it was shown to print "all resolving" at exit 0 over a genuinely dangling pointer.
+ *        See the note at the violation push for the reproduction. The cost is a false RED on a
+ *        pointer an editor wrapped, which is the safe direction and is fixed by unwrapping it.
  *  (xii) [PINNED] A POINTER IS MATCHED IFF IT IS SPELLED IN ASCII BYTES. The filed limit on this
  *        was WRONG and is corrected here: UTF-7 DOES match, because RFC 2152 permits a bare hash, so
  *        a UTF-7 document spells the pointer in ASCII bytes and is read exactly like any other. A
@@ -439,6 +449,7 @@ function extractHeadings(lines: readonly string[]): Extraction {
   const slugger = makeSlugger();
   let inFence = false;
   let fenceMarker = "";
+  let fenceLength = 0;
   let inComment = false;
   let commentOpenedAt = 0;
   let commented = 0;
@@ -464,15 +475,27 @@ function extractHeadings(lines: readonly string[]): Extraction {
   for (let i = start; i < lines.length; i += 1) {
     const line = lines[i] ?? "";
 
+    // A FENCE CLOSES ONLY ON COMMONMARK'S TERMS, AND A LOOSER TEST MINTS PHANTOM ANCHORS. The
+    // closing fence must use the SAME marker character, be AT LEAST AS LONG as the opener, and
+    // carry NO info string. A test that accepts any run of the same character closes an opened
+    // block on a NESTED opener (a fenced sample that itself contains a fence, which is exactly how
+    // markdown documentation quotes markdown), after which every hash line in the remainder of the
+    // sample is read as a heading and mints an anchor GitHub does not render. That is the
+    // false-green direction this gate must never fail in, so the rule is the real one. Verified
+    // against a CommonMark/GFM parser on a nested-fence sample; both halves are self-tested.
     const fence = FENCE_RE.exec(line);
     if (fence && !inComment) {
-      const marker = (fence[1] ?? "")[0] ?? "";
+      const run = fence[1] ?? "";
+      const marker = run[0] ?? "";
+      const info = line.slice(line.indexOf(run) + run.length).trim();
       if (!inFence) {
         inFence = true;
         fenceMarker = marker;
-      } else if (marker === fenceMarker) {
+        fenceLength = run.length;
+      } else if (marker === fenceMarker && run.length >= fenceLength && info === "") {
         inFence = false;
         fenceMarker = "";
+        fenceLength = 0;
       }
       continue;
     }
@@ -690,6 +713,22 @@ function selfTest(): void {
     "```sh",
     `${hash} not a heading`,
     "```",
+    "body",
+    "",
+    // THE NESTED FENCE, which is how a markdown document quotes markdown. The inner opener carries
+    // an info string, so CommonMark does NOT treat it as the closer; a looser test would close here
+    // and read every hash line in the rest of the sample as a heading.
+    "```md",
+    `${hash} heading inside a fenced sample`,
+    "```js",
+    `${hash} still inside: the info string means that line was not a closer`,
+    "```",
+    "body",
+    "",
+    // A CLOSER MAY BE LONGER THAN ITS OPENER, and must not be mistaken for a fresh opener.
+    "~~~",
+    `${hash} inside a tilde fence`,
+    "~~~~",
     "body",
     "",
     "<!--",
@@ -1025,7 +1064,8 @@ function main(argv: readonly string[]): number {
     );
   }
 
-  if (!tracked.includes(CURSOR_PATH)) {
+  const cursorTracked = tracked.includes(CURSOR_PATH);
+  if (!cursorTracked) {
     violations.push({
       where: CURSOR_PATH,
       what: `the cursor half of the pair is not tracked. The contract is two files; one is gone.`,
@@ -1164,15 +1204,19 @@ function main(argv: readonly string[]): number {
         pointerFiles.add(path);
         if (anchors.has(anchor)) continue;
 
-        // The wrap join, attempted ONLY on an anchor that already failed to resolve and only when
-        // it ran to the end of the line. It can rescue a false red; it cannot manufacture a pass
-        // for a pointer the line pass already resolved.
-        if (m.index + m[0].length === line.length) {
-          const tail = (lines[i + 1] ?? "").replace(/^[ \t>*-]*/, "");
-          const joined = new RegExp(`^(${ANCHOR_CHARS}+)`, "u").exec(tail);
-          if (joined && anchors.has(anchor + (joined[1] ?? ""))) continue;
-        }
-
+        // ▶ THERE IS DELIBERATELY NO WRAP JOIN HERE, AND A SIBLING'S EXISTED AND WAS DELETED IN
+        // REVIEW. The shape is: an anchor that failed to resolve and ran to the end of its line is
+        // re-tried joined to the next line's leading anchor run, on the theory that it rescues a
+        // false red on a pointer a text editor wrapped. Its comment claimed it "cannot manufacture
+        // a pass for a pointer the line pass already resolved", which is a TAUTOLOGY dressed as a
+        // safety property: the direction that matters is a pointer the line pass did NOT resolve,
+        // and the join manufactures exactly that pass. Reproduced on this tree before it was
+        // removed, with a real cursor line whose anchor was truncated one character early and whose
+        // continuation began with the missing character plus prose: the gate printed "all resolving"
+        // at exit 0 over a link GitHub resolves to nothing. It also rescued ZERO of this tree's real
+        // pointers, so it bought nothing while opening the one direction this gate must never fail
+        // in. If a wrapped pointer ever becomes a real false red here, the fix is to unwrap the
+        // pointer, not to re-add the join.
         violations.push({
           where: `${path}:${String(i + 1)}`,
           what:
@@ -1200,7 +1244,13 @@ function main(argv: readonly string[]): number {
     );
   }
 
-  if (pointerCount === 0) {
+  // ORDERED AFTER THE CURSOR CHECK, AND THAT ORDER IS THE FIX FOR A MISDIAGNOSIS. A tree whose
+  // cursor half is untracked has zero pointers as a CONSEQUENCE, and refusing here would answer a
+  // modelled contract break ("one half of the pair is gone") with "the matcher stopped matching",
+  // which sends a reader to the wrong file. Both outcomes are fail-closed; only one is legible. The
+  // refusal still fires whenever the cursor IS tracked and the matcher found nothing in it, which
+  // is the case it exists for.
+  if (pointerCount === 0 && cursorTracked) {
     throw new RefusalError(
       `found ZERO qualified pointers at ${CONTRACT_BASENAME} across ${String(opened)} opened ` +
         `file(s). In this repo that is not a clean tree: ${CURSOR_PATH} names the narrative file ` +

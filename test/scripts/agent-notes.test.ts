@@ -41,10 +41,11 @@
  *     and that was measured; `astm`'s is 37 explicit tags, where a slug-only check reports every
  *     pointer in the repo as dangling. Refusing is what stops this gate quietly becoming that.
  *  9. THE CORPUS PARTITION, IN BOTH DIRECTIONS, AND IT IS THE ANTI-PORT CONTROL. A tracked file that
- *     carries a NUL byte but decodes as UTF-8 IS READ, so a dangling pointer inside one still reds:
- *     every sibling copy of this gate skips on NUL, and this repository tracks hand-written
- *     TypeScript sources that embed NUL bytes, so a ported partition would drop authored source out
- *     of the sweep in silence. A file that is genuinely not UTF-8 is skipped AND COUNTED.
+ *     carries a NUL byte but decodes as UTF-8 IS READ, so a dangling pointer inside one still reds.
+ *     A NUL partition is the obvious shape to reach for and this repository tracks hand-written
+ *     TypeScript sources that embed NUL bytes, so adopting it would drop authored source out of the
+ *     sweep in silence. A file that is genuinely not UTF-8 is skipped AND COUNTED. (What any other
+ *     repository partitions on is not asserted here: it is not checkable from inside this one.)
  * 10. AN UNTERMINATED HTML COMMENT REFUSES, and a heading inside a terminated one mints NO anchor,
  *     so a pointer at it reds. A commented-out heading renders no anchor on GitHub; several sibling
  *     copies count it anyway and merely disclose the phantom.
@@ -394,6 +395,56 @@ describe("check-agent-notes", () => {
       } finally {
         fx.cleanup();
       }
+    },
+    CASE_TIMEOUT,
+  );
+
+  it(
+    "13. a pointer split across a line wrap is REPORTED, never rejoined into a pass",
+    () => {
+      // THE REFUTED SHAPE, PINNED SO IT CANNOT COME BACK. A sibling rejoined a failed anchor with
+      // the next line's leading run, and that printed "all resolving" at exit 0 over a link GitHub
+      // resolves to nothing: the anchor is truncated one character early and the continuation opens
+      // with the missing character followed by prose. A false RED here is the safe direction and is
+      // fixed by unwrapping the pointer, never by re-adding the join.
+      const files = baseFiles();
+      files["CLAUDE.md"] =
+        `${heading(1, "Sample cursor")}\n\n` +
+        `- Never do the second thing. Why: ${pointer("the-second-rul")}\n` +
+        `  e. Everything after this is ordinary prose.\n` +
+        `- Never do the first thing. Why: ${pointer("the-first-rule")}\n`;
+      withFixture(files, (run) => {
+        expect(run.status).toBe(1);
+        expect(run.stderr).toContain("the-second-rul");
+        expect(run.stderr).toContain("does not resolve");
+      });
+    },
+    CASE_TIMEOUT,
+  );
+
+  it(
+    "14. a heading inside a NESTED fenced sample mints no anchor",
+    () => {
+      // A markdown document that quotes markdown opens a fence inside a fence. A closer test that
+      // accepts any run of the same character closes the outer block on the inner OPENER, after
+      // which every hash line in the rest of the sample is read as a heading and mints an anchor
+      // GitHub never renders. That is the false-green direction, so the pointer at such a heading
+      // must red rather than resolve.
+      const files = baseFiles();
+      files[NOTES_PATH] =
+        `${files[NOTES_PATH] ?? ""}\n` +
+        "```md\n" +
+        `${heading(3, "Quoted in a sample")}\n` +
+        "```js\n" +
+        `${heading(3, "Also quoted")}\n` +
+        "```\n" +
+        "\nReal prose after the sample.\n";
+      files["CLAUDE.md"] = `${files["CLAUDE.md"] ?? ""}- And: ${pointer("quoted-in-a-sample")}\n`;
+      withFixture(files, (run) => {
+        expect(run.status).toBe(1);
+        expect(run.stderr).toContain("quoted-in-a-sample");
+        expect(run.stderr).toContain("does not resolve");
+      });
     },
     CASE_TIMEOUT,
   );

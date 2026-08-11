@@ -334,9 +334,9 @@ exit 2 rather than being ignored. `astm` is the proof that this is a live failur
 theoretical one, and ignoring a tag is exactly how a slug-only gate silently becomes the wrong gate.
 
 **THE CORPUS PARTITION IS UTF-8 DECODABILITY, NOT NUL, AND THAT IS THE PART A PORT GETS WRONG IN
-SILENCE.** Every sibling copy skips a file containing a NUL byte, reasoning that a NUL means a
-compressed vendored tarball nobody can edit to clear a red. **That reasoning is false here and was
-measured false first:** `src/context.ts`, `src/manifest.ts` and `src/report.ts` are hand-written and
+SILENCE.** The obvious partition is a NUL byte, reasoning that a NUL means a compressed vendored
+tarball nobody can edit to clear a red. **That reasoning is false here and was measured false
+first:** `src/context.ts`, `src/manifest.ts` and `src/report.ts` are hand-written and
 embed NUL bytes, so a NUL partition drops three authored sources out of both the matcher and the
 census with nothing to notice. This repository already had that measurement written down, because a
 "binary blob" predicate was proposed for `scripts/phi-scan.ts` and **rejected** for the same reason.
@@ -365,7 +365,28 @@ pointers**. The gate was right. **Exempting the gate's own files was rejected �
 list this gate refuses to have** — so every sample pointer and every sample bare span in both files
 here is **assembled from parts at runtime**, and the gate was re-run staged before anything shipped.
 
-**Two departures from the sibling copies, both deliberate.** A heading inside an HTML comment renders
+**WHAT AN ADVERSARIAL REVIEW TOOK OUT BEFORE THIS SHIPPED, recorded because two of the four were
+ported shapes rather than new mistakes.** (1) **A WRAP JOIN WAS DELETED.** Carried over from a
+sibling, it re-tried a failed anchor joined to the next line's leading run, and its comment claimed it
+"cannot manufacture a pass for a pointer the line pass already resolved" — **a tautology dressed as a
+safety property**, since the direction that matters is a pointer the line pass did *not* resolve. It
+was reproduced printing "all resolving" at exit 0 over a truncated anchor whose continuation began
+with the missing character, and it rescued **zero** of this tree's real pointers, so it bought nothing
+while opening the one direction this gate must never fail in. (2) **A UNIVERSAL ABOUT SIBLINGS WAS
+REMOVED FROM THREE PLACES**: the script, its test docblock and this section each opened the partition
+argument with "every sibling copy skips on NUL". That is a claim about repositories this script cannot
+read, it is the exact shape criterion 3 forbids, and the umbrella's `conventions.md` records the
+NUL-skip as a **per-repo decision** with the reference copy not having one at all. **The same
+over-universalisation was corrected in `conventions.md` on 2026-08-10 and was re-introduced here ten
+days later**: hedge every sentence about another repo, or delete it. (3) **The fence closer was wrong
+by CommonMark**: any run of the same character closed an open block, so a **nested** fence (a markdown
+sample quoting markdown, which is how these files are written) closed the outer block on the inner
+*opener* and every hash line after it minted a phantom anchor. The rule is now same marker, at least
+as long, no info string. (4) **The cursor-untracked violation was unreachable**, because the
+zero-pointer refusal fired first and answered "one half of the pair is gone" with "the matcher stopped
+matching". Both are fail-closed; only one is legible. Cases 13 and 14 pin (1) and (3).
+
+**Two departures from the copies this one was read against, both deliberate.** A heading inside an HTML comment renders
 no anchor on GitHub; several siblings count it anyway and merely disclose the phantom, while this copy
 **suppresses it, counts the suppressions, and refuses an unterminated comment** rather than swallowing
 the rest of the file. And the filed claim that a pointer must be spelled in a particular encoding was
