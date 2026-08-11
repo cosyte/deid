@@ -28,6 +28,12 @@ import { ManifestBuilder, type DeidManifestEntry, type DeidResult } from "./mani
 import { resolvePolicy, type DeidPolicy, type TransformName } from "./policy.js";
 import type { FreeTextRedactor } from "./redactor.js";
 import {
+  assertRetentionContract,
+  isRetainableCategory,
+  retains,
+  type RetainedLocusClass,
+} from "./retention.js";
+import {
   dateShift,
   generalizeAge,
   generalizeDate,
@@ -50,6 +56,15 @@ import {
 export interface DeidOptions {
   /** The policy to apply. Defaults to the built-in Safe Harbor policy. */
   readonly policy?: DeidPolicy | "safe-harbor";
+  /**
+   * The **retention classes** the configured profile permits: the named groups of identifying loci a
+   * format adapter may pass through unchanged (each one still recorded as a residual). Build this
+   * with {@link profileOptions} rather than by hand; the widen-never-narrow contract on a derived
+   * profile is what keeps a site preset from adding one.
+   *
+   * **Absent or empty retains nothing**, so a bare options bag gets the strict treatment.
+   */
+  readonly retainedLoci?: readonly RetainedLocusClass[];
   /** The context carrying the consumer's key, required only when the policy uses a keyed transform. */
   readonly context?: DeidContext;
   /**
@@ -81,6 +96,26 @@ function blocked(
     value: null,
     disposition: "blocked",
     manifest: { category, transform: "block", locus: path, disposition: "blocked", code },
+  };
+}
+
+/**
+ * Build the outcome for a locus the configured profile's **retention set** keeps: the value passes
+ * through unchanged, and the fact is **recorded** as a residual so it reaches the retained-quasi-
+ * identifier inventory a determiner reads. An unclassified retained locus is recorded as the
+ * catch-all (R), never as "nothing happened here".
+ */
+function retainedResidual(locus: GenericLocus, category: SafeHarborCategory): LocusOutcome {
+  return {
+    value: locus.value,
+    disposition: "retained",
+    manifest: {
+      category,
+      transform: "retain",
+      locus: locus.path,
+      disposition: "retained",
+      code: DEID_DISPOSITION_CODES.DEID_RESIDUAL_RETAINED,
+    },
   };
 }
 
@@ -196,11 +231,14 @@ function applyTransform(
         },
       };
     case "byo-redact":
+    case "retain":
     case "block":
     default:
-      // `byo-redact` is not a category transform: free-text redaction is driven by the `redactor`
-      // option, not the policy map. If a policy assigns it (or `block`, or anything unknown) to a
-      // category, fail closed (block).
+      // Neither `byo-redact` nor `retain` is a category transform: free-text redaction is driven by
+      // the `redactor` option and retention by the profile's retention set, not by the policy map. If
+      // a policy assigns either (or `block`, or anything unknown) to a category, fail closed (block).
+      // `retain` in particular must never keep a value from here: reaching this arm means a policy
+      // asked for it per-category, which is not how retention is decided.
       return blocked(locus.path, category, DEID_DISPOSITION_CODES.DEID_LOCUS_BLOCKED);
   }
 }
@@ -267,6 +305,7 @@ function handleLocus(
   policy: DeidPolicy,
   context: DeidContext | undefined,
   redactor: FreeTextRedactor | undefined,
+  retainedLoci: readonly RetainedLocusClass[] | undefined,
 ): LocusOutcome {
   // Over-scrub guard: a clinical value is not an identifier, retain it untouched.
   if (locus.kind === "clinical") {
@@ -285,6 +324,25 @@ function handleLocus(
       DEID_DISPOSITION_CODES.DEID_LOCUS_BLOCKED,
     );
   }
+  // Retention needs THREE independent keys to line up, and any one of them missing means the policy
+  // transform runs instead:
+  //   1. the adapter proposed a class for this locus;
+  //   2. the CONFIGURED OPTIONS list that class (an adapter cannot retain anything by itself, and an
+  //      options bag that never mentions retention keeps nothing);
+  //   3. the resolved category is one a limited data set may carry at all: never one of the sixteen
+  //      direct identifiers §164.514(e)(2) enumerates. A visit-number field routinely carries a
+  //      medical record or account number, typed as such by the standard's own identifier-type code,
+  //      and keeping THAT would republish in the clear the very identifier the pass pseudonymized
+  //      elsewhere in the same document.
+  // It is also reached only AFTER the three fail-closed guards above, so free text and unrecognized
+  // structure can never be retained however an adapter marks them; and a kept locus is always recorded.
+  if (
+    locus.retention !== undefined &&
+    retains(retainedLoci, locus.retention) &&
+    isRetainableCategory(locus.category)
+  ) {
+    return retainedResidual(locus, locus.category);
+  }
   return applyTransform(policy.transforms[locus.category], locus, locus.category, context);
 }
 
@@ -299,7 +357,8 @@ function handleLocus(
  * @param options - The policy and (for keyed transforms) the key context.
  * @returns The frozen {@link DeidResult}: transformed document + value-free manifest.
  * @throws {@link DeidError} `EMPTY_INPUT` if the model is null or carries no locus list; `DEID_NO_KEY`
- *   if a keyed transform is required but no key context was supplied.
+ *   if a keyed transform is required but no key context was supplied; `DEID_POLICY_INVALID` if a
+ *   `safe-harbor`-labelled policy is asked to retain an identifying locus.
  * @example
  * ```ts
  * import { deidentify, SAFE_HARBOR_CATEGORIES } from "@cosyte/deid";
@@ -322,11 +381,20 @@ export function deidentify(
     throw new DeidError(FATAL_CODES.EMPTY_INPUT, "de-identify requires a model with a loci array");
   }
   const policy = resolvePolicy(options.policy);
+  // Fail closed on the label: a "safe-harbor"-labelled policy may not retain, however the options bag
+  // was built. This is the one route no profile-level check can see.
+  assertRetentionContract(policy.name, options.retainedLoci);
   const builder = new ManifestBuilder();
   const loci: TransformedLocus[] = [];
 
   for (const locus of inputLoci) {
-    const outcome = handleLocus(locus, policy, options.context, options.redactor);
+    const outcome = handleLocus(
+      locus,
+      policy,
+      options.context,
+      options.redactor,
+      options.retainedLoci,
+    );
     loci.push(
       Object.freeze({
         path: locus.path,

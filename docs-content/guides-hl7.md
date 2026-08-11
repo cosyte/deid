@@ -30,8 +30,8 @@ import { createDeidContext } from "@cosyte/deid";
 const context = createDeidContext({ key: process.env.DEID_KEY! });
 const { document, manifest } = deidentifyHl7(parseHL7(rawMessage), { context });
 
-document.toString();  // spec-clean, de-identified HL7 wire
-manifest;             // value-free audit: category + locus + disposition, never a value
+document.toString(); // spec-clean, de-identified HL7 wire
+manifest; // value-free audit: category + locus + disposition, never a value
 ```
 
 A keyed transform (MRN / account / beneficiary pseudonymization) requires a `context`; calling without
@@ -40,14 +40,16 @@ surrogate.
 
 ## What is located, and how it is transformed
 
-| Segment | Loci | Transform |
-|---|---|---|
-| **PID** | name (5/6/9), DOB (7/29), address (11), SSN (19), phone (13/14), driver's licence (20), MRN/account/mother-id (2/3/4/18/21), county (12), birth place (23) | names/phone/SSN/licence **removed**; MRN/account → consistent **surrogate** (keyed HMAC); DOB → **year**; ZIP → safe **3-digit** (or `000`); county/birth place fail closed |
-| **NK1 / GT1 / IN1 / IN2** | relatives / guarantor / insured names, addresses, phones, SSNs, DOBs, member/policy/Medicare/Medicaid ids | same category transforms: Safe Harbor removes identifiers of **relatives, employers, and household members**, not only the patient |
-| **OBX-5, NTE-3** | narrative / ambiguous free text (OBX-5 unless OBX-2 types it structured) | **fail closed**: blocked, never regex-scrubbed |
-| **MRG / ACC / FAM / PEO / PDA** | known patient-identity / relative / geographic segments absent from the map | **fail closed**: blocked (e.g. a merge message's prior name + MRN) |
-| **Z-segments / unknown structure** | every populated field | **fail closed**: blocked |
-| Retained clinical/administrative segments (an explicit allow-list: OBR, ORC, AL1, DG1, PV1, RX*, …) | n/a | **retained untouched** (the over-scrub guard) |
+| Segment                                                                                              | Loci                                                                                                                                                       | Transform                                                                                                                                                                   |
+| ---------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **PID**                                                                                              | name (5/6/9), DOB (7/29), address (11), SSN (19), phone (13/14), driver's licence (20), MRN/account/mother-id (2/3/4/18/21), county (12), birth place (23) | names/phone/SSN/licence **removed**; MRN/account → consistent **surrogate** (keyed HMAC); DOB → **year**; ZIP → safe **3-digit** (or `000`); county/birth place fail closed |
+| **NK1 / GT1 / IN1 / IN2**                                                                            | relatives / guarantor / insured names, addresses, phones, SSNs, DOBs, member/policy/Medicare/Medicaid ids                                                  | same category transforms: Safe Harbor removes identifiers of **relatives, employers, and household members**, not only the patient                                          |
+| **OBX-5, NTE-3**                                                                                     | narrative / ambiguous free text (OBX-5 unless OBX-2 types it structured)                                                                                   | **fail closed**: blocked, never regex-scrubbed                                                                                                                              |
+| **MRG / ACC / FAM / PEO / PDA**                                                                      | known patient-identity / relative / geographic segments absent from the map                                                                                | **fail closed**: blocked (e.g. a merge message's prior name + MRN)                                                                                                          |
+| **Z-segments / unknown structure**                                                                   | every populated field                                                                                                                                      | **fail closed**: blocked                                                                                                                                                    |
+| **PV1-19, OBR-2/3, ORC-2/3** | visit number, placer + filler order numbers, inside retained segments | **removed**. PV1-19 is routed by its CX-5 type code like PID-3: `VN`/untyped is the encounter identifier, removed as (R) and retainable under a profile that names the class; `MR`/`AN`/`SS` is transformed as that identifier under **both** profiles, never retained |
+| **PV1-44/45, OBR-7, DG1-5**                                                                          | admit, discharge, observation and diagnosis dates, inside retained segments                                                                                | → **year** (§164.514(b)(2)(i)(C) names admission and discharge); kept whole, and recorded, only under a profile that names the class                                        |
+| Retained clinical/administrative segments (an explicit allow-list: OBR, ORC, AL1, DG1, PV1, RX\*, …) | every field except the two rows above                                                                                                                      | **retained untouched** (the over-scrub guard)                                                                                                                               |
 
 A recognized segment is retained **only** if it is on the explicit retain-list; anything else fails
 closed. OBX-5 is retained only when OBX-2 positively types it as a structured clinical value (numeric,
@@ -59,9 +61,9 @@ handled differently, structurally, from the parser's typing.
 
 ## The two guarantees
 
-- **No leak.** Every seeded PHI sentinel across PID/NK1/GT1/IN1/IN2, the free-text loci, and Z-segments
-  is gone from the serialized output. An unmapped locus that could carry PHI is blocked, never passed
-  through in the clear.
+- **No leak.** Every seeded PHI sentinel across PID/NK1/GT1/IN1/IN2, the encounter dates and order
+  identifiers, the free-text loci, and Z-segments is gone from the serialized output under the Safe
+  Harbor profile. An unmapped locus that could carry PHI is blocked, never passed through in the clear.
 - **No over-scrub.** Structured clinical OBX values, units, LOINC/coded observation identifiers,
   reference ranges, and result statuses are retained byte-identical: the de-identifier never degenerates
   into a blanket-blanking "safe but useless" scrubber.
@@ -69,8 +71,11 @@ handled differently, structurally, from the parser's typing.
 ## Known limitations (this release)
 
 - Free text is **block-only**: there is no built-in NLP scrub.
-- Within **retained** clinical / visit segments, patient-related **dates** (OBR / DG1 / PV1 timestamps),
-  **visit identifiers** (PV1-19), and **provider** names (PV1-7/8, OBR-16) are **not** de-identified.
+- Within **retained** clinical / visit segments, **every** field the carve-out above does not name is
+  **not** de-identified and is **not recorded**. That still includes full-precision timestamps in EVN,
+  PV2, PR1, RXA, RXD, FT1, TXA and SPM, and the **provider** names in PV1-7/8 and OBR-16, among others.
+  Retaining a segment is not auditing every field in it, and the carve-out narrows this class rather
+  than closing it.
 - The address generalization keeps only the Safe Harbor 3-digit ZIP (the permitted state is also
   dropped, conservative, never a leak).
 

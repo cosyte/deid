@@ -42,6 +42,9 @@ import { serializeDicom } from "@cosyte/dicom";
 import {
   buildExpertDeterminationSupportReport,
   createDeidContext,
+  LIMITED_DATA_SET_PROFILE,
+  profileOptions,
+  SAFE_HARBOR_PROFILE,
   type DeidManifestEntry,
 } from "../../src/index.js";
 import { deidentifyHl7 } from "../../src/hl7/index.js";
@@ -115,6 +118,57 @@ function hl7Case(): CorpusCase {
         expect(document.get(p)).toBe(original.get(p));
       }
     },
+  };
+}
+
+/**
+ * The HL7 v2 **encounter** case: the loci carved out of the RETAINED visit / order / diagnosis
+ * segments, which no other fixture in this corpus carries. Without it the headline gate is
+ * structurally blind to this whole class: the leak sweep can only report on sentinels a fixture
+ * actually seeds, so an adapter that passes an admission date or a visit number straight through
+ * produces exactly the same green as one that removes it.
+ *
+ * Swept under the **Safe Harbor** profile, where §164.514(b)(2)(i)(C) permits only the year of a date
+ * directly related to the individual and (R) reaches the encounter and order numbers. The other
+ * direction, that the limited-data-set profile still CARRIES them, is asserted below: a corpus that
+ * only ever proves absence cannot tell a removal from a preset that scrubs everything.
+ */
+function hl7EncounterCase(): CorpusCase {
+  const ctx = createDeidContext({ key: "hl7-enc-corpus", patientId: "p-hl7-enc" });
+  const raw = hl7Wire("adt-a03");
+  const { document, manifest } = deidentifyHl7(
+    parseHL7(raw),
+    profileOptions(SAFE_HARBOR_PROFILE, ctx),
+  );
+  return {
+    name: "hl7-encounter",
+    deidWire: document.toString(),
+    manifest,
+    originalWire: raw,
+    sentinels: [
+      // The encounter loci: the visit number, the admit / discharge / observation / diagnosis dates,
+      // and the placer + filler order numbers.
+      "ZZVISIT700",
+      "20200103040500",
+      "20200109060700",
+      "20200104080000",
+      "20200105090000",
+      "ZZPLACER700",
+      "ZZFILLER700",
+      // The patient demographics carried alongside them, so this fixture is a whole document.
+      "ZZMRN003",
+      "ZZENCFAMILY",
+      "ZZENCGIVEN",
+      "ZZENCSTREET",
+      "ZZENCCITY",
+      "90210",
+      "5550000020",
+      "ZZACCT300",
+      "19900215",
+    ],
+    // Distinctive clinical survivors only: the LOINC code, the unit, the diagnosis code, and the
+    // patient-location text. The bare "140" is excluded for the same reason as the other cases.
+    survivors: ["2951-2", "mmol/L", "E11.9", "WARD"],
   };
 }
 
@@ -269,6 +323,7 @@ function dicomCase(): CorpusCase {
 
 const CASES: readonly CorpusCase[] = [
   hl7Case(),
+  hl7EncounterCase(),
   ccdaCase(),
   fhirCase(),
   x12Case(),
@@ -320,6 +375,87 @@ describe("corpus non-vacuity, the sweep and the corpus both have teeth", () => {
       expect(c.deidWire.includes(canary as string)).toBe(false);
     });
   }
+});
+
+/**
+ * The **other direction**, and it is not optional. Every gate above proves a value is ABSENT, and a
+ * detector that reports zero can be a gap rather than a clearance: an adapter that dropped the whole
+ * PV1 segment, or a fixture whose loci the extractor never reached, would pass all of them. This
+ * proves the same loci are still CARRIED by the profile that is entitled to carry them, so the
+ * absences above are a decision the policy made and not an accident of the harness.
+ */
+describe("encounter loci positive control, the limited-data-set profile still carries them", () => {
+  const ENCOUNTER_SENTINELS: readonly string[] = [
+    "ZZVISIT700",
+    "20200103040500",
+    "20200109060700",
+    "20200104080000",
+    "20200105090000",
+    "ZZPLACER700",
+    "ZZFILLER700",
+  ];
+
+  const ctx = createDeidContext({ key: "hl7-lds-corpus", patientId: "p-hl7-lds" });
+  const { document, manifest } = deidentifyHl7(
+    parseHL7(hl7Wire("adt-a03")),
+    profileOptions(LIMITED_DATA_SET_PROFILE, ctx),
+  );
+  const wire = document.toString();
+
+  it("every encounter sentinel survives the limited-data-set pass", () => {
+    const removed = ENCOUNTER_SENTINELS.filter((s) => !wire.includes(s));
+    expect(removed).toEqual([]);
+  });
+
+  it("every surviving encounter locus is RECORDED as a retained residual", () => {
+    const retained = manifest.filter((m) => m.disposition === "retained");
+    expect(retained.map((m) => m.locus).sort()).toEqual([
+      "DG1-5",
+      "OBR-2",
+      "OBR-3",
+      "OBR-7",
+      "ORC-2",
+      "ORC-3",
+      "PV1-19[0]",
+      "PV1-44",
+      "PV1-45",
+    ]);
+    expect(retained.every((m) => m.code === "DEID_RESIDUAL_RETAINED")).toBe(true);
+  });
+
+  it("and each one reaches the determiner's residual inventory in the support report", () => {
+    const report = buildExpertDeterminationSupportReport(manifest, {
+      policy: LIMITED_DATA_SET_PROFILE.policy,
+    });
+    const inventoried = new Set(report.retainedQuasiIdentifiers.map((r) => r.locus));
+    for (const locus of [
+      "PV1-19[0]",
+      "PV1-44",
+      "PV1-45",
+      "OBR-2",
+      "OBR-3",
+      "OBR-7",
+      "ORC-2",
+      "ORC-3",
+      "DG1-5",
+    ]) {
+      expect(inventoried.has(locus)).toBe(true);
+    }
+    expect(report.dispositionSummary.retained).toBe(9);
+  });
+
+  it("the patient identifiers §164.514(e)(2) DOES name are still gone", () => {
+    for (const s of [
+      "ZZENCFAMILY",
+      "ZZENCGIVEN",
+      "ZZENCSTREET",
+      "ZZENCCITY",
+      "5550000020",
+      "ZZMRN003",
+    ]) {
+      expect(wire.includes(s)).toBe(false);
+    }
+  });
 });
 
 describe("consolidated over-scrub corpus, clinical/financial values survive", () => {

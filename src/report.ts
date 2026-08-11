@@ -53,8 +53,12 @@ export const EXPERT_DETERMINATION_DISCLAIMER =
   "re-identification risk score and reaches no conclusion. It is descriptive input a determiner " +
   "consumes and documents, never the determination itself.";
 
-/** A manifest disposition: the three outcomes a locus can have. */
-export type ReportDisposition = "transformed" | "removed" | "blocked";
+/**
+ * A manifest disposition: the four outcomes an acted-on locus can have. `retained` is an
+ * **identifying** locus the configured profile's retention set deliberately kept unchanged; it is
+ * always paired with `DEID_RESIDUAL_RETAINED`, so it also appears in the residual inventory below.
+ */
+export type ReportDisposition = "transformed" | "removed" | "blocked" | "retained";
 
 /**
  * Per-category coverage, for one of the 18 Safe Harbor categories (45 CFR §164.514(b)(2)(i)(A)–(R)),
@@ -97,10 +101,18 @@ export interface CategoryCoverage {
 }
 
 /**
- * One entry in the **retained-quasi-identifier residual inventory**: a coarse identifying element the
- * pass **deliberately kept** for analytic utility and **recorded** as `DEID_RESIDUAL_RETAINED`: a
- * year-only date, a retained safe 3-digit ZIP prefix, an exact age ≤ 89. These are exactly the residuals
- * an expert reasons about under the §164.514(b)(2)(ii) actual-knowledge test.
+ * One entry in the **retained-quasi-identifier residual inventory**: an identifying element the pass
+ * **deliberately kept** for analytic utility and **recorded** as `DEID_RESIDUAL_RETAINED`. Two things
+ * land here:
+ *
+ * - a **coarse residual** left by a generalization: a year-only date, a retained safe 3-digit ZIP
+ *   prefix, an exact age ≤ 89;
+ * - a **whole value kept by the profile's retention set**: under a limited-data-set preset, an
+ *   admission / discharge / service date or an encounter or order number, which a Safe-Harbor-labelled
+ *   policy removes instead.
+ *
+ * These are exactly the residuals an expert reasons about under the §164.514(b)(2)(ii)
+ * actual-knowledge test, and the second kind is the stronger one: it is a full, unreduced value.
  *
  * @example
  * ```ts
@@ -120,6 +132,12 @@ export interface RetainedQuasiIdentifier {
   readonly category: SafeHarborCategory;
   /** How many values at this locus retained a residual. */
   readonly count: number;
+  /**
+   * How the residual arose, so the two kinds are not indistinguishable in the inventory: `generalize`
+   * left a coarse residual (a year, a safe 3-digit ZIP prefix, an age ≤ 89), while `retain` kept the
+   * **whole unreduced value**. A determiner reasons about those very differently.
+   */
+  readonly transform: TransformName;
 }
 
 /**
@@ -144,6 +162,8 @@ export interface DispositionSummary {
   readonly removed: number;
   /** Loci failed closed (blocked; value withheld). */
   readonly blocked: number;
+  /** Identifying loci the profile's retention set kept unchanged (each one a recorded residual). */
+  readonly retained: number;
   /** Of the transformed values, how many retained a coarse residual (`DEID_RESIDUAL_RETAINED`). */
   readonly residualRetained: number;
   /** Free-text loci blocked by default (`DEID_FREETEXT_BLOCKED`). */
@@ -335,6 +355,7 @@ function coverageFor(
     transformed: 0,
     removed: 0,
     blocked: 0,
+    retained: 0,
   };
   const transforms = new Set<TransformName>();
   const codes = new Set<DeidDispositionCode>();
@@ -369,6 +390,7 @@ function summarize(entries: readonly DeidManifestEntry[]): DispositionSummary {
     transformed: 0,
     removed: 0,
     blocked: 0,
+    retained: 0,
     residualRetained: 0,
     freeTextBlocked: 0,
     freeTextConsumerRedacted: 0,
@@ -452,7 +474,14 @@ export function buildExpertDeterminationSupportReport(
 
   const retainedQuasiIdentifiers = entries
     .filter((e) => e.code === DEID_DISPOSITION_CODES.DEID_RESIDUAL_RETAINED)
-    .map((e) => Object.freeze({ locus: e.locus, category: e.category, count: e.count }));
+    .map((e) =>
+      Object.freeze({
+        locus: e.locus,
+        category: e.category,
+        count: e.count,
+        transform: e.transform,
+      }),
+    );
 
   const policyName =
     options.policy === undefined
@@ -514,7 +543,8 @@ export function formatExpertDeterminationSupportReport(
   );
   const d = report.dispositionSummary;
   lines.push(
-    `- Dispositions: transformed: ${String(d.transformed)}, removed: ${String(d.removed)}, blocked: ${String(d.blocked)}` +
+    `- Dispositions: transformed: ${String(d.transformed)}, removed: ${String(d.removed)}, blocked: ${String(d.blocked)},` +
+      ` retained: ${String(d.retained)}` +
       ` (free-text blocked: ${String(d.freeTextBlocked)}, consumer-redacted: ${String(d.freeTextConsumerRedacted)})`,
   );
   lines.push("");
@@ -530,21 +560,25 @@ export function formatExpertDeterminationSupportReport(
     );
   }
   lines.push("");
-  lines.push("## Retained quasi-identifiers (coarse residuals recorded as retained)");
+  lines.push("## Retained quasi-identifiers (identifying residuals recorded as retained)");
   lines.push("");
   if (report.retainedQuasiIdentifiers.length === 0) {
     lines.push(
       "_None recorded._ Coarse residuals (year-only dates, safe 3-digit ZIP prefixes, exact",
     );
     lines.push(
-      "ages ≤ 89) would appear here when a generalization keeps one. Clinical values retained",
+      "ages ≤ 89) appear here when a generalization keeps one, and so does every whole value a",
     );
     lines.push(
-      "untouched by the over-scrub guard are not identifiers and are not enumerated in the",
+      "profile's retention set kept. Clinical values retained untouched by the over-scrub guard",
     );
     lines.push(
-      "value-free manifest; see each format's retained-segment limitations for residual dates.",
+      "are not identifiers and are not enumerated. What is NOT enumerated anywhere is a field",
     );
+    lines.push(
+      "inside a retained structure that no locus map reaches: those are named, per format, in the",
+    );
+    lines.push("published limitations, and they are not visible to this report.");
   } else {
     lines.push(
       "These are residual identifying elements the pass kept for utility. They are an actual-knowledge",
@@ -552,7 +586,10 @@ export function formatExpertDeterminationSupportReport(
     lines.push("(§164.514(b)(2)(ii)) consideration for the determiner:");
     lines.push("");
     for (const r of report.retainedQuasiIdentifiers) {
-      lines.push(`- ${r.locus}: ${r.category} (×${String(r.count)})`);
+      // `retain` means the WHOLE value survived; `generalize` means only a coarse residual did. Naming
+      // it is the difference between "a year is present" and "a full timestamp is present".
+      const kind = r.transform === "retain" ? "whole value kept" : "coarse residual";
+      lines.push(`- ${r.locus}: ${r.category} (×${String(r.count)}, ${kind})`);
     }
   }
   const qi = report.quasiIdentifierStatistics;

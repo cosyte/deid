@@ -16,9 +16,12 @@ import { parseHL7 } from "@cosyte/hl7";
 import {
   DEID_DISPOSITION_CODES,
   FATAL_CODES,
+  LIMITED_DATA_SET_PROFILE,
   SAFE_HARBOR_CATEGORIES,
+  SAFE_HARBOR_PROFILE,
   createDeidContext,
   defineDeidPolicy,
+  profileOptions,
 } from "../../src/index.js";
 import { deidentifyHl7 } from "../../src/hl7/index.js";
 
@@ -39,8 +42,9 @@ const ctx = createDeidContext({ key: "hl7-test-key", patientId: "patient-1" });
 /**
  * The patient / relative / guarantor / insured PHI sentinels seeded across `adt-a01.hl7`. Every one
  * must be GONE after a de-id pass. (Retained-by-design values, the MSH/EVN envelope timestamps, the
- * PV1 provider, the insurer org name/address and the OBR order numbers, are deliberately not `ZZ`-tagged
- * and are not in this list; provider/order loci are an explicit Phase-2 scope boundary.)
+ * PV1 provider name and the insurer org name/address, are deliberately not `ZZ`-tagged and are not in
+ * this list. The encounter dates and the encounter / order identifiers are NOT among them: they are
+ * removed under this profile, and `adt-a03.hl7` is the fixture that seeds and proves it.)
  */
 const ADT_SENTINELS: readonly string[] = [
   "ZZMRN001",
@@ -383,5 +387,255 @@ describe("deidentifyHl7, fatal + policy + immutability", () => {
     const msg = parseHL7("MSH|^~\\&|A|B|C|D|20200101||ACK|M1|P|2.5\rMSA|AA|M1");
     const { manifest } = deidentifyHl7(msg, { context: ctx });
     expect(manifest).toEqual([]);
+  });
+});
+
+/**
+ * The encounter loci carved out of the RETAINED visit / order / diagnosis segments, seeded in
+ * `adt-a03.hl7`. Each row is one of the seven the two profiles must treat differently.
+ *
+ * Under `safe-harbor` every one must be GONE: the dates are elements of dates directly related to the
+ * individual (§164.514(b)(2)(i)(C) names admission and discharge in the regulation text itself, and
+ * permits only the year), and the visit / order numbers are unique identifying codes the (R) catch-all
+ * reaches. Under `limited-data-set` every one must SURVIVE BYTE-IDENTICAL: §164.514(e)(2)'s list of
+ * sixteen direct identifiers names no date and carries no catch-all, so a limited data set may keep
+ * them.
+ *
+ * Both directions are asserted, because a removal test that passes because the detector never found the
+ * locus is indistinguishable from one that passes because the locus was removed.
+ */
+const ENCOUNTER_LOCI: readonly {
+  readonly what: string;
+  readonly locus: string;
+  readonly seeded: string;
+}[] = [
+  { what: "visit number", locus: "PV1-19", seeded: "ZZVISIT700" },
+  { what: "admit date/time", locus: "PV1-44", seeded: "20200103040500" },
+  { what: "discharge date/time", locus: "PV1-45", seeded: "20200109060700" },
+  { what: "placer order number (order control)", locus: "ORC-2", seeded: "ZZPLACER700" },
+  { what: "filler order number (order control)", locus: "ORC-3", seeded: "ZZFILLER700" },
+  { what: "placer order number (observation request)", locus: "OBR-2", seeded: "ZZPLACER700" },
+  { what: "filler order number (observation request)", locus: "OBR-3", seeded: "ZZFILLER700" },
+  { what: "observation (service) date/time", locus: "OBR-7", seeded: "20200104080000" },
+  { what: "diagnosis date/time", locus: "DG1-5", seeded: "20200105090000" },
+];
+
+describe("deidentifyHl7, the encounter loci inside retained segments (§164.514(b)(2) vs §164.514(e))", () => {
+  it("PRE-CONDITION: every seeded encounter value is really present in the original wire", () => {
+    const raw = loadFixture("adt-a03");
+    const missing = ENCOUNTER_LOCI.filter((l) => !raw.includes(l.seeded));
+    expect(missing).toEqual([]);
+  });
+
+  it("safe-harbor: every encounter date and encounter/order identifier is REMOVED from the wire", () => {
+    const wire = deidentifyHl7(
+      parseHL7(loadFixture("adt-a03")),
+      profileOptions(SAFE_HARBOR_PROFILE, ctx),
+    ).document.toString();
+    const survivors = ENCOUNTER_LOCI.filter((l) => wire.includes(l.seeded));
+    expect(survivors).toEqual([]);
+  });
+
+  it("safe-harbor: the dates keep their YEAR (permitted) and the identifiers are blocked as (R)", () => {
+    const { document, manifest } = deidentifyHl7(
+      parseHL7(loadFixture("adt-a03")),
+      profileOptions(SAFE_HARBOR_PROFILE, ctx),
+    );
+    // Dates: generalized to the four-digit year, recorded as a coarse residual.
+    for (const path of ["PV1.44.1", "PV1.45.1", "OBR.7.1", "DG1.5.1"]) {
+      expect(document.get(path)).toBe("2020");
+    }
+    for (const locus of ["PV1-44", "PV1-45", "OBR-7", "DG1-5"]) {
+      const entry = manifest.find((m) => m.locus === locus);
+      expect(entry?.category).toBe(C.DATES);
+      expect(entry?.disposition).toBe("transformed");
+      expect(entry?.code).toBe(D.DEID_RESIDUAL_RETAINED);
+    }
+    // The EI order numbers: the whole field is gone. PV1-19 is a CX list, handled per repetition like
+    // PID-3, so its id-number component is cleared and the assigning authority / type code remain.
+    for (const path of ["ORC.2.1", "ORC.3.1", "OBR.2.1", "OBR.3.1"]) {
+      expect(document.get(path)).toBeUndefined();
+    }
+    expect(document.get("PV1.19.1")).toBe("");
+    expect(document.get("PV1.19.5")).toBe("VN"); // type code retained, the value is what had to go
+    for (const locus of ["PV1-19[0]", "ORC-2", "ORC-3", "OBR-2", "OBR-3"]) {
+      const entry = manifest.find((m) => m.locus === locus);
+      expect(entry?.category).toBe(C.OTHER_UNIQUE_ID);
+      expect(entry?.disposition).toBe("blocked");
+      expect(entry?.code).toBe(D.DEID_LOCUS_BLOCKED);
+    }
+  });
+
+  it("limited-data-set: every one SURVIVES byte-identical, and every one is RECORDED", () => {
+    const original = parseHL7(loadFixture("adt-a03"));
+    const { document, manifest } = deidentifyHl7(
+      parseHL7(loadFixture("adt-a03")),
+      profileOptions(LIMITED_DATA_SET_PROFILE, ctx),
+    );
+    const wire = document.toString();
+    const removed = ENCOUNTER_LOCI.filter((l) => !wire.includes(l.seeded));
+    expect(removed).toEqual([]);
+    // Byte-identical, not merely "the token appears somewhere": the composite survives intact, so the
+    // visit number keeps its assigning authority and identifier-type components.
+    for (const path of ["PV1.19.1", "PV1.19.4", "PV1.19.5", "PV1.44.1", "OBR.2.1", "DG1.5.1"]) {
+      expect(document.get(path)).toBe(original.get(path));
+    }
+    // Recorded, every one: a kept identifier that no artifact names is invisible twice over.
+    for (const locus of [
+      "PV1-19[0]",
+      "PV1-44",
+      "PV1-45",
+      "ORC-2",
+      "ORC-3",
+      "OBR-2",
+      "OBR-3",
+      "OBR-7",
+      "DG1-5",
+    ]) {
+      const entry = manifest.find((m) => m.locus === locus);
+      expect(entry?.disposition).toBe("retained");
+      expect(entry?.transform).toBe("retain");
+      expect(entry?.code).toBe(D.DEID_RESIDUAL_RETAINED);
+    }
+  });
+
+  it("limited-data-set still removes the PATIENT identifiers §164.514(e)(2) DOES name", () => {
+    const wire = deidentifyHl7(
+      parseHL7(loadFixture("adt-a03")),
+      profileOptions(LIMITED_DATA_SET_PROFILE, ctx),
+    ).document.toString();
+    // Names, address detail, phone, and the raw medical record number are all on the limited-data-set
+    // exclusion list, so keeping the encounter loci must not have loosened any of them.
+    for (const s of [
+      "ZZENCFAMILY",
+      "ZZENCGIVEN",
+      "ZZENCSTREET",
+      "ZZENCCITY",
+      "5550000020",
+      "ZZMRN003",
+    ]) {
+      expect(wire.includes(s)).toBe(false);
+    }
+  });
+
+  it("retention is OPT-IN: a bare options bag keeps nothing (fail closed)", () => {
+    // A consumer who builds options by hand from the limited-data-set POLICY, without the profile's
+    // retention set, gets the strict treatment rather than a silent pass-through.
+    const wire = deidentifyHl7(parseHL7(loadFixture("adt-a03")), {
+      policy: LIMITED_DATA_SET_PROFILE.policy,
+      context: ctx,
+    }).document.toString();
+    const survivors = ENCOUNTER_LOCI.filter((l) => wire.includes(l.seeded));
+    expect(survivors).toEqual([]);
+  });
+
+  it("an absent encounter field is not invented as a locus (no manifest row, no over-scrub)", () => {
+    // adt-a01 carries a PV1 with no visit number and no admit/discharge date.
+    const { manifest } = deidentifyHl7(parseHL7(loadFixture("adt-a01")), {
+      context: ctx,
+    });
+    expect(manifest.filter((m) => m.locus.startsWith("PV1-"))).toEqual([]);
+  });
+
+  it("the clinical value alongside the encounter loci survives byte-identical (over-scrub guard)", () => {
+    const original = parseHL7(loadFixture("adt-a03"));
+    const { document } = deidentifyHl7(
+      parseHL7(loadFixture("adt-a03")),
+      profileOptions(SAFE_HARBOR_PROFILE, ctx),
+    );
+    for (const path of ["OBX[0].5", "OBX[0].6", "OBX[0].3.1", "OBR.4.1", "DG1.3.1", "PV1.3.1"]) {
+      expect(document.get(path)).toBe(original.get(path));
+    }
+  });
+});
+
+describe("a visit-number field carrying a REAL direct identifier is never retained", () => {
+  // §164.514(e)(2) enumerates sixteen direct identifiers, and (vii) NAMES medical record numbers while
+  // (ix) NAMES account numbers. The whole argument for keeping a visit number in a limited data set is
+  // that the list has no catch-all: that argument evaporates the moment the field actually carries one
+  // of the sixteen, which PV1-19 routinely does. The standard types it for us at CX-5 (Table 0203).
+
+  /** Build a PV1 whose 19th field is exactly `visitNumber`, counted rather than eyeballed. */
+  function pv1(visitNumber: string): string {
+    const fields = new Array<string>(19).fill("");
+    fields[0] = "1";
+    fields[1] = "I";
+    fields[2] = "W^R^B";
+    fields[18] = visitNumber; // PV1-19
+    return `PV1|${fields.join("|")}`;
+  }
+
+  const wire = (visitNumber: string): string =>
+    [
+      "MSH|^~\\&|A|B|C|D|20200101||ADT^A03|M1|P|2.5",
+      "PID|1||ZZMRN500^^^HOSP^MR||ZZFAM^ZZGIV||19850302",
+      pv1(visitNumber),
+    ].join("\r");
+
+  it("the fixture builder really puts the value at PV1-19 (pre-condition)", () => {
+    // A test that silently seeded PV1-20 would assert nothing at all.
+    expect(parseHL7(wire("ZZMRN500^^^HOSP^VN")).get("PV1.19.1")).toBe("ZZMRN500");
+  });
+
+  it("an MR-typed visit number is pseudonymized, not retained, EVEN under limited-data-set", () => {
+    const ctx = createDeidContext({ key: "pv19-key", patientId: "p1" });
+    const { document, manifest } = deidentifyHl7(
+      parseHL7(wire("ZZMRN500^^^HOSP^MR")),
+      profileOptions(LIMITED_DATA_SET_PROFILE, ctx),
+    );
+    expect(document.toString().includes("ZZMRN500")).toBe(false);
+    const entry = manifest.find((m) => m.locus === "PV1-19[0]");
+    expect(entry?.category).toBe(C.MRN);
+    expect(entry?.disposition).toBe("transformed");
+    // And the surrogate is the SAME one PID-3 got, so a pass can never republish in the clear the
+    // identifier it just pseudonymized elsewhere in the very same message.
+    expect(document.get("PV1.19.1")).toBe(document.get("PID.3[0].1"));
+  });
+
+  it("AN / SS / MA typed visit numbers are likewise transformed, never retained", () => {
+    const ctx = createDeidContext({ key: "pv19-key", patientId: "p1" });
+    for (const [typeCode, category] of [
+      ["AN", C.ACCOUNT],
+      ["SS", C.SSN],
+      ["MA", C.HEALTH_PLAN_BENEFICIARY],
+    ] as const) {
+      const { document, manifest } = deidentifyHl7(
+        parseHL7(wire(`ZZMRN500^^^HOSP^${typeCode}`)),
+        profileOptions(LIMITED_DATA_SET_PROFILE, ctx),
+      );
+      expect(document.toString().includes("ZZMRN500")).toBe(false);
+      const entry = manifest.find((m) => m.locus === "PV1-19[0]");
+      expect(entry?.category).toBe(category);
+      expect(entry?.disposition).not.toBe("retained");
+    }
+  });
+
+  it("an untyped or VN-typed visit number IS the encounter identifier, and is retained under LDS", () => {
+    const ctx = createDeidContext({ key: "pv19-key", patientId: "p1" });
+    for (const visitNumber of ["ZZVISIT500^^^HOSP^VN", "ZZVISIT500"]) {
+      const { document, manifest } = deidentifyHl7(
+        parseHL7(wire(visitNumber)),
+        profileOptions(LIMITED_DATA_SET_PROFILE, ctx),
+      );
+      const entry = manifest.find((m) => m.locus === "PV1-19[0]");
+      expect(entry?.category).toBe(C.OTHER_UNIQUE_ID);
+      expect(entry?.disposition).toBe("retained");
+      expect(document.get("PV1.19.1")).toBe("ZZVISIT500");
+    }
+  });
+
+  it("a mixed PV1-19 list routes each repetition on its own type code", () => {
+    const ctx = createDeidContext({ key: "pv19-key", patientId: "p1" });
+    const msg = parseHL7(wire("ZZVISIT500^^^H^VN~ZZMRN500^^^H^MR"));
+    const { document, manifest } = deidentifyHl7(
+      msg,
+      profileOptions(LIMITED_DATA_SET_PROFILE, ctx),
+    );
+    expect(manifest.find((m) => m.locus === "PV1-19[0]")?.disposition).toBe("retained");
+    expect(manifest.find((m) => m.locus === "PV1-19[1]")?.category).toBe(C.MRN);
+    expect(manifest.find((m) => m.locus === "PV1-19[1]")?.disposition).toBe("transformed");
+    const out = document.toString();
+    expect(out.includes("ZZVISIT500")).toBe(true); // the real encounter identifier survives
+    expect(out.includes("ZZMRN500")).toBe(false); // the medical record number does not
   });
 });

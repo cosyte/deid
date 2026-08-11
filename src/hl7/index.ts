@@ -20,10 +20,24 @@
  * line is unchanged: the output is **"Safe-Harbor-transformed per the configured policy"**, never
  * "de-identified".
  *
- * **Known limitations.** Free text is block-only (no scrub); within **retained** clinical /
- * visit segments, patient-related dates (OBR/DG1/PV1 timestamps), visit identifiers (PV1-19), and
- * provider names (PV1-7/8, OBR-16) are **not** de-identified; the address generalization keeps only the
- * Safe Harbor 3-digit ZIP and conservatively drops the (permitted) state as well.
+ * **Inside a retained segment**, the identifying dates and the encounter / order numbers are carved
+ * back out ({@link RETAINED_LOCUS_RULES}): under a Safe-Harbor-labelled policy the admit (PV1-44),
+ * discharge (PV1-45), observation (OBR-7) and diagnosis (DG1-5) dates generalize to their **year**, and
+ * the visit number (PV1-19) and the placer / filler order numbers (OBR-2/3, ORC-2/3) are **removed**. A
+ * profile that names their retention class keeps them **unchanged and recorded**.
+ *
+ * **PV1-19 is a CX list routed by its CX-5 identifier-type code**, exactly like PID-3: a `VN`-typed or
+ * untyped value is the encounter identifier (removed as the (R) catch-all, retainable), while an
+ * `MR`/`AN`/`SS`-typed one is handled as the identifier it really is and is **transformed under both
+ * profiles, never retained** — §164.514(e)(2) names all three, so keeping one would republish in the
+ * clear the identifier the pass pseudonymized at PID-3 in the same message.
+ *
+ * **Known limitations.** Free text is block-only (no scrub); **every** field of a retained segment that
+ * the carve-out does not name is still passed through untouched and unrecorded, which continues to
+ * include full-precision timestamps in EVN, PV2, PR1, RXA, RXD, FT1, TXA and SPM and the provider names
+ * in PV1-7/8 and OBR-16, among others: the carve-out narrows this class, it does not close it. The
+ * address generalization keeps only the Safe Harbor 3-digit ZIP and conservatively drops the
+ * (permitted) state as well.
  *
  * @packageDocumentation
  */
@@ -63,9 +77,10 @@ export interface Hl7DeidResult {
  * de-identified, and Expert Determination is not rendered.
  *
  * @param msg - The parsed HL7 v2 message to de-identify.
- * @param options - The policy and (for keyed transforms, MRN / account / beneficiary pseudonymization)
- *   the key context. A keyed transform with no context is a fatal `DEID_NO_KEY`, never an unkeyed
- *   fallback.
+ * @param options - The policy, the profile's retention classes, and (for keyed transforms, MRN /
+ *   account / beneficiary pseudonymization) the key context. A keyed transform with no context is a
+ *   fatal `DEID_NO_KEY`, never an unkeyed fallback. **Retention defaults to nothing**, so a bare
+ *   options bag removes the encounter dates and identifiers rather than keeping them.
  * @returns The de-identified message and the value-free manifest.
  * @throws {@link DeidError} `DEID_NO_KEY` when a keyed transform is required for a category present in
  *   the message but no key context was supplied.
@@ -82,7 +97,10 @@ export interface Hl7DeidResult {
  * ```
  */
 export function deidentifyHl7(msg: Hl7Message, options: DeidOptions = {}): Hl7DeidResult {
-  const { loci, coords } = extractHl7Loci(msg);
+  const { loci, coords } = extractHl7Loci(
+    msg,
+    options.retainedLoci !== undefined ? { retainedLoci: options.retainedLoci } : {},
+  );
   const { document, manifest } = deidentify({ loci }, options);
   const deidentified = applyHl7(msg, document.loci, coords);
   return { document: deidentified, manifest };
@@ -94,7 +112,14 @@ export {
   type Hl7FieldRule,
   type Hl7FieldMode,
 } from "./locus-map.js";
-export { extractHl7Loci, type Hl7Coord, type Hl7Extraction, type Hl7EditKind } from "./extract.js";
+export {
+  extractHl7Loci,
+  type Hl7Coord,
+  type Hl7Extraction,
+  type Hl7EditKind,
+  type Hl7ExtractOptions,
+} from "./extract.js";
 export { applyHl7 } from "./apply.js";
-export { RETAIN_SEGMENTS } from "./retain.js";
+export { RETAIN_SEGMENTS, RETAINED_LOCUS_RULES, type Hl7RetainedFieldRule } from "./retain.js";
+export { RETAINED_LOCUS_CLASSES, retains, type RetainedLocusClass } from "../retention.js";
 export { SAFE_HARBOR_CATEGORIES, type SafeHarborCategory } from "../categories.js";
