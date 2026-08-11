@@ -54,19 +54,12 @@ never rendered**. Full statement: `documentation/agent-notes.md#project`.
 
 ## Tech Stack (the shared `@cosyte/*` standard)
 
-Inherited by depending on the published `@cosyte/*` config packages, not by copying files. Source of
-truth is the meta-repo's `documentation/conventions.md`; the full per-line detail is
+Per the published `@cosyte/*` config packages, never by copying files: TypeScript strict
+(**ES2023**, `NodeNext`, 5.9.x pinned), **Node >= 22** (CI 22+24), **pnpm@10**, dual ESM + CJS via
+`tsup`, ESLint 10 + Prettier, `--max-warnings=0`, Vitest 4 at >= 90 per-directory coverage,
+**runtime deps zero**, MIT. **`attw` is a WRAPPER, not the bare CLI**: see below. Detail + the vendored
+optional-peer arrangement:
 `documentation/agent-notes.md#tech-stack-the-shared-cosyte-standard`.
-
-- **Language:** TypeScript strict (full rigor set incl. `noUncheckedIndexedAccess`), **ES2023**,
-  `NodeNext`, TS 5.9.x exact-pinned. **Node >= 22** (CI matrix 22 + 24). **pnpm@10.**
-- **Build:** dual ESM + CJS + `.d.ts` via `tsup`. The `attw` script is
-  **`node scripts/attw.mjs --profile node16`, not the bare CLI**: see the guardrail below.
-- **Lint/format:** ESLint 10 + type-checked `typescript-eslint`, Prettier, `--max-warnings=0`.
-- **Testing:** Vitest 4 + v8 coverage, per-directory >= 90 gates; invariants from `@cosyte/test-utils`.
-- **CI/CD:** thin callers of the reusable `cosyte/.github` workflows. **Runtime deps: zero.** MIT.
-- Each format's parser is an **optional peer dep** consumed only from its subpath, installed from
-  `pnpm pack` tarballs committed under `vendor/`.
 
 ### Branch protection and Dependabot
 
@@ -106,6 +99,12 @@ truth is the meta-repo's `documentation/conventions.md`; the full per-line detai
   **The per-rule tallies are absent from this file DELIBERATELY: they went stale before the files they
   counted existed. The OK line prints the live figures on every run; do not write one back in here.**
   → `documentation/agent-notes.md#the-test-selection-gate`
+- **`pnpm check:agent-notes` gates this file's pointers into the narrative one**, on `pnpm check` and
+  `pnpm test`, riding required `ci / verify`; NO new required context. **MATCHER, ANCHOR SPACE AND
+  CORPUS PARTITION WERE EACH DERIVED FROM THIS TREE AND NONE PORTS**: a bare anchor or explicit anchor
+  tag REFUSES; the partition is **UTF-8 decodability, NOT NUL**. **It asserts this repo's promise,
+  never a universal about a sibling. Never clear a red by deleting a pointer, heading or span.**
+  → `documentation/agent-notes.md#the-narrative-pointer-gate`
 - **The ruleset BLOCKS the "Version Packages" PR by design: it needs one push** (an empty commit onto
   `changeset-release/main`), done **last**, immediately before merging. `bypass_actors` is empty on
   purpose. → `documentation/agent-notes.md#the-version-packages-pr-is-blocked-by-design`
