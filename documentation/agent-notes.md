@@ -131,6 +131,11 @@ a summary.
 - **CI/CD:** thin callers of the reusable `cosyte/.github` workflows.
 - **Runtime deps:** **Zero.** Node stdlib only.
 - **License:** MIT.
+- **Optional peer deps, vendored.** Each format's parser is an **optional peer dep** consumed only from
+  its subpath, installed from `pnpm pack` tarballs committed under `vendor/`. *(Relocated verbatim from
+  `CLAUDE.md` on 2026-08-11 to make room for the narrative-pointer gate's entry; the bullet list above
+  it in `CLAUDE.md` was a second copy of this section and was compressed to the facts plus its pointer,
+  which is relocation, not deletion. Nothing here was shortened.)*
 
 ## Branch protection and Dependabot
 
@@ -266,6 +271,169 @@ a summary.
     set of spellings, so each new self-test buys one more), which means: **a diff touching
     `exportedSourceEntries` or `resolveSpecifier` is reviewed by a person, and the OK line's counts
     are what a reviewer compares it against.**
+
+### The narrative-pointer gate
+
+`scripts/check-agent-notes.ts`, landed 2026-08-11. **It is named for what it checks and it asserts no
+universal about any sibling repository.** That sentence is the most load-bearing one here, so it comes
+first: the two-file split was applied across much of the cosyte tree, and the tempting framing is
+"every repo has this pair, and this gate enforces the contract". **It is not.** Measured across the
+umbrella's own checkout on 2026-08-06, `config`, `hl7`, `workflow`, `crew`, `knowledgebase`, `.github`
+and `claude-containers` carry **no narrative file at all**, so the ecosystem-wide contract is either
+not universal or is violated in every one of those places. For those repos the honest outcome is a
+**written exemption, not an invented file**. An overclaiming guard is worse than a narrow one: it
+invites a reader to trust a promise the tree does not keep, and the first repo it trips deletes the
+gate rather than fixing anything. **A claim about another repository is not checkable from inside this
+one.** Do not widen the script to make one.
+
+**What it checks, and nothing else.** The narrative file must be tracked; every section must have a
+body (a container's body is its subsections); every qualified pointer at it, in a file the gate
+opened, must resolve. Three things could break silently before it existed and none had a check: the
+narrative file stops being tracked, a section is emptied down to its heading, or an anchor moves on
+one side of the pair and not the other. In **this** package that is clinical-safety content rather
+than tidiness: the rules those anchors ground are the fail-closed reflex, the scoped safety claims,
+the PHI-scan roots and the allow-list traps, and each was learned by shipping a defect.
+
+**THE MATCHER, THE ANCHOR SPACE AND THE CORPUS PARTITION WERE EACH DERIVED BY MEASURING THIS TREE, AND
+NONE OF THE THREE PORTS.** Two pointer spellings are live across the ecosystem — QUALIFIED (the
+basename, a hash, an anchor run, optionally path-prefixed) and BARE (an inline code span holding
+nothing but a hash and an anchor run) — and which dominates is a property of the tree, not of the
+convention. The record, which is why nothing here was copied:
+
+- `ncpdp`: a verbatim port of `mllp`'s qualified matcher would have printed "all resolving" while
+  covering **3 of 38** pointers; the dominant spelling there is the bare one, 35 against 3.
+- `terminology`: **100% bare, 42 against 0.** The same matcher would have found nothing and exited 0.
+- `cli`: the mirror, **100% qualified, 11 against 0.**
+- `astm`: a third arrangement. The bare form dominated (**66, with zero in either filed form**) **and
+  the anchor space was 37 explicit anchor tags rather than heading slugs**, because its headings carry
+  long dated titles. A slug-only check there reports **every pointer in the repo** as dangling.
+
+**Measured here, on this tree, before the matcher was written, with two independent tools**, because a
+premise check is a matcher too and ports no better than a gate's: a coordinator's pre-dispatch count
+of `astm` read 2 and was wrong (it grepped the literal basename, which cannot see a bare anchor at
+all), and `grep` in this container has been observed reporting **no match** on a file `rg` and a Node
+read both find hits in — which happened again during this slice, on this gate's own test file. The
+figures were **53 qualified pointers, all of them in `CLAUDE.md`; zero bare pointers in any file the
+gate can read as text; 54 heading slugs; zero explicit anchor tags; zero headings inside HTML
+comments.** All 53 resolved. **Do not trust those numbers from this paragraph** — a figure written
+into prose goes stale on the next commit with nobody touching it. **The OK line prints every count on
+every run**, because it measures rather than remembers.
+
+**THE BARE CENSUS is how "the bare form is dead here" stays a measurement.** A per-form refusal keyed
+on a bare count of zero would refuse forever on a healthy tree, so instead every opened file is
+censused on every run — every file, not just the pair, because a bare pointer in a third file would
+otherwise be seen by neither the matcher nor a pair-scoped census. A span whose anchor is all decimal
+digits is a pull-request reference and is **counted and reported**; anything else **REFUSES at exit 2**
+and tells you to re-derive the matcher. That converts the scope from an assumption into a
+**self-invalidating measurement**. `cli`'s copy caught its own source mid-work this way, and its eight
+bare-shaped spans turned out to be five digits-only references plus a quoted shebang and quoted
+headings: **shape is not a pointer, so count what resolves, not what matches.**
+
+**THE ANCHOR SPACE REFUSES TOO.** An explicit anchor tag anywhere in the narrative file refuses at
+exit 2 rather than being ignored. `astm` is the proof that this is a live failure rather than a
+theoretical one, and ignoring a tag is exactly how a slug-only gate silently becomes the wrong gate.
+
+**THE CORPUS PARTITION IS UTF-8 DECODABILITY, NOT NUL, AND THAT IS THE PART A PORT GETS WRONG IN
+SILENCE.** The obvious partition is a NUL byte, reasoning that a NUL means a compressed vendored
+tarball nobody can edit to clear a red. **That reasoning is false here and was measured false
+first:** `src/context.ts`, `src/manifest.ts` and `src/report.ts` are hand-written and
+embed NUL bytes, so a NUL partition drops three authored sources out of both the matcher and the
+census with nothing to notice. This repository already had that measurement written down, because a
+"binary blob" predicate was proposed for `scripts/phi-scan.ts` and **rejected** for the same reason.
+**Git's own classification is a third, different set and is also wrong for this purpose:** `git grep -I`
+calls `src/context.ts` and `src/manifest.ts` binary and `src/report.ts` not, because its heuristic
+reads only the head of a file. So neither `grep -I` nor `git ls-files --eol` may be substituted in as
+a simplification: either drops authored source from the sweep with no tell. The set that does not
+decode as UTF-8 is exactly the six vendored tarballs, and **the count of files opened despite carrying
+a NUL byte is printed on the OK line** so a regression to the sibling partition shows up as a number
+rather than as silence.
+
+**THE POSITIVE CONTROLS, AND WHY ONE OF THEM IS BUILT THE WAY IT IS.** `test/scripts/agent-notes.test.ts`
+carries twelve cases, and each red is preceded by an asserted green so no red proves merely that a
+fixture was broken. Beyond the synthetic ones, the gate was run against a **file copy of this real
+tree** with a single real anchor mutated: green, then exit 1 naming the file, the line and the anchor,
+then green again after restoring the file by copy. **A control can be vacuous rather than wrong:** one
+of `astm`'s seven printed OK over an emptied section because anchors and headings were bound
+separately, so the anchor looked empty, the heading looked unreferenced, and both passes skipped it.
+Here a heading record carries its slug **and** its body range, so the two cannot disagree, and the
+emptied-section case asserts that the heading and the pointer at it both survive the edit.
+
+**RE-RUN A CORPUS-SCANNING GATE AFTER `git add`.** The corpus is the index, so a new file is invisible
+until it is staged. `astm`'s local verify was green while both new files were untracked and CI went red
+on both Node versions the moment they were staged, because **the gate's own test fixtures spelled
+pointers**. The gate was right. **Exempting the gate's own files was rejected — that is the exclusion
+list this gate refuses to have** — so every sample pointer and every sample bare span in both files
+here is **assembled from parts at runtime**, and the gate was re-run staged before anything shipped.
+
+**WHAT AN ADVERSARIAL REVIEW TOOK OUT BEFORE THIS SHIPPED, recorded because two of the four were
+ported shapes rather than new mistakes.** (1) **A WRAP JOIN WAS DELETED.** Carried over from a
+sibling, it re-tried a failed anchor joined to the next line's leading run, and its comment claimed it
+"cannot manufacture a pass for a pointer the line pass already resolved" — **a tautology dressed as a
+safety property**, since the direction that matters is a pointer the line pass did *not* resolve. It
+was reproduced printing "all resolving" at exit 0 over a truncated anchor whose continuation began
+with the missing character, and it rescued **zero** of this tree's real pointers, so it bought nothing
+while opening the one direction this gate must never fail in. (2) **A UNIVERSAL ABOUT SIBLINGS WAS
+REMOVED FROM THREE PLACES**: the script, its test docblock and this section each opened the partition
+argument with "every sibling copy skips on NUL". That is a claim about repositories this script cannot
+read, it is the exact shape criterion 3 forbids, and the umbrella's `conventions.md` records the
+NUL-skip as a **per-repo decision** with the reference copy not having one at all. **The same
+over-universalisation was corrected in `conventions.md` on 2026-08-10 and was re-introduced here ten
+days later**: hedge every sentence about another repo, or delete it. (3) **The fence closer was wrong
+by CommonMark**: any run of the same character closed an open block, so a **nested** fence (a markdown
+sample quoting markdown, which is how these files are written) closed the outer block on the inner
+*opener* and every hash line after it minted a phantom anchor. The rule is now same marker, at least
+as long, no info string, plus CommonMark 4.5's rule that a backtick fence's info string may not
+contain a backtick, which is the false-RED half of the same defect. (4) **The cursor-untracked
+violation was unreachable**, because the zero-pointer refusal fired first and answered "one half of
+the pair is gone" with "the matcher stopped matching". Both are fail-closed; only one is legible.
+
+**A SECOND REVIEW PASS THEN CAUGHT THE REMEDY'S OWN VACUOUS CONTROL, in the file whose banner says
+this repo has already paid for a vacuous assertion twice.** The nested-fence case pointed at the
+FIRST heading in the sample, which sits inside the fence under the broken rule *and* the correct one,
+so all three of its assertions passed verbatim against the pre-fix gate. **Only the heading AFTER the
+inner opener changes side**, and that is where it points now. It also found the length condition
+DELETABLE with every other case still green, and the reordering untested.
+
+**AND A THIRD PASS REFUTED THE FIX TO THE SECOND, WHICH IS THE ENTRY TO READ IF YOU ARE SHORT OF
+TIME.** The remedy above asserted, in the script, in the changeset and in this file, that *"each of
+the three fence conditions has its own self-test case, verified by removing each one and watching the
+gate refuse."* **Measured false.** The fence rule has **four** conditions, not three (the closer's
+three, plus the opener's backtick-info restriction), and `marker ===
+fenceMarker` could be deleted with the self-test, the real tree and all fifteen suite cases still
+green — while, with it gone, one input yields a phantom anchor and a lost real anchor at the same
+time. The mutation matrix behind the sentence had removed conditions **in pairs**, which proves
+nothing about either one. All four conditions of the fence rule — three on the closer, one on the
+opener — now have their own case, each verified by deleting that
+conjunct **alone**; cases 13, 14 and 15 were each verified by reverting their fix and watching the
+case fail.
+
+**THE DURABLE LESSON, EARNED THREE TIMES IN ONE SLICE: A CONTROL THAT DOES NOT CHANGE ANSWER WHEN THE
+FIX IS REVERTED IS A CONTROL OF NOTHING, AND "IT GOES RED" IS NOT EVIDENCE UNLESS YOU HAVE SHOWN IT
+GOES GREEN FOR THE OTHER REASON.** The second-order version is the one that cost the extra pass: **a
+claim that a verification was performed is itself a claim, and it decays exactly like a count.** Both
+times the prose was written from the intent of the mutation rather than from its output. Re-run the
+matrix before you believe that sentence again.
+
+**Two departures from the copies this one was read against, both deliberate.** A heading inside an HTML comment renders
+no anchor on GitHub; several siblings count it anyway and merely disclose the phantom, while this copy
+**suppresses it, counts the suppressions, and refuses an unterminated comment** rather than swallowing
+the rest of the file. And the filed claim that a pointer must be spelled in a particular encoding was
+**wrong: UTF-7 does match**, because RFC 2152 permits a bare hash, so the rule is **matched iff spelled
+in ASCII bytes**.
+
+**Wiring, and what it deliberately does not add.** It runs from `pnpm check:agent-notes`, is reached by
+`pnpm check` (so it is on the meta-repo's `scripts/verify.sh deid` ladder) and by `pnpm test` (so it
+rides the required `ci / verify` context and `prepublishOnly`). **No new workflow and no new required
+check-run context**: requiring a context before its workflow has run on `main` leaves every PR
+**PENDING** rather than red, and this repo has already paid that cost twice.
+
+**Scope, stated rather than discovered.** Only the narrative file's **basename** is compared, never its
+directory, so moving it while the pointers keep their old prefix exits 0 with every rendered link
+broken. A file that is not valid UTF-8 is skipped whole, and the tell is the skipped count. A pointer
+at any other file's anchor is out of scope. A section with a body is not a section with the **right**
+body — that half stays human. And it checks no byte budget: `CLAUDE.md`'s ceiling belongs to the
+umbrella's hook, and a second copy of that number inside this package would go stale. The full list,
+with which items a test pins, is the disclosed-miss block in the script header.
 
 ### The Version Packages PR is blocked by design
 
