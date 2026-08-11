@@ -428,14 +428,31 @@ describe("encounter loci positive control, the limited-data-set profile still ca
       policy: LIMITED_DATA_SET_PROFILE.policy,
     });
     const inventoried = new Set(report.retainedQuasiIdentifiers.map((r) => r.locus));
-    for (const locus of ["PV1-19", "PV1-44", "PV1-45", "OBR-2", "OBR-3", "OBR-7", "ORC-2", "ORC-3", "DG1-5"]) {
+    for (const locus of [
+      "PV1-19",
+      "PV1-44",
+      "PV1-45",
+      "OBR-2",
+      "OBR-3",
+      "OBR-7",
+      "ORC-2",
+      "ORC-3",
+      "DG1-5",
+    ]) {
       expect(inventoried.has(locus)).toBe(true);
     }
     expect(report.dispositionSummary.retained).toBe(9);
   });
 
   it("the patient identifiers §164.514(e)(2) DOES name are still gone", () => {
-    for (const s of ["ZZENCFAMILY", "ZZENCGIVEN", "ZZENCSTREET", "ZZENCCITY", "5550000020", "ZZMRN003"]) {
+    for (const s of [
+      "ZZENCFAMILY",
+      "ZZENCGIVEN",
+      "ZZENCSTREET",
+      "ZZENCCITY",
+      "5550000020",
+      "ZZMRN003",
+    ]) {
       expect(wire.includes(s)).toBe(false);
     }
   });

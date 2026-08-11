@@ -226,11 +226,14 @@ function applyTransform(
         },
       };
     case "byo-redact":
+    case "retain":
     case "block":
     default:
-      // `byo-redact` is not a category transform: free-text redaction is driven by the `redactor`
-      // option, not the policy map. If a policy assigns it (or `block`, or anything unknown) to a
-      // category, fail closed (block).
+      // Neither `byo-redact` nor `retain` is a category transform: free-text redaction is driven by
+      // the `redactor` option and retention by the profile's retention set, not by the policy map. If
+      // a policy assigns either (or `block`, or anything unknown) to a category, fail closed (block).
+      // `retain` in particular must never keep a value from here: reaching this arm means a policy
+      // asked for it per-category, which is not how retention is decided.
       return blocked(locus.path, category, DEID_DISPOSITION_CODES.DEID_LOCUS_BLOCKED);
   }
 }

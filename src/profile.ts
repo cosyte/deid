@@ -43,11 +43,7 @@ import {
   type TransformName,
 } from "./policy.js";
 import { type FreeTextRedactor } from "./redactor.js";
-import {
-  NO_RETAINED_LOCI,
-  RETAINED_LOCUS_CLASSES,
-  type RetainedLocusClass,
-} from "./retention.js";
+import { NO_RETAINED_LOCI, RETAINED_LOCUS_CLASSES, type RetainedLocusClass } from "./retention.js";
 
 /**
  * The **protection rank** of a transform: higher means the residual is *less* identifying, so the

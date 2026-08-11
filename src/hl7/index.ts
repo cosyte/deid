@@ -113,9 +113,5 @@ export {
 } from "./extract.js";
 export { applyHl7 } from "./apply.js";
 export { RETAIN_SEGMENTS, RETAINED_LOCUS_RULES, type Hl7RetainedFieldRule } from "./retain.js";
-export {
-  RETAINED_LOCUS_CLASSES,
-  retains,
-  type RetainedLocusClass,
-} from "../retention.js";
+export { RETAINED_LOCUS_CLASSES, retains, type RetainedLocusClass } from "../retention.js";
 export { SAFE_HARBOR_CATEGORIES, type SafeHarborCategory } from "../categories.js";

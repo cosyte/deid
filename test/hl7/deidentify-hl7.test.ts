@@ -404,18 +404,21 @@ describe("deidentifyHl7, fatal + policy + immutability", () => {
  * Both directions are asserted, because a removal test that passes because the detector never found the
  * locus is indistinguishable from one that passes because the locus was removed.
  */
-const ENCOUNTER_LOCI: readonly { readonly what: string; readonly locus: string; readonly seeded: string }[] =
-  [
-    { what: "visit number", locus: "PV1-19", seeded: "ZZVISIT700" },
-    { what: "admit date/time", locus: "PV1-44", seeded: "20200103040500" },
-    { what: "discharge date/time", locus: "PV1-45", seeded: "20200109060700" },
-    { what: "placer order number (order control)", locus: "ORC-2", seeded: "ZZPLACER700" },
-    { what: "filler order number (order control)", locus: "ORC-3", seeded: "ZZFILLER700" },
-    { what: "placer order number (observation request)", locus: "OBR-2", seeded: "ZZPLACER700" },
-    { what: "filler order number (observation request)", locus: "OBR-3", seeded: "ZZFILLER700" },
-    { what: "observation (service) date/time", locus: "OBR-7", seeded: "20200104080000" },
-    { what: "diagnosis date/time", locus: "DG1-5", seeded: "20200105090000" },
-  ];
+const ENCOUNTER_LOCI: readonly {
+  readonly what: string;
+  readonly locus: string;
+  readonly seeded: string;
+}[] = [
+  { what: "visit number", locus: "PV1-19", seeded: "ZZVISIT700" },
+  { what: "admit date/time", locus: "PV1-44", seeded: "20200103040500" },
+  { what: "discharge date/time", locus: "PV1-45", seeded: "20200109060700" },
+  { what: "placer order number (order control)", locus: "ORC-2", seeded: "ZZPLACER700" },
+  { what: "filler order number (order control)", locus: "ORC-3", seeded: "ZZFILLER700" },
+  { what: "placer order number (observation request)", locus: "OBR-2", seeded: "ZZPLACER700" },
+  { what: "filler order number (observation request)", locus: "OBR-3", seeded: "ZZFILLER700" },
+  { what: "observation (service) date/time", locus: "OBR-7", seeded: "20200104080000" },
+  { what: "diagnosis date/time", locus: "DG1-5", seeded: "20200105090000" },
+];
 
 describe("deidentifyHl7, the encounter loci inside retained segments (§164.514(b)(2) vs §164.514(e))", () => {
   it("PRE-CONDITION: every seeded encounter value is really present in the original wire", () => {
@@ -475,7 +478,17 @@ describe("deidentifyHl7, the encounter loci inside retained segments (§164.514(
       expect(document.get(path)).toBe(original.get(path));
     }
     // Recorded, every one: a kept identifier that no artifact names is invisible twice over.
-    for (const locus of ["PV1-19", "PV1-44", "PV1-45", "ORC-2", "ORC-3", "OBR-2", "OBR-3", "OBR-7", "DG1-5"]) {
+    for (const locus of [
+      "PV1-19",
+      "PV1-44",
+      "PV1-45",
+      "ORC-2",
+      "ORC-3",
+      "OBR-2",
+      "OBR-3",
+      "OBR-7",
+      "DG1-5",
+    ]) {
       const entry = manifest.find((m) => m.locus === locus);
       expect(entry?.disposition).toBe("retained");
       expect(entry?.transform).toBe("retain");
@@ -490,7 +503,14 @@ describe("deidentifyHl7, the encounter loci inside retained segments (§164.514(
     ).document.toString();
     // Names, address detail, phone, and the raw medical record number are all on the limited-data-set
     // exclusion list, so keeping the encounter loci must not have loosened any of them.
-    for (const s of ["ZZENCFAMILY", "ZZENCGIVEN", "ZZENCSTREET", "ZZENCCITY", "5550000020", "ZZMRN003"]) {
+    for (const s of [
+      "ZZENCFAMILY",
+      "ZZENCGIVEN",
+      "ZZENCSTREET",
+      "ZZENCCITY",
+      "5550000020",
+      "ZZMRN003",
+    ]) {
       expect(wire.includes(s)).toBe(false);
     }
   });
