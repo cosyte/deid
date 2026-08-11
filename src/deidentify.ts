@@ -27,6 +27,7 @@ import type { DeidDocument, GenericLocus, TransformedLocus } from "./locus.js";
 import { ManifestBuilder, type DeidManifestEntry, type DeidResult } from "./manifest.js";
 import { resolvePolicy, type DeidPolicy, type TransformName } from "./policy.js";
 import type { FreeTextRedactor } from "./redactor.js";
+import type { RetainedLocusClass } from "./retention.js";
 import {
   dateShift,
   generalizeAge,
@@ -50,6 +51,15 @@ import {
 export interface DeidOptions {
   /** The policy to apply. Defaults to the built-in Safe Harbor policy. */
   readonly policy?: DeidPolicy | "safe-harbor";
+  /**
+   * The **retention classes** the configured profile permits: the named groups of identifying loci a
+   * format adapter may pass through unchanged (each one still recorded as a residual). Build this
+   * with {@link profileOptions} rather than by hand; the widen-never-narrow contract on a derived
+   * profile is what keeps a site preset from adding one.
+   *
+   * **Absent or empty retains nothing**, so a bare options bag gets the strict treatment.
+   */
+  readonly retainedLoci?: readonly RetainedLocusClass[];
   /** The context carrying the consumer's key, required only when the policy uses a keyed transform. */
   readonly context?: DeidContext;
   /**
@@ -81,6 +91,26 @@ function blocked(
     value: null,
     disposition: "blocked",
     manifest: { category, transform: "block", locus: path, disposition: "blocked", code },
+  };
+}
+
+/**
+ * Build the outcome for a locus the configured profile's **retention set** keeps: the value passes
+ * through unchanged, and the fact is **recorded** as a residual so it reaches the retained-quasi-
+ * identifier inventory a determiner reads. An unclassified retained locus is recorded as the
+ * catch-all (R), never as "nothing happened here".
+ */
+function retainedResidual(locus: GenericLocus, category: SafeHarborCategory): LocusOutcome {
+  return {
+    value: locus.value,
+    disposition: "retained",
+    manifest: {
+      category,
+      transform: "retain",
+      locus: locus.path,
+      disposition: "retained",
+      code: DEID_DISPOSITION_CODES.DEID_RESIDUAL_RETAINED,
+    },
   };
 }
 
@@ -284,6 +314,12 @@ function handleLocus(
       SAFE_HARBOR_CATEGORIES.OTHER_UNIQUE_ID,
       DEID_DISPOSITION_CODES.DEID_LOCUS_BLOCKED,
     );
+  }
+  // The configured profile's retention set deliberately keeps this class of identifying locus. It is
+  // reached only AFTER the three fail-closed guards above, so free text and unrecognized structure can
+  // never be retained by this route however an adapter marks them; and it is always recorded.
+  if (locus.retainedByPolicy === true) {
+    return retainedResidual(locus, locus.category);
   }
   return applyTransform(policy.transforms[locus.category], locus, locus.category, context);
 }

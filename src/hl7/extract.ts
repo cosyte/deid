@@ -10,8 +10,10 @@
  * else: a recognized segment is retained only if it is on the explicit {@link RETAIN_SEGMENTS}
  * clinical/administrative list, so a *known* patient-identity segment absent from the map (MRG / FAM /
  * ACC / PEO / PDA) is blocked exactly like a Z-segment or a segment unknown to the parser. A non-mapped
- * field inside a mapped segment, and a retained clinical segment, are left untouched (the over-scrub
- * guard); OBX-5 is retained only when OBX-2 positively types it as a structured clinical value.
+ * field inside a mapped segment is left untouched (the over-scrub guard); OBX-5 is retained only when
+ * OBX-2 positively types it as a structured clinical value. Inside a **retained** segment the
+ * {@link RETAINED_LOCUS_RULES} carve-out still applies: its identifying dates and encounter / order
+ * numbers are handed to the engine unless the configured profile names their retention class.
  *
  * @packageDocumentation
  */
@@ -21,11 +23,16 @@ import { type Hl7Message, type Segment } from "@cosyte/hl7";
 import { SAFE_HARBOR_CATEGORIES } from "../categories.js";
 import { safeLocusToken } from "../derived-token.js";
 import type { GenericLocus } from "../locus.js";
+import { retains, type RetainedLocusClass } from "../retention.js";
 import { HL7_LOCUS_MAP, categoryForIdentifierType, type Hl7FieldRule } from "./locus-map.js";
-import { RETAIN_SEGMENTS } from "./retain.js";
+import { RETAIN_SEGMENTS, RETAINED_LOCUS_RULES } from "./retain.js";
 
-/** How the applier writes a transformed locus back onto the cloned raw tree. */
-export type Hl7EditKind = "whole-field" | "id-number" | "address-zip";
+/**
+ * How the applier writes a transformed locus back onto the cloned raw tree. `none` writes **nothing**:
+ * it is the coordinate of a locus the profile's retention set kept, which must stay byte-identical
+ * (a whole-field write would flatten its components and repetitions into a single value).
+ */
+export type Hl7EditKind = "whole-field" | "id-number" | "address-zip" | "none";
 
 /**
  * A write-back coordinate: the exact structural location of one extracted locus in the message's raw
@@ -40,6 +47,15 @@ export interface Hl7Coord {
   readonly rep: number;
   /** How to write the transformed value back. */
   readonly edit: Hl7EditKind;
+}
+
+/**
+ * Options for {@link extractHl7Loci}. The retention set comes from the configured profile via
+ * {@link profileOptions}; **omitting it retains nothing**, which is the fail-closed default.
+ */
+export interface Hl7ExtractOptions {
+  /** The retention classes the profile permits. Absent or empty keeps no identifying locus. */
+  readonly retainedLoci?: readonly RetainedLocusClass[];
 }
 
 /** The paired output of {@link extractHl7Loci}: loci for the engine + coordinates for the applier. */
@@ -202,6 +218,44 @@ function extractRule(
   }
 }
 
+/**
+ * Extract the identifying fields carved out of a **retained** segment: the encounter dates and the
+ * encounter / order identifiers. When the configured profile names the rule's retention class the
+ * locus is marked `retainedByPolicy` (passed through unchanged, and recorded as a residual) and given
+ * a **`none`** coordinate so the applier writes nothing; otherwise it is an ordinary locus the policy
+ * acts on: a date generalizes to its year, an identifier is blocked as the (R) catch-all.
+ */
+function extractRetainedLoci(
+  out: Hl7Extraction,
+  seg: Segment,
+  type: string,
+  occ: number,
+  retainedLoci: readonly RetainedLocusClass[] | undefined,
+): void {
+  const rules = RETAINED_LOCUS_RULES[type];
+  if (rules === undefined) return;
+  for (const rule of rules) {
+    if (!hasContent(seg, rule.field)) continue;
+    const kept = retains(retainedLoci, rule.retention);
+    push(
+      out,
+      {
+        path: fieldPath(type, occ, rule.field),
+        kind: rule.kind,
+        category: rule.category,
+        ...(kept ? { retainedByPolicy: true } : {}),
+        value: seg.field(rule.field).value,
+      },
+      {
+        segIndex: seg.absoluteIndex,
+        field: rule.field,
+        rep: 0,
+        edit: kept ? "none" : "whole-field",
+      },
+    );
+  }
+}
+
 /** Extract the OBX-5 locus, failing closed unless OBX-2 positively types it as a structured value. */
 function extractObx(out: Hl7Extraction, seg: Segment, occ: number): void {
   if (!hasContent(seg, 5)) return;
@@ -254,6 +308,7 @@ function extractUnknownSegment(out: Hl7Extraction, seg: Segment, type: string, o
  * the `@cosyte/hl7` model. Never mutates the message.
  *
  * @param msg - The parsed HL7 v2 message.
+ * @param options - The configured profile's retention classes. Omitted retains nothing (fail closed).
  * @returns The loci (for the engine) and their index-aligned write-back coordinates.
  * @example
  * ```ts
@@ -264,7 +319,7 @@ function extractUnknownSegment(out: Hl7Extraction, seg: Segment, type: string, o
  * loci.length; // number of located candidate values
  * ```
  */
-export function extractHl7Loci(msg: Hl7Message): Hl7Extraction {
+export function extractHl7Loci(msg: Hl7Message, options: Hl7ExtractOptions = {}): Hl7Extraction {
   const out: Hl7Extraction = { loci: [], coords: [] };
   const occurrences = new Map<string, number>();
 
@@ -297,7 +352,12 @@ export function extractHl7Loci(msg: Hl7Message): Hl7Extraction {
     // retain-list. Everything else is blocked: a Z-segment, a segment unknown to the parser, OR a
     // *known* patient/relative-identity segment absent from the map and the retain-list (MRG / ACC /
     // FAM / PEO / PDA). A merge message's prior name + MRN can never ride through in the clear.
-    if (RETAIN_SEGMENTS.has(type)) continue;
+    if (RETAIN_SEGMENTS.has(type)) {
+      // Retaining the SEGMENT does not retain every field in it: the identifying dates and the
+      // encounter / order identifiers are carved back out and handed to the engine.
+      extractRetainedLoci(out, seg, type, occ, options.retainedLoci);
+      continue;
+    }
     extractUnknownSegment(out, seg, type, occ);
   }
 

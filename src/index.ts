@@ -87,6 +87,14 @@ export {
   type DeidStandard,
 } from "./profile.js";
 
+// ── Policy-scoped retention: the named classes of identifying locus a profile may keep, and record.
+export {
+  RETAINED_LOCUS_CLASSES,
+  NO_RETAINED_LOCI,
+  retains,
+  type RetainedLocusClass,
+} from "./retention.js";
+
 // ── The generic locus model.
 export {
   type LocusKind,

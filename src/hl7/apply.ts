@@ -6,7 +6,9 @@
  *
  * Removal is clean: a redacted or blocked field's repetitions are dropped to `[]` (it serializes as an
  * empty field), never zero-length-padded into `^^^` residue. A pseudonymized identifier replaces only
- * the id-number component (CX.1); a generalized address keeps only the Safe Harbor 3-digit ZIP.
+ * the id-number component (CX.1); a generalized address keeps only the Safe Harbor 3-digit ZIP. A
+ * locus the profile's retention set kept carries the `none` edit and is not written at all, so it
+ * survives byte-identical.
  *
  * @packageDocumentation
  */
@@ -149,6 +151,10 @@ export function applyHl7(
         break;
       case "address-zip":
         applyAddressZip(field, coord.rep, t);
+        break;
+      case "none":
+        // A locus the profile's retention set kept: byte-identical is the whole point, so nothing is
+        // written back. A whole-field write would flatten its components/repetitions into one value.
         break;
     }
   }

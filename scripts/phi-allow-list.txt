@@ -81,6 +81,17 @@ NAME ZZLABGIVEN
 NAME ZZLABSTREET
 NAME ZZLABCITY
 
+# --- Synthetic HL7 v2 encounter fixture tokens (test/fixtures/hl7/adt-a03.hl7) ---
+# The discharge ADT that seeds the encounter loci carved out of the retained visit / order segments:
+# the visit number, the admit + discharge + observation + diagnosis dates, and the placer / filler
+# order numbers, alongside the usual patient demographics. Every one is a ZZ-tagged sentinel or a
+# fictional 555 phone; each is asserted ABSENT under the Safe Harbor profile and PRESENT under the
+# limited-data-set profile, which is why the fixture has to carry them in the clear to begin with.
+NAME ZZENCFAMILY
+NAME ZZENCGIVEN
+NAME ZZENCSTREET
+NAME ZZENCCITY
+
 # --- Synthetic C-CDA header person-name / street / city / county tokens (test/fixtures/ccda) ---
 # Patient + guardian + author + informant person names, organization names, and address parts. All
 # obviously-synthetic ZZ-tagged tokens: checked structurally by the C-CDA header detector.
@@ -186,6 +197,12 @@ DOB 19811203
 # The two birth dates of the longitudinal date-shift fixtures (test/hl7/deidentify-hl7.test.ts).
 DOB 20200110
 DOB 20200210
+# The encounter fixture's admit / discharge / observation / diagnosis timestamps. Not birth dates, but
+# they are elements of dates directly related to the individual, declared here for the same reason.
+DOB 20200103040500
+DOB 20200109060700
+DOB 20200104080000
+DOB 20200105090000
 #
 # ▶ `19800101` IS DELIBERATELY ABSENT AND MUST STAY ABSENT. It is the undeclared DOB
 # `test/scripts/phi-scan.test.ts` uses to prove the HL7, C-CDA, X12 and NCPDP detectors CATCH a
@@ -197,6 +214,13 @@ DOB 20200210
 ID ZZMRN
 ID ZZMRN001
 ID ZZMRN002
+ID ZZMRN003
+# The encounter fixture's visit number, order numbers, and account number (test/fixtures/hl7/adt-a03).
+ID ZZVISIT700
+ID ZZPLACER700
+ID ZZFILLER700
+ID ZZACCT300
+ID 5550000020
 # Inline HL7 identifiers in test modules / scripts/smoke.mjs: the five identifier-type placeholders
 # of the PID-3 repetition test, the surviving MRN of the MRG merge case, and the smoke MRN.
 ID I1

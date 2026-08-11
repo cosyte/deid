@@ -49,6 +49,18 @@ export interface GenericLocus {
   readonly kind: LocusKind;
   /** The Safe Harbor category, when known. Omit to force fail-closed handling as category (R). */
   readonly category?: SafeHarborCategory;
+  /**
+   * Set by an adapter when the **configured policy's retention set** names the class this locus
+   * belongs to: the value is passed through **unchanged** and recorded as a residual, rather than
+   * transformed. It is how a limited-data-set preset keeps an admission date or an encounter number
+   * that Safe Harbor removes.
+   *
+   * **This is the one flag that makes the engine emit an identifying value.** It is opt-in and
+   * fails closed: absent (the default) the locus takes its normal policy transform. It is **not** the
+   * over-scrub guard: a `clinical` locus is not an identifier and is retained without a manifest row,
+   * whereas a locus marked here **is** identifying and is always recorded.
+   */
+  readonly retainedByPolicy?: boolean;
   /** The value at the locus. Consumed by the engine, never copied into the manifest. */
   readonly value: string;
 }

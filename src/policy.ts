@@ -25,6 +25,10 @@ const SAFE_HARBOR_LABEL = "safe-harbor";
  * the fail-closed default (the engine blocks it), because free-text redaction is driven by the
  * `redactor` option, not by the per-category policy map.
  *
+ * `retain` is likewise **not** policy-assignable: it is the manifest marker for a locus the profile's
+ * **retention set** deliberately kept unchanged, which is driven by that set and not by the
+ * per-category map. Assigning it to a category fails closed to a block, exactly like `byo-redact`.
+ *
  * @example
  * ```ts
  * import { type TransformName } from "@cosyte/deid";
@@ -39,7 +43,8 @@ export type TransformName =
   | "pseudonymize"
   | "hash"
   | "block"
-  | "byo-redact";
+  | "byo-redact"
+  | "retain";
 
 /** The transforms that require the consumer's key (and, for `date-shift`, a per-patient scope). */
 export const KEYED_TRANSFORMS: ReadonlySet<TransformName> = new Set([
