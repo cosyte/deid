@@ -71,9 +71,11 @@ handled differently, structurally, from the parser's typing.
 ## Known limitations (this release)
 
 - Free text is **block-only**: there is no built-in NLP scrub.
-- Within **retained** clinical / visit segments, a field the carve-out above does not name is **not**
-  de-identified and is **not recorded**: the specimen collection date (SPM-17) and the **provider**
-  names (PV1-7/8, OBR-16). Retaining a segment is not auditing every field in it.
+- Within **retained** clinical / visit segments, **every** field the carve-out above does not name is
+  **not** de-identified and is **not recorded**. That still includes full-precision timestamps in EVN,
+  PV2, PR1, RXA, RXD, FT1, TXA and SPM, and the **provider** names in PV1-7/8 and OBR-16, among others.
+  Retaining a segment is not auditing every field in it, and the carve-out narrows this class rather
+  than closing it.
 - The address generalization keeps only the Safe Harbor 3-digit ZIP (the permitted state is also
   dropped, conservative, never a leak).
 

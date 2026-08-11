@@ -13,6 +13,8 @@ import {
   FATAL_CODES,
   LIMITED_DATA_SET_PROFILE,
   profileOptions,
+  isRetainableCategory,
+  LIMITED_DATA_SET_DIRECT_IDENTIFIERS,
   RETAINED_LOCUS_CLASSES,
   retains,
   SAFE_HARBOR_CATEGORIES,
@@ -218,7 +220,7 @@ describe("policy-scoped retention, and what widen-never-narrow means for it", ()
             path: "PV1-44",
             kind: "date",
             category: C.DATES,
-            retainedByPolicy: true,
+            retention: R.ENCOUNTER_DATES,
             value: "20200103040500",
           },
         ],
@@ -232,7 +234,7 @@ describe("policy-scoped retention, and what widen-never-narrow means for it", ()
     expect(manifest[0]?.code).toBe("DEID_RESIDUAL_RETAINED");
   });
 
-  it("the retention flag can never keep free text or unrecognized structure (guard order)", () => {
+  it("the retention marker can never keep free text or unrecognized structure (guard order)", () => {
     const ctx = createDeidContext({ key: "retain-key", patientId: "p1" });
     const { document, manifest } = deidentify(
       {
@@ -241,17 +243,22 @@ describe("policy-scoped retention, and what widen-never-narrow means for it", ()
             path: "NTE-3",
             kind: "freetext",
             category: C.OTHER_UNIQUE_ID,
-            retainedByPolicy: true,
+            retention: R.ENCOUNTER_DATES,
             value: "ZZPROSE",
           },
           {
             path: "ZPI-1",
             kind: "unknown",
             category: C.OTHER_UNIQUE_ID,
-            retainedByPolicy: true,
+            retention: R.ENCOUNTER_DATES,
             value: "ZZUNKNOWN",
           },
-          { path: "PID-5", kind: "identifier", retainedByPolicy: true, value: "ZZUNCLASSIFIED" },
+          {
+            path: "PID-5",
+            kind: "identifier",
+            retention: R.ENCOUNTER_DATES,
+            value: "ZZUNCLASSIFIED",
+          },
         ],
       },
       profileOptions(LIMITED_DATA_SET_PROFILE, ctx),
@@ -265,5 +272,91 @@ describe("policy-scoped retention, and what widen-never-narrow means for it", ()
     expect(() =>
       defineDeidProfile({ name: "site-retain-names", transforms: { [C.NAMES]: "retain" } }),
     ).toThrow(DeidError);
+  });
+});
+
+describe("retention needs all three keys, and any one missing means the transform runs", () => {
+  const R = RETAINED_LOCUS_CLASSES;
+  const ctx = createDeidContext({ key: "three-keys", patientId: "p1" });
+  const dateLocus = {
+    path: "PV1-44",
+    kind: "date",
+    category: C.DATES,
+    retention: R.ENCOUNTER_DATES,
+    value: "20200103040500",
+  } as const;
+
+  it("key 2: an adapter marker alone does NOT retain when the options bag is bare", () => {
+    // The failure this pins: an engine that trusts the locus marker on its own turns every options
+    // bag into a retaining one, which is the opposite of the documented fail-closed default.
+    const { document, manifest } = deidentify({ loci: [dateLocus] }, {});
+    expect(document.loci[0]?.value).toBe("2020");
+    expect(document.loci[0]?.disposition).toBe("transformed");
+    expect(manifest[0]?.transform).toBe("generalize");
+  });
+
+  it("key 2: an explicitly EMPTY retention set does not retain either", () => {
+    const { document } = deidentify(
+      { loci: [dateLocus] },
+      { policy: LIMITED_DATA_SET_PROFILE.policy, retainedLoci: [], context: ctx },
+    );
+    expect(document.loci[0]?.value).not.toBe("20200103040500");
+  });
+
+  it("key 2: a set naming a DIFFERENT class does not retain", () => {
+    const { document } = deidentify(
+      { loci: [dateLocus] },
+      {
+        policy: LIMITED_DATA_SET_PROFILE.policy,
+        retainedLoci: [R.ENCOUNTER_IDENTIFIERS],
+        context: ctx,
+      },
+    );
+    expect(document.loci[0]?.value).not.toBe("20200103040500");
+  });
+
+  it("key 3: a category §164.514(e)(2) NAMES is never retainable, whatever is asked for", () => {
+    // The sixteen direct identifiers of a limited data set. Each one carries a retention marker and a
+    // matching enabled class, and each one must still be transformed.
+    for (const category of [C.MRN, C.ACCOUNT, C.SSN, C.HEALTH_PLAN_BENEFICIARY, C.NAMES, C.PHONE]) {
+      const { document, manifest } = deidentify(
+        {
+          loci: [
+            {
+              path: "PV1-19[0]",
+              kind: "identifier",
+              category,
+              retention: R.ENCOUNTER_IDENTIFIERS,
+              value: "ZZDIRECTID",
+            },
+          ],
+        },
+        profileOptions(LIMITED_DATA_SET_PROFILE, ctx),
+      );
+      expect(document.loci[0]?.value).not.toBe("ZZDIRECTID");
+      expect(manifest[0]?.disposition).not.toBe("retained");
+    }
+    // And exactly two of the eighteen are retainable: DATES and the (R) catch-all.
+    expect(isRetainableCategory(C.DATES)).toBe(true);
+    expect(isRetainableCategory(C.OTHER_UNIQUE_ID)).toBe(true);
+    expect(LIMITED_DATA_SET_DIRECT_IDENTIFIERS.size).toBe(16);
+  });
+
+  it("the reserved safe-harbor label refuses retention however the options bag was built", () => {
+    // The route no profile check can see: a hand-built bag pairing the reserved label with a
+    // retention set. It must be fatal, not a Safe-Harbor-labelled result that is not Safe Harbor.
+    try {
+      deidentify(
+        { loci: [dateLocus] },
+        { policy: "safe-harbor", retainedLoci: [R.ENCOUNTER_DATES], context: ctx },
+      );
+      expect.unreachable("a safe-harbor-labelled policy must not retain");
+    } catch (err) {
+      expect((err as DeidError).code).toBe(FATAL_CODES.DEID_POLICY_INVALID);
+    }
+    // The same bag with an empty set is fine: it is the retention, not the option, that is refused.
+    expect(() =>
+      deidentify({ loci: [dateLocus] }, { policy: "safe-harbor", retainedLoci: [] }),
+    ).not.toThrow();
   });
 });

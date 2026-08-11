@@ -20,10 +20,11 @@
  * their retention class, and even then they are **recorded**.
  *
  * **Documented limitation, and it is narrower than it was but real.** A field inside a retained segment
- * that is on **neither** list is still passed through untouched and is **not** recorded anywhere: the
- * specimen collection date (SPM-17), the attending / referring *provider* names (PV1-7/8, OBR-16), and
- * every other unmapped position. Forgetting a clinical segment here fails **safe**: it is blocked, not
- * leaked. Forgetting a *field* of a retained segment does not.
+ * that is on **neither** list is still passed through untouched and is **not** recorded anywhere. That
+ * remains a large class, not a short list: full-precision timestamps in EVN, PV2, PR1, RXA, RXD, FT1,
+ * TXA and SPM, the attending / referring *provider* names (PV1-7/8, OBR-16), and every other unmapped
+ * position. Forgetting a clinical segment here fails **safe**: it is blocked, not leaked. Forgetting a
+ * *field* of a retained segment does not.
  *
  * @packageDocumentation
  */
@@ -146,10 +147,24 @@ export interface Hl7RetainedFieldRule {
   readonly field: number;
   /** The retention class a profile must name for this locus to survive. */
   readonly retention: RetainedLocusClass;
-  /** The Safe Harbor category the locus carries when the policy acts on it. */
+  /**
+   * The Safe Harbor category the locus carries when the policy acts on it. For a `routeByTypeCode`
+   * field this is only the **fallback**: the real category is read from the identifier-type code.
+   */
   readonly category: SafeHarborCategory;
   /** `date` generalizes to year under Safe Harbor; `identifier` is blocked as the (R) catch-all. */
   readonly kind: "date" | "identifier";
+  /**
+   * For a **CX** field: resolve the category **per repetition** from the CX-5 identifier-type code
+   * (HL7 Table 0203), exactly as PID-3 does, and write back only the id-number component.
+   *
+   * **This is a safety requirement, not a nicety.** PV1-19 is a CX, and a visit-number field routinely
+   * carries an `MR` medical record number or an `AN` account number: both are named by
+   * §164.514(e)(2), so both must be transformed rather than retained even under a limited-data-set
+   * preset. Reading the code is what stops the pass republishing, in the clear, the very identifier it
+   * pseudonymized at PID-3 in the same message.
+   */
+  readonly routeByTypeCode?: boolean;
 }
 
 const R = RETAINED_LOCUS_CLASSES;
@@ -176,8 +191,15 @@ const C_OTHER = SAFE_HARBOR_CATEGORIES.OTHER_UNIQUE_ID;
 export const RETAINED_LOCUS_RULES: Readonly<Record<string, readonly Hl7RetainedFieldRule[]>> =
   Object.freeze({
     PV1: [
-      // PV1-19 Visit Number (CX): the encounter identifier.
-      { field: 19, retention: R.ENCOUNTER_IDENTIFIERS, category: C_OTHER, kind: "identifier" },
+      // PV1-19 Visit Number (CX): the encounter identifier, but only when the CX-5 type code does not
+      // say it is really an MRN / account / SSN / beneficiary number.
+      {
+        field: 19,
+        retention: R.ENCOUNTER_IDENTIFIERS,
+        category: C_OTHER,
+        kind: "identifier",
+        routeByTypeCode: true,
+      },
       // PV1-44 Admit Date/Time (TS) and PV1-45 Discharge Date/Time (TS).
       { field: 44, retention: R.ENCOUNTER_DATES, category: C_DATES, kind: "date" },
       { field: 45, retention: R.ENCOUNTER_DATES, category: C_DATES, kind: "date" },

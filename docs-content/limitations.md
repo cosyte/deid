@@ -65,11 +65,12 @@ Two things follow, and the second is the one that surprises people:
   (DG1-5) dates are reduced to their **year**, and the visit number (PV1-19) with the placer and filler
   order numbers (OBR-2/3, ORC-2/3) are **blocked** as the (R) catch-all. §164.514(b)(2)(i)(C) names
   admission and discharge dates in the regulation text itself.
-- **A field of a retained structure that no locus map names is still passed through, and is recorded
-  nowhere.** Named, because a limitation you cannot enumerate is not a limitation: the specimen
-  collection date (SPM-17) and the attending / referring **provider** names (PV1-7/8, OBR-16). They are
-  not in the manifest, so they are not in the support report either. If your threat model includes
-  them, filter them yourself.
+- **Every other field of a retained structure is still passed through untouched, and recorded
+  nowhere.** The carve-out above narrows this class; it does not close it. Full-precision timestamps
+  survive in EVN, PV2, PR1, RXA, RXD, FT1, TXA and SPM, and the attending / referring **provider**
+  names survive in PV1-7/8 and OBR-16, among others. None of them is in the manifest, so none is in the
+  support report either. **Do not read the named loci above as the complete set of what a retained
+  structure can carry.** If your threat model includes these, filter them yourself.
 
 Vendor-proprietary loci absent from public specs are deferred, **not invented**: a quirk is encoded
 only when a real de-identified document grounds it.

@@ -414,3 +414,42 @@ describe("formatExpertDeterminationSupportReport, human-readable rendering", () 
     expect(md).toContain("_None recorded._");
   });
 });
+
+describe("the residual inventory distinguishes a kept year from a kept whole value", () => {
+  const manifest = [
+    {
+      category: C.DATES,
+      transform: "generalize" as const,
+      locus: "PID-7",
+      count: 1,
+      disposition: "transformed" as const,
+      code: CODES.DEID_RESIDUAL_RETAINED,
+    },
+    {
+      category: C.DATES,
+      transform: "retain" as const,
+      locus: "PV1-44",
+      count: 1,
+      disposition: "retained" as const,
+      code: CODES.DEID_RESIDUAL_RETAINED,
+    },
+  ];
+
+  it("carries the transform on every inventory row", () => {
+    const report = buildExpertDeterminationSupportReport(manifest);
+    const byLocus = new Map(report.retainedQuasiIdentifiers.map((r) => [r.locus, r.transform]));
+    expect(byLocus.get("PID-7")).toBe("generalize");
+    expect(byLocus.get("PV1-44")).toBe("retain");
+  });
+
+  it("counts a retained disposition, and renders the two kinds differently", () => {
+    const report = buildExpertDeterminationSupportReport(manifest);
+    expect(report.dispositionSummary.retained).toBe(1);
+    expect(report.dispositionSummary.transformed).toBe(1);
+    const md = formatExpertDeterminationSupportReport(report);
+    // Without this the two rows are indistinguishable, and a full timestamp reads like a kept year.
+    expect(md).toContain("PID-7: DATES (×1, coarse residual)");
+    expect(md).toContain("PV1-44: DATES (×1, whole value kept)");
+    expect(md).toContain("retained: 1");
+  });
+});

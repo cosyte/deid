@@ -120,10 +120,10 @@ are **blocked** as the (R) catch-all. A profile that names their retention class
 preset does, keeps them **unchanged and recorded**.
 
 **Known limitations (this release).** Free text is block-by-default (no built-in scrub; opt-in BYO
-redaction: see [Free text](#free-text-block-by-default--byo-redaction)); a field of a retained segment
-that the carve-out does not name is **not** de-identified and is recorded nowhere (the specimen
-collection date SPM-17, and the _provider_ names PV1-7/8 and OBR-16); the address generalization keeps
-only the Safe Harbor 3-digit ZIP.
+redaction: see [Free text](#free-text-block-by-default--byo-redaction)); **every** field of a retained
+segment that the carve-out does not name is **not** de-identified and is recorded nowhere, which still
+includes full-precision timestamps in EVN, PV2, PR1, RXA, RXD, FT1, TXA and SPM and the _provider_ names
+in PV1-7/8 and OBR-16, among others; the address generalization keeps only the Safe Harbor 3-digit ZIP.
 
 ## De-identify a C-CDA document
 

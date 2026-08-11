@@ -26,10 +26,12 @@
  * the visit number (PV1-19) and the placer / filler order numbers (OBR-2/3, ORC-2/3) are **blocked** as
  * the (R) catch-all. A profile that names their retention class keeps them **unchanged and recorded**.
  *
- * **Known limitations.** Free text is block-only (no scrub); a field of a retained segment that the
- * carve-out does not name is still passed through untouched and unrecorded (the specimen collection
- * date SPM-17, and the provider names PV1-7/8 and OBR-16); the address generalization keeps only the
- * Safe Harbor 3-digit ZIP and conservatively drops the (permitted) state as well.
+ * **Known limitations.** Free text is block-only (no scrub); **every** field of a retained segment that
+ * the carve-out does not name is still passed through untouched and unrecorded, which continues to
+ * include full-precision timestamps in EVN, PV2, PR1, RXA, RXD, FT1, TXA and SPM and the provider names
+ * in PV1-7/8 and OBR-16, among others: the carve-out narrows this class, it does not close it. The
+ * address generalization keeps only the Safe Harbor 3-digit ZIP and conservatively drops the
+ * (permitted) state as well.
  *
  * @packageDocumentation
  */

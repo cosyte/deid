@@ -11,6 +11,7 @@
  */
 
 import type { SafeHarborCategory } from "./categories.js";
+import type { RetainedLocusClass } from "./retention.js";
 
 /**
  * The kind of value at a locus: drives which generalization applies and whether the engine must
@@ -50,17 +51,16 @@ export interface GenericLocus {
   /** The Safe Harbor category, when known. Omit to force fail-closed handling as category (R). */
   readonly category?: SafeHarborCategory;
   /**
-   * Set by an adapter when the **configured policy's retention set** names the class this locus
-   * belongs to: the value is passed through **unchanged** and recorded as a residual, rather than
-   * transformed. It is how a limited-data-set preset keeps an admission date or an encounter number
-   * that Safe Harbor removes.
+   * The **retention class** this locus belongs to, when an adapter can name one. It is a *proposal*,
+   * never a decision: the engine keeps the value only if the configured options **also** list this
+   * class, **and** the resolved category is one a limited data set may carry at all. Both keys are
+   * required, so an adapter cannot retain anything on its own and a stale marker cannot leak a value.
    *
-   * **This is the one flag that makes the engine emit an identifying value.** It is opt-in and
-   * fails closed: absent (the default) the locus takes its normal policy transform. It is **not** the
-   * over-scrub guard: a `clinical` locus is not an identifier and is retained without a manifest row,
-   * whereas a locus marked here **is** identifying and is always recorded.
+   * Absent (the default) the locus takes its normal policy transform. This is **not** the over-scrub
+   * guard: a `clinical` locus is not an identifier and is retained without a manifest row, whereas a
+   * locus marked here **is** identifying and is always recorded when it is kept.
    */
-  readonly retainedByPolicy?: boolean;
+  readonly retention?: RetainedLocusClass;
   /** The value at the locus. Consumed by the engine, never copied into the manifest. */
   readonly value: string;
 }

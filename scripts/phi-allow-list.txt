@@ -221,6 +221,9 @@ ID ZZPLACER700
 ID ZZFILLER700
 ID ZZACCT300
 ID 5550000020
+# The PV1-19 identifier-type-routing cases (test/hl7/deidentify-hl7.test.ts), written inline.
+ID ZZMRN500
+ID ZZVISIT500
 # Inline HL7 identifiers in test modules / scripts/smoke.mjs: the five identifier-type placeholders
 # of the PID-3 repetition test, the surviving MRN of the MRG merge case, and the smoke MRN.
 ID I1

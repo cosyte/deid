@@ -132,6 +132,12 @@ export interface RetainedQuasiIdentifier {
   readonly category: SafeHarborCategory;
   /** How many values at this locus retained a residual. */
   readonly count: number;
+  /**
+   * How the residual arose, so the two kinds are not indistinguishable in the inventory: `generalize`
+   * left a coarse residual (a year, a safe 3-digit ZIP prefix, an age ≤ 89), while `retain` kept the
+   * **whole unreduced value**. A determiner reasons about those very differently.
+   */
+  readonly transform: TransformName;
 }
 
 /**
@@ -468,7 +474,14 @@ export function buildExpertDeterminationSupportReport(
 
   const retainedQuasiIdentifiers = entries
     .filter((e) => e.code === DEID_DISPOSITION_CODES.DEID_RESIDUAL_RETAINED)
-    .map((e) => Object.freeze({ locus: e.locus, category: e.category, count: e.count }));
+    .map((e) =>
+      Object.freeze({
+        locus: e.locus,
+        category: e.category,
+        count: e.count,
+        transform: e.transform,
+      }),
+    );
 
   const policyName =
     options.policy === undefined
@@ -547,7 +560,7 @@ export function formatExpertDeterminationSupportReport(
     );
   }
   lines.push("");
-  lines.push("## Retained quasi-identifiers (coarse residuals recorded as retained)");
+  lines.push("## Retained quasi-identifiers (identifying residuals recorded as retained)");
   lines.push("");
   if (report.retainedQuasiIdentifiers.length === 0) {
     lines.push(
@@ -573,7 +586,10 @@ export function formatExpertDeterminationSupportReport(
     lines.push("(§164.514(b)(2)(ii)) consideration for the determiner:");
     lines.push("");
     for (const r of report.retainedQuasiIdentifiers) {
-      lines.push(`- ${r.locus}: ${r.category} (×${String(r.count)})`);
+      // `retain` means the WHOLE value survived; `generalize` means only a coarse residual did. Naming
+      // it is the difference between "a year is present" and "a full timestamp is present".
+      const kind = r.transform === "retain" ? "whole value kept" : "coarse residual";
+      lines.push(`- ${r.locus}: ${r.category} (×${String(r.count)}, ${kind})`);
     }
   }
   const qi = report.quasiIdentifierStatistics;

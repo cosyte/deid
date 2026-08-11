@@ -451,11 +451,14 @@ describe("deidentifyHl7, the encounter loci inside retained segments (§164.514(
       expect(entry?.disposition).toBe("transformed");
       expect(entry?.code).toBe(D.DEID_RESIDUAL_RETAINED);
     }
-    // Identifiers: the whole field is gone, assigning authority and all, recorded as blocked (R).
-    for (const path of ["PV1.19.1", "ORC.2.1", "ORC.3.1", "OBR.2.1", "OBR.3.1"]) {
+    // The EI order numbers: the whole field is gone. PV1-19 is a CX list, handled per repetition like
+    // PID-3, so its id-number component is cleared and the assigning authority / type code remain.
+    for (const path of ["ORC.2.1", "ORC.3.1", "OBR.2.1", "OBR.3.1"]) {
       expect(document.get(path)).toBeUndefined();
     }
-    for (const locus of ["PV1-19", "ORC-2", "ORC-3", "OBR-2", "OBR-3"]) {
+    expect(document.get("PV1.19.1")).toBe("");
+    expect(document.get("PV1.19.5")).toBe("VN"); // type code retained, the value is what had to go
+    for (const locus of ["PV1-19[0]", "ORC-2", "ORC-3", "OBR-2", "OBR-3"]) {
       const entry = manifest.find((m) => m.locus === locus);
       expect(entry?.category).toBe(C.OTHER_UNIQUE_ID);
       expect(entry?.disposition).toBe("blocked");
@@ -479,7 +482,7 @@ describe("deidentifyHl7, the encounter loci inside retained segments (§164.514(
     }
     // Recorded, every one: a kept identifier that no artifact names is invisible twice over.
     for (const locus of [
-      "PV1-19",
+      "PV1-19[0]",
       "PV1-44",
       "PV1-45",
       "ORC-2",
@@ -543,5 +546,96 @@ describe("deidentifyHl7, the encounter loci inside retained segments (§164.514(
     for (const path of ["OBX[0].5", "OBX[0].6", "OBX[0].3.1", "OBR.4.1", "DG1.3.1", "PV1.3.1"]) {
       expect(document.get(path)).toBe(original.get(path));
     }
+  });
+});
+
+describe("a visit-number field carrying a REAL direct identifier is never retained", () => {
+  // §164.514(e)(2) enumerates sixteen direct identifiers, and (vii) NAMES medical record numbers while
+  // (ix) NAMES account numbers. The whole argument for keeping a visit number in a limited data set is
+  // that the list has no catch-all: that argument evaporates the moment the field actually carries one
+  // of the sixteen, which PV1-19 routinely does. The standard types it for us at CX-5 (Table 0203).
+
+  /** Build a PV1 whose 19th field is exactly `visitNumber`, counted rather than eyeballed. */
+  function pv1(visitNumber: string): string {
+    const fields = new Array<string>(19).fill("");
+    fields[0] = "1";
+    fields[1] = "I";
+    fields[2] = "W^R^B";
+    fields[18] = visitNumber; // PV1-19
+    return `PV1|${fields.join("|")}`;
+  }
+
+  const wire = (visitNumber: string): string =>
+    [
+      "MSH|^~\\&|A|B|C|D|20200101||ADT^A03|M1|P|2.5",
+      "PID|1||ZZMRN500^^^HOSP^MR||ZZFAM^ZZGIV||19850302",
+      pv1(visitNumber),
+    ].join("\r");
+
+  it("the fixture builder really puts the value at PV1-19 (pre-condition)", () => {
+    // A test that silently seeded PV1-20 would assert nothing at all.
+    expect(parseHL7(wire("ZZMRN500^^^HOSP^VN")).get("PV1.19.1")).toBe("ZZMRN500");
+  });
+
+  it("an MR-typed visit number is pseudonymized, not retained, EVEN under limited-data-set", () => {
+    const ctx = createDeidContext({ key: "pv19-key", patientId: "p1" });
+    const { document, manifest } = deidentifyHl7(
+      parseHL7(wire("ZZMRN500^^^HOSP^MR")),
+      profileOptions(LIMITED_DATA_SET_PROFILE, ctx),
+    );
+    expect(document.toString().includes("ZZMRN500")).toBe(false);
+    const entry = manifest.find((m) => m.locus === "PV1-19[0]");
+    expect(entry?.category).toBe(C.MRN);
+    expect(entry?.disposition).toBe("transformed");
+    // And the surrogate is the SAME one PID-3 got, so a pass can never republish in the clear the
+    // identifier it just pseudonymized elsewhere in the very same message.
+    expect(document.get("PV1.19.1")).toBe(document.get("PID.3[0].1"));
+  });
+
+  it("AN / SS / MA typed visit numbers are likewise transformed, never retained", () => {
+    const ctx = createDeidContext({ key: "pv19-key", patientId: "p1" });
+    for (const [typeCode, category] of [
+      ["AN", C.ACCOUNT],
+      ["SS", C.SSN],
+      ["MA", C.HEALTH_PLAN_BENEFICIARY],
+    ] as const) {
+      const { document, manifest } = deidentifyHl7(
+        parseHL7(wire(`ZZMRN500^^^HOSP^${typeCode}`)),
+        profileOptions(LIMITED_DATA_SET_PROFILE, ctx),
+      );
+      expect(document.toString().includes("ZZMRN500")).toBe(false);
+      const entry = manifest.find((m) => m.locus === "PV1-19[0]");
+      expect(entry?.category).toBe(category);
+      expect(entry?.disposition).not.toBe("retained");
+    }
+  });
+
+  it("an untyped or VN-typed visit number IS the encounter identifier, and is retained under LDS", () => {
+    const ctx = createDeidContext({ key: "pv19-key", patientId: "p1" });
+    for (const visitNumber of ["ZZVISIT500^^^HOSP^VN", "ZZVISIT500"]) {
+      const { document, manifest } = deidentifyHl7(
+        parseHL7(wire(visitNumber)),
+        profileOptions(LIMITED_DATA_SET_PROFILE, ctx),
+      );
+      const entry = manifest.find((m) => m.locus === "PV1-19[0]");
+      expect(entry?.category).toBe(C.OTHER_UNIQUE_ID);
+      expect(entry?.disposition).toBe("retained");
+      expect(document.get("PV1.19.1")).toBe("ZZVISIT500");
+    }
+  });
+
+  it("a mixed PV1-19 list routes each repetition on its own type code", () => {
+    const ctx = createDeidContext({ key: "pv19-key", patientId: "p1" });
+    const msg = parseHL7(wire("ZZVISIT500^^^H^VN~ZZMRN500^^^H^MR"));
+    const { document, manifest } = deidentifyHl7(
+      msg,
+      profileOptions(LIMITED_DATA_SET_PROFILE, ctx),
+    );
+    expect(manifest.find((m) => m.locus === "PV1-19[0]")?.disposition).toBe("retained");
+    expect(manifest.find((m) => m.locus === "PV1-19[1]")?.category).toBe(C.MRN);
+    expect(manifest.find((m) => m.locus === "PV1-19[1]")?.disposition).toBe("transformed");
+    const out = document.toString();
+    expect(out.includes("ZZVISIT500")).toBe(true); // the real encounter identifier survives
+    expect(out.includes("ZZMRN500")).toBe(false); // the medical record number does not
   });
 });

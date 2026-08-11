@@ -91,6 +91,9 @@ export {
 export {
   RETAINED_LOCUS_CLASSES,
   NO_RETAINED_LOCI,
+  LIMITED_DATA_SET_DIRECT_IDENTIFIERS,
+  isRetainableCategory,
+  assertRetentionContract,
   retains,
   type RetainedLocusClass,
 } from "./retention.js";

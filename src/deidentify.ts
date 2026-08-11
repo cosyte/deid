@@ -27,7 +27,12 @@ import type { DeidDocument, GenericLocus, TransformedLocus } from "./locus.js";
 import { ManifestBuilder, type DeidManifestEntry, type DeidResult } from "./manifest.js";
 import { resolvePolicy, type DeidPolicy, type TransformName } from "./policy.js";
 import type { FreeTextRedactor } from "./redactor.js";
-import type { RetainedLocusClass } from "./retention.js";
+import {
+  assertRetentionContract,
+  isRetainableCategory,
+  retains,
+  type RetainedLocusClass,
+} from "./retention.js";
 import {
   dateShift,
   generalizeAge,
@@ -300,6 +305,7 @@ function handleLocus(
   policy: DeidPolicy,
   context: DeidContext | undefined,
   redactor: FreeTextRedactor | undefined,
+  retainedLoci: readonly RetainedLocusClass[] | undefined,
 ): LocusOutcome {
   // Over-scrub guard: a clinical value is not an identifier, retain it untouched.
   if (locus.kind === "clinical") {
@@ -318,10 +324,23 @@ function handleLocus(
       DEID_DISPOSITION_CODES.DEID_LOCUS_BLOCKED,
     );
   }
-  // The configured profile's retention set deliberately keeps this class of identifying locus. It is
-  // reached only AFTER the three fail-closed guards above, so free text and unrecognized structure can
-  // never be retained by this route however an adapter marks them; and it is always recorded.
-  if (locus.retainedByPolicy === true) {
+  // Retention needs THREE independent keys to line up, and any one of them missing means the policy
+  // transform runs instead:
+  //   1. the adapter proposed a class for this locus;
+  //   2. the CONFIGURED OPTIONS list that class (an adapter cannot retain anything by itself, and an
+  //      options bag that never mentions retention keeps nothing);
+  //   3. the resolved category is one a limited data set may carry at all: never one of the sixteen
+  //      direct identifiers §164.514(e)(2) enumerates. A visit-number field routinely carries a
+  //      medical record or account number, typed as such by the standard's own identifier-type code,
+  //      and keeping THAT would republish in the clear the very identifier the pass pseudonymized
+  //      elsewhere in the same document.
+  // It is also reached only AFTER the three fail-closed guards above, so free text and unrecognized
+  // structure can never be retained however an adapter marks them; and a kept locus is always recorded.
+  if (
+    locus.retention !== undefined &&
+    retains(retainedLoci, locus.retention) &&
+    isRetainableCategory(locus.category)
+  ) {
     return retainedResidual(locus, locus.category);
   }
   return applyTransform(policy.transforms[locus.category], locus, locus.category, context);
@@ -338,7 +357,8 @@ function handleLocus(
  * @param options - The policy and (for keyed transforms) the key context.
  * @returns The frozen {@link DeidResult}: transformed document + value-free manifest.
  * @throws {@link DeidError} `EMPTY_INPUT` if the model is null or carries no locus list; `DEID_NO_KEY`
- *   if a keyed transform is required but no key context was supplied.
+ *   if a keyed transform is required but no key context was supplied; `DEID_POLICY_INVALID` if a
+ *   `safe-harbor`-labelled policy is asked to retain an identifying locus.
  * @example
  * ```ts
  * import { deidentify, SAFE_HARBOR_CATEGORIES } from "@cosyte/deid";
@@ -361,11 +381,20 @@ export function deidentify(
     throw new DeidError(FATAL_CODES.EMPTY_INPUT, "de-identify requires a model with a loci array");
   }
   const policy = resolvePolicy(options.policy);
+  // Fail closed on the label: a "safe-harbor"-labelled policy may not retain, however the options bag
+  // was built. This is the one route no profile-level check can see.
+  assertRetentionContract(policy.name, options.retainedLoci);
   const builder = new ManifestBuilder();
   const loci: TransformedLocus[] = [];
 
   for (const locus of inputLoci) {
-    const outcome = handleLocus(locus, policy, options.context, options.redactor);
+    const outcome = handleLocus(
+      locus,
+      policy,
+      options.context,
+      options.redactor,
+      options.retainedLoci,
+    );
     loci.push(
       Object.freeze({
         path: locus.path,

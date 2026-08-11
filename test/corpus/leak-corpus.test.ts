@@ -416,7 +416,7 @@ describe("encounter loci positive control, the limited-data-set profile still ca
       "OBR-7",
       "ORC-2",
       "ORC-3",
-      "PV1-19",
+      "PV1-19[0]",
       "PV1-44",
       "PV1-45",
     ]);
@@ -429,7 +429,7 @@ describe("encounter loci positive control, the limited-data-set profile still ca
     });
     const inventoried = new Set(report.retainedQuasiIdentifiers.map((r) => r.locus));
     for (const locus of [
-      "PV1-19",
+      "PV1-19[0]",
       "PV1-44",
       "PV1-45",
       "OBR-2",

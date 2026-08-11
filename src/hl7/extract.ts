@@ -23,9 +23,9 @@ import { type Hl7Message, type Segment } from "@cosyte/hl7";
 import { SAFE_HARBOR_CATEGORIES } from "../categories.js";
 import { safeLocusToken } from "../derived-token.js";
 import type { GenericLocus } from "../locus.js";
-import { retains, type RetainedLocusClass } from "../retention.js";
+import { isRetainableCategory, retains, type RetainedLocusClass } from "../retention.js";
 import { HL7_LOCUS_MAP, categoryForIdentifierType, type Hl7FieldRule } from "./locus-map.js";
-import { RETAIN_SEGMENTS, RETAINED_LOCUS_RULES } from "./retain.js";
+import { RETAIN_SEGMENTS, RETAINED_LOCUS_RULES, type Hl7RetainedFieldRule } from "./retain.js";
 
 /**
  * How the applier writes a transformed locus back onto the cloned raw tree. `none` writes **nothing**:
@@ -234,16 +234,53 @@ function extractRetainedLoci(
 ): void {
   const rules = RETAINED_LOCUS_RULES[type];
   if (rules === undefined) return;
+  const classEnabled = (rule: Hl7RetainedFieldRule): boolean =>
+    retains(retainedLoci, rule.retention);
+
   for (const rule of rules) {
     if (!hasContent(seg, rule.field)) continue;
-    const kept = retains(retainedLoci, rule.retention);
+
+    if (rule.routeByTypeCode === true) {
+      // A CX list: one locus per repetition, category read from the CX-5 identifier-type code, so an
+      // `MR`/`AN`/`SS`-typed value in a visit-number field is transformed like the identifier it is
+      // (and gets the SAME keyed surrogate as the matching PID-3 entry) instead of being retained.
+      const reps = seg.field(rule.field).repetitions.length;
+      for (let rep = 0; rep < reps; rep += 1) {
+        const idNumber = componentValue(seg, rule.field, rep, 1); // CX.1
+        if (idNumber.length === 0) continue;
+        const category = categoryForIdentifierType(
+          componentValue(seg, rule.field, rep, 5), // CX.5
+          rule.category,
+        );
+        const kept = classEnabled(rule) && isRetainableCategory(category);
+        push(
+          out,
+          {
+            path: fieldPath(type, occ, rule.field, rep),
+            kind: rule.kind,
+            category,
+            ...(kept ? { retention: rule.retention } : {}),
+            value: idNumber,
+          },
+          {
+            segIndex: seg.absoluteIndex,
+            field: rule.field,
+            rep,
+            edit: kept ? "none" : "id-number",
+          },
+        );
+      }
+      continue;
+    }
+
+    const kept = classEnabled(rule) && isRetainableCategory(rule.category);
     push(
       out,
       {
         path: fieldPath(type, occ, rule.field),
         kind: rule.kind,
         category: rule.category,
-        ...(kept ? { retainedByPolicy: true } : {}),
+        ...(kept ? { retention: rule.retention } : {}),
         value: seg.field(rule.field).value,
       },
       {
