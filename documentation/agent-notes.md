@@ -382,9 +382,22 @@ days later**: hedge every sentence about another repo, or delete it. (3) **The f
 by CommonMark**: any run of the same character closed an open block, so a **nested** fence (a markdown
 sample quoting markdown, which is how these files are written) closed the outer block on the inner
 *opener* and every hash line after it minted a phantom anchor. The rule is now same marker, at least
-as long, no info string. (4) **The cursor-untracked violation was unreachable**, because the
-zero-pointer refusal fired first and answered "one half of the pair is gone" with "the matcher stopped
-matching". Both are fail-closed; only one is legible. Cases 13 and 14 pin (1) and (3).
+as long, no info string, plus CommonMark 4.5's rule that a backtick fence's info string may not
+contain a backtick, which is the false-RED half of the same defect. (4) **The cursor-untracked
+violation was unreachable**, because the zero-pointer refusal fired first and answered "one half of
+the pair is gone" with "the matcher stopped matching". Both are fail-closed; only one is legible.
+
+**A SECOND REVIEW PASS THEN CAUGHT THE REMEDY'S OWN VACUOUS CONTROL, in the file whose banner says
+this repo has already paid for a vacuous assertion twice.** The nested-fence case pointed at the
+FIRST heading in the sample, which sits inside the fence under the broken rule *and* the correct one,
+so all three of its assertions passed verbatim against the pre-fix gate. **Only the heading AFTER the
+inner opener changes side**, and that is where it points now. It also found the length condition
+DELETABLE with every other case still green, and the reordering untested. **Each of the three fence
+conditions now has its own self-test case, verified by removing each one and watching the gate refuse,
+and cases 13, 14 and 15 were each verified by reverting the fix and watching the case fail.** The
+durable lesson is the one the emptied-section control already taught: **a control that does not change
+answer when the fix is reverted is a control of nothing, and "it goes red" is not evidence unless you
+have shown it goes green for the other reason.**
 
 **Two departures from the copies this one was read against, both deliberate.** A heading inside an HTML comment renders
 no anchor on GitHub; several siblings count it anyway and merely disclose the phantom, while this copy

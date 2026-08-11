@@ -430,6 +430,11 @@ describe("check-agent-notes", () => {
       // which every hash line in the rest of the sample is read as a heading and mints an anchor
       // GitHub never renders. That is the false-green direction, so the pointer at such a heading
       // must red rather than resolve.
+      //
+      // ▶ IT POINTS AT THE SECOND HEADING, AND THAT IS THE WHOLE CASE. An earlier draft pointed at
+      // the FIRST, which sits inside the sample under the loose rule AND the correct one, so all
+      // three assertions passed verbatim against the pre-fix gate: VACUOUS, and caught in review.
+      // Only the heading AFTER the inner opener discriminates, because only it changes side.
       const files = baseFiles();
       files[NOTES_PATH] =
         `${files[NOTES_PATH] ?? ""}\n` +
@@ -439,11 +444,31 @@ describe("check-agent-notes", () => {
         `${heading(3, "Also quoted")}\n` +
         "```\n" +
         "\nReal prose after the sample.\n";
-      files["CLAUDE.md"] = `${files["CLAUDE.md"] ?? ""}- And: ${pointer("quoted-in-a-sample")}\n`;
+      files["CLAUDE.md"] = `${files["CLAUDE.md"] ?? ""}- And: ${pointer("also-quoted")}\n`;
       withFixture(files, (run) => {
         expect(run.status).toBe(1);
-        expect(run.stderr).toContain("quoted-in-a-sample");
+        expect(run.stderr).toContain("also-quoted");
         expect(run.stderr).toContain("does not resolve");
+      });
+    },
+    CASE_TIMEOUT,
+  );
+
+  it(
+    "15. an untracked cursor half is a FINDING naming it, not a misdiagnosed refusal",
+    () => {
+      // The zero-pointer refusal must not be reached here. Every pointer lives in the cursor file,
+      // so an untracked cursor gives zero pointers as a CONSEQUENCE, and refusing would answer a
+      // modelled contract break with "the matcher stopped matching" and send a reader to the wrong
+      // file. Reverting the guard turns this case's exit 1 into exit 2, which is what makes it a
+      // test of the ordering rather than of the message.
+      const files = baseFiles();
+      delete files["CLAUDE.md"];
+      withFixture(files, (run) => {
+        expect(run.status).toBe(1);
+        expect(run.stderr).toContain("CLAUDE.md");
+        expect(run.stderr).toContain("the cursor half of the pair is not tracked");
+        expect(run.stderr).not.toContain("ZERO qualified pointers");
       });
     },
     CASE_TIMEOUT,

@@ -482,12 +482,20 @@ function extractHeadings(lines: readonly string[]): Extraction {
     // markdown documentation quotes markdown), after which every hash line in the remainder of the
     // sample is read as a heading and mints an anchor GitHub does not render. That is the
     // false-green direction this gate must never fail in, so the rule is the real one. Verified
-    // against a CommonMark/GFM parser on a nested-fence sample; both halves are self-tested.
+    // against a CommonMark/GFM parser; EACH of the three conditions has its own self-test case,
+    // because a review found the length condition deletable with everything else still green.
+    //
+    // A BACKTICK FENCE'S INFO STRING MAY NOT CONTAIN A BACKTICK (CommonMark 4.5), so such a line
+    // opens NO fence at all. Without that clause a line of prose carrying a run of backticks and
+    // then more backticks opens a phantom block here, and every heading until the next fence-shaped
+    // line vanishes: a heading that vanishes is a MISSING anchor and a false RED, and the inverse
+    // (an unmatched opener swallowing the rest of the file) is the same defect at scale.
     const fence = FENCE_RE.exec(line);
-    if (fence && !inComment) {
-      const run = fence[1] ?? "";
-      const marker = run[0] ?? "";
-      const info = line.slice(line.indexOf(run) + run.length).trim();
+    const run = fence?.[1] ?? "";
+    const marker = run[0] ?? "";
+    const info = fence === null ? "" : line.slice(line.indexOf(run) + run.length).trim();
+    const isFenceLine = fence !== null && !(marker === "`" && info.includes("`"));
+    if (isFenceLine && !inComment) {
       if (!inFence) {
         inFence = true;
         fenceMarker = marker;
@@ -731,6 +739,24 @@ function selfTest(): void {
     "~~~~",
     "body",
     "",
+    // THE LENGTH CONDITION, PINNED ON ITS OWN. A review deleted `run.length >= fenceLength` and
+    // found every other case still green, because the nested sample above is carried by the info
+    // string alone. A SHORTER run of the same marker cannot close a longer opener, so without the
+    // length rule the line below closes here and the heading after it mints a phantom anchor.
+    "````",
+    `${hash}${hash} inside a four-tick fence`,
+    "```",
+    `${hash}${hash} still inside: a shorter run cannot close a longer opener`,
+    "````",
+    "body",
+    "",
+    // A BACKTICK FENCE'S INFO STRING MAY NOT CONTAIN A BACKTICK, so the line below opens NO fence
+    // and the heading after it is a REAL heading. This is the false-RED direction: treated as an
+    // opener, it swallows every heading until the next fence-shaped line.
+    "``` an info `string` with backticks",
+    `${hash}${hash} a real heading after a line that is not a fence`,
+    "body",
+    "",
     "<!--",
     `${hash}${hash} inside a block comment`,
     "-->",
@@ -738,7 +764,13 @@ function selfTest(): void {
   ];
   const extraction = extractHeadings(sample);
   const got = extraction.headings.map((h) => h.slug);
-  const want = ["top", "indented-by-two", "setext-one", "a-wrapped-setextheading-over-two-lines"];
+  const want = [
+    "top",
+    "indented-by-two",
+    "setext-one",
+    "a-wrapped-setextheading-over-two-lines",
+    "a-real-heading-after-a-line-that-is-not-a-fence",
+  ];
   if (got.length !== want.length || got.some((s, i) => s !== want[i])) {
     throw new RefusalError(
       `SELF-TEST FAILED: the heading detector produced [${got.join(", ")}], expected ` +

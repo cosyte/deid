@@ -91,8 +91,17 @@ because such a claim is not checkable from inside this one and the convention it
 as a per-package decision. The closing rule for a fenced block was wrong: any run of the same
 character ended it, so a nested sample closed the outer block on the inner opener and every heading
 after that minted an anchor no renderer produces; the rule is now same marker, at least as long, no
-info string. And the missing-cursor-file finding was unreachable behind the no-links refusal, which
+info string, and no backtick inside a backtick fence's info string, which is the opposite half of the
+same defect. And the missing-cursor-file finding was unreachable behind the no-links refusal, which
 answered a modelled break with a misdiagnosis; both are fail-closed, one is legible.
+
+A second review pass then caught the remedy's own vacuous control: the nested-sample case aimed at a
+heading that sits inside the sample under the broken rule and the correct one alike, so every one of
+its assertions passed against the unfixed code. It aims at the heading after the inner opener now,
+which is the only one that changes side. Each of the three fence conditions has its own case, checked
+by removing that condition and watching the check refuse, and each new case was checked by reverting
+its fix and watching the case fail. A control that does not change answer when the fix is reverted is
+a control of nothing.
 
 Scope, stated rather than discovered: only the narrative file's basename is compared, so relocating
 it to another directory while the links keep their old prefix passes while every rendered link
