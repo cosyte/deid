@@ -9,9 +9,12 @@ import {
   createDeidContext,
   defineDeidProfile,
   deidentify,
+  DeidError,
   FATAL_CODES,
   LIMITED_DATA_SET_PROFILE,
   profileOptions,
+  RETAINED_LOCUS_CLASSES,
+  retains,
   SAFE_HARBOR_CATEGORIES,
   SAFE_HARBOR_POLICY,
   SAFE_HARBOR_PROFILE,
@@ -124,5 +127,143 @@ describe("profileOptions composition", () => {
     expect(opts.context).toBeUndefined();
     expect(opts.redactor).toBeUndefined();
     expect(opts.policy).toBe(SAFE_HARBOR_PROFILE.policy);
+  });
+});
+
+describe("policy-scoped retention, and what widen-never-narrow means for it", () => {
+  const R = RETAINED_LOCUS_CLASSES;
+
+  it("Safe Harbor retains NOTHING; the limited data set retains the two §164.514(e)(2) permits", () => {
+    expect(SAFE_HARBOR_PROFILE.retainedLoci).toEqual([]);
+    expect([...LIMITED_DATA_SET_PROFILE.retainedLoci].sort()).toEqual([
+      "encounter-dates",
+      "encounter-identifiers",
+    ]);
+  });
+
+  it("retains() fails closed on an absent or empty set", () => {
+    expect(retains(undefined, R.ENCOUNTER_DATES)).toBe(false);
+    expect(retains([], R.ENCOUNTER_DATES)).toBe(false);
+    expect(retains([R.ENCOUNTER_DATES], R.ENCOUNTER_DATES)).toBe(true);
+    expect(retains([R.ENCOUNTER_DATES], R.ENCOUNTER_IDENTIFIERS)).toBe(false);
+  });
+
+  it("profileOptions carries the retention set; a hand-built options bag does not", () => {
+    expect(profileOptions(SAFE_HARBOR_PROFILE).retainedLoci).toEqual([]);
+    expect(profileOptions(LIMITED_DATA_SET_PROFILE).retainedLoci).toHaveLength(2);
+    // The fail-closed direction: reading the policy off a profile loses the retention set entirely.
+    const handBuilt = { policy: LIMITED_DATA_SET_PROFILE.policy };
+    expect(handBuilt).not.toHaveProperty("retainedLoci");
+  });
+
+  it("DROPPING a retained class is a WIDENING and is allowed (keep less, remove more)", () => {
+    const tighter = defineDeidProfile({
+      name: "site-dates-only",
+      base: LIMITED_DATA_SET_PROFILE,
+      retainedLoci: [R.ENCOUNTER_DATES],
+    });
+    expect(tighter.retainedLoci).toEqual([R.ENCOUNTER_DATES]);
+
+    const strictest = defineDeidProfile({
+      name: "site-retain-nothing",
+      base: LIMITED_DATA_SET_PROFILE,
+      retainedLoci: [],
+    });
+    expect(strictest.retainedLoci).toEqual([]);
+  });
+
+  it("ADDING a retained class is a NARROWING and is REJECTED (fatal DEID_PROFILE_INVALID)", () => {
+    // Derived from Safe Harbor, which retains nothing: any class at all is an addition.
+    expect(() =>
+      defineDeidProfile({
+        name: "site-keeps-visit-numbers",
+        retainedLoci: [R.ENCOUNTER_IDENTIFIERS],
+      }),
+    ).toThrow(DeidError);
+    try {
+      defineDeidProfile({ name: "site-keeps-dates", retainedLoci: [R.ENCOUNTER_DATES] });
+      expect.unreachable("adding a retention class must be rejected");
+    } catch (err) {
+      expect((err as DeidError).code).toBe(FATAL_CODES.DEID_PROFILE_INVALID);
+    }
+    // And a profile derived from the LDS base may not add one it does not already have either: with
+    // both classes on the base there is nothing left to add, so drop one first and then try to re-add.
+    const dropped = defineDeidProfile({
+      name: "site-dropped",
+      base: LIMITED_DATA_SET_PROFILE,
+      retainedLoci: [R.ENCOUNTER_DATES],
+    });
+    expect(() =>
+      defineDeidProfile({
+        name: "site-re-added",
+        base: dropped,
+        retainedLoci: [R.ENCOUNTER_DATES, R.ENCOUNTER_IDENTIFIERS],
+      }),
+    ).toThrow(DeidError);
+  });
+
+  it("omitting retainedLoci inherits the base's set unchanged", () => {
+    const derived = defineDeidProfile({ name: "site-inherit", base: LIMITED_DATA_SET_PROFILE });
+    expect([...derived.retainedLoci].sort()).toEqual(
+      [...LIMITED_DATA_SET_PROFILE.retainedLoci].sort(),
+    );
+  });
+
+  it("a retained locus is passed through UNCHANGED and always RECORDED as a residual", () => {
+    const ctx = createDeidContext({ key: "retain-key", patientId: "p1" });
+    const { document, manifest } = deidentify(
+      {
+        loci: [
+          {
+            path: "PV1-44",
+            kind: "date",
+            category: C.DATES,
+            retainedByPolicy: true,
+            value: "20200103040500",
+          },
+        ],
+      },
+      profileOptions(LIMITED_DATA_SET_PROFILE, ctx),
+    );
+    expect(document.loci[0]?.value).toBe("20200103040500");
+    expect(document.loci[0]?.disposition).toBe("retained");
+    expect(manifest[0]?.disposition).toBe("retained");
+    expect(manifest[0]?.transform).toBe("retain");
+    expect(manifest[0]?.code).toBe("DEID_RESIDUAL_RETAINED");
+  });
+
+  it("the retention flag can never keep free text or unrecognized structure (guard order)", () => {
+    const ctx = createDeidContext({ key: "retain-key", patientId: "p1" });
+    const { document, manifest } = deidentify(
+      {
+        loci: [
+          {
+            path: "NTE-3",
+            kind: "freetext",
+            category: C.OTHER_UNIQUE_ID,
+            retainedByPolicy: true,
+            value: "ZZPROSE",
+          },
+          {
+            path: "ZPI-1",
+            kind: "unknown",
+            category: C.OTHER_UNIQUE_ID,
+            retainedByPolicy: true,
+            value: "ZZUNKNOWN",
+          },
+          { path: "PID-5", kind: "identifier", retainedByPolicy: true, value: "ZZUNCLASSIFIED" },
+        ],
+      },
+      profileOptions(LIMITED_DATA_SET_PROFILE, ctx),
+    );
+    // All three fail closed regardless of the flag: the three guards run BEFORE retention.
+    expect(document.loci.map((l) => l.value)).toEqual([null, null, null]);
+    expect(manifest.every((m) => m.disposition === "blocked")).toBe(true);
+  });
+
+  it("`retain` is not policy-assignable: assigning it to a category fails closed to a block", () => {
+    expect(() =>
+      defineDeidProfile({ name: "site-retain-names", transforms: { [C.NAMES]: "retain" } }),
+    ).toThrow(DeidError);
   });
 });

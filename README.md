@@ -100,6 +100,7 @@ const { document, manifest } = deidentifyHl7(parseHL7(rawMessage), { context });
 document.toString(); // spec-clean, de-identified HL7 wire
 // PID-5 (name), NK1/GT1/IN1/IN2 relatives, SSN, phone → removed; MRN/account → consistent surrogate;
 // DOB → year; address → safe 3-digit ZIP. OBX-5/NTE free text and Z-segments fail closed (blocked).
+// Admit/discharge/observation/diagnosis dates → year; visit and order numbers blocked as (R).
 // Structured clinical OBX values, units, codes, and statuses survive untouched.
 ```
 
@@ -112,11 +113,17 @@ so a known patient-identity segment absent from the map (e.g. **MRG** prior name
 coded / date); narrative (`TX`/`FT`), ambiguous String (`ST`), and any empty/unknown OBX-2 fail closed,
 as do **NTE-3** comments. Structured clinical values, units, codes, and statuses survive untouched.
 
+**Inside a retained segment**, the identifying loci are carved back out: under a Safe-Harbor-labelled
+policy the admit (PV1-44), discharge (PV1-45), observation (OBR-7) and diagnosis (DG1-5) dates keep only
+their **year**, and the visit number (PV1-19) with the placer and filler order numbers (OBR-2/3, ORC-2/3)
+are **blocked** as the (R) catch-all. A profile that names their retention class, as the limited-data-set
+preset does, keeps them **unchanged and recorded**.
+
 **Known limitations (this release).** Free text is block-by-default (no built-in scrub; opt-in BYO
-redaction: see [Free text](#free-text-block-by-default--byo-redaction)); within **retained** clinical /
-visit segments, patient-related _dates_ (OBR/DG1/PV1 timestamps), _visit identifiers_ (PV1-19), and
-_provider_ names (PV1-7/8, OBR-16) are **not** de-identified; the address generalization keeps only the
-Safe Harbor 3-digit ZIP.
+redaction: see [Free text](#free-text-block-by-default--byo-redaction)); a field of a retained segment
+that the carve-out does not name is **not** de-identified and is recorded nowhere (the specimen
+collection date SPM-17, and the _provider_ names PV1-7/8 and OBR-16); the address generalization keeps
+only the Safe Harbor 3-digit ZIP.
 
 ## De-identify a C-CDA document
 
@@ -371,7 +378,7 @@ Determination** (§164.514(b)(1), a qualified statistician's risk judgment). `@c
 the latter and **never renders** it. `buildExpertDeterminationSupportReport(manifest)` structures the
 value-free manifest into what an expert reasons about: per-locus dispositions, coverage across all 18
 categories, and the **retained-quasi-identifier inventory** (year-only dates, safe 3-digit ZIP prefixes,
-exact ages ≤ 89), then hands it over.
+exact ages ≤ 89, and any whole value a profile's retention set kept), then hands it over.
 
 ```ts
 import { buildExpertDeterminationSupportReport } from "@cosyte/deid";

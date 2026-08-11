@@ -80,12 +80,17 @@ report.totals.categoriesActedOn; // => 2
 report.retainedQuasiIdentifiers[0].locus; // => "PID-7"
 ```
 
-The **retained-quasi-identifier inventory** is the residual an expert cares about most: the coarse
-identifying elements the pass kept for utility and **recorded** as `DEID_RESIDUAL_RETAINED`, a year-only
-date, a safe 3-digit ZIP prefix, an exact age ≤ 89. These are the §164.514(b)(2)(ii) actual-knowledge
-considerations. (Clinical values retained untouched by the over-scrub guard are not identifiers and are
-not enumerated in the value-free manifest; consult each format's retained-segment notes for residual
-dates in retained clinical segments.)
+The **retained-quasi-identifier inventory** is the residual an expert cares about most: the identifying
+elements the pass kept for utility and **recorded** as `DEID_RESIDUAL_RETAINED`. Two kinds land there: a
+coarse residual left by a generalization (a year-only date, a safe 3-digit ZIP prefix, an exact age
+≤ 89), and a **whole unreduced value** a profile's retention set kept, such as the admission, discharge
+and service dates and the encounter and order numbers a limited-data-set preset carries. The second kind
+is the stronger residual, and it is inventoried here rather than left to a footnote. These are the
+§164.514(b)(2)(ii) actual-knowledge considerations.
+
+Clinical values retained untouched by the over-scrub guard are not identifiers and are not enumerated.
+What is enumerated **nowhere** is a field inside a retained structure that no locus map reaches; those
+are named per format in the published limitations, and this report cannot see them.
 
 ## The optional k-anonymity indicator: caller-supplied, descriptive only
 
