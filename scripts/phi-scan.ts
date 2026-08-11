@@ -31,6 +31,82 @@
  * ===========================================================================
  *
  * ===========================================================================
+ * 🛑 THIS FILE IS NOT FINISHED, AND IT IS NOT MERGEABLE AS IT STANDS.
+ *
+ * The directive it is being brought under is that ALL PROCESS lives in the
+ * shared engine and is PARAMETERIZED, so that this file is DATA. The five axes
+ * below and `DEID_DETECTORS` ARE that data. Everything between `DEID_DETECTORS`
+ * and `process.exit` is PROCESS that the engine does not yet parameterize, and
+ * it is carried here ONLY so the data can be executed and therefore PROVEN.
+ *
+ * FIVE PARAMETERS THE ENGINE MUST GROW BEFORE THIS FILE CAN BE FINISHED. Each
+ * one is named with the local construct it deletes and the measurement that says
+ * a default cannot cover it:
+ *
+ *   `stagedRoots?: readonly string[]`  (default: `scanRoots`)
+ *      Deletes `isStagedReadable`. AXIS 3 is a LIST OF DIRECTORIES here, not a
+ *      judgement: `["src", "test", "scripts"]`. As data, the engine's own
+ *      containment rule (staged roots inside scan roots) becomes a config-time
+ *      refusal on the author's first run instead of a run-time one.
+ *
+ *   `unreadablePrefixes?: readonly string[]`  (default: `[]`)
+ *      Deletes the `isWalkReadable` override. Declared directory prefixes the
+ *      two SWEEPING read filters drop, WITHOUT leaving the ROOT half of scope,
+ *      so a link named under one is still refused. `excludedPaths` cannot
+ *      express it for two measured reasons: it is exact-match, so `vendor/`'s
+ *      six tarballs would have to be enumerated BY NAME and each name carries
+ *      the vendored parser's VERSION, so re-packing one silently renames it out
+ *      of the exclusion; and `excludedPaths` drops a path from the root half
+ *      too, which would let a `vendor/`-named symbolic link buy a pass on a
+ *      NAME, the exact escape the engine refuses everywhere else.
+ *
+ *   `views?: readonly ("raw" | "source-literals")[]`  (default: `["raw"]`)
+ *      Deletes `SOURCE_ESCAPE`, `decodeSourceEscapes`, `SOURCE_LITERAL`,
+ *      `sourceLiteralDocument`, `hitKey`, the two-view dedupe in `detect`, and
+ *      the `literalView` flag threaded through the delimited-segment kind. This
+ *      repo keeps its wire text INLINE IN `.ts` MODULES, so a second view of
+ *      each target — its string literals, escapes decoded, joined — is what
+ *      makes sweeping `test/` worth anything. ⚖️ AND IT CLOSES A RESIDUAL THIS
+ *      FILE OTHERWISE HAS TO NAME: the engine runs its cross-cutting floor over
+ *      `ctx.text` only, so on this branch the second view gets the four
+ *      structured detectors and NOT the floor, where the copied scanner gave it
+ *      both. In the engine, one view list feeds the floor and every kind alike,
+ *      for every repo, and the residual does not exist to be named.
+ *
+ *   `detectors?: readonly DetectorSpec[]`  (default: `[]`)
+ *      Deletes every function below. The KINDS are universal and the engine
+ *      ships them; only the VOCABULARY is per-repo, and the vocabulary is
+ *      `DEID_DETECTORS`. This repo fills four of them: delimited-segment,
+ *      xml-element, fixed-envelope-edi, control-char-fields. It fills NO
+ *      binary-tag and NO json-path kind, which is a gap in this repo's coverage
+ *      (DICOM and FHIR have no structured detector) and not a gap in the engine.
+ *
+ *   `sourceHolePattern?: RegExp`  (default: the identifier-chain rule)
+ *      Deletes `SUBSTITUTION_SITE` / `isSubstitutionSite`. Universal to any repo
+ *      whose fixtures are source literals: a value that is ENTIRELY a `${a.b}`
+ *      placeholder is a hole where a value will be interpolated at run time, not
+ *      a value. Every kind must apply it before checking a locus.
+ *
+ * 🛑 AND ONE DESIGN CONSTRAINT ON `detectors` THAT THIS REPO IS THE HARD CASE
+ * FOR, MEASURED THREE TIMES ON A CLEAN CORPUS. A kind that offers only "check
+ * element N of segment X" is NOT sufficient here. Three of this repo's
+ * carve-outs are CONDITIONAL — on a sibling element's value, or on a region of
+ * the document — and removing each one from the data alone reds a corpus that is
+ * otherwise clean:
+ *
+ *   NM1/N1 patient-entity guard removed  -> 15 hits across 2 files
+ *   C-CDA `regionEndsAt` emptied         ->  4 hits across 2 files (one a DRUG
+ *                                            NAME in a body `<name>` element)
+ *   REF PHI-qualifier guard removed      ->  3 hits across 1 file
+ *
+ * So `guard: { element, oneOf }` and `regionEndsAt` are REQUIREMENTS on the
+ * kinds, not conveniences. In this repo specifically both ways of forcing a
+ * flat vocabulary are wrong: check provider names and document bodies and the
+ * gate screams on purpose-built fixtures until someone disables it; drop the
+ * patient loci and the gate goes blind in the package whose whole job is PHI.
+ * ===========================================================================
+ *
+ * ===========================================================================
  * COVERAGE: READ BEFORE YOU RELY ON THIS.
  *
  *   FLOOR (any format, and the engine's, not this file's): a dashed SSN shape
@@ -319,10 +395,31 @@ function isStagedReadable(relPath: string): boolean {
 // ██  THE STANDARD-SPECIFIC FIELD DETECTION  ████████████████████████████████
 // ===========================================================================
 //
-// The half the shared engine deliberately does not own, because it differs per
+// The half the shared engine does not own YET, because it differs per
 // healthcare standard. The engine has already run the cross-cutting floor over
-// `ctx.text` and reported any hits against the correct locus; everything below
-// is this repo's.
+// `ctx.text` and reported any hits against the correct locus.
+//
+// ===========================================================================
+// 🛑 STAGE 1 OF TWO, AND THE SECOND STAGE IS AN ENGINE CHANGE, NOT A CHANGE
+// HERE. The directive this file is being brought under is that ALL PROCESS
+// lives in `@cosyte/script-utils/phi-scan` and is PARAMETERIZED, so that this
+// file is DATA. The four detectors below are not yet expressible that way: the
+// engine ships no detector kinds. So this file carries, deliberately and
+// visibly:
+//
+//   `DEID_DETECTORS` — THE VOCABULARY, AS DATA, IN THE SHAPE THE ENGINE MUST
+//   CONSUME IT. This is the deliverable. It is not illustrative: every detector
+//   below reads its loci, guards, regions and separators OUT of it and nothing
+//   else, so a green `pnpm phi-scan` over this repo's corpus is a proof that
+//   the vocabulary is complete and correctly transcribed. A table nobody
+//   executes is how every claim in this lineage rotted.
+//
+//   The functions under it — THE PROCESS — are an adapter that EXISTS TO BE
+//   DELETED. When the engine ships the kinds, this file keeps `DEID_DETECTORS`,
+//   passes it as `detectors:`, and everything between here and `process.exit`
+//   goes. Do not grow them. Do not fix a gap here that belongs in the engine:
+//   a shim written in this file is exactly what this adoption exists to delete,
+//   because it makes the next escape cost thirteen pull requests again.
 // ===========================================================================
 
 /** A finding before the engine fills in the locus. */
@@ -330,6 +427,114 @@ type LocalHit = Omit<Hit, "path">;
 
 /** Raise a finding. Every detector below reaches the report through one of these. */
 type Emit = (h: LocalHit) => void;
+
+/**
+ * KIND 1 — DELIMITED SEGMENT (HL7 v2 and its family). One header segment
+ * declares the delimiters; every other line is `SEG<sep>field<sep>…`, and a
+ * locus is `SEG-field.component`.
+ */
+interface DelimitedSegmentSpec {
+  kind: "delimited-segment";
+  /** The segment whose id + encoding characters declare the delimiters. */
+  headerSegment: string;
+  /** Used when no well-formed header is present. A missing header must not stop the scan. */
+  defaultDelimiters: { field: string; component: string; repetition: string; subcomponent: string };
+  /** The permitted width of the encoding-characters run, which is what makes the anchor strict. */
+  encodingCharsWidth: readonly [number, number];
+  /** Which position of the encoding-characters run carries which delimiter. */
+  encodingCharsAt: { component: number; repetition: number; subcomponent: number };
+  /** THE VOCABULARY: segment id -> the PHI-bearing fields and their identifying components. */
+  loci: Readonly<Record<string, ReadonlyArray<{ field: number; comps: readonly number[] }>>>;
+  reason: string;
+}
+
+/**
+ * KIND 2 — XML ELEMENT (C-CDA / CDA R2). A namespace recognises the document; a
+ * REGION bounds where person-PHI elements are unambiguous; the vocabulary is
+ * element names and element/attribute pairs.
+ */
+interface XmlElementSpec {
+  kind: "xml-element";
+  /** A string whose presence recognises the document. Absent: not this format, scan nothing. */
+  recognizeBy: string;
+  /**
+   * Element names that END the region. 🛑 THE REGION IS PART OF THE VOCABULARY AND NOT AN
+   * OPTIMISATION: measured, scanning the whole document instead of the header reports 4 hits across
+   * 2 files on this repo's clean corpus, one of them a DRUG NAME in a `<name>` element in the
+   * clinical body. An engine kind that cannot express a region forces a choice between a gate that
+   * screams on legitimate clinical content and one that stops checking person names.
+   */
+  regionEndsAt: readonly string[];
+  /** THE VOCABULARY: elements whose DIRECT text is a person-PHI value. */
+  textElements: readonly string[];
+  /** THE VOCABULARY: element/attribute pairs whose attribute value is a person-PHI value. */
+  attributes: ReadonlyArray<{ element: string; attribute: string }>;
+  reason: string;
+}
+
+/**
+ * KIND 3 — FIXED-ENVELOPE EDI (X12 005010). A fixed-width header declares the
+ * delimiters by OFFSET; a locus is `SEG-nn`, and a check may be GUARDED by the
+ * value of a sibling element in the same segment.
+ */
+interface FixedEnvelopeEdiSpec {
+  kind: "fixed-envelope-edi";
+  /** The header's id and the fixed offsets that both validate it and carry its delimiters. */
+  header: {
+    id: string;
+    length: number;
+    separatorAt: number;
+    /** The offset that must repeat the separator, because the first element is fixed-width. */
+    repeatSeparatorAt: number;
+    terminatorAt: number;
+  };
+  /** THE VOCABULARY. */
+  segments: readonly EdiSegmentSpec[];
+  reason: string;
+}
+
+interface EdiSegmentSpec {
+  id: string;
+  /**
+   * 🛑 THE SHARPEST DECLARATIVE REQUIREMENT THIS REPO HAS, AND THE ANSWER TO "CAN THE CARVE-OUT BE
+   * DATA?". A name at `NM1-03` is the individual's PHI when `NM1-01` names a PATIENT-side entity and
+   * is a RETAINED provider/organization name otherwise: the de-identifier keeps the latter on
+   * purpose. So the carve-out is conditional on ANOTHER ELEMENT OF THE SAME SEGMENT, and it is still
+   * declarative — `{ element, oneOf }` states it exactly.
+   *
+   * MEASURED, red-before: dropping this guard reports 15 hits across 2 files on this repo's clean
+   * corpus, every one a legitimate provider or organization name or id. An engine kind that offers
+   * only "check element N of segment X" cannot express it, and both ways of forcing it are wrong in
+   * this repo specifically: check provider names and the gate screams on purpose-built fixtures
+   * until someone disables it; skip patient names and the gate goes blind in the package whose whole
+   * job is PHI.
+   */
+  guard?: { element: number; oneOf: readonly string[] };
+  /** THE VOCABULARY: element index -> the locus a hit is reported against. */
+  check: ReadonlyArray<{ element: number; locus: string }>;
+}
+
+/**
+ * KIND 4 — CONTROL-CHARACTER FIELD IDS (NCPDP Telecom). The transmission is
+ * framed by control bytes and every field is `<fixed-width id><value>`. Field
+ * ids are globally unique in the standard, so the vocabulary is a flat id list
+ * and needs no segment context.
+ */
+interface ControlCharFieldsSpec {
+  kind: "control-char-fields";
+  /** The framing bytes the transmission is split on. */
+  separators: readonly number[];
+  idWidth: number;
+  /** THE VOCABULARY. */
+  fieldIds: readonly string[];
+  reason: string;
+}
+
+type DetectorSpec =
+  | DelimitedSegmentSpec
+  | XmlElementSpec
+  | FixedEnvelopeEdiSpec
+  | ControlCharFieldsSpec;
 
 // ---------------------------------------------------------------------------
 // Shared detector helpers
@@ -380,67 +585,66 @@ function syntheticTokens(allow: DetectContext["allow"]): Set<string> {
  * fixture unnoticed. (State/ZIP/type-code components are intentionally omitted:
  * they are not the identifying tokens and would be noise.)
  */
-const HL7_PHI_FIELDS: Readonly<Record<string, ReadonlyArray<{ field: number; comps: number[] }>>> =
-  {
-    PID: [
-      { field: 2, comps: [1] },
-      { field: 3, comps: [1] },
-      { field: 4, comps: [1] },
-      { field: 5, comps: [1, 2, 3] },
-      { field: 6, comps: [1, 2] },
-      { field: 7, comps: [1] },
-      { field: 9, comps: [1, 2] },
-      { field: 11, comps: [1, 3] },
-      { field: 12, comps: [1] },
-      { field: 13, comps: [1, 4] },
-      { field: 14, comps: [1] },
-      { field: 18, comps: [1] },
-      { field: 19, comps: [1] },
-      { field: 20, comps: [1] },
-      { field: 21, comps: [1] },
-      { field: 23, comps: [1] },
-      { field: 29, comps: [1] },
-    ],
-    NK1: [
-      { field: 2, comps: [1, 2] },
-      { field: 4, comps: [1, 3] },
-      { field: 5, comps: [1] },
-      { field: 6, comps: [1] },
-      { field: 30, comps: [1, 2] },
-      { field: 31, comps: [1] },
-      { field: 32, comps: [1, 3] },
-      { field: 33, comps: [1] },
-      { field: 37, comps: [1] },
-    ],
-    GT1: [
-      { field: 2, comps: [1] },
-      { field: 3, comps: [1, 2] },
-      { field: 4, comps: [1, 2] },
-      { field: 5, comps: [1, 3] },
-      { field: 6, comps: [1] },
-      { field: 7, comps: [1] },
-      { field: 8, comps: [1] },
-      { field: 12, comps: [1] },
-      { field: 19, comps: [1] },
-    ],
-    IN1: [
-      { field: 8, comps: [1] },
-      { field: 16, comps: [1, 2] },
-      { field: 18, comps: [1] },
-      { field: 19, comps: [1, 3] },
-      { field: 36, comps: [1] },
-      { field: 49, comps: [1] },
-    ],
-    IN2: [
-      { field: 2, comps: [1] },
-      { field: 3, comps: [1, 2] },
-      { field: 6, comps: [1] },
-      { field: 7, comps: [1] },
-      { field: 8, comps: [1, 2] },
-      { field: 61, comps: [1] },
-      { field: 63, comps: [1] },
-    ],
-  };
+const HL7_PHI_FIELDS: DelimitedSegmentSpec["loci"] = {
+  PID: [
+    { field: 2, comps: [1] },
+    { field: 3, comps: [1] },
+    { field: 4, comps: [1] },
+    { field: 5, comps: [1, 2, 3] },
+    { field: 6, comps: [1, 2] },
+    { field: 7, comps: [1] },
+    { field: 9, comps: [1, 2] },
+    { field: 11, comps: [1, 3] },
+    { field: 12, comps: [1] },
+    { field: 13, comps: [1, 4] },
+    { field: 14, comps: [1] },
+    { field: 18, comps: [1] },
+    { field: 19, comps: [1] },
+    { field: 20, comps: [1] },
+    { field: 21, comps: [1] },
+    { field: 23, comps: [1] },
+    { field: 29, comps: [1] },
+  ],
+  NK1: [
+    { field: 2, comps: [1, 2] },
+    { field: 4, comps: [1, 3] },
+    { field: 5, comps: [1] },
+    { field: 6, comps: [1] },
+    { field: 30, comps: [1, 2] },
+    { field: 31, comps: [1] },
+    { field: 32, comps: [1, 3] },
+    { field: 33, comps: [1] },
+    { field: 37, comps: [1] },
+  ],
+  GT1: [
+    { field: 2, comps: [1] },
+    { field: 3, comps: [1, 2] },
+    { field: 4, comps: [1, 2] },
+    { field: 5, comps: [1, 3] },
+    { field: 6, comps: [1] },
+    { field: 7, comps: [1] },
+    { field: 8, comps: [1] },
+    { field: 12, comps: [1] },
+    { field: 19, comps: [1] },
+  ],
+  IN1: [
+    { field: 8, comps: [1] },
+    { field: 16, comps: [1, 2] },
+    { field: 18, comps: [1] },
+    { field: 19, comps: [1, 3] },
+    { field: 36, comps: [1] },
+    { field: 49, comps: [1] },
+  ],
+  IN2: [
+    { field: 2, comps: [1] },
+    { field: 3, comps: [1, 2] },
+    { field: 6, comps: [1] },
+    { field: 7, comps: [1] },
+    { field: 8, comps: [1, 2] },
+    { field: 61, comps: [1] },
+    { field: 63, comps: [1] },
+  ],
+};
 
 /**
  * Structured HL7 v2 PHI scan: for every PID/NK1/GT1/IN1/IN2 PHI field, check
@@ -449,12 +653,14 @@ const HL7_PHI_FIELDS: Readonly<Record<string, ReadonlyArray<{ field: number; com
  * dependency (matches every sibling scanner).
  */
 function scanHl7Structured(
+  spec: DelimitedSegmentSpec,
   content: string,
   allow: DetectContext["allow"],
   emit: Emit,
   literalView: boolean,
 ): void {
   const lines = content.split(/\r\n|\r|\n/).filter((l) => l.length > 0);
+  const idLen = spec.headerSegment.length;
   // The MSH header is found ANYWHERE on its line, not only at column 0. In a
   // `.ts` test module the message opens mid-line, inside a quote, so a column-0
   // anchor answered "not an HL7 v2 message" for every inline literal in this
@@ -466,13 +672,17 @@ function scanHl7Structured(
   // in prose set the field separator to `-` for the rest of the document, after
   // which nothing was detected at all. Segment lines below stay anchored at
   // column 0; `sourceLiteralDocument` is what puts each segment at one.
+  const anchor = new RegExp(
+    `(?:^|[^A-Za-z0-9])${spec.headerSegment}([^A-Za-z0-9\\s])` +
+      `[^A-Za-z0-9\\s]{${String(spec.encodingCharsWidth[0])},${String(spec.encodingCharsWidth[1])}}\\1`,
+  );
   let msh: string | undefined;
   let mshAt = -1;
   for (const l of lines) {
-    const m = /(?:^|[^A-Za-z0-9])MSH([^A-Za-z0-9\s])[^A-Za-z0-9\s]{2,8}\1/.exec(l);
+    const m = anchor.exec(l);
     if (m !== null) {
       msh = l;
-      mshAt = l.indexOf(`MSH${m[1] ?? "|"}`, m.index);
+      mshAt = l.indexOf(`${spec.headerSegment}${m[1] ?? spec.defaultDelimiters.field}`, m.index);
       break;
     }
   }
@@ -491,16 +701,20 @@ function scanHl7Structured(
   // Residual, disclosed rather than chased: a header that uses a non-default
   // field separator AND a mis-shaped MSH-2 gets the defaults and is read as if it
   // used `|`. The segment guard below is what keeps that from inventing hits.
+  const d = spec.defaultDelimiters;
   const encRaw =
-    msh === undefined ? "" : (msh.slice(mshAt + 4).split(msh.charAt(mshAt + 3))[0] ?? "");
-  // A source literal spells HL7's own backslash doubled, so `^~\\&` arrives five
-  // characters long and the sub-component separator read out of position 3 was
-  // the backslash rather than `&`.
-  const enc = encRaw.replace(/\\\\/g, "\\") || "^~\\&";
-  const fieldSep = (msh === undefined ? "" : msh.charAt(mshAt + 3)) || "|";
-  const compSep = enc.charAt(0) || "^";
-  const repSep = enc.charAt(1) || "~";
-  const subSep = enc.charAt(3) || "&";
+    msh === undefined
+      ? ""
+      : (msh.slice(mshAt + idLen + 1).split(msh.charAt(mshAt + idLen))[0] ?? "");
+  // A source literal spells the standard's own backslash doubled, so the run
+  // arrives one character long and the sub-component separator read out of its
+  // declared position was the backslash rather than the real delimiter.
+  const enc = encRaw.replace(/\\\\/g, "\\");
+  const at = spec.encodingCharsAt;
+  const fieldSep = (msh === undefined ? "" : msh.charAt(mshAt + idLen)) || d.field;
+  const compSep = enc.charAt(at.component) || d.component;
+  const repSep = enc.charAt(at.repetition) || d.repetition;
+  const subSep = enc.charAt(at.subcomponent) || d.subcomponent;
   const allowed = syntheticTokens(allow);
 
   for (const lineRaw of lines) {
@@ -514,15 +728,15 @@ function scanHl7Structured(
     // declared-synthetic DOB with the backtick and semicolon attached. Quote
     // characters are never stripped, in either view, for the same reason.
     const line = literalView ? lineRaw.replace(/^[ \t]+/, "") : lineRaw;
-    const name = line.slice(0, 3);
-    const spec = HL7_PHI_FIELDS[name];
-    if (spec === undefined) continue;
+    const name = line.slice(0, idLen);
+    const fieldSpecs = spec.loci[name];
+    if (fieldSpecs === undefined) continue;
     // The segment id must be FOLLOWED BY THE FIELD SEPARATOR. Without this the
-    // fallback above would let any line whose first three characters happen to
-    // spell a segment name be parsed as one.
-    if (line.charAt(3) !== fieldSep) continue;
+    // fallback above would let any line whose first characters happen to spell a
+    // segment name be parsed as one.
+    if (line.charAt(idLen) !== fieldSep) continue;
     const fields = line.split(fieldSep); // fields[0] = segment name; fields[n] = SEG-n
-    for (const { field, comps } of spec) {
+    for (const { field, comps } of fieldSpecs) {
       const raw = fields[field];
       if (raw === undefined || raw.length === 0) continue;
       for (const rep of raw.split(repSep)) {
@@ -535,7 +749,7 @@ function scanHl7Structured(
             emit({
               segment: `${name}-${String(field)}.${String(c)}`,
               value,
-              reason: "HL7 PHI field value not declared synthetic in the allow-list",
+              reason: spec.reason,
             });
           }
         }
@@ -577,14 +791,19 @@ const CCDA_HEADER_TEXT_ELEMENTS: readonly string[] = [
  * Anything not positively declared synthetic is a hit. Pure string scanning, no
  * parser dependency (matches every sibling scanner).
  */
-function scanCcdaStructured(content: string, allow: DetectContext["allow"], emit: Emit): void {
-  if (!content.includes("urn:hl7-org:v3")) return; // not a C-CDA / CDA R2 document
-  // Cut to the header: person `<name>`/`<addr>` before the body are unambiguously person PHI.
-  const bodyAt = content.search(/<(?:\w+:)?structuredBody[\s>]/);
-  const nonXmlAt = content.search(/<(?:\w+:)?nonXMLBody[\s>]/);
+function scanCcdaStructured(
+  spec: XmlElementSpec,
+  content: string,
+  allow: DetectContext["allow"],
+  emit: Emit,
+): void {
+  if (!content.includes(spec.recognizeBy)) return; // not a document of this kind
+  // Cut to the region: person `<name>`/`<addr>` before the body are unambiguously person PHI.
   let end = content.length;
-  if (bodyAt >= 0) end = Math.min(end, bodyAt);
-  if (nonXmlAt >= 0) end = Math.min(end, nonXmlAt);
+  for (const boundary of spec.regionEndsAt) {
+    const at = content.search(new RegExp(`<(?:\\w+:)?${boundary}[\\s>]`));
+    if (at >= 0) end = Math.min(end, at);
+  }
   const header = content.slice(0, end);
   const allowed = syntheticTokens(allow);
 
@@ -593,23 +812,20 @@ function scanCcdaStructured(content: string, allow: DetectContext["allow"], emit
     if (v.length === 0) return;
     if (isSubstitutionSite(v)) return; // a source hole, not a value
     if (!allowed.has(v.toUpperCase())) {
-      emit({
-        segment: locator,
-        value: v,
-        reason: "C-CDA header PHI element value not declared synthetic in the allow-list",
-      });
+      emit({ segment: locator, value: v, reason: spec.reason });
     }
   };
 
-  for (const el of CCDA_HEADER_TEXT_ELEMENTS) {
+  for (const el of spec.textElements) {
     // Only the element's DIRECT text (`[^<]*`): an element with child elements (a
     // `<name>` wrapping `<given>`/`<family>`) yields empty/whitespace here and is
     // checked via those children instead.
     const re = new RegExp(`<(?:\\w+:)?${el}\\b[^>]*>([^<]*)</(?:\\w+:)?${el}>`, "g");
     for (const m of header.matchAll(re)) check(m[1] ?? "", `<${el}>`);
   }
-  for (const m of header.matchAll(/<(?:\w+:)?birthTime\b[^>]*\bvalue="([^"]*)"/g)) {
-    check(m[1] ?? "", "birthTime@value");
+  for (const { element, attribute } of spec.attributes) {
+    const re = new RegExp(`<(?:\\w+:)?${element}\\b[^>]*\\b${attribute}="([^"]*)"`, "g");
+    for (const m of header.matchAll(re)) check(m[1] ?? "", `${element}@${attribute}`);
   }
 }
 
@@ -623,14 +839,23 @@ function scanCcdaStructured(content: string, allow: DetectContext["allow"], emit
  * provider-entity NM1 name is retained and NOT checked (checking it would
  * false-positive on legitimate provider/organization names in fixtures).
  */
-const X12_PATIENT_ENTITY_CODES = new Set<string>(["IL", "QC", "03", "QD", "GD", "74", "S1", "S3"]);
+const X12_PATIENT_ENTITY_CODES: readonly string[] = [
+  "IL",
+  "QC",
+  "03",
+  "QD",
+  "GD",
+  "74",
+  "S1",
+  "S3",
+];
 
 /**
  * REF-01 qualifiers whose REF-02 value is a patient identifier (SSN / member /
  * subscriber / group / medical record). Mirrors `src/x12/locus-map.ts`
  * REF_PHI_QUALIFIERS.
  */
-const X12_REF_PHI_QUALIFIERS = new Set<string>([
+const X12_REF_PHI_QUALIFIERS: readonly string[] = [
   "SY",
   "1W",
   "0F",
@@ -640,7 +865,7 @@ const X12_REF_PHI_QUALIFIERS = new Set<string>([
   "23",
   "6P",
   "1H",
-]);
+];
 
 /**
  * Structured X12 PHI scan: detect the ISA envelope, read its element separator
@@ -649,8 +874,14 @@ const X12_REF_PHI_QUALIFIERS = new Set<string>([
  * PHI-qualified `REF` (REF-02) segments against the synthetic allow-list.
  * Anything not positively declared synthetic is a hit.
  */
-function scanX12Structured(content: string, allow: DetectContext["allow"], emit: Emit): void {
+function scanX12Structured(
+  spec: FixedEnvelopeEdiSpec,
+  content: string,
+  allow: DetectContext["allow"],
+  emit: Emit,
+): void {
   const src = content.trimStart();
+  const h = spec.header;
   // ▶ THE 106-BYTE ISA HEADER IS FOUND ANYWHERE, NOT ONLY AT OFFSET 0, AND
   // REQUIRING OFFSET 0 GAVE THE WIDENED `test/` ROOT NOTHING FOR X12. A `.ts`
   // module never begins with `ISA`: its first bytes are an import statement, and
@@ -688,19 +919,21 @@ function scanX12Structured(content: string, allow: DetectContext["allow"], emit:
   // CANDIDATE, which is what makes the fixed-offset delimiter read sound.
   let header = "";
   let body = "";
-  for (const m of src.matchAll(/(?:^|[^A-Za-z0-9])ISA[^A-Za-z0-9\s]/g)) {
-    const at = m.index + m[0].length - 4;
+  const boundary = new RegExp(`(?:^|[^A-Za-z0-9])${h.id}[^A-Za-z0-9\\s]`, "g");
+  for (const m of src.matchAll(boundary)) {
+    const at = m.index + m[0].length - (h.id.length + 1);
     const candidate = src.slice(at).replace(/[\r\n]/g, "");
-    if (candidate.length < 106) continue;
-    if (candidate.charAt(6) !== candidate.charAt(3)) continue; // ISA01 is 2 wide
-    if (/[A-Za-z0-9\s]/.test(candidate.charAt(105))) continue;
+    if (candidate.length < h.length) continue;
+    // The first element is fixed-width, so the separator MUST repeat at its far side.
+    if (candidate.charAt(h.repeatSeparatorAt) !== candidate.charAt(h.separatorAt)) continue;
+    if (/[A-Za-z0-9\s]/.test(candidate.charAt(h.terminatorAt))) continue;
     header = candidate; // newline-free, for the two FIXED-OFFSET delimiter reads only
     body = src.slice(at); // newline-PRESERVING, for the segment split below
     break;
   }
-  if (header.length === 0) return; // not an X12 interchange
-  const elementSep = header.charAt(3);
-  const segTerm = header.charAt(105);
+  if (header.length === 0) return; // not an interchange of this kind
+  const elementSep = header.charAt(h.separatorAt);
+  const segTerm = header.charAt(h.terminatorAt);
   if (elementSep.length === 0 || segTerm.length === 0) return;
   const allowed = syntheticTokens(allow);
 
@@ -717,11 +950,7 @@ function scanX12Structured(content: string, allow: DetectContext["allow"], emit:
     if (seen.has(key)) return;
     if (!allowed.has(v.toUpperCase())) {
       seen.add(key);
-      emit({
-        segment: locator,
-        value: v,
-        reason: "X12 PHI element value not declared synthetic in the allow-list",
-      });
+      emit({ segment: locator, value: v, reason: spec.reason });
     }
   };
 
@@ -749,39 +978,31 @@ function scanX12Structured(content: string, allow: DetectContext["allow"], emit:
   // and `check` de-duplicates so the overlap between the two costs no noise.
   for (const piece of body.split(segTerm)) {
     for (const seg of piece.split(/\r\n|\r|\n/)) {
-      scanX12Segment(seg, elementSep, check);
+      scanEdiSegment(spec.segments, seg, elementSep, check);
     }
     const rejoined = piece.replace(/[\r\n]/g, "");
-    if (rejoined !== piece) scanX12Segment(rejoined, elementSep, check);
+    if (rejoined !== piece) scanEdiSegment(spec.segments, rejoined, elementSep, check);
   }
 }
 
-/** One X12 segment candidate: dispatch on its id and check the identifying elements. */
-function scanX12Segment(
+/** One segment candidate: match the declared id, apply its guard, check its declared elements. */
+function scanEdiSegment(
+  segments: readonly EdiSegmentSpec[],
   seg: string,
   elementSep: string,
   check: (value: string, locator: string) => void,
 ): void {
   const els = seg.split(elementSep);
   const id = els[0];
-  if (id === "NM1") {
-    // A provider/organization entity's name is RETAINED by the de-identifier, so
-    // checking it would false-positive on legitimate provider names in fixtures.
-    if (!X12_PATIENT_ENTITY_CODES.has((els[1] ?? "").toUpperCase())) return;
-    check(els[3] ?? "", "NM1-03"); // last / org name
-    check(els[4] ?? "", "NM1-04"); // first name
-    check(els[9] ?? "", "NM1-09"); // identifier
-  } else if (id === "N1") {
-    if (!X12_PATIENT_ENTITY_CODES.has((els[1] ?? "").toUpperCase())) return;
-    check(els[2] ?? "", "N1-02"); // patient-side party name
-    check(els[4] ?? "", "N1-04"); // patient-side party identifier
-  } else if (id === "SBR") {
-    check(els[3] ?? "", "SBR-03"); // insured group / policy number
-    check(els[4] ?? "", "SBR-04"); // insured group name
-  } else if (id === "DMG") {
-    check(els[2] ?? "", "DMG-02"); // date of birth
-  } else if (id === "REF") {
-    if (X12_REF_PHI_QUALIFIERS.has((els[1] ?? "").toUpperCase())) check(els[2] ?? "", "REF-02");
+  for (const s of segments) {
+    if (s.id !== id) continue;
+    if (
+      s.guard !== undefined &&
+      !s.guard.oneOf.includes((els[s.guard.element] ?? "").toUpperCase())
+    )
+      return;
+    for (const { element, locus } of s.check) check(els[element] ?? "", locus);
+    return;
   }
 }
 
@@ -795,7 +1016,7 @@ function scanX12Segment(
  * the id (not the segment) is correct and bypass-resistant. Mirrors
  * `src/ncpdp/locus-map.ts`.
  */
-const TELECOM_PHI_FIELD_IDS = new Set<string>([
+const TELECOM_PHI_FIELD_IDS: readonly string[] = [
   "CA", // Patient First Name
   "CB", // Patient Last Name
   "CM", // Patient Street Address
@@ -808,7 +1029,7 @@ const TELECOM_PHI_FIELD_IDS = new Set<string>([
   "CC", // Cardholder First Name
   "CD", // Cardholder Last Name
   "DB", // Prescriber ID
-]);
+];
 
 /**
  * Structured NCPDP Telecom PHI scan: split the transmission on the Field / Group
@@ -816,21 +1037,25 @@ const TELECOM_PHI_FIELD_IDS = new Set<string>([
  * token whose id is a known PHI field, check the value against the synthetic
  * allow-list. Anything not positively declared synthetic is a hit.
  */
-function scanTelecomStructured(content: string, allow: DetectContext["allow"], emit: Emit): void {
+function scanTelecomStructured(
+  spec: ControlCharFieldsSpec,
+  content: string,
+  allow: DetectContext["allow"],
+  emit: Emit,
+): void {
   const allowed = syntheticTokens(allow);
-  for (const token of content.split(/[\x1c\x1d\x1e]/)) {
-    if (token.length < 2) continue;
-    const id = token.slice(0, 2).toUpperCase();
-    if (!TELECOM_PHI_FIELD_IDS.has(id)) continue;
-    const value = token.slice(2).trim();
+  const framing = new RegExp(
+    `[${spec.separators.map((c) => `\\u${c.toString(16).padStart(4, "0")}`).join("")}]`,
+  );
+  for (const token of content.split(framing)) {
+    if (token.length < spec.idWidth) continue;
+    const id = token.slice(0, spec.idWidth).toUpperCase();
+    if (!spec.fieldIds.includes(id)) continue;
+    const value = token.slice(spec.idWidth).trim();
     if (value.length === 0) continue;
     if (isSubstitutionSite(value)) continue; // a source hole, not a value
     if (!allowed.has(value.toUpperCase())) {
-      emit({
-        segment: id,
-        value,
-        reason: "NCPDP Telecom PHI field value not declared synthetic in the allow-list",
-      });
+      emit({ segment: id, value, reason: spec.reason });
     }
   }
 }
@@ -934,11 +1159,92 @@ function scanViews(
   emit: Emit,
   literalView: boolean,
 ): void {
-  scanHl7Structured(text, allow, emit, literalView);
-  scanCcdaStructured(text, allow, emit);
-  scanX12Structured(text, allow, emit);
-  scanTelecomStructured(text, allow, emit);
+  for (const spec of DEID_DETECTORS) {
+    if (spec.kind === "delimited-segment") scanHl7Structured(spec, text, allow, emit, literalView);
+    else if (spec.kind === "xml-element") scanCcdaStructured(spec, text, allow, emit);
+    else if (spec.kind === "fixed-envelope-edi") scanX12Structured(spec, text, allow, emit);
+    else scanTelecomStructured(spec, text, allow, emit);
+  }
 }
+
+// ===========================================================================
+// ██  `DEID_DETECTORS` — THE DELIVERABLE: THIS REPO'S VOCABULARY, AS DATA  ███
+// ===========================================================================
+//
+// Every detector above reads its loci, guards, regions and separators out of
+// THIS constant and out of nothing else, so a green `pnpm phi-scan` over this
+// repo's corpus PROVES the vocabulary is complete and correctly transcribed. It
+// is the value this file will pass as the engine's `detectors:` parameter once
+// the engine ships the kinds, at which point every function above is deleted.
+//
+// A DETECTOR THAT DOES NOT CONSULT THE ALLOW-LIST HAS NO REMEDY AT ALL, because
+// the whole-file bypass is closed. Every locus below is checked against
+// `scripts/phi-allow-list.txt`'s declared synthetic tokens.
+// ===========================================================================
+
+const DEID_DETECTORS: readonly DetectorSpec[] = [
+  {
+    kind: "delimited-segment",
+    headerSegment: "MSH",
+    defaultDelimiters: { field: "|", component: "^", repetition: "~", subcomponent: "&" },
+    encodingCharsWidth: [2, 8],
+    encodingCharsAt: { component: 0, repetition: 1, subcomponent: 3 },
+    loci: HL7_PHI_FIELDS,
+    reason: "HL7 PHI field value not declared synthetic in the allow-list",
+  },
+  {
+    kind: "xml-element",
+    recognizeBy: "urn:hl7-org:v3",
+    regionEndsAt: ["structuredBody", "nonXMLBody"],
+    textElements: CCDA_HEADER_TEXT_ELEMENTS,
+    attributes: [{ element: "birthTime", attribute: "value" }],
+    reason: "C-CDA header PHI element value not declared synthetic in the allow-list",
+  },
+  {
+    kind: "fixed-envelope-edi",
+    header: { id: "ISA", length: 106, separatorAt: 3, repeatSeparatorAt: 6, terminatorAt: 105 },
+    segments: [
+      {
+        id: "NM1",
+        guard: { element: 1, oneOf: X12_PATIENT_ENTITY_CODES },
+        check: [
+          { element: 3, locus: "NM1-03" }, // last / org name
+          { element: 4, locus: "NM1-04" }, // first name
+          { element: 9, locus: "NM1-09" }, // identifier
+        ],
+      },
+      {
+        id: "N1",
+        guard: { element: 1, oneOf: X12_PATIENT_ENTITY_CODES },
+        check: [
+          { element: 2, locus: "N1-02" }, // patient-side party name
+          { element: 4, locus: "N1-04" }, // patient-side party identifier
+        ],
+      },
+      {
+        id: "SBR",
+        check: [
+          { element: 3, locus: "SBR-03" }, // insured group / policy number
+          { element: 4, locus: "SBR-04" }, // insured group name
+        ],
+      },
+      { id: "DMG", check: [{ element: 2, locus: "DMG-02" }] }, // date of birth
+      {
+        id: "REF",
+        guard: { element: 1, oneOf: X12_REF_PHI_QUALIFIERS },
+        check: [{ element: 2, locus: "REF-02" }],
+      },
+    ],
+    reason: "X12 PHI element value not declared synthetic in the allow-list",
+  },
+  {
+    kind: "control-char-fields",
+    separators: [0x1c, 0x1d, 0x1e],
+    idWidth: 2,
+    fieldIds: TELECOM_PHI_FIELD_IDS,
+    reason: "NCPDP Telecom PHI field value not declared synthetic in the allow-list",
+  },
+];
 
 /**
  * THE STANDARD-SPECIFIC FIELD DETECTION: the half the shared engine deliberately
