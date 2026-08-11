@@ -229,9 +229,21 @@ const OVERRIDE_LOG_PATH = join(REPO_ROOT, "phi-scan-overrides.md");
  * and a lockfile, and walking from the root also descends `node_modules/`,
  * `dist/` and `coverage/` before the gitignore filter can drop them.
  *
- * ▶ WHAT IS STILL OUT OF SCOPE, STATED RATHER THAN IMPLIED: `.github/`,
- * `docs-content/` (all `.md` bar `sidebars.json`), `vendor/`, and the root-level
- * manifests. None of them is claimed covered by this gate.
+ * ▶ WHAT IS OUT OF SCOPE *FOR THE WALK*, STATED RATHER THAN IMPLIED: `.github/`,
+ * `docs-content/`, `vendor/`, and the root-level manifests. None of them is
+ * reached by the walk or by `--staged`.
+ *
+ * ▶ THAT IS NO LONGER THE WHOLE ANSWER, AND THE DIFFERENCE IS WORTH READING
+ * CAREFULLY, BECAUSE IT IS EASY TO OVERSTATE IN EITHER DIRECTION. All mode also
+ * reads the index (`buildTargetsForIndex`, which is where that scope is decided
+ * and is the ONE place it is written down), so `.github/` and the root manifests
+ * ARE swept from their committed bytes. `vendor/` is excluded there, and so is
+ * every `.md`.
+ *
+ * ▶ SO `docs-content/` IS STILL A PUBLISHED CONSUMER SURFACE THIS GATE DOES NOT
+ * SCAN FOR PHI: 16 of its 17 tracked files are `.md`, and the index route adds
+ * only `sidebars.json`. Do not read "the index route reads what git carries" as
+ * covering it. Nothing here scans a `.md` on any route.
  */
 const SCAN_ROOT_NAMES: readonly string[] = ["src", "test", "scripts"];
 
@@ -879,7 +891,10 @@ function buildTargetsForStaged(): Target[] {
  * the two copies goes false.
  *
  * WHAT IT IS. All mode reads the working tree through `walk()`, and then reads
- * THE BYTES GIT CARRIES for every path in the index, wherever that path sits.
+ * THE BYTES GIT CARRIES for every path in the index it can read, wherever that
+ * path sits. "Every path it can read" is exact and not a hedge: `.md` and
+ * `vendor/` are excluded below, so of the 25 tracked non-markdown paths outside
+ * every scan root this route adds 19, and it adds NO `.md` at all.
  * It is a UNION with the walk, never a replacement: no scan root was narrowed,
  * no clause was dropped, and a file the walk reads is still read off disk with
  * exactly the two views it had. This route only ever ADDS bytes to the sweep.
@@ -2059,7 +2074,8 @@ function run(): number {
   for (const t of targets) scan(t);
 
   // THE INDEX CORPUS, ALL MODE ONLY: the bytes git carries, at every path it
-  // carries them, whether or not that path sits under a scan root and whether or
+  // carries them AND THIS ROUTE CAN READ (`.md` and `vendor/` are excluded),
+  // whether or not that path sits under a scan root and whether or
   // not the working tree still agrees with it. The mechanism, everything it
   // closes and everything it deliberately does not do are written down once, at
   // `buildTargetsForIndex`.

@@ -410,8 +410,19 @@ R100` and this route printed its clean line (measured on git 2.39.5; the all-mod
   `PID|…` literals. Both routes now share one `isUnderScanRoot`. **`mllp` walks `test/` too but
   EXCLUDES `.ts` from it** — correct there, and it would have closed **none** of these 38, because
   every one is a `.ts`. **`ccda` roots at the repo root**, which this tree cannot do without walking
-  `node_modules/`, `dist/`, `coverage/` and six binary `vendor/*.tgz`. Still out of scope and stated
-  as such: `.github/`, `docs-content/`, `vendor/`, the root manifests.
+  `node_modules/`, `dist/`, `coverage/` and six binary `vendor/*.tgz`. Out of scope **for the walk
+  and for `--staged`**, stated as such: `.github/`, `docs-content/`, `vendor/`, the root manifests.
+
+  **▶ ALL MODE ALSO READS THE INDEX, SO THAT LIST IS NO LONGER THE WHOLE ANSWER — AND IT IS EASY TO
+  OVERSTATE IN EITHER DIRECTION.** `.github/` and the root manifests **are** swept from their
+  committed bytes; `vendor/` and **every `.md`** are excluded there. **So `docs-content/` REMAINS A
+  PUBLISHED CONSUMER SURFACE THIS GATE DOES NOT SCAN FOR PHI: 16 of its 17 tracked files are `.md`,
+  and the index route adds only `sidebars.json`.** A draft of this slice wrote that `docs-content/`
+  was "no longer out of scope full stop" and **deleted the sentence that said otherwise** — the
+  refuter measured it in one command and it was a **false green about the one surface that ships to
+  docs.cosyte.com**, in the de-identification package. **Nothing here scans a `.md` on any route**
+  (`isDocFile`), which is the pre-existing exemption that decides it; the index scope itself is
+  decided in `buildTargetsForIndex`.
 
 ### Enumerating the files buys the floor only
 

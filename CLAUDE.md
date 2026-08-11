@@ -163,10 +163,10 @@ Every line here is clinical-safety content. Full cases: `documentation/agent-not
   false-green one. → `documentation/agent-notes.md#closed-by-no-renames`
 - **THE WALK ROOTS ARE `src/`, `test/` (ALL of it) AND `scripts/`: A DIFFERENT DECISION FROM EVERY
   SIBLING'S. DO NOT PORT ONE OVER IT.** The old scopes missed **38 tracked files**, four carrying
-  inline HL7 `PID|…` literals. **OUT OF SCOPE FOR THE WALK, AND NO LONGER OUT OF SCOPE FULL STOP:**
-  `.github/`, `docs-content/` and the root manifests are now read **from the index** in all mode;
-  only `vendor/` and `.md` are excluded there. **`docs-content/`'s WORKING-TREE bytes are still
-  unread, so an unstaged edit there is not scanned.** → `documentation/agent-notes.md#the-scan-roots`
+  inline HL7 `PID|…` literals. **`.md` IS EXEMPT ON EVERY ROUTE, SO `docs-content/` REMAINS A
+  PUBLISHED CONSUMER SURFACE THIS GATE DOES NOT SCAN FOR PHI**: 16 of its 17 files are `.md`, and
+  the index route adds only `sidebars.json`. `.github/` and the root manifests ARE read there now;
+  `vendor/` is not. → `documentation/agent-notes.md#the-scan-roots`
 - **ENUMERATING THE FILES BUYS THE SSN/EMAIL FLOOR AND NOTHING ELSE: a detector has to RECOGNISE the
   document first, and every recogniser was written for a file that _is_ the document.** This repo's
   fixtures are `.ts` string literals, so each file is also scanned as its **decoded, joined

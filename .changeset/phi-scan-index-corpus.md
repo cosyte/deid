@@ -9,7 +9,8 @@ the working tree being honest and on the corpus sitting where the roots point. F
 reproduced on the previous commit, each printing `[phi-scan] OK, no hits` at exit 0 over a synthetic
 HL7 message carrying a patient name, a birthdate, an MRN and a dashed SSN: decoy content at a tracked
 path, whose committed bytes carry the payload and whose working-tree bytes are clean; a tracked path
-outside every root, of which 25 non-markdown ones exist here and no route had ever opened one; a root
+outside every root, of which 25 non-markdown ones exist here and no route had ever opened one, 19 of
+which this adds; a root
 emptied or deleted from the working tree with its files still tracked, which for this package meant
 deleting all three left the sweep reporting clean over the entire corpus; a tracked symlink or
 gitlink outside every root; and an empty index, against which the route has nothing to read. All five
@@ -41,6 +42,11 @@ domain separators, so git's own heuristic calls them binary and a predicate woul
 out of the very decoy defence this adds. The `.md` and `vendor/` rules are both applied last, after
 the mode refusals, so naming a symlink `vendor/x.tgz` or `x.md` cannot buy it a pass: git carries a
 link's target path, which is itself an identifier surface.
+
+What this does not widen, stated because it would be easy to read the other way: markdown is exempt
+on every route, as it already was, so the documentation set remains a published surface this gate
+does not scan. Sixteen of its seventeen tracked files are markdown and this adds only the navigation
+config beside them.
 
 One floor hit surfaced, and it is not patient data: the package manifest's `author` field carries a
 company mailbox at our own domain, registry metadata that already ships in every published tarball.
