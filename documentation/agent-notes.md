@@ -410,8 +410,23 @@ R100` and this route printed its clean line (measured on git 2.39.5; the all-mod
   `PID|…` literals. Both routes now share one `isUnderScanRoot`. **`mllp` walks `test/` too but
   EXCLUDES `.ts` from it** — correct there, and it would have closed **none** of these 38, because
   every one is a `.ts`. **`ccda` roots at the repo root**, which this tree cannot do without walking
-  `node_modules/`, `dist/`, `coverage/` and six binary `vendor/*.tgz`. Still out of scope and stated
-  as such: `.github/`, `docs-content/`, `vendor/`, the root manifests.
+  `node_modules/`, `dist/`, `coverage/` and six binary `vendor/*.tgz`. Out of scope **for the walk
+  and for `--staged`**, stated as such: `.github/`, `docs-content/`, `vendor/`, the root manifests.
+
+  **▶ ALL MODE ALSO READS THE INDEX, SO THAT LIST IS NO LONGER THE WHOLE ANSWER — AND IT IS EASY TO
+  OVERSTATE IN EITHER DIRECTION.** `.github/` and the root manifests **are** swept from their
+  committed bytes; `vendor/` and **every `.md`** are excluded there. **So `docs-content/` REMAINS A
+  PUBLISHED CONSUMER SURFACE THIS GATE DOES NOT SCAN FOR PHI: 16 of its 17 tracked files are `.md`,
+  and the index route adds only `sidebars.json`.** A draft of this slice wrote that `docs-content/`
+  was "no longer out of scope full stop" and **deleted the sentence that said otherwise** — the
+  refuter measured it in one command and it was a **false green about the one surface that ships to
+  docs.cosyte.com**, in the de-identification package. **No `.md` is scanned by either ENUMERATING
+  route or by the index route** (`isDocFile`), which is the pre-existing exemption that decides it;
+  the index scope itself is decided in `buildTargetsForIndex`. **"On any route" would be WIDER THAN
+  THE MEASUREMENT and pass 2 caught it: `buildTargetsForPaths` applies no `isDocFile` filter, so an
+  explicitly named `.md` IS scanned** -- correctly, since a positional path is the caller's own
+  argument rather than this package's corpus. That direction overstates the GAP rather than the
+  coverage, so it was never a false green, and it is corrected rather than softened.
 
 ### Enumerating the files buys the floor only
 
@@ -487,6 +502,139 @@ R100` and this route printed its clean line (measured on git 2.39.5; the all-mod
   escape as uncaught exceptions, which Node exits **1** for — a gate that could not read its own
   allow-list reporting "I found PHI in your corpus". Failure is the default path now; do not go back
   to catching by type, because the set of things that can fail is open.
+
+### All mode reads the bytes git carries
+
+  **▶ ALL MODE READS THE BYTES GIT CARRIES, AS A *UNION* WITH THE WALK, NEVER IN PLACE OF IT.** The
+  walk reads three declared roots off the **working tree**, which is a claim that depends on the
+  working tree being honest and on the corpus sitting where the roots point. **Five states were
+  reproduced on `880c79b`, every one printing `[phi-scan] OK, no hits` at exit 0** over a synthetic
+  HL7 message carrying a patient name, a birthdate, an MRN and a dashed SSN:
+
+  1. **a DECOY at a tracked path** — committed bytes carrying PHI, working-tree bytes clean.
+     **Reconciling path SETS is not reading bytes**, and this is the escape the route exists for: a
+     set comparison is satisfied *completely* by that tree.
+  2. **a tracked path OUTSIDE every scan root.** `SCAN_ROOT_NAMES` is three names, so nothing
+     outside them was enumerated. **Measured: 25 tracked non-markdown files sit outside all three
+     roots and neither route had ever opened one.**
+  3. **a scan root EMPTIED or DELETED from the working tree, its files still tracked.** This is
+     **this repo's purest instance of the class, and it has no sibling's shape**: there is no
+     floor-of-one and no reconciliation here, so `enterRoot` returns silently from an absent root
+     and **deleting all three left the sweep reporting `OK, no hits` over the entire corpus.** A
+     sibling that already refused an unobserved root closed this elsewhere; **this route must not be
+     credited with it there.** Closed **for tracked content only** — tracked content is the only
+     kind git can hand back.
+  4. **a tracked symlink or gitlink OUTSIDE every scan root.** `walk()` classifies entries *inside*
+     a root, so such an entry was reached by neither route. Refused **by mode**, through the same
+     `gitModeKind` closed set, and **the refusal still never reports the link target.**
+  5. **an EMPTY index.** Zero entries is not a clean corpus, it is no corpus.
+
+  **▶ THE MECHANISM IS WRITTEN DOWN IN EXACTLY ONE PLACE, `buildTargetsForIndex`.** The header
+  banner, the allow-list, `CLAUDE.md` and the changeset state only the consumer-facing property and
+  point there. That is the one durable rule this whole class earned: **a mechanism restated in a
+  second place is how one of the two copies goes false.**
+
+  **▶ EVERY REFUSAL RUNS *AFTER* THE WALK HAS BEEN SCANNED, AND THAT ORDERING IS A FIX, NOT A
+  PREFERENCE. A REFUSAL MUST NOT SWALLOW A REAL HIT.** Refused first, the run would be strictly
+  **worse** than the base commit's for one input: exit 1 naming every locus before, exit 2 naming
+  nothing after. The exit code is still **2** — an incomplete sweep is not a verdict whatever it
+  found on the way — but the hits are printed first. Two cases pin it.
+
+  **▶ `--allow-fixture` IS SUBTRACTED ON THE INDEX ROUTE TOO, AND HERE THAT IS LOAD-BEARING RATHER
+  THAN DEAD CODE.** `parseArgs` does **not** seed the positional path set from the flag, so
+  `pnpm phi-scan` runs in **all** mode with the one logged bypass in force; without the subtraction
+  the route reads the bypassed suite straight out of the index and **red-locks the repo.** (A
+  sibling whose `parseArgs` *does* seed it has the same line as unreachable defence. Do not carry
+  that reading over.) **The case proving it needs the committed and working-tree bytes to DIFFER:**
+  with both copies identical the byte-comparison skip fires first, the subtraction is never reached,
+  and deleting it leaves the case green. Verified by deleting it.
+
+  **▶ `makeRepo()` IN THE SUITE NOW COMMITS ITS BASELINE, AND THAT IS A PRECONDITION.** All mode
+  refuses an empty index, so a `git init` with no commit is exit 2; the helper used to stop at
+  `init`, which is why **26 pre-existing cases went red the moment the route landed.** Committing
+  also means each case exercises **both** routes rather than the walk alone.
+
+  **▶ WHAT IS *NOT* CLOSED, MEASURED RATHER THAN REASONED: working-tree bytes at a path outside
+  every scan root are read by NEITHER route, whether or not git tracks the path.** The walk reads
+  three declared roots and this route reads what the **index** carries, so the two miss the same
+  place from opposite sides. PHI edited into a tracked file outside the roots and left **unstaged**
+  is not read; an **untracked** file out there is not read at all. **Both halves are
+  base-identical** — nothing outside the roots was read before either — and what is new is only that
+  the claim is written down. Closing it means a third enumeration with its own refusal semantics.
+  **The route also does not reach `--staged` or `paths`**: `--staged` is the pre-commit hook, so its
+  scope decides what a **commit** is blocked on, which is a HOOK decision and not a rider on this.
+
+### What the index route excludes
+
+  **▶ `vendor/` IS EXCLUDED, AS A LITERAL PATH PREFIX AND NOT A PREDICATE.** It is **not a new
+  exemption**: the scanner's header banner and `CLAUDE.md` already declared `vendor/` out of scope,
+  and the route honours that rather than quietly overriding it. The six entries are third-party
+  `pnpm pack` tarballs of the sibling parsers, not this package's corpus.
+
+  **▶ THE COST IS MEASURED, NOT ASSUMED.** They are gzip, so their text is compressed and no
+  detector here can read it without decompressing an archive, which this scanner does not do.
+  Handing the compressed bytes to the detectors as UTF-8 is **noise, not weak coverage**: with the
+  exclusion removed, all mode over this repo reports **45 hits across all six tarballs and exits
+  1 — 44 spurious NCPDP Telecom field tokens and one spurious email address.** The Telecom detector
+  splits on `0x1C`/`0x1D`/`0x1E` and reads the next two bytes as a field id; those bytes occur
+  throughout compressed data, so it fires indefinitely. **A gate that red-locks the repo on mojibake
+  teaches developers to bypass it.** Re-derive that figure rather than trusting it: it is a function
+  of what is vendored *and* of the detector set, and both move.
+
+  **▶ A "BINARY BLOB" PREDICATE WAS MEASURED AND REJECTED, AND THIS IS THE REASON TO WRITE DOWN.**
+  Two real TypeScript sources here — `src/context.ts` and `src/manifest.ts` — **embed NUL bytes as
+  HMAC domain separators**, so git's own NUL-in-the-first-8000-bytes heuristic calls them binary. A
+  predicate would have dropped two hand-written source files out of the decoy defence the route
+  exists to provide.
+
+  **▶ BOTH NAME RULES (`.md` AND `vendor/`) ARE APPLIED *LAST*, TO THE READABLE SET ONLY, AND THE
+  ORDER IS A HOLE RATHER THAN A STYLE POINT.** Git carries a link's **target path**, which is itself
+  a PHI surface, so naming a link `vendor/x.tgz` or `x.md` must not buy it a pass. Pinned by a case
+  that stages a link under each name and expects exit 2.
+
+  **▶ THE SKIP IS A BYTE COMPARISON — NOT A STAT, NOT AN MTIME, NOT A HASH.** Those are exactly what
+  a decoy defeats. **AND IT MAY NOT NORMALIZE LINE ENDINGS FIRST**: that compares a *derived* form
+  of the two byte strings, and a decoy differing only in what the normalizer erases would then be
+  skipped, reopening the escape. Under `.gitattributes eol=crlf` or `core.autocrlf=true` the skip
+  stops firing and every text file is scanned twice — **fail-safe (a duplicate finding, never a
+  miss), and wrong-looking enough that someone will want to "fix" it.** **Neither condition is live
+  here, measured rather than assumed: no `.gitattributes` at all, `core.autocrlf` and `core.eol`
+  both unset, Linux CI.** So the doubling is recorded, not handled. **Check the condition before
+  porting this on.**
+
+  **▶ GITIGNORE IS NOT CONSULTED ON THIS ROUTE, deliberately unlike the walk.** A tracked file that
+  also matches an ignore rule is still content git carries; the walk's ignore rule is about entries
+  it found on disk. **And it reads the INDEX, not `HEAD`** — staged bytes are what the next commit
+  carries, and what the working tree can no longer be trusted to show.
+
+### The positive control and its floor hit
+
+  **▶ A GREEN OVER A CORPUS NOBODY OPENED IS THE DEFECT THIS ROUTE IS ABOUT, so a case that only
+  shows the scanner passing proves nothing.** The control takes **this package's own `package.json`,
+  byte for byte**, puts it at the same out-of-every-root path in a throwaway tree, and then **strikes
+  the one allow-list declaration**: the same corpus goes green → exit 1. **The green is earned by
+  the declaration rather than by the file never being opened**, and that is the only difference that
+  matters.
+
+  **▶ THE FLOOR HIT IS REAL AND IT IS NOT PHI.** `package.json`'s `author` field carries a company
+  mailbox at our own domain. It is **registry metadata that ships in every published tarball and is
+  already public on the npm page** — not patient data. It surfaced only because all mode began
+  reading what git carries; `package.json` sits outside every scan root, so no route had ever opened
+  it. **The declaration (`EMAILDOMAIN cosyte.com`) is the honest answer** rather than narrowing the
+  sweep back to where it could not see the file.
+
+  **▶ THE COST OF THAT DECLARATION, STATED RATHER THAN HIDDEN: AN `EMAILDOMAIN` ENTRY IS GLOBAL AND
+  ROUTE-BLIND.** It stops the floor firing on **any** address at that domain, in any file, on every
+  route. Accepted deliberately: a real patient address would not be at our own corporate domain, and
+  the alternative is the whole-file bypass, which silences *every* check for that file.
+
+  **▶ THE ADDRESS IS DELIBERATELY NOT SPELLED OUT IN THE ALLOW-LIST'S OWN COMMENT, AND THAT IS A
+  DEFECT THIS SLICE MADE AND CAUGHT.** The allow-list sits **inside a scan root**, so an earlier
+  draft that wrote the address out made *that file* red whenever the declaration was struck — and
+  the control then **passed against the base scanner** without the manifest ever being opened. **A
+  control that reds on two files cannot tell you which one it read.** The cases now assert the hit is
+  **named** (`HIT: package.json`), carries `origin="git index"`, and is **`1 hit(s) across 1
+  file(s)`**. Counting the exit code alone is what let it through.
 
 ## The attw wrapper
 

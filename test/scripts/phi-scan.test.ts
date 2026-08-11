@@ -303,10 +303,25 @@ function runIn(cwd: string, args: string[]): RunResult {
 
 const repos: string[] = [];
 
+/** Stage everything and commit it, so the repo has a populated index. */
+function commitAll(root: string, message: string): void {
+  git(root, ["add", "-A"]);
+  git(root, ["commit", "-q", "-m", message]);
+}
+
 /**
  * A throwaway git repo laid out the way the scanner expects: an allow-list under
  * `scripts/`, every scan root, and one ordinary source file so the walk has
  * something legitimate to find.
+ *
+ * ▶ THE BASELINE IS COMMITTED, AND THAT IS A PRECONDITION RATHER THAN TIDINESS.
+ * All mode now reads the bytes git carries as well as the working tree, and it
+ * REFUSES an empty index (exit 2) because zero tracked entries is not a clean
+ * corpus, it is no corpus. This helper used to `git init` and stop, so every
+ * all-mode case below ran against an index holding nothing. Committing here
+ * also means each case exercises BOTH routes rather than the walk alone: a file
+ * a case then writes without staging is untracked and read by the walk, exactly
+ * as before, while the baseline is read by both and skipped by byte comparison.
  */
 function makeRepo(): string {
   const root = realpathSync(mkdtempSync(join(tmpdir(), "phi-scan-repo-")));
@@ -320,6 +335,13 @@ function makeRepo(): string {
   );
   writeFileSync(join(root, "src", "ordinary.ts"), "export const answer = 42;\n");
   git(root, ["init", "-q", "."]);
+  // Set locally rather than relying on the ambient config, which CI may not have,
+  // and disable signing so a developer's global `commit.gpgsign` cannot fail the
+  // suite on a machine with no key loaded.
+  git(root, ["config", "user.email", "phi-scan-test@example.com"]);
+  git(root, ["config", "user.name", "phi-scan test"]);
+  git(root, ["config", "commit.gpgsign", "false"]);
+  commitAll(root, "baseline");
   return root;
 }
 
@@ -471,9 +493,9 @@ describe("phi-scan: the --staged route refuses a staged non-regular entry", () =
     // Replacing a TRACKED file with a link is neither an add nor a modify: git
     // raises `:100644 120000 <sha> <sha> T`, and without `T` in the filter the
     // record never existed, so the pre-commit hook passed the link green.
+    // `src/ordinary.ts` is already TRACKED: `makeRepo` commits its baseline, which
+    // is what makes the replacement below a typechange rather than an add.
     const root = makeRepo();
-    git(root, ["add", "src/ordinary.ts"]);
-    git(root, ["-c", "user.email=t@example.com", "-c", "user.name=t", "commit", "-qm", "base"]);
 
     writeFileSync(join(root, TARGET_NAME), SYNTHETIC_PHI);
     rmSync(join(root, "src", "ordinary.ts"));
@@ -1343,5 +1365,396 @@ describe("phi-scan: indentation is stripped in the literal view only", () => {
     const r = runIn(root, []);
     expect(r.code, `stderr: ${r.stderr}`).toBe(1);
     expect(r.stderr).toMatch(/PID-5\.1 value="RIVERA"/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The index corpus: all mode reads the bytes git carries, as a UNION
+// ---------------------------------------------------------------------------
+//
+// The walk reads three declared roots off the WORKING TREE, which is a claim
+// that depends on the working tree being honest and on the corpus sitting where
+// the roots point. Five states were reproduced on 880c79b, each printing
+// `[phi-scan] OK, no hits` at exit 0 over the payload above. They are pinned
+// here individually, because a single case cannot tell "the escape is closed"
+// apart from "one of the five is closed".
+//
+// The mechanism lives in ONE place, `buildTargetsForIndex`; these cases assert
+// the consumer-facing behaviour and never restate it.
+
+/** Commit a file at `rel`, then leave DIFFERENT bytes at that path in the worktree. */
+function commitThenDiverge(root: string, rel: string, committed: string, working: string): void {
+  writeFileSync(join(root, rel), committed);
+  commitAll(root, `commit ${rel}`);
+  writeFileSync(join(root, rel), working);
+}
+
+describe("phi-scan index corpus: the five states the walk alone reported clean", () => {
+  it("1. a DECOY: committed bytes carry PHI, the working tree at that path is clean", () => {
+    // The escape the whole route exists for. Comparing PATH SETS is satisfied
+    // completely by this tree: every root yields files and every tracked path is
+    // accounted for. Only reading the blob answers it.
+    const root = makeRepo();
+    commitThenDiverge(root, "src/decoy.ts", SYNTHETIC_PHI, "export const clean = 1;\n");
+
+    const r = runIn(root, []);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toContain("src/decoy.ts");
+    expect(r.stderr).toContain("123-45-6789");
+    expect(r.stderr).toMatch(/PID-5\.1 value="RIVERA"/);
+    // The remedy differs from a file the walk never reached, so the origin does.
+    expect(r.stderr).toContain("the working tree differs");
+  });
+
+  it("2. a tracked path OUTSIDE every scan root", () => {
+    const root = makeRepo();
+    mkdirSync(join(root, "elsewhere"));
+    writeFileSync(join(root, "elsewhere", "patient.hl7"), SYNTHETIC_PHI);
+    commitAll(root, "out of root");
+
+    const r = runIn(root, []);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toContain("elsewhere/patient.hl7");
+    expect(r.stderr).toMatch(/origin="git index"/);
+  });
+
+  it("3. a scan root EMPTIED from the working tree, its files still tracked", () => {
+    // This scanner has no floor-of-one and no reconciliation: an absent root
+    // returns silently from `enterRoot`. Deleting all three left the sweep
+    // reporting `OK, no hits` over the entire corpus, which is this repo's
+    // purest instance of the class.
+    const root = makeRepo();
+    writeFileSync(join(root, "test", "patient.hl7"), SYNTHETIC_PHI);
+    commitAll(root, "fixture");
+    rmSync(join(root, "test"), { recursive: true, force: true });
+    rmSync(join(root, "src"), { recursive: true, force: true });
+
+    const r = runIn(root, []);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toContain("test/patient.hl7");
+  });
+
+  it("4. an EMPTY index refuses (exit 2) rather than printing a completed sweep's line", () => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), "phi-scan-empty-")));
+    repos.push(root);
+    mkdirSync(join(root, "scripts"));
+    mkdirSync(join(root, "src"));
+    copyFileSync(
+      join(REPO_ROOT, "scripts", "phi-allow-list.txt"),
+      join(root, "scripts", "phi-allow-list.txt"),
+    );
+    writeFileSync(join(root, "src", "ordinary.ts"), "export const answer = 42;\n");
+    git(root, ["init", "-q", "."]);
+
+    const r = runIn(root, []);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(2);
+    expect(r.stderr).toContain("holds no entries");
+    expect(r.stdout).not.toMatch(/OK, no hits/);
+  });
+
+  it("5. a tracked SYMLINK outside every scan root is refused, and its target is NOT named", () => {
+    // `walk()` classifies entries INSIDE a root, so this was reached by neither
+    // route. It is refused BY MODE here, and the refusal must never echo the
+    // link target: that is working-tree text which can itself carry PHI.
+    const root = makeRepo();
+    symlinkSync(join("..", TARGET_NAME), join(root, "outside-link"));
+    git(root, ["add", "outside-link"]);
+    commitAll(root, "link");
+
+    const r = runIn(root, []);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(2);
+    expect(r.stderr).toContain("outside-link");
+    expect(r.stderr).toContain("a symbolic link");
+    expectNoPhi(r.stderr);
+  });
+
+  it("...and a tracked GITLINK outside every scan root is refused by the same rule", () => {
+    const root = makeRepo();
+    const nested = join(root, "nested");
+    mkdirSync(nested);
+    git(nested, ["init", "-q", "."]);
+    git(nested, ["config", "user.email", "phi-scan-test@example.com"]);
+    git(nested, ["config", "user.name", "phi-scan test"]);
+    git(nested, ["config", "commit.gpgsign", "false"]);
+    writeFileSync(join(nested, "f.txt"), "ordinary\n");
+    commitAll(nested, "nested");
+    git(root, ["add", "nested"]);
+
+    const r = runIn(root, []);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(2);
+    expect(r.stderr).toContain("nested");
+    expect(r.stderr).toContain("a gitlink");
+  });
+});
+
+describe("phi-scan index corpus: it is a UNION, never a replacement", () => {
+  it("still reads an UNTRACKED working-tree file under a root (the walk is not narrowed)", () => {
+    // The superset property, stated as a case: git carries nothing at this path,
+    // so only the walk can find it. If the index route had replaced the walk
+    // rather than joining it, this would be the regression.
+    const root = makeRepo();
+    writeFileSync(join(root, "src", "untracked.hl7"), SYNTHETIC_PHI);
+
+    const r = runIn(root, []);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toContain("src/untracked.hl7");
+    // ...and it is the WORKING-TREE read, so it carries no index origin.
+    expect(r.stderr).not.toMatch(/src\/untracked\.hl7[\s\S]*?origin=/);
+  });
+
+  it("reports BOTH routes' findings in one run", () => {
+    const root = makeRepo();
+    mkdirSync(join(root, "elsewhere"));
+    writeFileSync(join(root, "elsewhere", "tracked.hl7"), SYNTHETIC_PHI);
+    commitAll(root, "tracked out of root");
+    writeFileSync(join(root, "src", "untracked.hl7"), SYNTHETIC_PHI);
+
+    const r = runIn(root, []);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toContain("src/untracked.hl7"); // the walk
+    expect(r.stderr).toContain("elsewhere/tracked.hl7"); // the index
+  });
+
+  it("reports a clean tracked file ONCE, not twice (the byte-comparison skip)", () => {
+    const root = makeRepo();
+    writeFileSync(join(root, "src", "dirty.hl7"), SYNTHETIC_PHI);
+    commitAll(root, "dirty");
+
+    const r = runIn(root, []);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    // The walk read it and the blob is byte-identical, so the index route skips
+    // it: one HIT block, not two.
+    expect(r.stderr.match(/HIT: src\/dirty\.hl7/g)).toHaveLength(1);
+  });
+
+  it("the skip is a BYTE comparison: bytes differing only in line endings are scanned both ways", () => {
+    // The one edit that would quietly reopen the escape is normalizing line
+    // endings before the comparison, because that compares a DERIVED form and a
+    // decoy differing only in what the normalizer erases would then be skipped.
+    // A CRLF/LF-only difference must therefore NOT be treated as "already read".
+    const root = makeRepo();
+    commitThenDiverge(root, "src/eol.hl7", SYNTHETIC_PHI.replace(/\n/g, "\r\n"), SYNTHETIC_PHI);
+
+    const r = runIn(root, []);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toContain("the working tree differs");
+  });
+
+  it("does NOT reach --staged or paths mode", () => {
+    // Both are bounded elsewhere: `--staged` is the pre-commit hook, so its scope
+    // decides what a COMMIT is blocked on, and `paths` is bounded by argv. A
+    // tracked out-of-root violator is found by all mode and by neither of them.
+    const root = makeRepo();
+    mkdirSync(join(root, "elsewhere"));
+    writeFileSync(join(root, "elsewhere", "patient.hl7"), SYNTHETIC_PHI);
+    commitAll(root, "out of root");
+
+    expect(runIn(root, []).code).toBe(1);
+    expect(runIn(root, ["--staged"]).code, "the hook's scope is unchanged").toBe(0);
+  });
+});
+
+describe("phi-scan index corpus: what it excludes, and what an exclusion may not excuse", () => {
+  it("does not read a tracked file under vendor/, which is declared out of scope", () => {
+    // `vendor/` holds third-party `pnpm pack` tarballs: gzip, so their text is
+    // compressed and no detector here can read it without decompressing an
+    // archive. Handing the compressed bytes to the detectors as UTF-8 is noise,
+    // not coverage. The cost is that a tracked file there is not swept.
+    const root = makeRepo();
+    mkdirSync(join(root, "vendor"));
+    writeFileSync(join(root, "vendor", "payload.hl7"), SYNTHETIC_PHI);
+    commitAll(root, "vendor");
+
+    const r = runIn(root, []);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(0);
+  });
+
+  it("but a NAME exclusion never excuses an entry whose bytes the route cannot read", () => {
+    // Both name rules are applied LAST, to the readable set only. Putting either
+    // first is a real hole: git carries a link's TARGET PATH, which is itself a
+    // PHI surface, so naming a link `vendor/…` or `….md` must not buy it a pass.
+    for (const rel of ["vendor/decoy.tgz", "notes.md"]) {
+      const root = makeRepo();
+      mkdirSync(join(root, "vendor"));
+      symlinkSync(join("..", TARGET_NAME), join(root, rel));
+      git(root, ["add", rel]);
+      commitAll(root, "link");
+
+      const r = runIn(root, []);
+      expect(r.code, `stderr (${rel}): ${r.stderr}`).toBe(2);
+      expect(r.stderr).toContain(rel);
+      expect(r.stderr).toContain("a symbolic link");
+      expectNoPhi(r.stderr);
+    }
+  });
+
+  it("does not read a tracked .md, exactly as the walk does not", () => {
+    const root = makeRepo();
+    writeFileSync(join(root, "README.md"), SYNTHETIC_PHI);
+    commitAll(root, "doc");
+
+    const r = runIn(root, []);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(0);
+  });
+
+  it("honors --allow-fixture, which in THIS repo is a live subtraction and not dead code", () => {
+    // `parseArgs` does not seed the positional path set from the flag, so
+    // `pnpm phi-scan` runs in ALL mode with the one logged bypass in force.
+    // Without this subtraction the route would read the bypassed file straight
+    // out of the index and red-lock the repo.
+    const root = makeRepo();
+    const rel = "test/scripts/phi-scan.test.ts";
+    mkdirSync(join(root, "test", "scripts"), { recursive: true });
+    copyFileSync(join(REPO_ROOT, "phi-scan-overrides.md"), join(root, "phi-scan-overrides.md"));
+    // ▶ THE COMMITTED BYTES CARRY THE PHI AND THE WORKING-TREE BYTES DO NOT, and
+    // that asymmetry is what makes this case load-bearing rather than decorative.
+    // With both copies identical the byte-comparison skip fires first, the index
+    // route never reaches its subtraction, and deleting that subtraction would
+    // leave this case green. Diverging them forces the index route to hold a
+    // PHI-bearing target for the bypassed path, so only the subtraction can
+    // silence it.
+    commitThenDiverge(root, rel, SYNTHETIC_PHI, "export const clean = 1;\n");
+
+    // Unbypassed, the index route reads the committed bytes and reds.
+    const un = runIn(root, []);
+    expect(un.code, `stderr: ${un.stderr}`).toBe(1);
+    expect(un.stderr).toContain("the working tree differs");
+
+    // Bypassed, neither route reads it -- including the index route.
+    const r = runIn(root, ["--allow-fixture", rel]);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(0);
+    expect(r.stderr).toContain("BYPASSED");
+    expectNoPhi(r.stderr);
+  });
+});
+
+describe("phi-scan index corpus: a refusal must not swallow a real hit", () => {
+  it("prints the walk's hits BEFORE refusing over an unreadable index entry", () => {
+    // Refused before the walk was scanned, the run would be strictly WORSE than
+    // the base commit's for this input: exit 1 naming every locus before, exit 2
+    // naming nothing after. The exit code is still 2, because an incomplete
+    // sweep is not a verdict whatever it found on the way.
+    const root = makeRepo();
+    writeFileSync(join(root, "src", "violator.hl7"), SYNTHETIC_PHI);
+    symlinkSync(join("..", TARGET_NAME), join(root, "outside-link"));
+    git(root, ["add", "outside-link"]);
+    commitAll(root, "link");
+
+    const r = runIn(root, []);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(2);
+    expect(r.stderr).toContain("src/violator.hl7");
+    expect(r.stderr).toContain("123-45-6789");
+    expect(r.stderr).toContain("cannot be scanned");
+    expectNoPhi(r.stderr.slice(r.stderr.indexOf("cannot be scanned")));
+  });
+
+  it("...and does the same for an empty index", () => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), "phi-scan-empty2-")));
+    repos.push(root);
+    mkdirSync(join(root, "scripts"));
+    mkdirSync(join(root, "src"));
+    copyFileSync(
+      join(REPO_ROOT, "scripts", "phi-allow-list.txt"),
+      join(root, "scripts", "phi-allow-list.txt"),
+    );
+    writeFileSync(join(root, "src", "violator.hl7"), SYNTHETIC_PHI);
+    git(root, ["init", "-q", "."]);
+
+    const r = runIn(root, []);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(2);
+    expect(r.stderr).toContain("123-45-6789");
+    expect(r.stderr).toContain("holds no entries");
+  });
+});
+
+describe("phi-scan index corpus: the positive control on the corpus it claims to clear", () => {
+  // A GREEN OVER A CORPUS NOBODY OPENED IS THE DEFECT THIS WHOLE ROUTE IS ABOUT,
+  // so a case that only shows the scanner passing proves nothing. This one takes
+  // THIS PACKAGE'S OWN `package.json`, byte for byte, and puts it at the same
+  // out-of-every-scan-root path in a throwaway tree. It is the file that made the
+  // gap concrete: 25 tracked non-markdown files sit outside all three scan roots
+  // in this repo, and this is the one carrying a token the floor fires on.
+  //
+  // The green is then shown to be EARNED BY THE DECLARATION rather than by the
+  // file never being opened, which is the only difference that matters and the
+  // one a passing run cannot show on its own.
+
+  /** This package's own manifest, read off disk so the case cannot go stale silently. */
+  const OWN_MANIFEST = readFileSync(join(REPO_ROOT, "package.json"), "utf8");
+
+  /** The declaration that makes the real corpus green, as it appears in the allow-list. */
+  const OWN_DOMAIN_DECLARATION = "EMAILDOMAIN cosyte.com";
+
+  it("premise: the manifest carries an address the floor fires on, outside every scan root", () => {
+    expect(OWN_MANIFEST).toMatch(/[A-Za-z0-9._%+-]+@cosyte\.com/);
+    // ...and `package.json` really does sit outside every declared scan root.
+    const scanner = readFileSync(SCANNER_PATH, "utf8");
+    expect(scanner).toContain(
+      `const SCAN_ROOT_NAMES: readonly string[] = ["src", "test", "scripts"];`,
+    );
+  });
+
+  it("the sweep OPENS it: strike the declaration and the same corpus reds (exit 1)", () => {
+    const root = makeRepo();
+    writeFileSync(join(root, "package.json"), OWN_MANIFEST);
+    commitAll(root, "manifest");
+
+    // Green, with the shipped allow-list.
+    const declared = runIn(root, []);
+    expect(declared.code, `stderr: ${declared.stderr}`).toBe(0);
+    expect(declared.stdout).toMatch(/OK, no hits/);
+
+    // The control. The ONLY thing that changes is the declaration, so a red here
+    // is proof the bytes were read and judged rather than skipped.
+    const allowList = join(root, "scripts", "phi-allow-list.txt");
+    const text = readFileSync(allowList, "utf8");
+    expect(text, "the declaration this control strikes has moved").toContain(
+      OWN_DOMAIN_DECLARATION,
+    );
+    writeFileSync(allowList, text.replace(`${OWN_DOMAIN_DECLARATION}\n`, ""));
+    commitAll(root, "strike the declaration");
+
+    const undeclared = runIn(root, []);
+    expect(undeclared.code, `stderr: ${undeclared.stderr}`).toBe(1);
+    expect(undeclared.stderr).toContain("package.json");
+    expect(undeclared.stderr).toContain("(email)");
+    expect(undeclared.stderr).toMatch(/origin="git index"/);
+  });
+
+  it("...and no ROOT-SCOPED route reaches that path, declaration struck or not", () => {
+    // The state this slice closes, shown with shipped code rather than a rebuilt
+    // variant: `--staged` judges scope with the same `isUnderScanRoot` the walk
+    // uses, so with the declaration struck and the manifest STAGED it is still
+    // green -- the path is outside every root. All mode reds on the same tree.
+    const root = makeRepo();
+    const allowList = join(root, "scripts", "phi-allow-list.txt");
+    writeFileSync(
+      allowList,
+      readFileSync(allowList, "utf8").replace(`${OWN_DOMAIN_DECLARATION}\n`, ""),
+    );
+    commitAll(root, "strike the declaration");
+
+    writeFileSync(join(root, "package.json"), OWN_MANIFEST);
+    git(root, ["add", "package.json"]);
+
+    const staged = runIn(root, ["--staged"]);
+    expect(staged.code, `stderr: ${staged.stderr}`).toBe(0);
+    expect(staged.stdout).toMatch(/OK, no hits/);
+
+    commitAll(root, "manifest");
+    const all = runIn(root, []);
+    expect(all.code, "all mode reads what git carries").toBe(1);
+    // NAMED, not merely counted. Asserting the exit code alone would let this
+    // case pass on any tree that happens to red for some other reason -- and it
+    // very nearly did: an earlier draft spelled the address out in the
+    // allow-list's own comment, which sits INSIDE a scan root, so striking the
+    // declaration reddened that file through the walk and this control passed on
+    // the base scanner without the manifest ever being opened.
+    expect(all.stderr).toContain("HIT: package.json");
+    expect(all.stderr).toMatch(/origin="git index"/);
+    // Exactly one file, so the red cannot be coming from anywhere else. (The
+    // remedy sentence names the allow-list on every run, so its mere presence in
+    // stderr proves nothing -- the HIT lines are what to count.)
+    expect(all.stderr).toContain("1 hit(s) across 1 file(s)");
   });
 });
