@@ -392,12 +392,25 @@ this repo has already paid for a vacuous assertion twice.** The nested-fence cas
 FIRST heading in the sample, which sits inside the fence under the broken rule *and* the correct one,
 so all three of its assertions passed verbatim against the pre-fix gate. **Only the heading AFTER the
 inner opener changes side**, and that is where it points now. It also found the length condition
-DELETABLE with every other case still green, and the reordering untested. **Each of the three fence
-conditions now has its own self-test case, verified by removing each one and watching the gate refuse,
-and cases 13, 14 and 15 were each verified by reverting the fix and watching the case fail.** The
-durable lesson is the one the emptied-section control already taught: **a control that does not change
-answer when the fix is reverted is a control of nothing, and "it goes red" is not evidence unless you
-have shown it goes green for the other reason.**
+DELETABLE with every other case still green, and the reordering untested.
+
+**AND A THIRD PASS REFUTED THE FIX TO THE SECOND, WHICH IS THE ENTRY TO READ IF YOU ARE SHORT OF
+TIME.** The remedy above asserted, in the script, in the changeset and in this file, that *"each of
+the three fence conditions has its own self-test case, verified by removing each one and watching the
+gate refuse."* **Measured false.** The closing rule has **four** conditions, and `marker ===
+fenceMarker` could be deleted with the self-test, the real tree and all fifteen suite cases still
+green — while, with it gone, one input yields a phantom anchor and a lost real anchor at the same
+time. The mutation matrix behind the sentence had removed conditions **in pairs**, which proves
+nothing about either one. All four conditions now have their own case, each verified by deleting that
+conjunct **alone**; cases 13, 14 and 15 were each verified by reverting their fix and watching the
+case fail.
+
+**THE DURABLE LESSON, EARNED THREE TIMES IN ONE SLICE: A CONTROL THAT DOES NOT CHANGE ANSWER WHEN THE
+FIX IS REVERTED IS A CONTROL OF NOTHING, AND "IT GOES RED" IS NOT EVIDENCE UNLESS YOU HAVE SHOWN IT
+GOES GREEN FOR THE OTHER REASON.** The second-order version is the one that cost the extra pass: **a
+claim that a verification was performed is itself a claim, and it decays exactly like a count.** Both
+times the prose was written from the intent of the mutation rather than from its output. Re-run the
+matrix before you believe that sentence again.
 
 **Two departures from the copies this one was read against, both deliberate.** A heading inside an HTML comment renders
 no anchor on GitHub; several siblings count it anyway and merely disclose the phantom, while this copy

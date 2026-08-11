@@ -98,10 +98,12 @@ answered a modelled break with a misdiagnosis; both are fail-closed, one is legi
 A second review pass then caught the remedy's own vacuous control: the nested-sample case aimed at a
 heading that sits inside the sample under the broken rule and the correct one alike, so every one of
 its assertions passed against the unfixed code. It aims at the heading after the inner opener now,
-which is the only one that changes side. Each of the three fence conditions has its own case, checked
-by removing that condition and watching the check refuse, and each new case was checked by reverting
-its fix and watching the case fail. A control that does not change answer when the fix is reverted is
-a control of nothing.
+which is the only one that changes side. A third pass then found that claim overstated in turn: the
+closing rule has four conditions, one of them could still be deleted with everything green, and three
+documents said each had been checked by exactly the method that disproved it. All four now have a
+case, verified by deleting that condition alone, and each new case was checked by reverting its fix
+and watching the case fail. A control that does not change answer when the fix is reverted is a
+control of nothing, and removing conditions in pairs proves nothing about either one.
 
 Scope, stated rather than discovered: only the narrative file's basename is compared, so relocating
 it to another directory while the links keep their old prefix passes while every rendered link

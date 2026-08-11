@@ -482,8 +482,14 @@ function extractHeadings(lines: readonly string[]): Extraction {
     // markdown documentation quotes markdown), after which every hash line in the remainder of the
     // sample is read as a heading and mints an anchor GitHub does not render. That is the
     // false-green direction this gate must never fail in, so the rule is the real one. Verified
-    // against a CommonMark/GFM parser; EACH of the three conditions has its own self-test case,
-    // because a review found the length condition deletable with everything else still green.
+    // against a CommonMark/GFM parser. THE RULE HAS FOUR CONDITIONS AND EACH ONE HAS ITS OWN
+    // SELF-TEST CASE, verified by deleting that conjunct ALONE and confirming this gate refuses at
+    // exit 2 on the real tree. That sentence is written this way because TWO EARLIER VERSIONS OF IT
+    // WERE FALSE: a review deleted the length condition with everything else green, and a later
+    // review deleted the MARKER condition with the self-test, the real tree and all fifteen suite
+    // cases still green while three documents claimed otherwise. **Delete one conjunct and re-run
+    // before you believe this sentence again** — a mutation matrix that removes conditions in pairs
+    // proves nothing about either one, which is exactly how the marker case was missed.
     //
     // A BACKTICK FENCE'S INFO STRING MAY NOT CONTAIN A BACKTICK (CommonMark 4.5), so such a line
     // opens NO fence at all. Without that clause a line of prose carrying a run of backticks and
@@ -737,6 +743,19 @@ function selfTest(): void {
     "~~~",
     `${hash} inside a tilde fence`,
     "~~~~",
+    "body",
+    "",
+    // THE MARKER CONDITION, PINNED ON ITS OWN, and it was the LAST of the four to get a case: a
+    // review deleted `marker === fenceMarker` and found the self-test, the real tree and all
+    // fifteen suite cases still green, while three documents claimed the opposite. A backtick run
+    // cannot close a TILDE fence, so without it the line below closes here, the heading after it
+    // mints a phantom anchor and the closing tilde run opens a block that swallows what follows:
+    // a false green and a false red out of one input.
+    "~~~",
+    `${hash}${hash} inside a tilde fence, again`,
+    "```",
+    `${hash}${hash} still inside: a backtick run cannot close a tilde fence`,
+    "~~~",
     "body",
     "",
     // THE LENGTH CONDITION, PINNED ON ITS OWN. A review deleted `run.length >= fenceLength` and
