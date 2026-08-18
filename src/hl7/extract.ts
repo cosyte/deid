@@ -10,10 +10,19 @@
  * else: a recognized segment is retained only if it is on the explicit {@link RETAIN_SEGMENTS}
  * clinical/administrative list, so a *known* patient-identity segment absent from the map (MRG / FAM /
  * ACC / PEO / PDA) is blocked exactly like a Z-segment or a segment unknown to the parser. A non-mapped
- * field inside a mapped segment is left untouched (the over-scrub guard); OBX-5 is retained only when
- * OBX-2 positively types it as a structured clinical value. Inside a **retained** segment the
- * {@link RETAINED_LOCUS_RULES} carve-out still applies: its identifying dates and encounter / order
+ * field inside a mapped segment is left untouched (the over-scrub guard). Inside a **retained** segment
+ * the {@link RETAINED_LOCUS_RULES} carve-out still applies: its identifying dates and encounter / order
  * numbers are handed to the engine unless the configured profile names their retention class.
+ *
+ * **Dates inside a passed-through segment are located from {@link HL7_DATE_LOCI}**, the committed HL7
+ * v2.5.1 enumeration, at the unit the standard gives them: a whole field for a `DT` / `TS` field, a
+ * single component for a date inside a composite, and one locus **per repetition** either way, so a
+ * sibling repetition is never disturbed by what happened to its neighbour. That sweep covers **OBX**
+ * too: the segment is passed through by the value-type branch below rather than by the retain-list, so
+ * its own observation / analysis / reference-range timestamps would otherwise leave in the clear and
+ * unrecorded. `OBX-5` is the one date position the message types for itself: `OBX-2` decides, and a
+ * value type that is not a date leaves the pinned behaviour untouched (structured values survive,
+ * narrative fails closed).
  *
  * @packageDocumentation
  */
@@ -24,6 +33,7 @@ import { SAFE_HARBOR_CATEGORIES } from "../categories.js";
 import { safeLocusToken } from "../derived-token.js";
 import type { GenericLocus } from "../locus.js";
 import { isRetainableCategory, retains, type RetainedLocusClass } from "../retention.js";
+import { DR_DATE_COMPONENTS, HL7_DATE_LOCI, OBX_DATE_VALUE_TYPES } from "./date-loci.js";
 import { HL7_LOCUS_MAP, categoryForIdentifierType, type Hl7FieldRule } from "./locus-map.js";
 import { RETAIN_SEGMENTS, RETAINED_LOCUS_RULES, type Hl7RetainedFieldRule } from "./retain.js";
 
@@ -31,8 +41,18 @@ import { RETAIN_SEGMENTS, RETAINED_LOCUS_RULES, type Hl7RetainedFieldRule } from
  * How the applier writes a transformed locus back onto the cloned raw tree. `none` writes **nothing**:
  * it is the coordinate of a locus the profile's retention set kept, which must stay byte-identical
  * (a whole-field write would flatten its components and repetitions into a single value).
+ *
+ * `date-field` and `date-component` are the two units a date locus can have: the first rewrites the
+ * date component of **one repetition** of a field, the second rewrites **one component** of one
+ * repetition and leaves every sibling component at its own ordinal.
  */
-export type Hl7EditKind = "whole-field" | "id-number" | "address-zip" | "none";
+export type Hl7EditKind =
+  | "whole-field"
+  | "id-number"
+  | "address-zip"
+  | "date-field"
+  | "date-component"
+  | "none";
 
 /**
  * A write-back coordinate: the exact structural location of one extracted locus in the message's raw
@@ -47,6 +67,8 @@ export interface Hl7Coord {
   readonly rep: number;
   /** How to write the transformed value back. */
   readonly edit: Hl7EditKind;
+  /** 1-based component number, for a `date-component` edit. Absent for every other edit. */
+  readonly component?: number;
 }
 
 /**
@@ -123,6 +145,23 @@ function fieldPath(type: string, occ: number, field: number, rep?: number): stri
   const seg = occ > 0 ? `${type}[${String(occ)}]` : type;
   const repSuffix = rep !== undefined ? `[${String(rep)}]` : "";
   return `${seg}-${String(field)}${repSuffix}`;
+}
+
+/**
+ * The locus path of a date position, at its own unit: segment occurrence, field, **repetition**, and
+ * the component ordinal when the date is a component of a composite. Two date components of one field
+ * therefore never share a path, never aggregate into one manifest entry, and are each individually
+ * addressable by a consumer reading the manifest. An ordinal is a position, not a value.
+ */
+function datePath(
+  type: string,
+  occ: number,
+  field: number,
+  rep: number,
+  component: number | undefined,
+): string {
+  const suffix = component === undefined ? "" : `.${String(component)}`;
+  return `${fieldPath(type, occ, field, rep)}${suffix}`;
 }
 
 /** Extract the loci for one mapped-segment field rule. */
@@ -219,14 +258,27 @@ function extractRule(
 }
 
 /**
- * Extract the identifying fields carved out of a **retained** segment: the encounter dates and the
- * encounter / order identifiers. When the configured profile names the rule's retention class the
- * locus is marked `retainedByPolicy` (passed through unchanged, and recorded as a residual) and given
- * a **`none`** coordinate so the applier writes nothing; otherwise it is an ordinary locus the policy
- * acts on: a date generalizes to its year, an identifier is blocked as the (R) catch-all.
+ * One extracted locus plus the position it sits at, so a segment's loci can be emitted in **document
+ * order** (ascending field, then repetition, then component) however many tables contributed them.
+ * `component` is `0` for a field-granular locus, which sorts it before that field's components.
  */
-function extractRetainedLoci(
-  out: Hl7Extraction,
+interface PositionedLocus {
+  readonly field: number;
+  readonly rep: number;
+  readonly component: number;
+  readonly locus: GenericLocus;
+  readonly coord: Hl7Coord;
+}
+
+/**
+ * Collect the identifying fields carved out of a **retained** segment: the encounter dates and the
+ * encounter / order identifiers. When the configured profile names the rule's retention class the
+ * locus is marked with its retention class (passed through unchanged, and recorded as a residual) and
+ * given a **`none`** coordinate so the applier writes nothing; otherwise it is an ordinary locus the
+ * policy acts on: a date generalizes to its year, an identifier is blocked as the (R) catch-all.
+ */
+function collectCarveOutLoci(
+  found: PositionedLocus[],
   seg: Segment,
   type: string,
   occ: number,
@@ -253,63 +305,180 @@ function extractRetainedLoci(
           rule.category,
         );
         const kept = classEnabled(rule) && isRetainableCategory(category);
-        push(
-          out,
-          {
+        found.push({
+          field: rule.field,
+          rep,
+          component: 0,
+          locus: {
             path: fieldPath(type, occ, rule.field, rep),
             kind: rule.kind,
             category,
             ...(kept ? { retention: rule.retention } : {}),
             value: idNumber,
           },
-          {
+          coord: {
             segIndex: seg.absoluteIndex,
             field: rule.field,
             rep,
             edit: kept ? "none" : "id-number",
           },
-        );
+        });
       }
       continue;
     }
 
     const kept = classEnabled(rule) && isRetainableCategory(rule.category);
-    push(
-      out,
-      {
+    found.push({
+      field: rule.field,
+      rep: 0,
+      component: 0,
+      locus: {
         path: fieldPath(type, occ, rule.field),
         kind: rule.kind,
         category: rule.category,
         ...(kept ? { retention: rule.retention } : {}),
         value: seg.field(rule.field).value,
       },
-      {
+      coord: {
         segIndex: seg.absoluteIndex,
         field: rule.field,
         rep: 0,
         edit: kept ? "none" : "whole-field",
       },
-    );
+    });
   }
 }
 
-/** Extract the OBX-5 locus, failing closed unless OBX-2 positively types it as a structured value. */
-function extractObx(out: Hl7Extraction, seg: Segment, occ: number): void {
+/** The fields of a segment the carve-out table already owns, whole-field, at their own granularity. */
+function carvedFields(type: string): ReadonlySet<number> {
+  const rules = RETAINED_LOCUS_RULES[type];
+  return new Set(rules === undefined ? [] : rules.map((r) => r.field));
+}
+
+/** Build one date locus at the unit the enumeration gives it, or `undefined` when it is empty. */
+function dateLocus(
+  seg: Segment,
+  type: string,
+  occ: number,
+  field: number,
+  rep: number,
+  component: number | undefined,
+): PositionedLocus | undefined {
+  // A field-granular date is the first component of its repetition (a `TS` field's date part); a
+  // component-granular one is the component the enumeration names. Empty or absent: no locus, no
+  // manifest entry, and the position is emitted exactly as it arrived.
+  const value = componentValue(seg, field, rep, component ?? 1);
+  if (value.length === 0) return undefined;
+  return {
+    field,
+    rep,
+    component: component ?? 0,
+    locus: {
+      path: datePath(type, occ, field, rep, component),
+      kind: "date",
+      category: SAFE_HARBOR_CATEGORIES.DATES,
+      value,
+    },
+    coord: {
+      segIndex: seg.absoluteIndex,
+      field,
+      rep,
+      edit: component === undefined ? "date-field" : "date-component",
+      ...(component === undefined ? {} : { component }),
+    },
+  };
+}
+
+/**
+ * Collect every date locus of a passed-through segment from the committed HL7 v2.5.1 enumeration: one
+ * locus per **repetition** of each enumerated field, at the field or the component the standard types
+ * as a date. A field the carve-out table already owns whole is left to it, so no position is acted on
+ * twice.
+ */
+function collectDateLoci(found: PositionedLocus[], seg: Segment, type: string, occ: number): void {
+  const table = HL7_DATE_LOCI[type];
+  if (table === undefined) return;
+  const carved = carvedFields(type);
+
+  for (const rule of table.loci) {
+    if (rule.component === undefined && carved.has(rule.field)) continue;
+    const reps = seg.field(rule.field).repetitions.length;
+    for (let rep = 0; rep < reps; rep += 1) {
+      const positioned = dateLocus(seg, type, occ, rule.field, rep, rule.component);
+      if (positioned !== undefined) found.push(positioned);
+    }
+  }
+}
+
+/** Emit a retained segment's loci in document order: ascending field, repetition, then component. */
+function extractRetainedSegment(
+  out: Hl7Extraction,
+  seg: Segment,
+  type: string,
+  occ: number,
+  retainedLoci: readonly RetainedLocusClass[] | undefined,
+): void {
+  const found: PositionedLocus[] = [];
+  collectCarveOutLoci(found, seg, type, occ, retainedLoci);
+  collectDateLoci(found, seg, type, occ);
+  found.sort((a, b) => a.field - b.field || a.rep - b.rep || a.component - b.component);
+  for (const entry of found) push(out, entry.locus, entry.coord);
+}
+
+/**
+ * Collect the OBX-5 locus: the one position whose datatype the **message** declares. `OBX-2` types the
+ * value, so no table is consulted; a `DR` makes the locus component-granular (range start, range end)
+ * and the other date types make it the field, one locus per repetition either way. A positively-typed
+ * structured clinical value survives (the over-scrub guard); everything else fails closed.
+ */
+function collectObxValueLoci(found: PositionedLocus[], seg: Segment, occ: number): void {
   if (!hasContent(seg, 5)) return;
   const valueType = seg.field(2).value.toUpperCase();
-  // Over-scrub guard: a positively-typed structured clinical value (NM / coded / date) survives.
+  // A date/time value type is the message declaring a date locus: act on it under the policy rather
+  // than passing a full-precision patient-related date through as a structured clinical value.
+  if (OBX_DATE_VALUE_TYPES.has(valueType)) {
+    const reps = seg.field(5).repetitions.length;
+    for (let rep = 0; rep < reps; rep += 1) {
+      const components = valueType === "DR" ? DR_DATE_COMPONENTS : [undefined];
+      for (const component of components) {
+        const positioned = dateLocus(seg, "OBX", occ, 5, rep, component);
+        if (positioned !== undefined) found.push(positioned);
+      }
+    }
+    return;
+  }
+  // Over-scrub guard: a positively-typed structured clinical value (NM / coded / time of day) survives.
   // Fail closed otherwise: narrative (TX/FT), ambiguous String (ST), and an empty/unknown OBX-2 block.
   if (STRUCTURED_VALUE_TYPES.has(valueType)) return;
-  push(
-    out,
-    {
+  found.push({
+    field: 5,
+    rep: 0,
+    component: 0,
+    locus: {
       path: fieldPath("OBX", occ, 5),
       kind: "freetext",
       category: SAFE_HARBOR_CATEGORIES.OTHER_UNIQUE_ID,
       value: seg.field(5).value,
     },
-    { segIndex: seg.absoluteIndex, field: 5, rep: 0, edit: "whole-field" },
-  );
+    coord: { segIndex: seg.absoluteIndex, field: 5, rep: 0, edit: "whole-field" },
+  });
+}
+
+/**
+ * Extract an OBX: the message-typed OBX-5 locus **and** the segment's own enumerated date positions.
+ *
+ * OBX is not on the retain-list, and it is passed through all the same: the value-type branch decides
+ * OBX-5 and every other field of the segment keeps its bytes. That is the shape a date hides in, so the
+ * observation (`OBX-14`), analysis (`OBX-19`) and reference-range (`OBX-12`) timestamps are swept from
+ * the same committed v2.5.1 enumeration every retained segment is swept from. Loci are emitted in
+ * document order, so OBX-5 precedes them.
+ */
+function extractObx(out: Hl7Extraction, seg: Segment, occ: number): void {
+  const found: PositionedLocus[] = [];
+  collectObxValueLoci(found, seg, occ);
+  collectDateLoci(found, seg, "OBX", occ);
+  found.sort((a, b) => a.field - b.field || a.rep - b.rep || a.component - b.component);
+  for (const entry of found) push(out, entry.locus, entry.coord);
 }
 
 /** Extract the free-text locus for an NTE segment (NTE-3, the comment). */
@@ -370,7 +539,12 @@ export function extractHl7Loci(msg: Hl7Message, options: Hl7ExtractOptions = {})
     const occ = occurrences.get(type) ?? 0;
     occurrences.set(type, occ + 1);
 
-    if (type === "MSH") continue; // message envelope, no patient PHI
+    if (type === "MSH") {
+      // The message envelope carries no patient identity, but it is on the retain-list and it does
+      // carry a date the standard types: sweep its date loci and nothing else.
+      extractRetainedSegment(out, seg, type, occ, options.retainedLoci);
+      continue;
+    }
 
     const rules = HL7_LOCUS_MAP[type];
     if (rules !== undefined) {
@@ -378,6 +552,8 @@ export function extractHl7Loci(msg: Hl7Message, options: Hl7ExtractOptions = {})
       continue;
     }
     if (type === "OBX") {
+      // NOT on the retain-list, and passed through all the same: OBX-2 decides OBX-5 and the rest of
+      // the segment keeps its bytes. Its enumerated date positions are swept here for that reason.
       extractObx(out, seg, occ);
       continue;
     }
@@ -391,8 +567,9 @@ export function extractHl7Loci(msg: Hl7Message, options: Hl7ExtractOptions = {})
     // FAM / PEO / PDA). A merge message's prior name + MRN can never ride through in the clear.
     if (RETAIN_SEGMENTS.has(type)) {
       // Retaining the SEGMENT does not retain every field in it: the identifying dates and the
-      // encounter / order identifiers are carved back out and handed to the engine.
-      extractRetainedLoci(out, seg, type, occ, options.retainedLoci);
+      // encounter / order identifiers are carved back out, and every date position the committed
+      // v2.5.1 enumeration names is handed to the engine alongside them.
+      extractRetainedSegment(out, seg, type, occ, options.retainedLoci);
       continue;
     }
     extractUnknownSegment(out, seg, type, occ);

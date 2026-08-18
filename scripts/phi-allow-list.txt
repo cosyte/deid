@@ -92,6 +92,15 @@ NAME ZZENCGIVEN
 NAME ZZENCSTREET
 NAME ZZENCCITY
 
+# --- Synthetic HL7 v2 retained-segment date fixture (test/fixtures/hl7/orm-o01-retained-dates.hl7) ---
+# The order message that seeds a full-precision timestamp at every kind of date position inside a
+# RETAINED segment: a plain date/time field, a date component of a composite, a repeating date field,
+# and an OBX-5 the message types as a date. Each is asserted PRESENT in the original wire and reduced
+# to its year (or blocked) after the pass, which is why the fixture has to carry them in the clear.
+# The operator and result-interpreter names are ZZ-tagged sentinels, not people.
+NAME ZZOPERATOR
+NAME ZZINTERP
+
 # --- Synthetic C-CDA header person-name / street / city / county tokens (test/fixtures/ccda) ---
 # Patient + guardian + author + informant person names, organization names, and address parts. All
 # obviously-synthetic ZZ-tagged tokens: checked structurally by the C-CDA header detector.
@@ -203,6 +212,53 @@ DOB 20200103040500
 DOB 20200109060700
 DOB 20200104080000
 DOB 20200105090000
+# The retained-segment date fixture's timestamps, and the two written inline in the tests that work the
+# component and repetition cases. Same reason as the block above: elements of dates directly related to
+# the individual, seeded in the clear so their absence after the pass means something.
+#
+# These are TOKEN declarations, which is the mechanism this repo ships for a synthetic literal:
+# `phi-scan-overrides.md` is the whole-file BYPASS log and says in its own words to prefer this file
+# for tokens. Nothing was added to that log, and its single existing entry is untouched.
+DOB 20240315103000
+DOB 20240316104500
+DOB 20240314102000
+DOB 20240310080000
+DOB 20240320170000
+DOB 20240309120000
+DOB 20240318150000
+DOB 20240311090000
+DOB 20240312090000
+DOB 20240316000000
+DOB 20240310110000
+DOB 20240311120000
+DOB 20240311130000
+DOB 20240311140000
+DOB 20240312150000
+DOB 20240313090000
+DOB 20240313100000
+DOB 20240314080000
+DOB 20240314090000
+DOB 20240311070000
+DOB 20240311073000
+DOB 20240311080000
+DOB 20250411080000
+DOB 20240315110000
+DOB 20240315120000
+DOB 20240315130000
+DOB 20240315140000
+DOB 20240316140000
+DOB 20240315090000
+DOB 20240315093000
+DOB 20250101000000
+DOB 20240315094500
+DOB 20240317080000
+DOB 20240312100000
+# The same fixture's OBX reference-range / observation / analysis timestamps (OBX-12 / OBX-14 /
+# OBX-19): the segment's own date/time fields, seeded beside a numeric result so that acting on them
+# and leaving the result byte-identical are both asserted.
+DOB 20240301080000
+DOB 20240311150000
+DOB 20240311160000
 #
 # ▶ `19800101` IS DELIBERATELY ABSENT AND MUST STAY ABSENT. It is the undeclared DOB
 # `test/scripts/phi-scan.test.ts` uses to prove the HL7, C-CDA, X12 and NCPDP detectors CATCH a

@@ -14,11 +14,12 @@
  * clinical/administrative list, so a *known* patient-identity segment absent from the map (**MRG** prior
  * name + MRN on a merge, **FAM**, **ACC**, **PEO**, **PDA**) is blocked, not passed through, and
  * Z-segments / structure unknown to the parser are blocked. **OBX-5** is retained only when OBX-2
- * positively types it as a structured clinical value (numeric / coded / date); narrative (`TX`/`FT`),
- * ambiguous String (`ST`), and any empty/unknown OBX-2 fail closed, as do **NTE-3** comments. Structured
- * clinical values / units / codes / status are **retained untouched** (the over-scrub guard). The honesty
- * line is unchanged: the output is **"Safe-Harbor-transformed per the configured policy"**, never
- * "de-identified".
+ * positively types it as a structured clinical value (numeric / coded / a time of day); narrative
+ * (`TX`/`FT`), ambiguous String (`ST`), and any empty/unknown OBX-2 fail closed, as do **NTE-3**
+ * comments, and a **date/time** value type makes OBX-5 a date this pass acts on. The OBX segment's own
+ * date/time fields are acted on too (below). Structured clinical values / units / codes / status are
+ * **retained untouched** (the over-scrub guard). The honesty line is unchanged: the output is
+ * **"Safe-Harbor-transformed per the configured policy"**, never "de-identified".
  *
  * **Inside a retained segment**, the identifying dates and the encounter / order numbers are carved
  * back out ({@link RETAINED_LOCUS_RULES}): under a Safe-Harbor-labelled policy the admit (PV1-44),
@@ -32,18 +33,28 @@
  * profiles, never retained** — §164.514(e)(2) names all three, so keeping one would republish in the
  * clear the identifier the pass pseudonymized at PID-3 in the same message.
  *
- * **Known limitations.** Free text is block-only (no scrub); **every** field of a retained segment that
- * the carve-out does not name is still passed through untouched and unrecorded, which continues to
- * include full-precision timestamps in EVN, PV2, PR1, RXA, RXD, FT1, TXA and SPM and the provider names
- * in PV1-7/8 and OBR-16, among others: the carve-out narrows this class, it does not close it. The
- * address generalization keeps only the Safe Harbor 3-digit ZIP and conservatively drops the
- * (permitted) state as well.
+ * **Every other date inside a segment the pass hands through** is located from {@link HL7_DATE_LOCI},
+ * the committed HL7 v2.5.1 enumeration, and acted on under the configured policy at the unit the
+ * standard gives it: a `DT`/`TS` field, a single date component of a composite, one repetition at a
+ * time. Its domain is {@link HL7_PASSED_THROUGH_SEGMENTS}: the retain-list **plus OBX**, whose own
+ * observation (OBX-14), analysis (OBX-19) and reference-range (OBX-12) timestamps are swept like any
+ * other even though the retain-list does not name the segment. Each outcome is recorded, so a consumer
+ * reads the manifest and knows which dates the output still carries.
+ *
+ * **Known limitations.** Free text is block-only (no scrub); every **non-date** field of a retained
+ * segment that the maps do not name is still passed through untouched and unrecorded, which includes
+ * the provider names in PV1-7/8 and OBR-16 and the date components carried inside a person-name or
+ * address composite. The date classification is fixed at v2.5.1, so a position only another version
+ * types as a date is a stated residual, as are the file and batch envelope headers. The address
+ * generalization keeps only the Safe Harbor 3-digit ZIP and conservatively drops the (permitted) state
+ * as well.
  *
  * @packageDocumentation
  */
 
-import { type Hl7Message } from "@cosyte/hl7";
+import { parseHL7, type Hl7Message } from "@cosyte/hl7";
 
+import { DeidError, FATAL_CODES } from "../codes.js";
 import { deidentify, type DeidOptions } from "../deidentify.js";
 import { type DeidManifestEntry } from "../manifest.js";
 import { applyHl7 } from "./apply.js";
@@ -103,7 +114,40 @@ export function deidentifyHl7(msg: Hl7Message, options: DeidOptions = {}): Hl7De
   );
   const { document, manifest } = deidentify({ loci }, options);
   const deidentified = applyHl7(msg, document.loci, coords);
+  assertRoundTrips(deidentified);
   return { document: deidentified, manifest };
+}
+
+/**
+ * Fail closed on the **shape** of the output: the transformed message must serialize, its own parser
+ * must be able to read what was written, and reading it must be **stable**, so what a downstream
+ * reader sees is what this pass emitted. A pass that emptied a locus and left a message its own reader
+ * reads differently cannot say what a downstream reader will make of the values still in it, so it
+ * throws rather than return a partially transformed document.
+ *
+ * Stability, not byte-equality, is the test, and the difference is deliberate: the serializer strips
+ * an insignificant trailing empty field, so a wire this adapter emits can be one canonicalization step
+ * away from the parser's own form without a single value or position having moved. The **fixed point**
+ * is the honest invariant: read the emitted wire, write it back, and reading that again must produce
+ * the same bytes. A structure that re-reads differently never reaches one.
+ *
+ * The diagnostic is value-free, like every other one on this path: it names the failure, never the
+ * message.
+ */
+function assertRoundTrips(document: Hl7Message): void {
+  let stable: boolean;
+  try {
+    const canonical = parseHL7(document.toString()).toString();
+    stable = parseHL7(canonical).toString() === canonical;
+  } catch {
+    stable = false;
+  }
+  if (!stable) {
+    throw new DeidError(
+      FATAL_CODES.DEID_OUTPUT_INVALID,
+      "the de-identified HL7 v2 message did not round-trip through its parser; no document is returned",
+    );
+  }
 }
 
 export {
@@ -121,5 +165,14 @@ export {
 } from "./extract.js";
 export { applyHl7 } from "./apply.js";
 export { RETAIN_SEGMENTS, RETAINED_LOCUS_RULES, type Hl7RetainedFieldRule } from "./retain.js";
+export {
+  HL7_DATE_LOCI,
+  HL7_DATE_LOCUS_VERSION,
+  HL7_PASSED_THROUGH_SEGMENTS,
+  OBX_DATE_VALUE_TYPES,
+  type Hl7DateDatatype,
+  type Hl7DateLocusRule,
+  type Hl7SegmentDateLoci,
+} from "./date-loci.js";
 export { RETAINED_LOCUS_CLASSES, retains, type RetainedLocusClass } from "../retention.js";
 export { SAFE_HARBOR_CATEGORIES, type SafeHarborCategory } from "../categories.js";

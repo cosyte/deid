@@ -110,8 +110,9 @@ recognized segment is retained **only** if it is on an explicit clinical/adminis
 so a known patient-identity segment absent from the map (e.g. **MRG** prior name + MRN on a merge, **FAM**,
 **ACC**) is blocked, never passed through, and Z-segments / structure unknown to the parser are blocked.
 **OBX-5** is retained only when OBX-2 positively types it as a structured clinical value (numeric /
-coded / date); narrative (`TX`/`FT`), ambiguous String (`ST`), and any empty/unknown OBX-2 fail closed,
-as do **NTE-3** comments. Structured clinical values, units, codes, and statuses survive untouched.
+coded / a time of day); narrative (`TX`/`FT`), ambiguous String (`ST`), and any empty/unknown OBX-2 fail
+closed, as do **NTE-3** comments, and a **date/time** value type makes OBX-5 a date the pass acts on.
+Structured clinical values, units, codes, and statuses survive untouched.
 
 **Inside a retained segment**, the identifying loci are carved back out: under a Safe-Harbor-labelled
 policy the admit (PV1-44), discharge (PV1-45), observation (OBR-7) and diagnosis (DG1-5) dates keep only
@@ -121,11 +122,21 @@ them **unchanged and recorded**. PV1-19 is a CX list routed by its CX-5 identifi
 only a `VN`-typed or untyped visit number is the encounter identifier, while an `MR`/`AN`/`SS`-typed one
 is transformed as the medical record / account / social security number it is, under **both** profiles.
 
+**Every other date inside a segment the pass hands through** is acted on and recorded too: every
+position the HL7 **v2.5.1** segment definitions type as a date or date/time, at its own unit (a field, a
+component of a composite, one repetition at a time), plus an OBX-5 the message types as a date. That
+reaches ORC-9 and ORC-15, the EVN / PV2 / PR1 / RXA / RXD / FT1 / TXA / SPM timestamps, the date
+components of a range or other composite, and the **OBX segment's own** reference-range, observation and
+analysis timestamps (OBX-12 / OBX-14 / OBX-19), which survive the value-type branch that decides OBX-5.
+The classification is structural and version-fixed: an eight-digit numeric result is not a date, and
+`MSH-12` moves no position.
+
 **Known limitations (this release).** Free text is block-by-default (no built-in scrub; opt-in BYO
-redaction: see [Free text](#free-text-block-by-default--byo-redaction)); **every** field of a retained
-segment that the carve-out does not name is **not** de-identified and is recorded nowhere, which still
-includes full-precision timestamps in EVN, PV2, PR1, RXA, RXD, FT1, TXA and SPM and the _provider_ names
-in PV1-7/8 and OBR-16, among others; the address generalization keeps only the Safe Harbor 3-digit ZIP.
+redaction: see [Free text](#free-text-block-by-default--byo-redaction)); every **non-date** field of a
+retained segment that the carve-outs do not name is **not** de-identified and is recorded nowhere, which
+still includes the _provider_ names in PV1-7/8 and OBR-16 and the date components carried inside a
+person-name or address composite; a position only a version other than v2.5.1 types as a date is a
+stated residual; the address generalization keeps only the Safe Harbor 3-digit ZIP.
 
 ## De-identify a C-CDA document
 
