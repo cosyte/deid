@@ -215,6 +215,10 @@ DOB 20200105090000
 # The retained-segment date fixture's timestamps, and the two written inline in the tests that work the
 # component and repetition cases. Same reason as the block above: elements of dates directly related to
 # the individual, seeded in the clear so their absence after the pass means something.
+#
+# These are TOKEN declarations, which is the mechanism this repo ships for a synthetic literal:
+# `phi-scan-overrides.md` is the whole-file BYPASS log and says in its own words to prefer this file
+# for tokens. Nothing was added to that log, and its single existing entry is untouched.
 DOB 20240315103000
 DOB 20240316104500
 DOB 20240314102000
@@ -249,6 +253,12 @@ DOB 20250101000000
 DOB 20240315094500
 DOB 20240317080000
 DOB 20240312100000
+# The same fixture's OBX reference-range / observation / analysis timestamps (OBX-12 / OBX-14 /
+# OBX-19): the segment's own date/time fields, seeded beside a numeric result so that acting on them
+# and leaving the result byte-identical are both asserted.
+DOB 20240301080000
+DOB 20240311150000
+DOB 20240311160000
 #
 # ▶ `19800101` IS DELIBERATELY ABSENT AND MUST STAY ABSENT. It is the undeclared DOB
 # `test/scripts/phi-scan.test.ts` uses to prove the HL7, C-CDA, X12 and NCPDP detectors CATCH a

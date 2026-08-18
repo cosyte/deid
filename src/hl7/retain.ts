@@ -18,9 +18,11 @@
  * hands them to the engine, so under a Safe-Harbor-labelled policy an admission date is reduced to its
  * year and a visit number is blocked as category (R). They survive only under a profile that names
  * their retention class, and even then they are **recorded**. Every OTHER date position of these
- * segments is carved out too, by the committed HL7 v2.5.1 enumeration in `date-loci.ts`, which is
- * complete over this list: those are always acted on and always recorded, and no retention class keeps
- * them.
+ * segments is carved out too, by the committed HL7 v2.5.1 enumeration in `date-loci.ts`: those are
+ * always acted on and always recorded, and no retention class keeps them. That enumeration is complete
+ * over this list **plus `OBX`**, which is not on this list and is passed through anyway by the OBX-2
+ * value-type branch; its domain is `HL7_PASSED_THROUGH_SEGMENTS`, because what makes a date position
+ * dangerous is surviving the pass, not being named by a list.
  *
  * **Documented limitation, and it is narrower than it was but real.** A **non-date** field inside a
  * retained segment that is on none of those lists is still passed through untouched and is **not**

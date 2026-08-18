@@ -6,10 +6,10 @@
  *
  * 1. the table's own shape, so a row cannot be added that names a position outside the segment
  *    definition it cites, or a duplicate of one already there;
- * 2. that **every row is wired end to end**. A walk builds one synthetic message per retained segment
- *    with a full-precision timestamp at every position the table names, and asserts that each one is
- *    reduced to its year and recorded under its own locus path. A row that exists in the table but is
- *    never acted on would pass a shape check and fail this one.
+ * 2. that **every row is wired end to end**. A walk builds one synthetic message per segment in the
+ *    table's domain with a full-precision timestamp at every position the table names, and asserts that
+ *    each one is reduced to its year and recorded under its own locus path. A row that exists in the
+ *    table but is never acted on would pass a shape check and fail this one.
  *
  * Every value here is a synthetic timestamp; no fixture is read.
  */
@@ -26,6 +26,7 @@ import {
 import {
   HL7_DATE_LOCI,
   HL7_DATE_LOCUS_VERSION,
+  HL7_PASSED_THROUGH_SEGMENTS,
   RETAINED_LOCUS_RULES,
   RETAIN_SEGMENTS,
   deidentifyHl7,
@@ -71,12 +72,32 @@ describe("the HL7 v2.5.1 date-locus enumeration: shape", () => {
     expect(HL7_DATE_LOCUS_VERSION).toBe("2.5.1");
   });
 
-  it("covers every segment on the retain-list, and nothing that is not on it", () => {
+  it("covers every segment the pass hands through, and nothing that is not one", () => {
     const enumerated = new Set(Object.keys(HL7_DATE_LOCI));
-    const retained = new Set(RETAIN_SEGMENTS);
-    const missing = [...retained].filter((s) => !enumerated.has(s)).sort();
-    const extra = [...enumerated].filter((s) => !retained.has(s)).sort();
+    const domain = new Set(HL7_PASSED_THROUGH_SEGMENTS);
+    const missing = [...domain].filter((s) => !enumerated.has(s)).sort();
+    const extra = [...enumerated].filter((s) => !domain.has(s)).sort();
     expect({ missing, extra }).toEqual({ missing: [], extra: [] });
+  });
+
+  it("the domain is the retain-list plus exactly one segment, and that segment is OBX", () => {
+    // The difference is stated rather than left implicit: OBX is passed through by the OBX-2
+    // value-type branch instead of by the list, which is what makes its own date/time fields
+    // reachable. A second entry appearing here silently would widen the sweep with nothing to notice.
+    const beyond = [...HL7_PASSED_THROUGH_SEGMENTS].filter((s) => !RETAIN_SEGMENTS.has(s)).sort();
+    expect(beyond).toEqual(["OBX"]);
+    // ... and the domain never LOSES a retain-list segment either.
+    const dropped = [...RETAIN_SEGMENTS].filter((s) => !HL7_PASSED_THROUGH_SEGMENTS.has(s));
+    expect(dropped).toEqual([]);
+  });
+
+  it("enumerates the OBX date/time fields the message does not type for itself", () => {
+    // OBX-5 is typed by OBX-2 and is deliberately absent from the table; OBX-12 / OBX-14 / OBX-19 are
+    // facts about v2.5.1 like any other row, and were the whole-segment omission this table once had.
+    const obx = HL7_DATE_LOCI["OBX"];
+    expect(obx?.loci.map((r) => r.field)).toEqual([12, 14, 19]);
+    expect(obx?.loci.every((r) => r.datatype === "TS" && r.component === undefined)).toBe(true);
+    expect(obx?.loci.some((r) => r.field === 5)).toBe(false);
   });
 
   it("cites a chapter and a walked field count for every segment", () => {
@@ -217,20 +238,23 @@ describe("the HL7 v2.5.1 date-locus enumeration: shape", () => {
     `);
   });
 
-  it("has the size a reviewer weighed: the retain-list and the enumeration are both counted", () => {
-    const segments = RETAIN_SEGMENTS.size;
+  it("has the size a reviewer weighed: the domain and the enumeration are both counted", () => {
+    const retainListSegments = RETAIN_SEGMENTS.size;
+    const enumeratedSegments = Object.keys(HL7_DATE_LOCI).length;
     const withDates = Object.values(HL7_DATE_LOCI).filter((t) => t.loci.length > 0).length;
     const loci = Object.values(HL7_DATE_LOCI).reduce((n, t) => n + t.loci.length, 0);
     const components = Object.values(HL7_DATE_LOCI).reduce(
       (n, t) => n + t.loci.filter((r) => r.component !== undefined).length,
       0,
     );
-    expect({ segments, withDates, loci, components }).toMatchInlineSnapshot(`
+    expect({ retainListSegments, enumeratedSegments, withDates, loci, components })
+      .toMatchInlineSnapshot(`
       {
         "components": 48,
-        "loci": 171,
-        "segments": 79,
-        "withDates": 50,
+        "enumeratedSegments": 80,
+        "loci": 174,
+        "retainListSegments": 79,
+        "withDates": 51,
       }
     `);
   });
@@ -239,7 +263,7 @@ describe("the HL7 v2.5.1 date-locus enumeration: shape", () => {
 describe("the HL7 v2.5.1 date-locus enumeration: every row is wired end to end", () => {
   const walked = Object.entries(HL7_DATE_LOCI).filter(([, t]) => t.loci.length > 0);
 
-  it("walks every retained segment that carries a date", () => {
+  it("walks every passed-through segment that carries a date", () => {
     expect(walked.length).toBeGreaterThan(0);
   });
 

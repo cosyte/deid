@@ -31,7 +31,7 @@ import {
   profileOptions,
   type DeidPolicy,
 } from "../../src/index.js";
-import { deidentifyHl7 } from "../../src/hl7/index.js";
+import { RETAIN_SEGMENTS, deidentifyHl7 } from "../../src/hl7/index.js";
 
 const C = SAFE_HARBOR_CATEGORIES;
 const D = DEID_DISPOSITION_CODES;
@@ -95,6 +95,9 @@ const DATE_LOCI: readonly {
   { path: "FT1.4.2", locus: "FT1-4[0].2", seeded: "20240316" },
   { path: "FT1.5", locus: "FT1-5[0]", seeded: "20240317080000" },
   { path: "DG1.19", locus: "DG1-19[0]", seeded: "20240312100000" },
+  { path: "OBX[0].12", locus: "OBX-12[0]", seeded: "20240301080000" },
+  { path: "OBX[0].14", locus: "OBX-14[0]", seeded: "20240311150000" },
+  { path: "OBX[0].19", locus: "OBX-19[0]", seeded: "20240311160000" },
   { path: "OBX[1].5", locus: "OBX[1]-5[0]", seeded: "20240311" },
   { path: "OBX[2].5", locus: "OBX[2]-5[0]", seeded: "20240311120000" },
   { path: "OBX[3].5.1", locus: "OBX[3]-5[0].1", seeded: "20240311070000" },
@@ -179,6 +182,55 @@ describe("AC-1 / AC-2 / AC-2b: safe-harbor generalizes and records every retaine
     const { document, manifest } = run();
     expect(document.get("OBX[5].5")).toBe("20241231");
     expect(manifest.some((m) => m.locus.startsWith("OBX[5]"))).toBe(false);
+  });
+});
+
+describe("AC-2 / AC-2b: an OBX's OWN date/time fields, not just the OBX-5 the message types", () => {
+  // OBX is NOT on the retain-list and is passed through all the same: the OBX-2 branch decides OBX-5
+  // and every other field keeps its bytes. A result message is the commonest carrier of an observation
+  // and an analysis timestamp, and OBX-5 there is a plain numeric result, so the one OBX date position
+  // the message types for itself is not even in play. This is the exact wire that reproduced the leak.
+  const ORU = "MSH|^~\\&|A|B|C|D|20240315103000||ORU^R01|M1|P|2.5.1";
+  const OBX =
+    "OBX|1|NM|1234-6^Sodium^LN|1|140|mmol/L|135-145|N|||F|||20240315103000|||||20240316104500";
+  const run = () =>
+    deidentifyHl7(parseHL7([ORU, OBX].join("\r")), profileOptions(SAFE_HARBOR_PROFILE, ctx));
+
+  it("PRE-CONDITION: the observation and analysis timestamps really sit at OBX-14 and OBX-19", () => {
+    const original = parseHL7([ORU, OBX].join("\r"));
+    expect(original.get("OBX.14")).toBe("20240315103000");
+    expect(original.get("OBX.19")).toBe("20240316104500");
+  });
+
+  it("both are generalized to their year and no full-precision value survives the wire", () => {
+    const { document } = run();
+    expect(document.get("OBX.14")).toBe("2024");
+    expect(document.get("OBX.19")).toBe("2024");
+    const wire = document.toString();
+    for (const value of ["20240315103000", "20240316104500"]) {
+      expect(wire).not.toContain(value);
+    }
+  });
+
+  it("both are recorded, so no date survives in any form absent from the manifest", () => {
+    const { manifest } = run();
+    for (const locus of ["OBX-14[0]", "OBX-19[0]"]) {
+      const entry = manifest.find((m) => m.locus === locus);
+      expect(entry?.category).toBe(C.DATES);
+      expect(entry?.transform).toBe("generalize");
+      expect(entry?.disposition).toBe("transformed");
+    }
+  });
+
+  it("the numeric OBX-5 beside them is untouched: acting on the segment is not scrubbing it", () => {
+    const { document, manifest } = run();
+    expect(document.get("OBX.5")).toBe("140");
+    expect(document.get("OBX.7")).toBe("135-145");
+    expect(manifest.some((m) => m.locus === "OBX-5" || m.locus.startsWith("OBX-5["))).toBe(false);
+  });
+
+  it("adds no segment to the retain-list: what the adapter RETAINS is unchanged", () => {
+    expect(RETAIN_SEGMENTS.has("OBX")).toBe(false);
   });
 });
 

@@ -71,15 +71,20 @@ Two things follow, and the second is the one that surprises people:
   **transformed under both profiles and is never retained** (§164.514(e)(2) names all three). A kept
   visit number is therefore only ever one the wire did not type as something stronger.
 - **Dates inside retained HL7 v2 segments are acted on and recorded.** Every position the **HL7
-  v2.5.1** segment definitions type as a date or date/time, in any segment on the HL7 v2 retain-list,
-  is reduced to its year under a Safe-Harbor-named policy, shifted under a date-shift policy, or
-  blocked when the configured transform cannot read the value, and **every one of those outcomes is in
-  the manifest** and therefore in the support report. That covers the timestamps in EVN, PV2, PR1, RXA,
-  RXD, FT1, TXA and SPM, the order dates in ORC and OBR that no earlier limitation named, the date
-  components of a date range or other composite (a specimen collection range, an order's
-  quantity/timing, a discharged-to location's effective date), and an OBX-5 the message itself types as
-  a date. The classification is **structural, never a guess from the value**: an eight-digit numeric
-  result is not a date.
+  v2.5.1** segment definitions type as a date or date/time, in any segment whose bytes the pass can
+  hand through, is reduced to its year under a Safe-Harbor-named policy, shifted under a date-shift
+  policy, or blocked when the configured transform cannot read the value, and **every one of those
+  outcomes is in the manifest** and therefore in the support report. That covers the timestamps in EVN,
+  PV2, PR1, RXA, RXD, FT1, TXA and SPM, the order dates in ORC and OBR that no earlier limitation
+  named, the date components of a date range or other composite (a specimen collection range, an
+  order's quantity/timing, a discharged-to location's effective date), an OBX-5 the message itself
+  types as a date, and the **OBX segment's own** reference-range, observation and analysis timestamps
+  (OBX-12, OBX-14, OBX-19). The classification is **structural, never a guess from the value**: an
+  eight-digit numeric result is not a date.
+- **The set of segments that reaches is what the pass hands through, not a list of names.** It is the
+  HL7 v2 retain-list plus `OBX`, which is handed through by its OBX-2 value-type branch rather than by
+  that list. A segment that fails closed is blocked field by field and carries nothing forward, so a
+  date inside one cannot survive to be recorded.
 - **The version that classification is fixed at is a residual of its own.** It is HL7 v2.5.1 and it is
   never re-read from the message, so identical bytes always yield the same set of positions. A position
   only some other version types as a date is therefore **not** classified, not acted on and not

@@ -16,10 +16,10 @@
  * Z-segments / structure unknown to the parser are blocked. **OBX-5** is retained only when OBX-2
  * positively types it as a structured clinical value (numeric / coded / a time of day); narrative
  * (`TX`/`FT`), ambiguous String (`ST`), and any empty/unknown OBX-2 fail closed, as do **NTE-3**
- * comments, and a **date/time** value type makes OBX-5 a date this pass acts on. Structured clinical
- * values / units / codes / status are **retained untouched** (the over-scrub guard). The honesty line is
- * unchanged: the output is **"Safe-Harbor-transformed per the configured policy"**, never
- * "de-identified".
+ * comments, and a **date/time** value type makes OBX-5 a date this pass acts on. The OBX segment's own
+ * date/time fields are acted on too (below). Structured clinical values / units / codes / status are
+ * **retained untouched** (the over-scrub guard). The honesty line is unchanged: the output is
+ * **"Safe-Harbor-transformed per the configured policy"**, never "de-identified".
  *
  * **Inside a retained segment**, the identifying dates and the encounter / order numbers are carved
  * back out ({@link RETAINED_LOCUS_RULES}): under a Safe-Harbor-labelled policy the admit (PV1-44),
@@ -33,10 +33,13 @@
  * profiles, never retained** — §164.514(e)(2) names all three, so keeping one would republish in the
  * clear the identifier the pass pseudonymized at PID-3 in the same message.
  *
- * **Every other date inside a retained segment** is located from {@link HL7_DATE_LOCI}, the committed
- * HL7 v2.5.1 enumeration, and acted on under the configured policy at the unit the standard gives it: a
- * `DT`/`TS` field, a single date component of a composite, one repetition at a time. Each outcome is
- * recorded, so a consumer reads the manifest and knows which dates the output still carries.
+ * **Every other date inside a segment the pass hands through** is located from {@link HL7_DATE_LOCI},
+ * the committed HL7 v2.5.1 enumeration, and acted on under the configured policy at the unit the
+ * standard gives it: a `DT`/`TS` field, a single date component of a composite, one repetition at a
+ * time. Its domain is {@link HL7_PASSED_THROUGH_SEGMENTS}: the retain-list **plus OBX**, whose own
+ * observation (OBX-14), analysis (OBX-19) and reference-range (OBX-12) timestamps are swept like any
+ * other even though the retain-list does not name the segment. Each outcome is recorded, so a consumer
+ * reads the manifest and knows which dates the output still carries.
  *
  * **Known limitations.** Free text is block-only (no scrub); every **non-date** field of a retained
  * segment that the maps do not name is still passed through untouched and unrecorded, which includes
@@ -165,6 +168,7 @@ export { RETAIN_SEGMENTS, RETAINED_LOCUS_RULES, type Hl7RetainedFieldRule } from
 export {
   HL7_DATE_LOCI,
   HL7_DATE_LOCUS_VERSION,
+  HL7_PASSED_THROUGH_SEGMENTS,
   OBX_DATE_VALUE_TYPES,
   type Hl7DateDatatype,
   type Hl7DateLocusRule,

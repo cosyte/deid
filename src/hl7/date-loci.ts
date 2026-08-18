@@ -1,9 +1,17 @@
 /**
- * The **date-locus enumeration** for HL7 v2: every position inside a segment on the
- * {@link RETAIN_SEGMENTS} retain-list that the **HL7 v2.5.1** segment definitions type as a date or a
- * date/time. It is the auditable source of truth for the class the engine acts on, and it carries **no
- * value**: a segment name, a field number, an optional component number, the datatype, and the field
- * name the standard gives that position.
+ * The **date-locus enumeration** for HL7 v2: every position inside a segment this adapter **passes
+ * through** that the **HL7 v2.5.1** segment definitions type as a date or a date/time. It is the
+ * auditable source of truth for the class the engine acts on, and it carries **no value**: a segment
+ * name, a field number, an optional component number, the datatype, and the field name the standard
+ * gives that position.
+ *
+ * **The domain is what survives the pass, not what a list happens to name.** That is
+ * {@link HL7_PASSED_THROUGH_SEGMENTS}: every segment on the {@link RETAIN_SEGMENTS} retain-list, plus
+ * **`OBX`**, which this adapter passes through by its own value-type branch rather than by the list.
+ * Being passed through, not being on a list, is what makes a full-precision date inside a segment a
+ * leak, so an `OBX` carrying its observation (`OBX-14`) and analysis (`OBX-19`) timestamps is swept
+ * exactly like a retained segment. A segment that fails closed is blocked field by field and can leak
+ * nothing, so it contributes no locus.
  *
  * **Why a table at all.** An HL7 v2 message does not declare its field datatypes: the datatype of
  * `ORC-9` is a fact about the standard, not about the message. Neither this package nor its parser
@@ -27,7 +35,12 @@
  * **What is deliberately NOT here.**
  *
  * - `OBX-5`. Its datatype is declared **by the message** at `OBX-2`, so it needs no table and is
- *   classified where it is read (see the extractor).
+ *   classified where it is read (see the extractor). Every OTHER date position of an `OBX` is a fact
+ *   about the standard like any other and IS here.
+ * - A segment this adapter **maps field by field** (`PID` / `NK1` / `GT1` / `IN1` / `IN2`). Its
+ *   identifying positions are located by the locus map; its unmapped positions, including any the
+ *   standard types as a date, are outside this enumeration's domain and are the pre-existing
+ *   unmapped-position residual rather than part of the retained-segment class this table fixes.
  * - The **file and batch envelope headers** (`FHS`, `BHS`). Like `MSH` they carry the field separator
  *   in their first position, and the model this adapter writes back through applies that offset for
  *   `MSH` alone. Their creation timestamps are a stated residual rather than a position written at a
@@ -44,6 +57,8 @@
  * @packageDocumentation
  */
 
+import { RETAIN_SEGMENTS } from "./retain.js";
+
 /**
  * The version of the HL7 standard every row of {@link HL7_DATE_LOCI} is derived from. The
  * classification is fixed here and is never re-derived per message.
@@ -56,6 +71,32 @@
  * ```
  */
 export const HL7_DATE_LOCUS_VERSION = "2.5.1";
+
+/**
+ * The **domain** of {@link HL7_DATE_LOCI}: every segment whose bytes this adapter can pass through, so
+ * every segment inside which a full-precision date could survive the pass. It is the
+ * {@link RETAIN_SEGMENTS} retain-list **plus `OBX`**, the one segment the adapter passes through by its
+ * own `OBX-2` value-type branch instead of by the list.
+ *
+ * The distinction is deliberate and is the reason this set exists rather than the retain-list alone:
+ * membership of a list is not what makes a date position dangerous, surviving the pass is. A segment
+ * that fails closed is blocked field by field and leaks nothing, so it is not here; `OBX` is not on the
+ * retain-list yet keeps every field the value-type branch does not touch, which is exactly the shape
+ * that hides a date. **This set adds no segment to the retain-list**: what the adapter retains is
+ * unchanged, and this only fixes what the date enumeration must be complete over.
+ *
+ * @example
+ * ```ts
+ * import { HL7_PASSED_THROUGH_SEGMENTS, RETAIN_SEGMENTS } from "@cosyte/deid/hl7";
+ *
+ * HL7_PASSED_THROUGH_SEGMENTS.has("OBX"); // => true  (passed through, not retain-listed)
+ * RETAIN_SEGMENTS.has("OBX"); // => false (the retain-list is unchanged)
+ * ```
+ */
+export const HL7_PASSED_THROUGH_SEGMENTS: ReadonlySet<string> = new Set<string>([
+  ...RETAIN_SEGMENTS,
+  "OBX",
+]);
 
 /**
  * The datatypes that make a position a date locus. `DT` is a calendar date, `TS` a time stamp, and
@@ -135,11 +176,12 @@ function c(
 }
 
 /**
- * The enumeration: every retained segment, and every date position HL7 v2.5.1 gives it.
+ * The enumeration: every segment of {@link HL7_PASSED_THROUGH_SEGMENTS}, and every date position HL7
+ * v2.5.1 gives it.
  *
- * Every segment on the retain-list appears here, including the ones with no date position at all, so
- * that "this segment was walked and carries none" and "this segment was never walked" are different
- * facts rather than the same silence.
+ * Every segment of that domain appears here, including the ones with no date position at all, so that
+ * "this segment was walked and carries none" and "this segment was never walked" are different facts
+ * rather than the same silence.
  *
  * @example
  * ```ts
@@ -354,6 +396,19 @@ export const HL7_DATE_LOCI: Readonly<Record<string, Hl7SegmentDateLoci>> = Objec
       f(27, "TS", "Filler's Expected Availability Date/Time"),
     ]),
   }),
+
+  // ── Result: passed through by the OBX-2 value-type branch, not by the retain-list ──────────────
+  OBX: Object.freeze({
+    chapter: "7",
+    fields: 25,
+    loci: Object.freeze([
+      f(12, "TS", "Effective Date of Reference Range"),
+      f(14, "TS", "Date/Time of the Observation"),
+      f(19, "TS", "Date/Time of the Analysis"),
+    ]),
+    note: "OBX-5 is absent on purpose: the message types it at OBX-2, so it is classified where it is read rather than from this table. OBX-20 to OBX-22 are reserved in v2.5.1 and define no position. The date components inside OBX-16 / OBX-24 / OBX-25 (a responsible observer, a performing organization's address and its medical director) ride person-name and address composites and are covered by the person-composite residual.",
+  }),
+
   SPM: Object.freeze({
     chapter: "7",
     fields: 29,

@@ -14,12 +14,15 @@
  * the {@link RETAINED_LOCUS_RULES} carve-out still applies: its identifying dates and encounter / order
  * numbers are handed to the engine unless the configured profile names their retention class.
  *
- * **Dates inside a retained segment are located from {@link HL7_DATE_LOCI}**, the committed HL7 v2.5.1
- * enumeration, at the unit the standard gives them: a whole field for a `DT` / `TS` field, a single
- * component for a date inside a composite, and one locus **per repetition** either way, so a sibling
- * repetition is never disturbed by what happened to its neighbour. `OBX-5` is the one date position the
- * message types for itself: `OBX-2` decides, and a value type that is not a date leaves the pinned
- * behaviour untouched (structured values survive, narrative fails closed).
+ * **Dates inside a passed-through segment are located from {@link HL7_DATE_LOCI}**, the committed HL7
+ * v2.5.1 enumeration, at the unit the standard gives them: a whole field for a `DT` / `TS` field, a
+ * single component for a date inside a composite, and one locus **per repetition** either way, so a
+ * sibling repetition is never disturbed by what happened to its neighbour. That sweep covers **OBX**
+ * too: the segment is passed through by the value-type branch below rather than by the retain-list, so
+ * its own observation / analysis / reference-range timestamps would otherwise leave in the clear and
+ * unrecorded. `OBX-5` is the one date position the message types for itself: `OBX-2` decides, and a
+ * value type that is not a date leaves the pinned behaviour untouched (structured values survive,
+ * narrative fails closed).
  *
  * @packageDocumentation
  */
@@ -387,9 +390,10 @@ function dateLocus(
 }
 
 /**
- * Collect every date locus of a retained segment from the committed HL7 v2.5.1 enumeration: one locus
- * per **repetition** of each enumerated field, at the field or the component the standard types as a
- * date. A field the carve-out table already owns whole is left to it, so no position is acted on twice.
+ * Collect every date locus of a passed-through segment from the committed HL7 v2.5.1 enumeration: one
+ * locus per **repetition** of each enumerated field, at the field or the component the standard types
+ * as a date. A field the carve-out table already owns whole is left to it, so no position is acted on
+ * twice.
  */
 function collectDateLoci(found: PositionedLocus[], seg: Segment, type: string, occ: number): void {
   const table = HL7_DATE_LOCI[type];
@@ -422,46 +426,59 @@ function extractRetainedSegment(
 }
 
 /**
- * Extract the OBX-5 date loci: the one position whose datatype the **message** declares. `OBX-2` types
- * the value, so no table is consulted; a `DR` makes the locus component-granular (range start, range
- * end) and the other date types make it the field, one locus per repetition either way.
+ * Collect the OBX-5 locus: the one position whose datatype the **message** declares. `OBX-2` types the
+ * value, so no table is consulted; a `DR` makes the locus component-granular (range start, range end)
+ * and the other date types make it the field, one locus per repetition either way. A positively-typed
+ * structured clinical value survives (the over-scrub guard); everything else fails closed.
  */
-function extractObxDates(out: Hl7Extraction, seg: Segment, occ: number, isRange: boolean): void {
-  const found: PositionedLocus[] = [];
-  const reps = seg.field(5).repetitions.length;
-  for (let rep = 0; rep < reps; rep += 1) {
-    const components = isRange ? DR_DATE_COMPONENTS : [undefined];
-    for (const component of components) {
-      const positioned = dateLocus(seg, "OBX", occ, 5, rep, component);
-      if (positioned !== undefined) found.push(positioned);
-    }
-  }
-  for (const entry of found) push(out, entry.locus, entry.coord);
-}
-
-/** Extract the OBX-5 locus, failing closed unless OBX-2 positively types it as a structured value. */
-function extractObx(out: Hl7Extraction, seg: Segment, occ: number): void {
+function collectObxValueLoci(found: PositionedLocus[], seg: Segment, occ: number): void {
   if (!hasContent(seg, 5)) return;
   const valueType = seg.field(2).value.toUpperCase();
   // A date/time value type is the message declaring a date locus: act on it under the policy rather
   // than passing a full-precision patient-related date through as a structured clinical value.
   if (OBX_DATE_VALUE_TYPES.has(valueType)) {
-    extractObxDates(out, seg, occ, valueType === "DR");
+    const reps = seg.field(5).repetitions.length;
+    for (let rep = 0; rep < reps; rep += 1) {
+      const components = valueType === "DR" ? DR_DATE_COMPONENTS : [undefined];
+      for (const component of components) {
+        const positioned = dateLocus(seg, "OBX", occ, 5, rep, component);
+        if (positioned !== undefined) found.push(positioned);
+      }
+    }
     return;
   }
   // Over-scrub guard: a positively-typed structured clinical value (NM / coded / time of day) survives.
   // Fail closed otherwise: narrative (TX/FT), ambiguous String (ST), and an empty/unknown OBX-2 block.
   if (STRUCTURED_VALUE_TYPES.has(valueType)) return;
-  push(
-    out,
-    {
+  found.push({
+    field: 5,
+    rep: 0,
+    component: 0,
+    locus: {
       path: fieldPath("OBX", occ, 5),
       kind: "freetext",
       category: SAFE_HARBOR_CATEGORIES.OTHER_UNIQUE_ID,
       value: seg.field(5).value,
     },
-    { segIndex: seg.absoluteIndex, field: 5, rep: 0, edit: "whole-field" },
-  );
+    coord: { segIndex: seg.absoluteIndex, field: 5, rep: 0, edit: "whole-field" },
+  });
+}
+
+/**
+ * Extract an OBX: the message-typed OBX-5 locus **and** the segment's own enumerated date positions.
+ *
+ * OBX is not on the retain-list, and it is passed through all the same: the value-type branch decides
+ * OBX-5 and every other field of the segment keeps its bytes. That is the shape a date hides in, so the
+ * observation (`OBX-14`), analysis (`OBX-19`) and reference-range (`OBX-12`) timestamps are swept from
+ * the same committed v2.5.1 enumeration every retained segment is swept from. Loci are emitted in
+ * document order, so OBX-5 precedes them.
+ */
+function extractObx(out: Hl7Extraction, seg: Segment, occ: number): void {
+  const found: PositionedLocus[] = [];
+  collectObxValueLoci(found, seg, occ);
+  collectDateLoci(found, seg, "OBX", occ);
+  found.sort((a, b) => a.field - b.field || a.rep - b.rep || a.component - b.component);
+  for (const entry of found) push(out, entry.locus, entry.coord);
 }
 
 /** Extract the free-text locus for an NTE segment (NTE-3, the comment). */
@@ -535,6 +552,8 @@ export function extractHl7Loci(msg: Hl7Message, options: Hl7ExtractOptions = {})
       continue;
     }
     if (type === "OBX") {
+      // NOT on the retain-list, and passed through all the same: OBX-2 decides OBX-5 and the rest of
+      // the segment keeps its bytes. Its enumerated date positions are swept here for that reason.
       extractObx(out, seg, occ);
       continue;
     }

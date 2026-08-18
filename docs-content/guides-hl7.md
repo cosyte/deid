@@ -49,7 +49,8 @@ surrogate.
 | **Z-segments / unknown structure**                                                                   | every populated field                                                                                                                                      | **fail closed**: blocked                                                                                                                                                    |
 | **PV1-19, OBR-2/3, ORC-2/3** | visit number, placer + filler order numbers, inside retained segments | **removed**. PV1-19 is routed by its CX-5 type code like PID-3: `VN`/untyped is the encounter identifier, removed as (R) and retainable under a profile that names the class; `MR`/`AN`/`SS` is transformed as that identifier under **both** profiles, never retained |
 | **PV1-44/45, OBR-7, DG1-5**                                                                          | admit, discharge, observation and diagnosis dates, inside retained segments                                                                                | → **year** (§164.514(b)(2)(i)(C) names admission and discharge); kept whole, and recorded, only under a profile that names the class                                        |
-| **Every other date position of a retained segment** (EVN-2/3/6, PV2-8/9/…, ORC-9/15, OBR-6/8/14/22, SPM-17/18/19, RXA-3/4, FT1-4/5, TXA-4/6/7/8, MSH-7, …) | every field HL7 v2.5.1 types `DT` or `TS`, and every date/time **component** of a date range or other composite it defines | → **year** under a Safe-Harbor-named policy, **shifted** under a date-shift policy, **blocked** when the transform cannot read the value; **recorded** either way, one manifest entry per repetition and per component |
+| **Every other date position of a segment the pass hands through** (EVN-2/3/6, PV2-8/9/…, ORC-9/15, OBR-6/8/14/22, SPM-17/18/19, RXA-3/4, FT1-4/5, TXA-4/6/7/8, MSH-7, …) | every field HL7 v2.5.1 types `DT` or `TS`, and every date/time **component** of a date range or other composite it defines | → **year** under a Safe-Harbor-named policy, **shifted** under a date-shift policy, **blocked** when the transform cannot read the value; **recorded** either way, one manifest entry per repetition and per component |
+| **OBX-12, OBX-14, OBX-19**                                                                          | the OBX segment's OWN reference-range, observation and analysis timestamps, whatever OBX-2 types the value at OBX-5                                        | same as the row above. The segment is handed through by the OBX-2 branch rather than by the retain-list, and a date position inside it is treated no differently for that   |
 | **OBX-5 typed as a date by OBX-2** (`DT`, `DTM`, `TS`, `DR`)                                        | the observation value the message itself types as a date                                                                                                   | same as the row above: acted on and recorded, per repetition, and per range component for a `DR`                                                                            |
 | Retained clinical/administrative segments (an explicit allow-list: OBR, ORC, AL1, DG1, PV1, RX\*, …) | every field except the rows above                                                                                                                          | **retained untouched** (the over-scrub guard)                                                                                                                               |
 
@@ -65,6 +66,11 @@ of the value: an eight-digit numeric lab result is not a date, and free text men
 one either. The classification is committed in the library as an auditable table of positions, each
 carrying the chapter, the field number, the component number where the date sits inside a composite,
 and the name the standard gives it, so a reviewer can re-derive a row rather than trust it.
+
+The table covers **every segment whose bytes the pass can hand through**, which is what makes a date
+position inside one reachable at all: every segment on the retain-list, plus `OBX`, which is handed
+through by the OBX-2 value-type branch instead of by that list. A segment that fails closed is blocked
+field by field, so it can carry nothing forward and contributes no position.
 
 The version is **fixed at 2.5.1** and is never re-read from `MSH-12`: identical wire bytes yield an
 identical set of date positions whatever version a sender declares. The price is stated in the
@@ -90,9 +96,12 @@ handled differently, structurally, from the parser's typing.
 - **No over-scrub.** Structured clinical OBX values, units, LOINC/coded observation identifiers,
   reference ranges, result statuses, times of day (`TM`), and every component of a composite that is not
   itself a date are retained byte-identical: the de-identifier never degenerates into a
-  blanket-blanking "safe but useless" scrubber. The one narrowing of that guarantee is stated rather
-  than implied: an OBX-5 whose OBX-2 types it as a **date** is a date, and is acted on and recorded like
-  any other, so a structured OBX value is retained byte-identical **except** for that date-typed subset.
+  blanket-blanking "safe but useless" scrubber. The narrowings of that guarantee are stated rather than
+  implied, and there are two, both of them dates: an OBX-5 whose OBX-2 types it as a **date** is a date,
+  and is acted on and recorded like any other, so a structured OBX value is retained byte-identical
+  **except** for that date-typed subset; and the OBX segment's own date/time fields (OBX-12, OBX-14,
+  OBX-19) are acted on whatever OBX-2 says, while the result, its units and its reference range beside
+  them are untouched.
 
 ## Known limitations (this release)
 
