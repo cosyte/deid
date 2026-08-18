@@ -55,6 +55,14 @@ export const FATAL_CODES = {
    * quietly loosen, the base standard's protection. The fatal set is additions-only.
    */
   DEID_PROFILE_INVALID: "DEID_PROFILE_INVALID",
+  /**
+   * The transformed document could not be re-serialized, or no longer round-trips through its own
+   * parser: what came back out of the writer is not what the reader reads. A de-identification pass
+   * that cannot vouch for the shape of its own output cannot vouch for what a downstream reader will
+   * make of the values inside it, so the pass fails rather than hand back a partially transformed
+   * document. The fatal set is additions-only.
+   */
+  DEID_OUTPUT_INVALID: "DEID_OUTPUT_INVALID",
 } as const;
 
 /**

@@ -87,6 +87,48 @@ function applyIdNumber(field: MutField, rep: number, t: TransformedLocus): void 
   repetition.components[0] = { subcomponents: [t.value ?? ""] };
 }
 
+/**
+ * Apply a **date-field** edit: rewrite the date component of ONE repetition, never the whole field.
+ *
+ * A transformed value replaces component 1 of that repetition and leaves every sibling component (a
+ * degree-of-precision marker, say) at its own ordinal. A blocked value empties the locus at its own
+ * unit: when the field carries a single repetition the field itself is emptied, position preserved
+ * and no component residue left behind; when it repeats, only the offending repetition is emptied, so
+ * a sibling repetition keeps both its bytes and its ordinal.
+ */
+function applyDateField(field: MutField, rep: number, t: TransformedLocus): void {
+  const repetition = field.repetitions[rep];
+  if (repetition === undefined) return;
+  if (t.value === null) {
+    if (field.repetitions.length === 1) {
+      field.repetitions = []; // blocked → empty field, nothing left behind
+      return;
+    }
+    repetition.components = [emptyComponent()];
+    return;
+  }
+  repetition.components[0] = { subcomponents: [t.value] };
+}
+
+/**
+ * Apply a **date-component** edit: rewrite exactly one component of one repetition. The field that
+ * contains it is never emptied, and every sibling component keeps its bytes and its ordinal, so
+ * reading component `n` after the pass yields what it yielded before at every `n` the pass did not act
+ * on. A blocked value leaves an empty component in place rather than deleting it, so nothing shifts.
+ */
+function applyDateComponent(
+  field: MutField,
+  rep: number,
+  component: number | undefined,
+  t: TransformedLocus,
+): void {
+  const repetition = field.repetitions[rep];
+  if (repetition === undefined || component === undefined) return;
+  const index = component - 1;
+  if (index < 0 || index >= repetition.components.length) return;
+  repetition.components[index] = { subcomponents: [t.value ?? ""] };
+}
+
 /** Apply an address edit: keep only the generalized 3-digit ZIP at XAD.5; drop every finer component. */
 function applyAddressZip(field: MutField, rep: number, t: TransformedLocus): void {
   const repetition = field.repetitions[rep];
@@ -139,7 +181,11 @@ export function applyHl7(
     const t = transformed[i];
     if (coord === undefined || t === undefined) continue;
     const seg = segments[coord.segIndex];
-    const field = seg?.fields[coord.field];
+    // MSH carries the field separator in its first position, so its raw slot for HL7 field N is
+    // N - 1: the same offset the parser's own field accessor applies. Every other segment is 1-indexed
+    // with a name placeholder at slot 0.
+    const slot = seg?.name === "MSH" ? coord.field - 1 : coord.field;
+    const field = seg?.fields[slot];
     if (field === undefined) continue;
 
     switch (coord.edit) {
@@ -151,6 +197,12 @@ export function applyHl7(
         break;
       case "address-zip":
         applyAddressZip(field, coord.rep, t);
+        break;
+      case "date-field":
+        applyDateField(field, coord.rep, t);
+        break;
+      case "date-component":
+        applyDateComponent(field, coord.rep, coord.component, t);
         break;
       case "none":
         // A locus the profile's retention set kept: byte-identical is the whole point, so nothing is

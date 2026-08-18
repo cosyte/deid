@@ -383,10 +383,13 @@ describe("deidentifyHl7, fatal + policy + immutability", () => {
     expect(manifest.length).toBeGreaterThan(0);
   });
 
-  it("returns an empty manifest for a message with no PHI loci", () => {
+  it("records only the envelope date for a message with no patient PHI loci", () => {
+    // MSH-7 is a date the standard types, inside a segment the retain-list keeps, so it is acted on
+    // and recorded like any other: an acknowledgement carries that one entry and nothing else.
     const msg = parseHL7("MSH|^~\\&|A|B|C|D|20200101||ACK|M1|P|2.5\rMSA|AA|M1");
-    const { manifest } = deidentifyHl7(msg, { context: ctx });
-    expect(manifest).toEqual([]);
+    const { document, manifest } = deidentifyHl7(msg, { context: ctx });
+    expect(manifest.map((m) => m.locus)).toEqual(["MSH-7[0]"]);
+    expect(document.get("MSH.7")).toBe("2020");
   });
 });
 

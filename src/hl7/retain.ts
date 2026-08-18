@@ -17,14 +17,18 @@
  * the patient-related *dates* and the *encounter / order identifiers* back out of these segments and
  * hands them to the engine, so under a Safe-Harbor-labelled policy an admission date is reduced to its
  * year and a visit number is blocked as category (R). They survive only under a profile that names
- * their retention class, and even then they are **recorded**.
+ * their retention class, and even then they are **recorded**. Every OTHER date position of these
+ * segments is carved out too, by the committed HL7 v2.5.1 enumeration in `date-loci.ts`, which is
+ * complete over this list: those are always acted on and always recorded, and no retention class keeps
+ * them.
  *
- * **Documented limitation, and it is narrower than it was but real.** A field inside a retained segment
- * that is on **neither** list is still passed through untouched and is **not** recorded anywhere. That
- * remains a large class, not a short list: full-precision timestamps in EVN, PV2, PR1, RXA, RXD, FT1,
- * TXA and SPM, the attending / referring *provider* names (PV1-7/8, OBR-16), and every other unmapped
- * position. Forgetting a clinical segment here fails **safe**: it is blocked, not leaked. Forgetting a
- * *field* of a retained segment does not.
+ * **Documented limitation, and it is narrower than it was but real.** A **non-date** field inside a
+ * retained segment that is on none of those lists is still passed through untouched and is **not**
+ * recorded anywhere: the attending / referring *provider* names (PV1-7/8, OBR-16), the date components
+ * carried inside a person-name or address composite, and every other unmapped position. Forgetting a
+ * clinical segment here fails **safe**: it is blocked, not leaked. Forgetting a *field* of a retained
+ * segment does not, which is why the date enumeration is derived over the whole of this list rather
+ * than over the segments a limitation happened to name.
  *
  * @packageDocumentation
  */

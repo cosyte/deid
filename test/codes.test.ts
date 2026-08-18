@@ -14,11 +14,15 @@ import {
 } from "../src/index.js";
 
 describe("code surface stability", () => {
+  // `DEID_OUTPUT_INVALID` is an ADDITION, deliberately reviewed here: nothing was renamed and nothing
+  // was removed, so a consumer branching on any existing code is unaffected. It carries the fail-closed
+  // outcome for a transformed document that no longer round-trips through its own parser.
   it("fatal codes are stable", () => {
     expect(sortedCodeSet(FATAL_CODES)).toMatchInlineSnapshot(`
       [
         "DEID_CONTEXT_INVALID",
         "DEID_NO_KEY",
+        "DEID_OUTPUT_INVALID",
         "DEID_POLICY_INVALID",
         "DEID_PROFILE_INVALID",
         "EMPTY_INPUT",
