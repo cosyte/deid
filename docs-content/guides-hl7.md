@@ -34,15 +34,17 @@ document.toString(); // spec-clean, de-identified HL7 wire
 manifest; // value-free audit: category + locus + disposition, never a value
 ```
 
-A keyed transform (MRN / account / beneficiary pseudonymization) requires a `context`; calling without
-one when the message needs it is a fatal `DEID_NO_KEY`: the engine never falls back to an unkeyed
-surrogate.
+The built-in Safe Harbor policy uses **no keyed transform**: MRN, account and beneficiary numbers are
+**removed**, so a Safe Harbor pass over a v2 message needs no `context` at all. Under a preset that
+keeps consistent keyed surrogates instead, such as `LIMITED_DATA_SET_PROFILE`, a `context` is
+required and calling without one when the message needs it is a fatal `DEID_NO_KEY`: the engine never
+falls back to an unkeyed surrogate.
 
 ## What is located, and how it is transformed
 
 | Segment                                                                                              | Loci                                                                                                                                                       | Transform                                                                                                                                                                   |
 | ---------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **PID**                                                                                              | name (5/6/9), DOB (7/29), address (11), SSN (19), phone (13/14), driver's licence (20), MRN/account/mother-id (2/3/4/18/21), county (12), birth place (23) | names/phone/SSN/licence **removed**; MRN/account → consistent **surrogate** (keyed HMAC); DOB → **year**; ZIP → safe **3-digit** (or `000`); county/birth place fail closed |
+| **PID**                                                                                              | name (5/6/9), DOB (7/29), address (11), SSN (19), phone (13/14), driver's licence (20), MRN/account/mother-id (2/3/4/18/21), county (12), birth place (23) | names/phone/SSN/licence/MRN/account **removed** (a consistent keyed surrogate for MRN and account only under a preset that does not claim the label); DOB → **year**; ZIP → safe **3-digit** (or `000`); county/birth place fail closed |
 | **NK1 / GT1 / IN1 / IN2**                                                                            | relatives / guarantor / insured names, addresses, phones, SSNs, DOBs, member/policy/Medicare/Medicaid ids                                                  | same category transforms: Safe Harbor removes identifiers of **relatives, employers, and household members**, not only the patient                                          |
 | **OBX-5, NTE-3**                                                                                     | narrative / ambiguous free text (OBX-5 unless OBX-2 types it structured)                                                                                   | **fail closed**: blocked, never regex-scrubbed                                                                                                                              |
 | **MRG / ACC / FAM / PEO / PDA**                                                                      | known patient-identity / relative / geographic segments absent from the map                                                                                | **fail closed**: blocked (e.g. a merge message's prior name + MRN)                                                                                                          |
@@ -83,9 +85,9 @@ component positions. A repeating field gets one locus **per repetition**, so an 
 emptied without disturbing the one beside it. The manifest path carries all three: `ORC-9[0]` is a
 field, `SPM-17[0].2` is a component, and `OBX[1]-5[0]` names the repetition.
 
-The identifier type inside a PID-3 list is read from the CX-5 type code (`SS` → SSN removed, `MR` → MRN
-pseudonymized, `AN` → account, `MA`/`MC`/`PN` → beneficiary), so an SSN and an MRN in the same field are
-handled differently, structurally, from the parser's typing.
+The identifier type inside a PID-3 list is read from the CX-5 type code (`SS` → SSN, `MR` → MRN,
+`AN` → account, `MA`/`MC`/`PN` → beneficiary), so the parser's typing, not a guess, decides which
+category each entry lands in and therefore which transform the configured policy applies to it.
 
 ## The two guarantees
 

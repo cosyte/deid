@@ -20,7 +20,13 @@ import {
   serializeTelecom,
 } from "@cosyte/ncpdp/telecom";
 
-import { DEID_DISPOSITION_CODES, FATAL_CODES, createDeidContext } from "../../src/index.js";
+import {
+  DEID_DISPOSITION_CODES,
+  FATAL_CODES,
+  SAFE_HARBOR_CATEGORIES,
+  createDeidContext,
+  defineDeidPolicy,
+} from "../../src/index.js";
 import {
   deidentifyTelecom,
   deidentifyTelecomString,
@@ -28,6 +34,7 @@ import {
 } from "../../src/ncpdp/index.js";
 
 const D = DEID_DISPOSITION_CODES;
+const C = SAFE_HARBOR_CATEGORIES;
 const FIXTURES = join(import.meta.dirname, "..", "fixtures", "ncpdp");
 
 function loadRaw(): string {
@@ -140,8 +147,17 @@ describe("NCPDP Telecom structured + fail-closed behavior", () => {
     );
   });
 
-  it("pseudonymizes the patient / cardholder / group identifiers to non-reversible surrogates", () => {
+  it("removes the patient / cardholder / group identifiers under the Safe Harbor default", () => {
     const { telecom } = deidentifyTelecomString(loadRaw(), { context: ctx });
+    const tx = parseTelecom(telecom);
+    const patientId = fieldValue(findSegment(tx.segments, "01"), "CY") ?? "";
+    expect(patientId).toBe("");
+    expect(telecom).not.toContain("ZZPATIENTID");
+  });
+
+  it("emits a non-reversible surrogate for those identifiers under a keyed policy", () => {
+    const keyed = defineDeidPolicy({ name: "keyed", transforms: { [C.MRN]: "pseudonymize" } });
+    const { telecom } = deidentifyTelecomString(loadRaw(), { context: ctx, policy: keyed });
     const tx = parseTelecom(telecom);
     const patientId = fieldValue(findSegment(tx.segments, "01"), "CY") ?? "";
     expect(patientId).toMatch(/^[0-9a-f]{64}$/);
@@ -168,9 +184,16 @@ describe("NCPDP Telecom manifest + immutability + fatal", () => {
   });
 
   it("throws DEID_NO_KEY when a keyed transform is required but no key context is supplied", () => {
-    expect(() => deidentifyTelecomString(loadRaw(), {})).toThrowError(
+    // The Safe Harbor default is no longer keyed at an identifier locus, so the keyed policy is named.
+    const keyed = defineDeidPolicy({ name: "keyed", transforms: { [C.MRN]: "pseudonymize" } });
+    expect(() => deidentifyTelecomString(loadRaw(), { policy: keyed })).toThrowError(
       expect.objectContaining({ code: FATAL_CODES.DEID_NO_KEY }),
     );
+  });
+
+  it("completes with NO key at all under the built-in Safe Harbor default", () => {
+    const { telecom } = deidentifyTelecomString(loadRaw(), {});
+    expect(telecom).not.toContain("ZZPATIENTID");
   });
 
   it("extracts loci from a minimally-built transaction (no patient segment → no scrub loci)", () => {

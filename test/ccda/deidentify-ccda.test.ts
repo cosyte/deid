@@ -113,11 +113,11 @@ describe("deidentifyCcda, the over-scrub test (clinical values survive byte-iden
 });
 
 describe("deidentifyCcda, structured per-category behavior", () => {
-  it("pseudonymizes the patient MRN (keeping the assigning root) and redacts an SSN-rooted id", () => {
+  it("removes the patient MRN (keeping the assigning root) and redacts an SSN-rooted id", () => {
     const { document, manifest } = deid("ccd");
     const ids = document.getPatient()?.identifiers ?? [];
-    // MRN → 64-hex HMAC surrogate; assigning authority root retained.
-    expect(ids[0]?.extension).toMatch(/^[0-9a-f]{64}$/);
+    // MRN → REMOVED under the Safe Harbor default (no keyed surrogate); assigning root retained.
+    expect(ids[0]?.extension).toBeUndefined();
     expect(ids[0]?.root).toBe("2.16.840.1.113883.19.5");
     // SSN-rooted id → redacted (value dropped), root retained.
     expect(ids[1]?.extension).toBeUndefined();
@@ -288,14 +288,20 @@ describe("deidentifyCcda, fail closed on narrative and unknown structure", () =>
     expect(manifest.find((m) => m.locus.includes("addr"))?.disposition).toBe("blocked");
   });
 
-  it("pseudonymizes a root-only person-role id (no extension)", () => {
+  it("acts on a root-only person-role id (no extension) under the configured transform", () => {
     const xml = `<?xml version="1.0"?><ClinicalDocument xmlns="urn:hl7-org:v3">
       <recordTarget><patientRole>
         <id root="ZZROOTONLYID"/>
       </patientRole></recordTarget></ClinicalDocument>`;
-    const { document } = deidentifyCcda(parseCcda(xml), { context: ctx });
+    // Under the Safe Harbor default the value is REMOVED, not replaced by a keyed surrogate.
+    const removed = deidentifyCcda(parseCcda(xml), { context: ctx });
+    expect(removed.document.toString()).not.toContain("ZZROOTONLYID");
+    expect(removed.manifest.find((m) => m.locus.includes("/id"))?.transform).toBe("redact");
+    // Under a policy that DOES pseudonymize, the root itself is the value and is surrogated.
+    const keyed = defineDeidPolicy({ name: "keyed", transforms: { [C.MRN]: "pseudonymize" } });
+    const { document } = deidentifyCcda(parseCcda(xml), { context: ctx, policy: keyed });
     const id = document.getPatient()?.identifiers[0];
-    expect(id?.root).toMatch(/^[0-9a-f]{64}$/); // the root itself was the value → pseudonymized
+    expect(id?.root).toMatch(/^[0-9a-f]{64}$/);
     expect(document.toString()).not.toContain("ZZROOTONLYID");
   });
 
@@ -374,9 +380,15 @@ describe("deidentifyCcda, fail closed on narrative and unknown structure", () =>
 
 describe("deidentifyCcda, fatal + policy + immutability", () => {
   it("throws DEID_NO_KEY when a keyed transform is needed but no context is supplied", () => {
-    expect(() => deidentifyCcda(parseCcda(loadFixture("ccd")), {})).toThrowError(
+    // The Safe Harbor default is no longer keyed at an identifier locus, so the keyed policy is named.
+    const keyed = defineDeidPolicy({ name: "keyed", transforms: { [C.MRN]: "pseudonymize" } });
+    expect(() => deidentifyCcda(parseCcda(loadFixture("ccd")), { policy: keyed })).toThrowError(
       expect.objectContaining({ code: FATAL_CODES.DEID_NO_KEY }),
     );
+  });
+
+  it("completes with NO key at all under the built-in Safe Harbor default", () => {
+    expect(() => deidentifyCcda(parseCcda(loadFixture("ccd")), {})).not.toThrow();
   });
 
   it("date-shifts under an Expert-Determination policy instead of generalizing", () => {

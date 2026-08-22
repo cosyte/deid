@@ -6,6 +6,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  buildExpertDeterminationSupportReport,
   createDeidContext,
   defineDeidProfile,
   deidentify,
@@ -21,9 +22,13 @@ import {
   SAFE_HARBOR_POLICY,
   SAFE_HARBOR_PROFILE,
   type DeidProfile,
+  type TransformName,
 } from "../src/index.js";
 
 const C = SAFE_HARBOR_CATEGORIES;
+
+/** The three categories this contract moves to `redact` in the Safe Harbor base: (H), (I), (J). */
+const KEYED_TRIPLE = [C.MRN, C.HEALTH_PLAN_BENEFICIARY, C.ACCOUNT] as const;
 
 describe("built-in profiles", () => {
   it("SAFE_HARBOR_PROFILE wraps the built-in Safe Harbor policy and needs no context", () => {
@@ -32,14 +37,41 @@ describe("built-in profiles", () => {
     expect(SAFE_HARBOR_PROFILE.requiresContext).toBe(false);
   });
 
+  it("SAFE_HARBOR_PROFILE removes (H), (I) and (J) and says so in its own description", () => {
+    for (const category of KEYED_TRIPLE) {
+      expect(SAFE_HARBOR_PROFILE.policy.transforms[category]).toBe("redact");
+    }
+    // A preset that misdescribes its own transform set is the same defect as a mislabelled one.
+    expect(SAFE_HARBOR_PROFILE.description).not.toContain("pseudonymized");
+    expect(SAFE_HARBOR_PROFILE.description).toContain("REMOVED");
+  });
+
   it("LIMITED_DATA_SET_PROFILE date-shifts dates, is NOT labelled safe-harbor, and requires a context", () => {
     expect(LIMITED_DATA_SET_PROFILE.standard).toBe("limited-data-set");
     expect(LIMITED_DATA_SET_PROFILE.policy.name).not.toBe("safe-harbor");
     expect(LIMITED_DATA_SET_PROFILE.policy.transforms[C.DATES]).toBe("date-shift");
     // Identifier handling stays at Safe Harbor strength.
     expect(LIMITED_DATA_SET_PROFILE.policy.transforms[C.NAMES]).toBe("redact");
-    expect(LIMITED_DATA_SET_PROFILE.policy.transforms[C.MRN]).toBe("pseudonymize");
+    // ...except that the three keyed identifiers stay keyed HERE, so linkage survives under a preset
+    // that does not, and may not, claim Safe Harbor.
+    for (const category of KEYED_TRIPLE) {
+      expect(LIMITED_DATA_SET_PROFILE.policy.transforms[category]).toBe("pseudonymize");
+    }
     expect(LIMITED_DATA_SET_PROFILE.requiresContext).toBe(true);
+    expect(LIMITED_DATA_SET_PROFILE.description).toContain("KEYED SURROGATES");
+    expect(LIMITED_DATA_SET_PROFILE.description).toContain("NOT Safe Harbor");
+  });
+
+  it("the LDS preset's other fourteen categories are exactly the Safe Harbor base's", () => {
+    // The eighteen less the three above and the dates it already overrides.
+    const overridden = new Set<string>([...KEYED_TRIPLE, C.DATES]);
+    const others = (Object.values(C) as string[]).filter((c) => !overridden.has(c));
+    expect(others).toHaveLength(14);
+    for (const category of others as (keyof typeof SAFE_HARBOR_POLICY.transforms)[]) {
+      expect(LIMITED_DATA_SET_PROFILE.policy.transforms[category]).toBe(
+        SAFE_HARBOR_POLICY.transforms[category],
+      );
+    }
   });
 
   it("the LDS profile actually shifts a date through the engine with a per-patient context", () => {
@@ -56,12 +88,12 @@ describe("built-in profiles", () => {
 });
 
 describe("defineDeidProfile, the widen-never-narrow contract", () => {
-  it("accepts an override that TIGHTENS a category (pseudonymize -> redact)", () => {
+  it("accepts an override that TIGHTENS a category (generalize -> redact)", () => {
     const strict = defineDeidProfile({
       name: "site-strict",
-      transforms: { [C.MRN]: "redact" },
+      transforms: { [C.GEOGRAPHIC]: "redact" },
     });
-    expect(strict.policy.transforms[C.MRN]).toBe("redact");
+    expect(strict.policy.transforms[C.GEOGRAPHIC]).toBe("redact");
     expect(strict.standard).toBe("custom");
     // Untouched categories keep the base.
     expect(strict.policy.transforms[C.NAMES]).toBe("redact");
@@ -73,7 +105,7 @@ describe("defineDeidProfile, the widen-never-narrow contract", () => {
     ).toThrowError(expect.objectContaining({ code: FATAL_CODES.DEID_PROFILE_INVALID }));
   });
 
-  it("rejects weakening a pseudonymized identifier down to a date-shift", () => {
+  it("rejects weakening a removed identifier down to a date-shift", () => {
     expect(() =>
       defineDeidProfile({ name: "site-x", transforms: { [C.MRN]: "date-shift" } }),
     ).toThrowError(expect.objectContaining({ code: FATAL_CODES.DEID_PROFILE_INVALID }));
@@ -99,10 +131,225 @@ describe("defineDeidProfile, the widen-never-narrow contract", () => {
     expect(tightened.policy.transforms[C.DATES]).toBe("generalize");
   });
 
-  it("marks requiresContext true when a keyed transform survives in the derived policy", () => {
-    const p: DeidProfile = defineDeidProfile({ name: "site-y", transforms: {} });
-    // Safe Harbor pseudonymizes MRN/account/beneficiary → keyed → requires a context.
-    expect(p.requiresContext).toBe(true);
+  it("marks requiresContext by whether a keyed transform survives in the derived policy", () => {
+    // The Safe Harbor base now REMOVES MRN / beneficiary / account, so nothing in it is keyed and a
+    // profile derived from it needs no context at all.
+    const fromSafeHarbor: DeidProfile = defineDeidProfile({ name: "site-y", transforms: {} });
+    expect(fromSafeHarbor.requiresContext).toBe(false);
+    // Derived from the limited-data-set base, whose date-shift and identifier surrogates ARE keyed.
+    const fromLds: DeidProfile = defineDeidProfile({
+      name: "site-y-lds",
+      base: LIMITED_DATA_SET_PROFILE,
+    });
+    expect(fromLds.requiresContext).toBe(true);
+  });
+});
+
+describe("widen-never-narrow over (H), (I) and (J), now that the base REDACTS them", () => {
+  /** The two sets are exhaustive over the published transform set, graded against the pinned rank. */
+  const REFUSED: readonly TransformName[] = [
+    "pseudonymize",
+    "hash",
+    "date-shift",
+    "generalize",
+    "retain",
+  ];
+  const ACCEPTED: readonly TransformName[] = ["redact", "block", "byo-redact"];
+
+  it("the two sets partition the published transform set, with nothing left over", () => {
+    // The pinned protection ranking is NOT re-derived here: this asserts the sets it must yield.
+    const all = [...REFUSED, ...ACCEPTED].sort();
+    expect(all).toEqual(
+      [
+        "block",
+        "byo-redact",
+        "date-shift",
+        "generalize",
+        "hash",
+        "pseudonymize",
+        "redact",
+        "retain",
+      ].sort(),
+    );
+    expect(new Set(all).size).toBe(8);
+  });
+
+  it("REFUSES every weakening override, on each of the three, each one constructed", () => {
+    for (const category of KEYED_TRIPLE) {
+      for (const transform of REFUSED) {
+        expect(() =>
+          defineDeidProfile({
+            name: `site-${category}-${transform}`,
+            transforms: { [category]: transform },
+          }),
+        ).toThrowError(expect.objectContaining({ code: FATAL_CODES.DEID_PROFILE_INVALID }));
+      }
+    }
+  });
+
+  it("ACCEPTS every equal-or-stronger override, on each of the three, each one constructed", () => {
+    for (const category of KEYED_TRIPLE) {
+      for (const transform of ACCEPTED) {
+        const derived = defineDeidProfile({
+          name: `ok-${category}-${transform}`,
+          transforms: { [category]: transform },
+        });
+        expect(derived.policy.transforms[category]).toBe(transform);
+      }
+    }
+  });
+
+  it("the shipped code path is what refuses: no bypass, exemption flag or trusted-caller route", () => {
+    // The library's own limited-data-set preset does NOT go through this check (it is built from the
+    // policy layer, not derived from the Safe Harbor PROFILE), so nothing had to be exempted to make
+    // it resolve. Deriving it the other way round is still refused, which is the point.
+    expect(() =>
+      defineDeidProfile({ name: "would-be-lds", transforms: { [C.MRN]: "pseudonymize" } }),
+    ).toThrowError(expect.objectContaining({ code: FATAL_CODES.DEID_PROFILE_INVALID }));
+  });
+});
+
+describe("the label contract on a PROFILE that declares the safe-harbor standard", () => {
+  /** A hand-built profile: it DECLARES the standard while its policy is named something else. */
+  function declaringProfile(transform: TransformName): DeidProfile {
+    return {
+      name: "site-p",
+      standard: "safe-harbor",
+      policy: {
+        name: "site-p-policy",
+        transforms: { ...SAFE_HARBOR_POLICY.transforms, [C.MRN]: transform },
+      },
+      description: "hand-built",
+      requiresContext: false,
+      retainedLoci: [],
+    };
+  }
+
+  it("refuses it with DEID_POLICY_INVALID at the point it becomes engine options", () => {
+    try {
+      profileOptions(declaringProfile("pseudonymize"));
+      expect.unreachable(
+        "a profile declaring the safe-harbor standard may not pseudonymize an MRN",
+      );
+    } catch (err) {
+      const e = err as DeidError;
+      expect(e.code).toBe(FATAL_CODES.DEID_POLICY_INVALID);
+      expect(e.message).toContain("MRN");
+      expect(e.message).toContain("pseudonymize");
+    }
+  });
+
+  it("refuses it with DEID_POLICY_INVALID when it is used as a derivation base", () => {
+    expect(() =>
+      defineDeidProfile({ name: "site-derived", base: declaringProfile("pseudonymize") }),
+    ).toThrowError(expect.objectContaining({ code: FATAL_CODES.DEID_POLICY_INVALID }));
+  });
+
+  it("where BOTH refusals fall due at derive time, the derive-time one wins (DEID_PROFILE_INVALID)", () => {
+    // The reserved-name refusal and the base's label refusal both apply to this one call. A profile
+    // that is refused never mints a policy to label, so the profile code is the one a caller sees.
+    try {
+      defineDeidProfile({ name: "safe-harbor", base: declaringProfile("pseudonymize") });
+      expect.unreachable("a derived profile may not reclaim a reserved standard label");
+    } catch (err) {
+      expect((err as DeidError).code).toBe(FATAL_CODES.DEID_PROFILE_INVALID);
+    }
+  });
+
+  it("leaves a profile that declares a DIFFERENT standard entirely alone", () => {
+    const custom: DeidProfile = {
+      ...declaringProfile("pseudonymize"),
+      standard: "custom",
+    };
+    expect(() => profileOptions(custom)).not.toThrow();
+    expect(profileOptions(custom).policy).toBe(custom.policy);
+    expect(custom.policy.transforms[C.MRN]).toBe("pseudonymize");
+  });
+
+  it("the library's OWN Safe Harbor profile passes both surfaces", () => {
+    expect(() => profileOptions(SAFE_HARBOR_PROFILE)).not.toThrow();
+    expect(() => defineDeidProfile({ name: "site-from-sh" })).not.toThrow();
+  });
+});
+
+describe("the limited-data-set preset keeps consistent keyed surrogates available", () => {
+  const ctx = createDeidContext({ key: "lds-linkage-key", patientId: "p1" });
+  const model = {
+    loci: [
+      { path: "PID-3", kind: "identifier" as const, category: C.MRN, value: "ZZMRN-1" },
+      {
+        path: "IN1-49",
+        kind: "identifier" as const,
+        category: C.HEALTH_PLAN_BENEFICIARY,
+        value: "ZZBEN-1",
+      },
+      { path: "PID-18", kind: "identifier" as const, category: C.ACCOUNT, value: "ZZACCT-1" },
+      { path: "PID-7", kind: "date" as const, category: C.DATES, value: "2020-06-15" },
+    ],
+  };
+
+  it("resolves AND applies without throwing, and neither claims nor is labelled safe-harbor", () => {
+    expect(LIMITED_DATA_SET_PROFILE.standard).not.toBe("safe-harbor");
+    expect(LIMITED_DATA_SET_PROFILE.policy.name).not.toBe("safe-harbor");
+    expect(LIMITED_DATA_SET_PROFILE.description).toContain("NOT a certified de-identification");
+    expect(() => profileOptions(LIMITED_DATA_SET_PROFILE, ctx)).not.toThrow();
+    expect(() => deidentify(model, profileOptions(LIMITED_DATA_SET_PROFILE, ctx))).not.toThrow();
+  });
+
+  it("emits a CONSISTENT keyed surrogate for each of the three, flagged as a re-identification code", () => {
+    const first = deidentify(model, profileOptions(LIMITED_DATA_SET_PROFILE, ctx));
+    const second = deidentify(model, profileOptions(LIMITED_DATA_SET_PROFILE, ctx));
+    for (const index of [0, 1, 2]) {
+      const value = first.document.loci[index]?.value;
+      expect(value).toMatch(/^[0-9a-f]{64}$/);
+      expect(second.document.loci[index]?.value).toBe(value); // cross-document linkage survives
+    }
+    const byLocus = new Map(first.manifest.map((e) => [e.locus, e]));
+    for (const locus of ["PID-3", "IN1-49", "PID-18"]) {
+      expect(byLocus.get(locus)?.transform).toBe("pseudonymize");
+      expect(byLocus.get(locus)?.reidentificationCode).toBe(true);
+    }
+    // The date-shifted locus is a keyed surrogate by the same definition.
+    expect(byLocus.get("PID-7")?.transform).toBe("date-shift");
+    expect(byLocus.get("PID-7")?.reidentificationCode).toBe(true);
+    // And every one reaches the support report's keyed-surrogate inventory.
+    const report = buildExpertDeterminationSupportReport(first.manifest, {
+      policy: LIMITED_DATA_SET_PROFILE.policy,
+    });
+    expect(report.keyedSurrogateResiduals.map((r) => r.locus).sort()).toEqual([
+      "IN1-49",
+      "PID-18",
+      "PID-3",
+      "PID-7",
+    ]);
+  });
+
+  it("fails with DEID_NO_KEY, never an unkeyed fallback, when a keyed category is present and no key is", () => {
+    expect(() => deidentify(model, profileOptions(LIMITED_DATA_SET_PROFILE))).toThrowError(
+      expect.objectContaining({ code: FATAL_CODES.DEID_NO_KEY }),
+    );
+  });
+
+  it("on a document with NO such category the pass completes and throws nothing about a key", () => {
+    const out = deidentify({ loci: [] }, profileOptions(LIMITED_DATA_SET_PROFILE));
+    expect(out.manifest).toHaveLength(0);
+    const report = buildExpertDeterminationSupportReport(out.manifest);
+    expect(report.keyedSurrogateResiduals).toEqual([]);
+    expect(report.retainedQuasiIdentifiers).toEqual([]);
+    expect(report.dispositionSummary.residualRetained).toBe(0);
+    expect(report.dispositionSummary.retained).toBe(0);
+  });
+
+  it("the built-in Safe Harbor profile over the SAME document needs no key and removes all three", () => {
+    const out = deidentify(model, profileOptions(SAFE_HARBOR_PROFILE));
+    expect(out.document.loci.slice(0, 3).map((l) => l.value)).toEqual([null, null, null]);
+    for (const e of out.manifest.filter((m) => m.locus !== "PID-7")) {
+      expect(e.transform).toBe("redact");
+      expect(e.disposition).toBe("removed");
+      expect(e.code).toBe("DEID_CATEGORY_REMOVED");
+      expect(e.reidentificationCode).toBe(false);
+    }
+    expect(JSON.stringify(out)).not.toContain("ZZMRN-1");
   });
 });
 

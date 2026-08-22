@@ -237,6 +237,7 @@ describe("the Expert-Determination support report keeps its shape, not only its 
         "perLocus",
         "categoryCoverage",
         "retainedQuasiIdentifiers",
+        "keyedSurrogateResiduals",
         "quasiIdentifierStatistics",
       ]
     `);
@@ -269,6 +270,7 @@ describe("the Expert-Determination support report keeps its shape, not only its 
         "# Expert-Determination support report",
         "## Safe Harbor category coverage (§164.514(b)(2)(i) A–R)",
         "## Retained quasi-identifiers (identifying residuals recorded as retained)",
+        "## Keyed surrogate residuals (re-identification codes, a separate kind of residual)",
       ]
     `);
   });

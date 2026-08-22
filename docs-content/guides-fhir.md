@@ -47,8 +47,10 @@ const { json, manifest } = deidentifyFhirJson(input, {
 });
 ```
 
-A keyed transform (identifier pseudonymization) requires a `context`; calling without one when the
-resource needs it is a fatal `DEID_NO_KEY`: the engine never falls back to an unkeyed surrogate.
+The built-in Safe Harbor policy uses **no keyed transform**, so a Safe Harbor pass over a resource
+needs no `context` at all. Under a preset that keeps consistent keyed surrogates instead, a `context`
+is required and calling without one when the resource needs it is a fatal `DEID_NO_KEY`: the engine
+never falls back to an unkeyed surrogate.
 
 ## What is located, and how it is transformed
 
@@ -60,13 +62,14 @@ adapter sweeping only the header participations, never the clinical body.
 | Scope | Loci | Transform |
 |---|---|---|
 | **Person resources**: `Patient` / `RelatedPerson` / `Practitioner` / `Person` (+ nested `Patient.contact`, a relative) | `name`, `telecom`, `photo`, `address`, `birthDate`, `deceasedDateTime` | name/telecom/photo **removed**; `address` → safe **3-digit ZIP** (or `000` for a restricted prefix), finer geography dropped; dates → **year** |
-| **Every resource (the universal PHI vectors)** | `identifier`, PHI-bearing dates, narrative `text.div`, `extension` / `modifierExtension` values, `Reference.display` | identifier → consistent **surrogate** by `system` (keyed HMAC; a **US-SSN** system **removed**); dates → **year**; narrative div / extension values / reference labels **blocked** |
+| **Every resource (the universal PHI vectors)** | `identifier`, PHI-bearing dates, narrative `text.div`, `extension` / `modifierExtension` values, `Reference.display` | identifier **removed** under Safe Harbor, `system` retained (a consistent keyed surrogate by `system` only under a preset that does not claim the label); dates → **year**; narrative div / extension values / reference labels **blocked** |
 | **Contained resources & `Bundle` entries** | each nested resource | **walked**: the resource role is re-derived at every `resourceType`, so a contained `RelatedPerson` or a Bundled `Patient` is de-identified too |
 | **Clinical resources**: `Observation`, `Condition`, `Encounter`, … | codes, values, units, statuses, reference ranges, reference wiring | **retained untouched** (the over-scrub guard) |
 
 An identifier's Safe Harbor category is read from its `system` URI: the US-SSN system
-(`http://hl7.org/fhir/sid/us-ssn` or its OID form) routes to **removed**, every other identifier to a
-**consistent surrogate** with the `system` retained. A `Reference.display` (usually a person's name) is
+(`http://hl7.org/fhir/sid/us-ssn` or its OID form) routes to the SSN category, every other identifier
+to the medical record number category, and the configured policy's transform for that category is what
+runs, with the `system` retained either way. A `Reference.display` (usually a person's name) is
 blocked, while a `Coding.display` (a coded term such as `Sodium`) is retained: the two are distinguished
 structurally, not by the property name.
 
@@ -102,7 +105,8 @@ not mistaken for a date, so it survives.
   extension that could carry PHI is blocked, never passed through in the clear.
 - **No over-scrub.** Clinical resources (observation and medication codes, values, units, result
   statuses, reference ranges, coded displays) are retained, and reference **wiring**
-  (`Reference.reference` pointers) is preserved, so linkage survives identifier pseudonymization.
+  (`Reference.reference` pointers) is preserved, so intra-document linkage survives whichever
+  transform the configured policy applies to an identifier.
 
 ## Known limitations (this release)
 

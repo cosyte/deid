@@ -15,7 +15,8 @@ Read this page before you rely on the library for anything that leaves your cont
 - Locates PHI **structurally** at each parser's loci (never by regex over raw bytes) and applies the
   configured policy transform per Safe Harbor category.
 - Returns an immutable transformed document plus a **value-free manifest** (category + transform +
-  locus + count + disposition, **never the value removed**, never the key, never the date-shift offset).
+  locus + count + disposition + a boolean `reidentificationCode`, **never the value removed**, never
+  the key, never the date-shift offset).
 - **Fails closed:** an unrecognized structure, an un-locatable identifier, an unknown segment/extension,
   or a free-text blob is **blocked or removed**, never emitted as safe.
 - Preserves clinical/financial values (codes, units, results, statuses, amounts), the **over-scrub
@@ -108,14 +109,21 @@ only when a real de-identified document grounds it.
 
 - **`SAFE_HARBOR_PROFILE`**: the fail-closed default, dates generalized to year, the (R) catch-all
   blocked. It retains **no** identifying locus: an admission, discharge or service date keeps only its
-  year, and an encounter or order number is removed.
+  year, and an encounter or order number is removed. It emits **no keyed surrogate**: the medical
+  record, health plan beneficiary and account numbers are **removed**, because a surrogate derived
+  from the individual's own value is not a §164.514(c)(1) code and the (R) exception does not reach
+  it. It therefore **needs no key at all**.
 - **`LIMITED_DATA_SET_PROFILE`**: a **research / longitudinal** preset that **date-shifts** dates
-  (interval-preserving) rather than generalizing them. It is deliberately **less protective than Safe
-  Harbor** for dates: a shifted-but-real date is still "an element of a date." Therefore it is **not**
-  labelled `safe-harbor`, it **requires** a keyed per-patient context, and it produces an
-  **Expert-Determination-supporting** dataset, **not** a certified de-identification, and **not**, on
-  its own, a HIPAA §164.514(e) Limited Data Set. Disclosing an actual Limited Data Set additionally
-  requires a **Data Use Agreement**, which is the consumer's responsibility.
+  (interval-preserving) rather than generalizing them, and that keeps a **consistent keyed surrogate**
+  for the medical record, health plan beneficiary and account numbers so cross-document linkage
+  survives. It is deliberately **less protective than Safe Harbor** on both counts: a shifted-but-real
+  date is still "an element of a date," and a keyed surrogate is a re-identification code anyone
+  holding the key can reverse the linkage of. Therefore it is **not** labelled `safe-harbor`, it
+  **requires** a keyed per-patient context, and it produces an **Expert-Determination-supporting**
+  dataset, **not** a certified de-identification, and **not**, on its own, a HIPAA §164.514(e) Limited
+  Data Set. Disclosing an actual Limited Data Set additionally requires a **Data Use Agreement**, which
+  is the consumer's responsibility. Every keyed surrogate it emits is flagged `reidentificationCode`
+  in the manifest and listed in the support report's keyed-surrogate residual inventory.
 
   It also **keeps unchanged** the two classes §164.514(e)(2) permits and Safe Harbor does not: the
   **encounter dates** (admission / discharge / service / diagnosis) and the **encounter and order

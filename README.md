@@ -63,20 +63,30 @@ const { document, manifest } = deidentify(
 ## Keyed transforms
 
 Pseudonymization and keyed hashing use a **keyed HMAC-SHA-256**; the key is the consumer's and never
-leaves the process:
+leaves the process. The **built-in Safe Harbor policy uses none of them**: a surrogate derived from
+the individual's own value is a re-identification code §164.514(c)(1) does not permit, so medical
+record, health plan beneficiary and account numbers are **removed** and the profile needs **no key at
+all**. Keyed surrogates live behind a preset that does not claim Safe Harbor:
 
 ```ts
-import { deidentify, createDeidContext, SAFE_HARBOR_CATEGORIES } from "@cosyte/deid";
+import {
+  deidentify,
+  createDeidContext,
+  profileOptions,
+  LIMITED_DATA_SET_PROFILE,
+} from "@cosyte/deid";
 
 const context = createDeidContext({ key: process.env.DEID_KEY!, patientId: "patient-1" });
-deidentify(
-  {
-    loci: [{ path: "PID-3", kind: "identifier", category: SAFE_HARBOR_CATEGORIES.MRN, value: mrn }],
-  },
-  { context },
-);
-// The MRN becomes a consistent, non-reversible surrogate; the key never appears in the output or manifest.
+deidentify(model, profileOptions(LIMITED_DATA_SET_PROFILE, context));
+// Under THAT preset the MRN becomes a consistent, non-reversible surrogate; the key never appears in
+// the output or manifest, the locus carries `reidentificationCode: true`, and the support report
+// lists it in the keyed-surrogate residual inventory an expert must reason about.
 ```
+
+A policy carrying the `safe-harbor` label that assigns a category a transform whose output is
+**derived from that category's own value** is refused with a typed `DEID_POLICY_INVALID` fatal naming
+the category and the transform, at mint time and at the point of use alike. A policy that does not
+claim the label keeps its keyed surrogate: nothing is silently strengthened behind the caller's back.
 
 ## De-identify an HL7 v2 message
 
@@ -98,7 +108,7 @@ const context = createDeidContext({ key: process.env.DEID_KEY! });
 const { document, manifest } = deidentifyHl7(parseHL7(rawMessage), { context });
 
 document.toString(); // spec-clean, de-identified HL7 wire
-// PID-5 (name), NK1/GT1/IN1/IN2 relatives, SSN, phone → removed; MRN/account → consistent surrogate;
+// PID-5 (name), NK1/GT1/IN1/IN2 relatives, SSN, phone, MRN and account → removed;
 // DOB → year; address → safe 3-digit ZIP. OBX-5/NTE free text and Z-segments fail closed (blocked).
 // Admit/discharge/observation/diagnosis dates → year; visit and order numbers blocked as (R).
 // Structured clinical OBX values, units, codes, and statuses survive untouched.
@@ -167,8 +177,9 @@ document.toString(); // spec-clean, de-identified C-CDA XML
 **What it covers.** The structured PHI loci of the CDA **header participations**: `recordTarget`
 (patient) + nested `guardian`, and `author` / `dataEnterer` / `informant` / `authenticator` /
 `legalAuthenticator` / `participant` / `custodian` / `documentationOf` / `componentOf` (relatives /
-providers / contacts). Person `<name>` / `<telecom>` removed; person-role `<id>` pseudonymized (SSN-rooted
-id removed, assigning root retained); `<addr>` reduced to the safe 3-digit ZIP; `<birthTime>` and
+providers / contacts). Person `<name>` / `<telecom>` removed; person-role `<id>` removed under Safe
+Harbor, assigning root retained (a consistent surrogate only under a preset that does not claim the
+label); `<addr>` reduced to the safe 3-digit ZIP; `<birthTime>` and
 participation / encounter dates generalized to year. **Fail closed** everywhere else: section narrative
 `<text>` blocks and the unstructured `nonXMLBody` are blocked; a value-bearing element that is neither
 mapped PHI nor recognized coded structure is blocked; foreign / `sdtc` elements are blocked. The clinical
@@ -204,18 +215,19 @@ const { document, manifest } = deidentifyFhir(resource, { context });
 
 serializeResource(document); // spec-clean, de-identified FHIR JSON
 // Patient/RelatedPerson/Practitioner/Person names, telecom, photo → removed; address → safe 3-digit ZIP;
-// birthDate + every date → year; identifiers pseudonymized by system (a US-SSN identifier removed).
+// birthDate + every date → year; identifiers removed under Safe Harbor (surrogated by system only
+// under a preset that does not claim the label).
 // Narrative text.div, extension values, and Reference.display fail closed; contained resources and
 // Bundle entries are walked. Clinical resources (Observation values, codes, units, statuses) survive.
 ```
 
 FHIR is a **graph of typed resources**, so the map splits by role:
 
-| Scope                                                                                                     | Loci                                                                               | Transform                                                                                                                                  |
-| --------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Person resources** (`Patient` / `RelatedPerson` / `Practitioner` / `Person` + nested `Patient.contact`) | `name`, `telecom`, `photo`, `address`, `birthDate`, dates                          | name/telecom/photo **removed**; `address` → safe **3-digit ZIP** (or `000`); dates → **year**                                              |
-| **Every resource (universal PHI vectors)**                                                                | `identifier`, dates, narrative `text.div`, `extension` values, `Reference.display` | identifier → **surrogate** by `system` (US-SSN **removed**); dates → **year**; narrative / extension values / reference labels **blocked** |
-| **Clinical resources** (`Observation`, `Condition`, …)                                                    | codes, values, units, statuses, reference wiring                                   | **retained untouched** (the over-scrub guard)                                                                                              |
+| Scope                                                                                                     | Loci                                                                               | Transform                                                                                                                                                                                           |
+| --------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Person resources** (`Patient` / `RelatedPerson` / `Practitioner` / `Person` + nested `Patient.contact`) | `name`, `telecom`, `photo`, `address`, `birthDate`, dates                          | name/telecom/photo **removed**; `address` → safe **3-digit ZIP** (or `000`); dates → **year**                                                                                                       |
+| **Every resource (universal PHI vectors)**                                                                | `identifier`, dates, narrative `text.div`, `extension` values, `Reference.display` | identifier **removed** under Safe Harbor (a surrogate by `system` only under a preset that does not claim the label); dates → **year**; narrative / extension values / reference labels **blocked** |
+| **Clinical resources** (`Observation`, `Condition`, …)                                                    | codes, values, units, statuses, reference wiring                                   | **retained untouched** (the over-scrub guard)                                                                                                                                                       |
 
 A `Reference.display` (a person label) is blocked; a `Coding.display` (a coded term like `Sodium`) is
 retained: the two are told apart structurally. Contained resources and `Bundle` entries are walked, with
@@ -255,18 +267,18 @@ const { x12, manifest } = deidentifyX12(parseX12(raw), { context });
 // `x12` is the de-identified interchange; `manifest` is the value-free audit.
 ```
 
-| Locus                                                        | Handling                                                                                                                                         |
-| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **`NM1`** (subscriber / patient / dependent)                 | name (`03–07`) **removed**; id (`09`) routed by the `08` qualifier: SSN **removed**, member **pseudonymized**                                    |
-| **`NM1`** (recognized provider / organization)               | **retained** (provider identity is not the individual's PHI, mirroring the HL7 adapter)                                                          |
-| **`NM1`** (unknown entity code)                              | **fails closed**: name + id blocked                                                                                                              |
-| **`N1` / `SBR`**                                             | `N1` payer/provider org retained (patient-side/unknown party fails closed); `SBR-03` group/policy **pseudonymized**, `SBR-04` group name removed |
-| **`N3` / `N4`**                                              | street + city **removed**, ZIP → safe 3-digit, state retained (unmapped `N4-06` location id fails closed)                                        |
-| **`DMG-02`**, **`DTP-03`**, **`DTM-02`**                     | dates → **year**                                                                                                                                 |
-| **`PER`**                                                    | contact name + communication numbers **removed**                                                                                                 |
-| **`REF`**                                                    | patient / member / group / SSN identifier removed or **pseudonymized**; admin/provider reference retained; **unknown qualifier fails closed**    |
-| **`CLM-01` / `CLP-01`**                                      | patient account number **pseudonymized**                                                                                                         |
-| **Clinical / financial** (`HI`, `SV*`, `SVC`, `AMT`, `CAS`…) | **retained untouched**: diagnosis / procedure codes, amounts, quantities survive byte-identical                                                  |
+| Locus                                                        | Handling                                                                                                                                                     |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **`NM1`** (subscriber / patient / dependent)                 | name (`03–07`) **removed**; id (`09`) routed by the `08` qualifier: SSN **removed**, member **removed** under Safe Harbor                                    |
+| **`NM1`** (recognized provider / organization)               | **retained** (provider identity is not the individual's PHI, mirroring the HL7 adapter)                                                                      |
+| **`NM1`** (unknown entity code)                              | **fails closed**: name + id blocked                                                                                                                          |
+| **`N1` / `SBR`**                                             | `N1` payer/provider org retained (patient-side/unknown party fails closed); `SBR-03` group/policy **removed** under Safe Harbor, `SBR-04` group name removed |
+| **`N3` / `N4`**                                              | street + city **removed**, ZIP → safe 3-digit, state retained (unmapped `N4-06` location id fails closed)                                                    |
+| **`DMG-02`**, **`DTP-03`**, **`DTM-02`**                     | dates → **year**                                                                                                                                             |
+| **`PER`**                                                    | contact name + communication numbers **removed**                                                                                                             |
+| **`REF`**                                                    | patient / member / group / SSN identifier **removed** under Safe Harbor; admin/provider reference retained; **unknown qualifier fails closed**               |
+| **`CLM-01` / `CLP-01`**                                      | patient account number **removed** under Safe Harbor (pseudonymized only under a preset that does not claim it)                                              |
+| **Clinical / financial** (`HI`, `SV*`, `SVC`, `AMT`, `CAS`…) | **retained untouched**: diagnosis / procedure codes, amounts, quantities survive byte-identical                                                              |
 
 ## De-identify an NCPDP Telecom transaction
 
@@ -284,7 +296,7 @@ const { telecom, manifest } = deidentifyTelecom(parseTelecom(raw), { context });
 
 The Patient (`01`), Insurance (`04`), and Coordination-of-Benefits (`05`) segments and the header Date of
 Service carry the individual's identity: name / phone / street / city **removed**, ZIP → 3-digit, DOB and
-dates → year, patient / cardholder / group ids **pseudonymized**. The Prescriber (`03`) id is **removed**
+dates → year, patient / cardholder / group ids **removed** under Safe Harbor. The Prescriber (`03`) id is **removed**
 (a deliberate asymmetry with the X12 adapter's provider-retention stance). A free-text field
 (`544-FY` DUR, `504-F4` message) and any unmapped / unknown segment **fail closed**; the clinical /
 financial segments (NDC drug codes, quantities, days-supply, pricing, DUR codes) are retained untouched.
@@ -350,9 +362,10 @@ registry.pseudonym("MRN-1"); // same MRN → same surrogate corpus-wide
 **The key contract.** You supply the key; there is **no weak default** (an absent key is a fatal
 `DEID_NO_KEY`, never a silent fallback). Rotating the key is **intentional linkage breakage**: a new
 key un-links a corpus from records made under the old one. The library holds no persistent key store.
-Date-shift retains dates in shifted form, so it is Expert-Determination-supporting, **not** Safe Harbor,
-and the library rejects any date-shifting policy that claims the `safe-harbor` label
-(`DEID_POLICY_INVALID`).
+Date-shift retains dates in shifted form, and a keyed surrogate is derived from the individual's own
+value, so both are Expert-Determination-supporting, **not** Safe Harbor. The library rejects any
+policy claiming the `safe-harbor` label that carries either (`DEID_POLICY_INVALID`), naming the
+offending category and transform.
 
 ## Free text: block-by-default + BYO redaction
 
@@ -390,8 +403,13 @@ HIPAA has two routes to de-identification: **Safe Harbor** (mechanical, implemen
 Determination** (§164.514(b)(1), a qualified statistician's risk judgment). `@cosyte/deid` **supports**
 the latter and **never renders** it. `buildExpertDeterminationSupportReport(manifest)` structures the
 value-free manifest into what an expert reasons about: per-locus dispositions, coverage across all 18
-categories, and the **retained-quasi-identifier inventory** (year-only dates, safe 3-digit ZIP prefixes,
-exact ages ≤ 89, and any whole value a profile's retention set kept), then hands it over.
+categories, and **two residual inventories**, then hands it over. The
+**retained-quasi-identifier inventory** holds pieces of the original value that survived (year-only
+dates, safe 3-digit ZIP prefixes, exact ages ≤ 89, and any whole value a profile's retention set
+kept). The **keyed-surrogate residual inventory** is its sibling and holds every locus flagged
+`reidentificationCode`: a replacement **derived** from the value under your key, where no plaintext
+survives but the linkage does. They are kept apart on purpose, because a determiner reasons about the
+two very differently.
 
 ```ts
 import { buildExpertDeterminationSupportReport } from "@cosyte/deid";
@@ -424,20 +442,22 @@ import {
   createDeidContext,
 } from "@cosyte/deid";
 
-// The fail-closed default (dates → year, the (R) catch-all blocked).
+// The fail-closed default (dates → year, MRN/beneficiary/account REMOVED, the (R) catch-all blocked).
+// It uses no keyed transform, so it needs no key.
 SAFE_HARBOR_PROFILE.standard; // => "safe-harbor"
 
-// A longitudinal research preset: dates are DATE-SHIFTED, not generalized. Deliberately less
-// protective than Safe Harbor → NOT labelled "safe-harbor", requires a keyed per-patient context, and
-// is NOT a certified de-identification (nor, on its own, a §164.514(e) Limited Data Set; that needs a
-// Data Use Agreement, which is yours).
+// A longitudinal research preset: dates are DATE-SHIFTED, not generalized, and MRN / beneficiary /
+// account keep a CONSISTENT KEYED SURROGATE so linkage survives. Deliberately less protective than
+// Safe Harbor → NOT labelled "safe-harbor", requires a keyed per-patient context, and is NOT a
+// certified de-identification (nor, on its own, a §164.514(e) Limited Data Set; that needs a Data Use
+// Agreement, which is yours).
 LIMITED_DATA_SET_PROFILE.requiresContext; // => true
 
 // A per-site profile may only move a category to an equal-or-STRONGER transform; a weakening override
 // is a fatal DEID_PROFILE_INVALID.
 const strict = defineDeidProfile({
   name: "site-strict",
-  transforms: { [SAFE_HARBOR_CATEGORIES.MRN]: "redact" }, // pseudonymize → redact (stronger): OK
+  transforms: { [SAFE_HARBOR_CATEGORIES.GEOGRAPHIC]: "redact" }, // generalize → redact (stronger): OK
 });
 
 const ctx = createDeidContext({ key: process.env.DEID_KEY! });
@@ -461,8 +481,9 @@ determination**.
 - **18 Safe Harbor categories**: §164.514(b)(2)(i)(A)–(R), including the open-ended catch-all (R).
 - **Fail-closed rule**: anything uncertain is blocked, never passed through; clinical values are
   retained untouched.
-- **Value-free manifest**: category + transform + locus + count + disposition + code, never a value,
-  never the key, never the date-shift offset. The locus is the one field built out of the document: a
+- **Value-free manifest**: category + transform + locus + count + disposition + code + a boolean
+  `reidentificationCode` (`true` only where a keyed surrogate was emitted), never a value, never the
+  key, never the date-shift offset. The locus is the one field built out of the document: a
   per-format adapter names the position with the identifier that sits there, so each identifier is
   checked against the shape its position promises and a non-conforming one is refused as
   `WITHHELD_LOCUS_TOKEN` (`<withheld>`) rather than echoed.

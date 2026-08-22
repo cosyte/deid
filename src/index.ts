@@ -130,6 +130,7 @@ export {
   type CategoryCoverage,
   type DispositionSummary,
   type RetainedQuasiIdentifier,
+  type KeyedSurrogateResidual,
   type QuasiIdentifierClassInput,
   type QuasiIdentifierStatistics,
   type ReportDisposition,

@@ -19,6 +19,7 @@ import {
   FATAL_CODES,
   SAFE_HARBOR_CATEGORIES,
   createDeidContext,
+  defineDeidPolicy,
   deidentify,
   type GenericLocus,
   type LocusKind,
@@ -115,6 +116,12 @@ describe("deid core conformance (fail-safe invariants)", () => {
   });
 
   it("fail-safe: a keyed policy with no context is a DEID_NO_KEY fatal, never an unkeyed fallback", () => {
+    // The built-in Safe Harbor default REMOVES an MRN, so the keyed policy is named explicitly: the
+    // fatal is a property of the keyed transform, not of the category.
+    const keyed = defineDeidPolicy({
+      name: "keyed",
+      transforms: { [SAFE_HARBOR_CATEGORIES.MRN]: "pseudonymize" },
+    });
     expect(() =>
       deidentify(
         {
@@ -127,7 +134,7 @@ describe("deid core conformance (fail-safe invariants)", () => {
             },
           ],
         },
-        {},
+        { policy: keyed },
       ),
     ).toThrowError(expect.objectContaining({ code: FATAL_CODES.DEID_NO_KEY }));
   });

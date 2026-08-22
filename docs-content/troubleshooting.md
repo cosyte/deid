@@ -19,6 +19,20 @@ transform it cannot apply to that locus. The block is recorded in the manifest w
 Pseudonymize, keyed-hash, and date-shift are **keyed**. Supply a `context`
 (`createDeidContext({ key })`): the engine **never** falls back to an unkeyed transform, because an
 unkeyed hash of an identifier is re-identifiable. Date-shift additionally needs a `patientId` scope.
+The **built-in Safe Harbor policy uses none of the three**, so it never raises this: if a Safe Harbor
+pass asks you for a key, a custom policy or profile put a keyed transform in it.
+
+## A policy threw `DEID_POLICY_INVALID`
+
+A policy claiming the `safe-harbor` label, either by its own name or through a profile that declares
+the `safe-harbor` standard, assigned a category a transform whose output is **derived from that
+category's own value**: `pseudonymize`, `hash` or `date-shift` on any category, or `generalize` on any
+category other than (B) geography and (C) dates and ages over 89. The message names the offending
+category and transform. Those are Expert-Determination techniques rather than Safe Harbor ones, so
+either withhold the value (`redact` or `block`) or name the policy distinctly - the library never
+silently strengthens a transform, and never renames a policy, behind your back. An assignment that is
+not one of the eight published transform names draws the same refusal: a pair whose derivation cannot
+be established is refused, never permitted.
 
 ## `deidentify` threw `EMPTY_INPUT`
 
@@ -28,7 +42,9 @@ The model was null/undefined or carried no `loci` array. Pass `{ loci: [...] }`.
 
 Error messages carry **no PHI**: every message this library raises is a fixed sentence, and no value,
 key, or date-shift offset is ever interpolated into one. A manifest entry never carries the value that
-was removed, generalized, or pseudonymized, and never the key or the offset.
+was removed, generalized, or pseudonymized, and never the key or the offset. Its
+`reidentificationCode` field is a **boolean** flag saying whether a keyed surrogate was emitted there,
+never the surrogate, the key or the offset itself.
 
 The **locus** needs one more sentence, because it is the one field built out of the document rather
 than chosen by the library. A per-format adapter names a locus using the identifier at that position:

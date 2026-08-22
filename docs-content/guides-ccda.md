@@ -36,9 +36,10 @@ document.toString();  // spec-clean, de-identified C-CDA XML
 manifest;             // value-free audit: category + locus + disposition, never a value
 ```
 
-A keyed transform (patient / provider id pseudonymization) requires a `context`; calling without one
-when the document needs it is a fatal `DEID_NO_KEY`: the engine never falls back to an unkeyed
-surrogate.
+The built-in Safe Harbor policy uses **no keyed transform**, so a Safe Harbor pass over a C-CDA needs
+no `context` at all. Under a preset that keeps consistent keyed surrogates instead, a `context` is
+required and calling without one when the document needs it is a fatal `DEID_NO_KEY`: the engine
+never falls back to an unkeyed surrogate.
 
 ## What is located, and how it is transformed
 
@@ -48,18 +49,18 @@ can be a drug or material name, so the body is deliberately never swept.
 
 | Participation | Loci | Transform |
 |---|---|---|
-| **recordTarget / patientRole** (+ nested `guardian`) | `id` (MRN / SSN), `addr`, `telecom`, `patient/name`, `birthTime` | name/telecom **removed**; id → consistent **surrogate** (keyed HMAC; SSN-rooted id **removed**); `birthTime` → **year**; `addr` → safe **3-digit ZIP** (or `000`), finer geography dropped |
+| **recordTarget / patientRole** (+ nested `guardian`) | `id` (MRN / SSN), `addr`, `telecom`, `patient/name`, `birthTime` | name/telecom **removed**; `id` **removed** under Safe Harbor, assigning root retained (a consistent keyed surrogate only under a preset that does not claim the label); `birthTime` → **year**; `addr` → safe **3-digit ZIP** (or `000`), finer geography dropped |
 | **author / dataEnterer / informant / authenticator / legalAuthenticator / participant / custodian** | person `name`, `id`, `addr`, `telecom`, participation `time` | same category transforms: Safe Harbor removes identifiers of **relatives, employers, and household members**, not only the patient |
-| **componentOf / documentationOf** | encounter / service-event `id`, `effectiveTime` | ids surrogated; dates → **year** |
+| **componentOf / documentationOf** | encounter / service-event `id`, `effectiveTime` | ids acted on under the configured transform; dates → **year** |
 | **section `<text>` narrative, `nonXMLBody`** | every narrative block | **fail closed**: blocked, never regex-scrubbed |
 | **unknown / `sdtc` / foreign elements carrying a value** | any value-bearing element that is neither mapped PHI nor recognized coded structure | **fail closed**: blocked |
 | **structuredBody clinical entries** (codes, values, units, statuses, dosing periods) | n/a | **retained untouched** (the over-scrub guard) |
 
 An `id`'s Safe Harbor category is read from its assigning-authority `root` OID: the SSN OID
-(`2.16.840.1.113883.4.1`) routes to **removed**, every other person/organization id to a **consistent
-surrogate**, so an SSN and an MRN at adjacent `id` loci are handled differently, structurally, from the
-parser's typing. A dosing-period `effectiveTime` (`PIVL_TS` / `EIVL_TS`) is a duration, not a calendar
-date, and is never generalized.
+(`2.16.840.1.113883.4.1`) routes to the SSN category, every other person/organization id to the
+medical record number category, so the parser's typing, not a guess, decides which transform the
+configured policy applies to each. A dosing-period `effectiveTime` (`PIVL_TS` / `EIVL_TS`) is a
+duration, not a calendar date, and is never generalized.
 
 ## How to read a C-CDA locus path
 

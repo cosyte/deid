@@ -135,14 +135,14 @@ describe("deidentifyFhir, the over-scrub test (clinical values + wiring survive)
 });
 
 describe("deidentifyFhir, structured per-category behavior", () => {
-  it("pseudonymizes the patient MRN by system (keeping system) and removes an SSN-system identifier", () => {
+  it("removes the patient MRN by system (keeping system) and removes an SSN-system identifier", () => {
     const { document, manifest } = deid("bundle");
     const patient = firstResource(document, "Patient");
     const ids = getProperty(patient, "identifier");
     const items = ids !== undefined && isList(ids) ? ids.items : [];
-    // MRN → 64-hex HMAC surrogate; system retained.
+    // MRN → value REMOVED under the Safe Harbor default (no keyed surrogate); system retained.
     const mrn = items[0];
-    expect(strValue(mrn, "value")).toMatch(/^[0-9a-f]{64}$/);
+    expect(getProperty(asComplex(mrn), "value")).toBeUndefined();
     expect(strValue(mrn, "system")).toBe("http://hospital.example/mrn");
     // SSN-system id → value removed, system retained.
     const ssn = items[1];
@@ -361,9 +361,15 @@ describe("deidentifyFhir, fail closed on narrative, extensions, and unknown stru
 
 describe("deidentifyFhir, fatal + policy + immutability + value-free manifest", () => {
   it("throws DEID_NO_KEY when a keyed transform is needed but no context is supplied", () => {
-    expect(() => deidentifyFhir(parseResource(loadFixture("bundle")).resource, {})).toThrowError(
-      expect.objectContaining({ code: FATAL_CODES.DEID_NO_KEY }),
-    );
+    // The Safe Harbor default is no longer keyed at an identifier locus, so the keyed policy is named.
+    const keyed = defineDeidPolicy({ name: "keyed", transforms: { [C.MRN]: "pseudonymize" } });
+    expect(() =>
+      deidentifyFhir(parseResource(loadFixture("bundle")).resource, { policy: keyed }),
+    ).toThrowError(expect.objectContaining({ code: FATAL_CODES.DEID_NO_KEY }));
+  });
+
+  it("completes with NO key at all under the built-in Safe Harbor default", () => {
+    expect(() => deidentifyFhir(parseResource(loadFixture("bundle")).resource, {})).not.toThrow();
   });
 
   it("date-shifts under an Expert-Determination policy instead of generalizing", () => {

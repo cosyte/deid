@@ -83,7 +83,7 @@ export interface DeidOptions {
 interface LocusOutcome {
   readonly value: string | null;
   readonly disposition: TransformedLocus["disposition"];
-  readonly manifest?: Omit<DeidManifestEntry, "count">;
+  readonly manifest?: Omit<DeidManifestEntry, "count" | "reidentificationCode">;
 }
 
 /** Build a fail-closed (blocked) outcome for a locus, recording the given disposition code. */

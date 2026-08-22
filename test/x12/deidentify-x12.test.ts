@@ -19,6 +19,7 @@ import {
   FATAL_CODES,
   SAFE_HARBOR_CATEGORIES,
   createDeidContext,
+  defineDeidPolicy,
 } from "../../src/index.js";
 import {
   classifyNm1Entity,
@@ -156,9 +157,17 @@ describe("X12 structured behavior", () => {
     );
   });
 
-  it("pseudonymizes the CLM-01 patient account number consistently but not reversibly", () => {
+  it("REMOVES the CLM-01 patient account number under the Safe Harbor default", () => {
     const { x12 } = deidentifyX12String(load("837p"), { context: ctx });
-    // The account number is gone and replaced by a hex surrogate; the sibling amount survives.
+    // The account number is gone and NOT replaced by a keyed surrogate; the sibling amount survives.
+    expect(x12).not.toContain("ZZACCTX12");
+    const clm = x12.split("~").find((s) => s.startsWith("CLM"));
+    expect(clm).toMatch(/^CLM\*\*100\.00/);
+  });
+
+  it("pseudonymizes the CLM-01 account number consistently but not reversibly under a keyed policy", () => {
+    const keyed = defineDeidPolicy({ name: "keyed", transforms: { [C.ACCOUNT]: "pseudonymize" } });
+    const { x12 } = deidentifyX12String(load("837p"), { context: ctx, policy: keyed });
     expect(x12).not.toContain("ZZACCTX12");
     const clm = x12.split("~").find((s) => s.startsWith("CLM"));
     expect(clm).toMatch(/^CLM\*[0-9a-f]{64}\*100\.00/);
@@ -214,9 +223,16 @@ describe("X12 fail-closed + manifest + immutability", () => {
   });
 
   it("throws DEID_NO_KEY when a keyed transform is required but no key context is supplied", () => {
-    expect(() => deidentifyX12String(load("837p"), {})).toThrowError(
+    // The Safe Harbor default is no longer keyed at an identifier locus, so the keyed policy is named.
+    const keyed = defineDeidPolicy({ name: "keyed", transforms: { [C.ACCOUNT]: "pseudonymize" } });
+    expect(() => deidentifyX12String(load("837p"), { policy: keyed })).toThrowError(
       expect.objectContaining({ code: FATAL_CODES.DEID_NO_KEY }),
     );
+  });
+
+  it("completes with NO key at all under the built-in Safe Harbor default", () => {
+    const { x12 } = deidentifyX12String(load("837p"), {});
+    expect(x12).not.toContain("ZZACCTX12");
   });
 
   it("extracts loci without throwing on an interchange with no transactions", () => {

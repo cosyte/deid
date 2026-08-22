@@ -38,8 +38,9 @@ telecom; // the de-identified Telecom transaction
 manifest; // value-free audit: category + locus + disposition, never a value
 ```
 
-A keyed transform (patient / cardholder / group id pseudonymization) requires a `context`; calling
-without one when the transaction needs it is a fatal `DEID_NO_KEY`.
+The built-in Safe Harbor policy uses **no keyed transform**, so a Safe Harbor pass over a transaction
+needs no `context` at all. Under a preset that keeps consistent keyed surrogates instead, a `context`
+is required and calling without one when the transaction needs it is a fatal `DEID_NO_KEY`.
 
 ## What is located, and how it is transformed
 
@@ -48,10 +49,10 @@ standard, so the map keys off the field id directly.
 
 | Segment / locus                          | Handling                                                                                                       |
 | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| **Patient (`01`)**                       | name (`CA`/`CB`) + phone (`CQ`) removed; street (`CM`) + city (`CN`) removed; ZIP (`CP`) → 3-digit; DOB (`C4`) → year; patient id (`CY`) **pseudonymized**; gender + state retained |
-| **Insurance (`04`)**                     | cardholder id (`C2`) + group id (`C1`) **pseudonymized**; cardholder name (`CC`/`CD`) removed; person code retained |
+| **Patient (`01`)**                       | name (`CA`/`CB`) + phone (`CQ`) removed; street (`CM`) + city (`CN`) removed; ZIP (`CP`) → 3-digit; DOB (`C4`) → year; patient id (`CY`) **removed** under Safe Harbor; gender + state retained |
+| **Insurance (`04`)**                     | cardholder id (`C2`) + group id (`C1`) **removed** under Safe Harbor; cardholder name (`CC`/`CD`) removed; person code retained |
 | **Prescriber (`03`)**                    | prescriber id (`DB`) **removed**                                                                              |
-| **Coordination of Benefits (`05`)**      | other-payer cardholder (`NU`) + group (`MJ`) ids **pseudonymized**; other-payer date (`E8`) → year             |
+| **Coordination of Benefits (`05`)**      | other-payer cardholder (`NU`) + group (`MJ`) ids **removed** under Safe Harbor; other-payer date (`E8`) → year |
 | **Header**                               | Date of Service → year                                                                                        |
 | **Free text** (`544-FY`, `504-F4`, `526-FQ`) | **fails closed**: blocked, never scrubbed by a naive pass                                                 |
 | **Clinical / financial** (`07`/`08`/`10`/`11`/`12`/`13`) | **retained untouched**: NDC drug codes, quantities, days-supply, pricing, DUR reason codes           |

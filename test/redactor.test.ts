@@ -120,9 +120,10 @@ describe("BYO free-text redactor, scope and safety invariants", () => {
       },
       { context: ctx, redactor: passthrough },
     );
-    // Name still removed structurally; MRN still pseudonymized; clinical value survives untouched.
+    // Name still removed structurally; MRN still removed under the Safe Harbor default (it is no
+    // longer a keyed surrogate); clinical value survives untouched.
     expect(out.document.loci[0]).toMatchObject({ value: null, disposition: "removed" });
-    expect(out.document.loci[1]?.value).toMatch(/^[0-9a-f]{64}$/);
+    expect(out.document.loci[1]).toMatchObject({ value: null, disposition: "removed" });
     expect(out.document.loci[2]).toMatchObject({ value: "5.4", disposition: "retained" });
     // Only the free-text locus went through the redactor.
     expect(out.document.loci[3]?.disposition).toBe("transformed");

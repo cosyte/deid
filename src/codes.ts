@@ -30,12 +30,20 @@ export const FATAL_CODES = {
    */
   DEID_NO_KEY: "DEID_NO_KEY",
   /**
-   * A policy violates the key/label contract: most importantly, it applies the interval-preserving
-   * **`date-shift`** transform while carrying the reserved **`safe-harbor`** label. A shifted-but-real
-   * date is still "an element of a date" under §164.514(b)(2)(i)(C), so date-shift is an
-   * Expert-Determination technique, **not** Safe Harbor; labelling it `safe-harbor` would misrepresent
-   * the residual risk. The engine rejects it at point of use rather than silently emit shifted real
-   * dates under a Safe Harbor claim. The fatal set is additions-only.
+   * A policy violates the key/label contract: whatever claims the reserved **`safe-harbor`** label,
+   * either as a policy **name** or as a profile's declared **standard**, assigns a category a
+   * transform whose output for that category is **derived from that category's own value**. A
+   * shifted-but-real date is still "an element of a date" under §164.514(b)(2)(i)(C), and a keyed
+   * surrogate of a medical record, beneficiary or account number is a code "derived from ...
+   * information about the individual", which §164.514(c)(1) does not permit and the (R) exception
+   * therefore does not reach. Both are Expert-Determination techniques, **not** Safe Harbor ones, and
+   * labelling either `safe-harbor` would misrepresent the residual risk.
+   *
+   * The refusal names the offending category and transform, carries no value / key / offset, and
+   * fires both at mint time and at point of use, so a hand-built policy object cannot slip past. It
+   * also covers an assignment that is not a published transform name at all: a pair whose derivation
+   * cannot be established is refused, never permitted. A policy that does **not** claim the label is
+   * entitled to its keyed surrogate and is applied unchanged. The fatal set is additions-only.
    */
   DEID_POLICY_INVALID: "DEID_POLICY_INVALID",
   /**

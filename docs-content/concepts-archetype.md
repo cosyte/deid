@@ -29,9 +29,21 @@ scrubber.
   preserving intervals. An **Expert-Determination** technique (a shifted real date is still a date), so
   it is **not** used under the Safe Harbor policy: the offset never leaks.
 - **pseudonymize**: replace an identifier (MRN, beneficiary, account) with a consistent **keyed
-  HMAC-SHA-256** surrogate so records still link, without being reversible without the key.
+  HMAC-SHA-256** surrogate so records still link, without being reversible without the key. Like
+  date-shift, an **Expert-Determination** technique and **not** used under the Safe Harbor policy: a
+  surrogate derived from the individual's own value is not a §164.514(c)(1) code, so the Safe Harbor
+  default **removes** those three categories instead. It is available under a preset that does not
+  claim Safe Harbor, such as `LIMITED_DATA_SET_PROFILE`.
 - **hash**: a keyed one-way digest. An **unsalted** hash of an identifier is re-identifiable, so the
   library keys it; the unkeyed path is off by default and documented non-conforming to §164.514(c).
+  It is derived output too, so it may not wear the Safe Harbor label either.
+
+A policy that carries the `safe-harbor` label and assigns a category a transform whose output is
+**derived from that category's own value** is **refused** with a typed `DEID_POLICY_INVALID` fatal
+naming the category and the transform. `generalize` is permitted only on **(B)** geography and
+**(C)** dates and ages over 89, the two sub-paragraphs that state a permitted coarsening. A policy
+that does not claim the label keeps its keyed surrogate: the library never silently substitutes a
+stronger transform, and never rewrites a caller's policy name.
 
 ## The 18 Safe Harbor categories
 
@@ -42,10 +54,13 @@ why fail-closed is not optional: a closed allow-list of 17 concrete types can ne
 ## The value-free manifest
 
 Every `DeidManifestEntry` records the **category** acted on, the **transform** applied, the **locus**
-(a path: segment/field index, XPath, FHIRPath, DICOM tag), a **count**, a **disposition**, and a
-stable **code**. It **never** records the value that was removed, generalized, or pseudonymized: a
-manifest that logged a value would be a PHI leak in the audit trail. The date-shift offset and the HMAC
-key never appear anywhere.
+(a path: segment/field index, XPath, FHIRPath, DICOM tag), a **count**, a **disposition**, a stable
+**code**, and a boolean **`reidentificationCode`**. That last field is `true` exactly where the pass
+emitted a **keyed surrogate** (`pseudonymize`, `hash` or `date-shift`) and `false` everywhere else:
+it is a flag, never a key or an offset, and it is what the support report's keyed-surrogate residual
+inventory is built from. It **never** records the value that was removed, generalized, or
+pseudonymized: a manifest that logged a value would be a PHI leak in the audit trail. The date-shift
+offset and the HMAC key never appear anywhere.
 
 The **locus** is the one field a per-format adapter builds out of the document, by naming the position
 with the identifier that sits there (a segment id, an element name, a tag). Each of those is checked
