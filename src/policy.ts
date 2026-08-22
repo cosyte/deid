@@ -54,6 +54,67 @@ export const KEYED_TRANSFORMS: ReadonlySet<TransformName> = new Set([
 ]);
 
 /**
+ * The eight published transform names, as a runtime set. An assignment that is not one of these
+ * cannot be classified, so a `safe-harbor`-labelled policy carrying one is **refused**: a pair whose
+ * derivation has not been established is never permitted.
+ */
+const PUBLISHED_TRANSFORM_NAMES: ReadonlySet<unknown> = new Set<TransformName>([
+  "redact",
+  "generalize",
+  "date-shift",
+  "pseudonymize",
+  "hash",
+  "block",
+  "byo-redact",
+  "retain",
+]);
+
+/**
+ * Transforms that **withhold** the value rather than compute a replacement from it. `redact` and
+ * `block` withhold by definition; `byo-redact` and `retain` are never performed from the per-category
+ * map and each falls closed to a block there, so the pair emits a withholding too. None is ever
+ * derived-output, on any category.
+ */
+const WITHHOLDING_TRANSFORMS: ReadonlySet<TransformName> = new Set([
+  "redact",
+  "block",
+  "byo-redact",
+  "retain",
+]);
+
+/**
+ * The two categories §164.514(b)(2)(i) states a permitted **coarsening** for rather than naming an
+ * identifier to remove: (B) geography, where the initial three digits of a ZIP may remain, and (C)
+ * dates, where the year may remain and an age over 89 is banded. `generalize` is label-permitted on
+ * these two and on no other category.
+ */
+const COARSENING_PERMITTED_CATEGORIES: ReadonlySet<SafeHarborCategory> = new Set([
+  SAFE_HARBOR_CATEGORIES.GEOGRAPHIC,
+  SAFE_HARBOR_CATEGORIES.DATES,
+]);
+
+/**
+ * Whether a (category, transform) pair produces a **derived output**: a value computed from that
+ * category's own value, rather than a withholding of it or a coarsening the regulation expressly
+ * permits for that category. Open at the bottom: an unpublished or unclassified name is treated as
+ * derived-output, so the label contract fails closed.
+ */
+function isDerivedOutputPair(category: SafeHarborCategory, transform: TransformName): boolean {
+  if (!PUBLISHED_TRANSFORM_NAMES.has(transform)) {
+    return true;
+  }
+  if (WITHHOLDING_TRANSFORMS.has(transform)) {
+    return false;
+  }
+  if (transform === "generalize") {
+    return !COARSENING_PERMITTED_CATEGORIES.has(category);
+  }
+  // `pseudonymize`, `hash` and `date-shift` compute the replacement from the value, on all 18
+  // categories; anything else published but unclassified falls closed here too.
+  return true;
+}
+
+/**
  * A de-identification policy: a name plus a per-category transform assignment covering all 18
  * categories.
  *
@@ -72,16 +133,20 @@ export interface DeidPolicy {
 }
 
 /**
- * The built-in **Safe Harbor** policy. Direct identifiers with no analytic value are redacted; MRN /
- * beneficiary / account numbers are pseudonymized (consistent surrogates); geography and dates are
- * generalized; the open-ended catch-all (R) is **blocked** (fail-closed). Dates generalize to year:
- * date-shift is an Expert-Determination mode, not Safe Harbor.
+ * The built-in **Safe Harbor** policy. Direct identifiers with no analytic value are redacted, and
+ * that includes the medical record, health plan beneficiary and account numbers: their value is
+ * **removed**, never replaced by a keyed surrogate. Geography and dates are generalized; the
+ * open-ended catch-all (R) is **blocked** (fail-closed). Dates generalize to year, and a keyed
+ * surrogate of an identifier is derived from information about the individual, so both date-shift and
+ * pseudonymization are Expert-Determination techniques rather than Safe Harbor ones. A consumer who
+ * needs a consistent keyed surrogate for those three categories uses
+ * `LIMITED_DATA_SET_PROFILE`, which does not claim Safe Harbor.
  *
  * @example
  * ```ts
  * import { SAFE_HARBOR_POLICY, SAFE_HARBOR_CATEGORIES } from "@cosyte/deid";
  *
- * SAFE_HARBOR_POLICY.transforms[SAFE_HARBOR_CATEGORIES.MRN]; // => "pseudonymize"
+ * SAFE_HARBOR_POLICY.transforms[SAFE_HARBOR_CATEGORIES.MRN]; // => "redact"
  * ```
  */
 export const SAFE_HARBOR_POLICY: DeidPolicy = Object.freeze({
@@ -94,9 +159,9 @@ export const SAFE_HARBOR_POLICY: DeidPolicy = Object.freeze({
     [SAFE_HARBOR_CATEGORIES.FAX]: "redact",
     [SAFE_HARBOR_CATEGORIES.EMAIL]: "redact",
     [SAFE_HARBOR_CATEGORIES.SSN]: "redact",
-    [SAFE_HARBOR_CATEGORIES.MRN]: "pseudonymize",
-    [SAFE_HARBOR_CATEGORIES.HEALTH_PLAN_BENEFICIARY]: "pseudonymize",
-    [SAFE_HARBOR_CATEGORIES.ACCOUNT]: "pseudonymize",
+    [SAFE_HARBOR_CATEGORIES.MRN]: "redact",
+    [SAFE_HARBOR_CATEGORIES.HEALTH_PLAN_BENEFICIARY]: "redact",
+    [SAFE_HARBOR_CATEGORIES.ACCOUNT]: "redact",
     [SAFE_HARBOR_CATEGORIES.CERTIFICATE_LICENSE]: "redact",
     [SAFE_HARBOR_CATEGORIES.VEHICLE]: "redact",
     [SAFE_HARBOR_CATEGORIES.DEVICE]: "redact",
@@ -157,12 +222,68 @@ export function defineDeidPolicy(spec: DeidPolicySpec): DeidPolicy {
 }
 
 /**
- * Enforce the key/label contract on a policy, **failing closed** if it is violated: a policy that
- * applies the interval-preserving `date-shift` transform must **not** carry the reserved `safe-harbor`
- * label, because a shifted-but-real date is still a date element (§164.514(b)(2)(i)(C)): date-shift is
- * an Expert-Determination technique, not Safe Harbor. Enforced both when a policy is minted
- * ({@link defineDeidPolicy}) and, so a hand-built {@link DeidPolicy} object cannot slip past, at the
- * point of use ({@link resolvePolicy}).
+ * Enforce the **label contract** on a transform assignment, **failing closed** if it is violated:
+ * whatever claims the reserved `safe-harbor` label may not assign a category a transform whose output
+ * for that category is **derived from that category's own value**. A keyed surrogate of a medical
+ * record number, like a shifted-but-real date, is derived from information about the individual, so
+ * §164.514(c)(1) does not permit it as a retained code and the (R) exception does not reach it: those
+ * are Expert-Determination techniques, not Safe Harbor ones.
+ *
+ * Every (category, transform) pair has a determined outcome. `redact` and `block` withhold the value,
+ * and `byo-redact` and `retain` fall closed to a block from the per-category map, so none of the four
+ * is ever derived-output. `pseudonymize`, `hash` and `date-shift` compute the replacement from the
+ * value, so each is derived-output on all 18 categories. `generalize` is permitted on (B) geography
+ * and (C) dates-and-ages-over-89, the two sub-paragraphs that state a permitted coarsening, and is
+ * derived-output on the other sixteen. An assignment that is not a published transform name at all
+ * cannot be classified and is refused rather than allowed.
+ *
+ * @param transforms - The per-category assignment claiming the label.
+ * @param claimant - A library-owned phrase naming the surface that claims the label, for the message.
+ * @throws {@link DeidError} with code `DEID_POLICY_INVALID`, naming the offending category and
+ *   transform, and carrying no value, no key and no offset.
+ * @internal
+ */
+export function assertSafeHarborTransformContract(
+  transforms: Readonly<Record<SafeHarborCategory, TransformName>>,
+  claimant: string,
+): void {
+  // Regulatory order (A→R), so a policy offending in more than one place names the first
+  // sub-paragraph that offends and the outcome is deterministic.
+  for (const category of Object.values(SAFE_HARBOR_CATEGORIES)) {
+    const transform = transforms[category];
+    if (!PUBLISHED_TRANSFORM_NAMES.has(transform)) {
+      throw new DeidError(
+        FATAL_CODES.DEID_POLICY_INVALID,
+        `${claimant} assigns category "${category}" a transform that is not one of the published ` +
+          "transform names, so whether its output would be derived from that category's own value " +
+          "cannot be established. A pair whose derivation is unknown is refused, never permitted: " +
+          "assign one of the published transforms, or name the policy distinctly.",
+      );
+    }
+    if (!isDerivedOutputPair(category, transform)) {
+      continue;
+    }
+    const because =
+      transform === "generalize"
+        ? "coarsening is permitted only for (B) geographic subdivisions and (C) dates and ages over " +
+          "89, so a coarsened value of this category is still derived from the value it replaces"
+        : "its output for that category is computed from the category's own value, so it is a " +
+          "re-identification code §164.514(c)(1) does not permit";
+    throw new DeidError(
+      FATAL_CODES.DEID_POLICY_INVALID,
+      `${claimant} must not assign category "${category}" the "${transform}" transform: ` +
+        `${because}. Withhold the value instead, or name the policy distinctly.`,
+    );
+  }
+}
+
+/**
+ * Enforce the key/label contract on a policy, **failing closed** if it is violated: a policy whose
+ * name is exactly the reserved `safe-harbor` label may carry no derived-output pair (see
+ * {@link assertSafeHarborTransformContract}). The comparison is exact, so a policy named
+ * `Safe-Harbor` is a differently-named policy the guard does not reach. Enforced both when a policy is
+ * minted ({@link defineDeidPolicy}) and, so a hand-built {@link DeidPolicy} object cannot slip past,
+ * at the point of use ({@link resolvePolicy}).
  *
  * @param policy - The policy to validate.
  * @throws {@link DeidError} with code `DEID_POLICY_INVALID` if the contract is violated.
@@ -172,14 +293,10 @@ export function assertPolicyContract(policy: DeidPolicy): void {
   if (policy.name !== SAFE_HARBOR_LABEL) {
     return;
   }
-  const shiftsDates = Object.values(policy.transforms).includes("date-shift");
-  if (shiftsDates) {
-    throw new DeidError(
-      FATAL_CODES.DEID_POLICY_INVALID,
-      'a "date-shift" policy must not carry the "safe-harbor" label: a shifted real date is still a ' +
-        "date element (Expert-Determination technique, not Safe Harbor). Name it distinctly.",
-    );
-  }
+  assertSafeHarborTransformContract(
+    policy.transforms,
+    `a policy carrying the reserved "${SAFE_HARBOR_LABEL}" label`,
+  );
 }
 
 /**

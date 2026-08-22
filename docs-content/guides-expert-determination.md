@@ -34,6 +34,7 @@ const report = buildExpertDeterminationSupportReport(
       count: 1,
       disposition: "removed",
       code: "DEID_CATEGORY_REMOVED",
+      reidentificationCode: false,
     },
   ],
   { policy: "safe-harbor" },
@@ -50,8 +51,8 @@ would be a real compliance harm, so the report is deliberately descriptive.
 ## What the report contains
 
 Feed it the manifest from any adapter (or an array of manifests for a corpus). You get: per-locus
-dispositions, coverage across all 18 Safe Harbor categories, a disposition roll-up, and the
-retained-quasi-identifier inventory.
+dispositions, coverage across all 18 Safe Harbor categories, a disposition roll-up, and **two
+residual inventories** - the retained-quasi-identifier one and the keyed-surrogate one.
 
 ```ts runnable
 import { buildExpertDeterminationSupportReport, SAFE_HARBOR_CATEGORIES } from "@cosyte/deid";
@@ -64,6 +65,7 @@ const report = buildExpertDeterminationSupportReport([
     count: 1,
     disposition: "removed",
     code: "DEID_CATEGORY_REMOVED",
+    reidentificationCode: false,
   },
   {
     category: SAFE_HARBOR_CATEGORIES.DATES,
@@ -72,6 +74,7 @@ const report = buildExpertDeterminationSupportReport([
     count: 1,
     disposition: "transformed",
     code: "DEID_RESIDUAL_RETAINED",
+    reidentificationCode: false,
   },
 ]);
 
@@ -91,6 +94,41 @@ is the stronger residual, and it is inventoried here rather than left to a footn
 Clinical values retained untouched by the over-scrub guard are not identifiers and are not enumerated.
 What is enumerated **nowhere** is a field inside a retained structure that no locus map reaches; those
 are named per format in the published limitations, and this report cannot see them.
+
+## The keyed-surrogate residual inventory: a different residual, kept apart
+
+A **keyed surrogate** is not a retained quasi-identifier and never joins that list. A retained
+quasi-identifier is a piece of the original value that survived; a keyed surrogate is a *replacement*
+**derived** from the value under your key (`pseudonymize`, `hash`, `date-shift`). No plaintext
+survives, but the **linkage** does: anyone holding the key can re-link the records, which is why
+§164.514(c)(1) does not permit such a code under Safe Harbor and why the built-in Safe Harbor policy
+emits none. Folding the two together would tell a determiner that a re-identification code is the
+same kind of residual as a kept year, so each has its own section.
+
+Every locus the pass surrogated carries `reidentificationCode: true` in the manifest, and
+`report.keyedSurrogateResiduals` is built from that flag, carrying the locus, the category, the count
+and the transform that produced it - never a value, never the key, never the shift offset. An empty
+inventory means the pass emitted no keyed surrogate, never that one went unmeasured.
+
+```ts runnable
+import { buildExpertDeterminationSupportReport, SAFE_HARBOR_CATEGORIES } from "@cosyte/deid";
+
+const report = buildExpertDeterminationSupportReport([
+  {
+    category: SAFE_HARBOR_CATEGORIES.MRN,
+    transform: "pseudonymize",
+    locus: "PID-3",
+    count: 1,
+    disposition: "transformed",
+    code: "DEID_CATEGORY_PSEUDONYMIZED",
+    reidentificationCode: true,
+  },
+]);
+
+report.keyedSurrogateResiduals[0].transform; // => "pseudonymize"
+report.keyedSurrogateResiduals[0].locus; // => "PID-3"
+report.retainedQuasiIdentifiers.length; // => 0
+```
 
 ## The optional k-anonymity indicator: caller-supplied, descriptive only
 

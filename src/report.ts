@@ -17,8 +17,16 @@
  * never prescriptive**: it says *"here is what was done and what remains,"* and hands that to the
  * expert.
  *
+ * **Two residual inventories, deliberately kept apart.** A **retained quasi-identifier** is a piece of
+ * the original value that survived (a kept year, a safe 3-digit ZIP prefix, a whole date a
+ * limited-data-set retention set kept). A **keyed surrogate residual** is a replacement *derived* from
+ * the value under the caller's key: no plaintext survives, but the linkage does, and anyone holding
+ * the key can reverse it. Folding the second into the first would tell a determiner that a
+ * re-identification code is the same kind of residual as a kept year, so each has its own section.
+ *
  * **Value-free, still.** Like the manifest it summarizes, the report carries **loci / categories /
- * dispositions / counts**, **never a PHI value**. The one optional quasi-identifier statistic it can
+ * dispositions / counts** plus the manifest's boolean re-identification flag, **never a PHI value**,
+ * never a key and never a date-shift offset. The one optional quasi-identifier statistic it can
  * surface (a k-anonymity **indicator**) is computed **only** over equivalence-class sizes the *consumer*
  * supplies (they hold the values; the library counts what it is given), and is labelled a descriptive
  * input, never a risk verdict.
@@ -71,7 +79,7 @@ export type ReportDisposition = "transformed" | "removed" | "blocked" | "retaine
  *
  * const report = buildExpertDeterminationSupportReport([
  *   { category: SAFE_HARBOR_CATEGORIES.SSN, transform: "redact", locus: "PID-19", count: 1,
- *     disposition: "removed", code: "DEID_CATEGORY_REMOVED" },
+ *     disposition: "removed", code: "DEID_CATEGORY_REMOVED", reidentificationCode: false },
  * ]);
  * const ssn = report.categoryCoverage.find((c) => c.category === SAFE_HARBOR_CATEGORIES.SSN);
  * ssn?.actedOn; // => true
@@ -114,13 +122,18 @@ export interface CategoryCoverage {
  * These are exactly the residuals an expert reasons about under the §164.514(b)(2)(ii)
  * actual-knowledge test, and the second kind is the stronger one: it is a full, unreduced value.
  *
+ * **A keyed surrogate is NOT one of these and never joins this list.** It is a *replacement* computed
+ * from the value rather than a piece of the value that survived, so it is inventoried separately as a
+ * {@link KeyedSurrogateResidual}: the two kinds are different residuals and a determiner reasons about
+ * them differently.
+ *
  * @example
  * ```ts
  * import { buildExpertDeterminationSupportReport, SAFE_HARBOR_CATEGORIES } from "@cosyte/deid";
  *
  * const report = buildExpertDeterminationSupportReport([
  *   { category: SAFE_HARBOR_CATEGORIES.DATES, transform: "generalize", locus: "PID-7", count: 1,
- *     disposition: "transformed", code: "DEID_RESIDUAL_RETAINED" },
+ *     disposition: "transformed", code: "DEID_RESIDUAL_RETAINED", reidentificationCode: false },
  * ]);
  * report.retainedQuasiIdentifiers[0]?.locus; // => "PID-7"
  * ```
@@ -141,6 +154,43 @@ export interface RetainedQuasiIdentifier {
 }
 
 /**
+ * One entry in the **keyed-surrogate residual inventory**: a locus where the pass replaced the value
+ * with a surrogate **derived from that value under the consumer's key** (`pseudonymize`, `hash` or
+ * `date-shift`), which the manifest marks with `reidentificationCode`. Anyone holding the key can
+ * re-link those records, so §164.514(c)(1) does not permit such a code under Safe Harbor and the
+ * residual is an **Expert-Determination** consideration.
+ *
+ * This inventory is a **sibling** of {@link RetainedQuasiIdentifier}, never a member of it: a retained
+ * quasi-identifier is a piece of the original value that survived (a year, a safe 3-digit ZIP prefix,
+ * a whole kept date), while this is a computed replacement that carries no plaintext but preserves
+ * linkage. Carrying `transform` on every row is what keeps the two distinguishable at a glance.
+ *
+ * Value-free, like everything else here: the locus, the category, the count and the transform, never
+ * a value, a key or a shift offset.
+ *
+ * @example
+ * ```ts
+ * import { buildExpertDeterminationSupportReport, SAFE_HARBOR_CATEGORIES } from "@cosyte/deid";
+ *
+ * const report = buildExpertDeterminationSupportReport([
+ *   { category: SAFE_HARBOR_CATEGORIES.MRN, transform: "pseudonymize", locus: "PID-3", count: 1,
+ *     disposition: "transformed", code: "DEID_CATEGORY_PSEUDONYMIZED", reidentificationCode: true },
+ * ]);
+ * report.keyedSurrogateResiduals[0]?.transform; // => "pseudonymize"
+ * ```
+ */
+export interface KeyedSurrogateResidual {
+  /** The format-neutral locus (segment/field index · path · tag), **never** a value. */
+  readonly locus: string;
+  /** The Safe Harbor category the surrogate stands in for. */
+  readonly category: SafeHarborCategory;
+  /** How many values at this locus were replaced by a keyed surrogate. */
+  readonly count: number;
+  /** Which keyed transform produced it: `pseudonymize`, `hash` or `date-shift`. */
+  readonly transform: TransformName;
+}
+
+/**
  * A roll-up of how many values landed in each disposition across the whole report: the one-glance
  * posture of the pass. Every field is a count; none is a value.
  *
@@ -150,7 +200,7 @@ export interface RetainedQuasiIdentifier {
  *
  * const report = buildExpertDeterminationSupportReport([
  *   { category: SAFE_HARBOR_CATEGORIES.SSN, transform: "redact", locus: "PID-19", count: 2,
- *     disposition: "removed", code: "DEID_CATEGORY_REMOVED" },
+ *     disposition: "removed", code: "DEID_CATEGORY_REMOVED", reidentificationCode: false },
  * ]);
  * report.dispositionSummary.removed; // => 2
  * ```
@@ -250,7 +300,7 @@ export interface ExpertDeterminationReportOptions {
  *
  * const report = buildExpertDeterminationSupportReport([
  *   { category: SAFE_HARBOR_CATEGORIES.NAMES, transform: "redact", locus: "PID-5", count: 1,
- *     disposition: "removed", code: "DEID_CATEGORY_REMOVED" },
+ *     disposition: "removed", code: "DEID_CATEGORY_REMOVED", reidentificationCode: false },
  * ]);
  * report.determination; // => null (the library never renders one)
  * report.totals.categoriesActedOn; // => 1
@@ -286,6 +336,12 @@ export interface ExpertDeterminationSupportReport {
   readonly categoryCoverage: readonly CategoryCoverage[];
   /** The retained-quasi-identifier residual inventory (coarse residuals the pass recorded as retained). */
   readonly retainedQuasiIdentifiers: readonly RetainedQuasiIdentifier[];
+  /**
+   * The **keyed-surrogate residual inventory**: every locus whose manifest entry carries
+   * `reidentificationCode`, so a determiner can reason about the linkage a keyed surrogate preserves.
+   * A sibling of {@link retainedQuasiIdentifiers}, never folded into it.
+   */
+  readonly keyedSurrogateResiduals: readonly KeyedSurrogateResidual[];
   /** Descriptive quasi-identifier statistics, **only** when the consumer supplied class sizes; else `null`. */
   readonly quasiIdentifierStatistics: QuasiIdentifierStatistics | null;
 }
@@ -483,6 +539,20 @@ export function buildExpertDeterminationSupportReport(
       }),
     );
 
+  // Built from the manifest's re-identification flag, never from a disposition code: an entry carries
+  // exactly one code, and every code a keyed surrogate can carry is already published with its own
+  // meaning. A sibling inventory, so nothing above moves and no code is retired in place.
+  const keyedSurrogateResiduals = entries
+    .filter((e) => e.reidentificationCode)
+    .map((e) =>
+      Object.freeze({
+        locus: e.locus,
+        category: e.category,
+        count: e.count,
+        transform: e.transform,
+      }),
+    );
+
   const policyName =
     options.policy === undefined
       ? null
@@ -508,6 +578,7 @@ export function buildExpertDeterminationSupportReport(
     perLocus: Object.freeze(entries.map((e) => Object.freeze(e))),
     categoryCoverage: Object.freeze(categoryCoverage),
     retainedQuasiIdentifiers: Object.freeze(retainedQuasiIdentifiers),
+    keyedSurrogateResiduals: Object.freeze(keyedSurrogateResiduals),
     quasiIdentifierStatistics: quasiIdentifierStats(options.quasiIdentifiers),
   });
 }
@@ -590,6 +661,41 @@ export function formatExpertDeterminationSupportReport(
       // it is the difference between "a year is present" and "a full timestamp is present".
       const kind = r.transform === "retain" ? "whole value kept" : "coarse residual";
       lines.push(`- ${r.locus}: ${r.category} (×${String(r.count)}, ${kind})`);
+    }
+  }
+  lines.push("");
+  lines.push("## Keyed surrogate residuals (re-identification codes, a separate kind of residual)");
+  lines.push("");
+  if (report.keyedSurrogateResiduals.length === 0) {
+    lines.push(
+      "_None recorded._ A locus appears here when the pass replaced the value with a surrogate",
+    );
+    lines.push(
+      "DERIVED from that value under the caller's key (pseudonymize / keyed hash / date-shift).",
+    );
+    lines.push(
+      "That is a different residual from a retained quasi-identifier above: no piece of the",
+    );
+    lines.push(
+      "original value survives, but anyone holding the key can re-link the records, which is why",
+    );
+    lines.push(
+      "§164.514(c)(1) does not permit such a code under Safe Harbor. An empty list means the pass",
+    );
+    lines.push("emitted no keyed surrogate, never that one went unmeasured.");
+  } else {
+    lines.push(
+      "The pass replaced each of these values with a surrogate DERIVED from it under the caller's",
+    );
+    lines.push(
+      "key. No plaintext survives, but the linkage does, so each is an Expert-Determination",
+    );
+    lines.push("(§164.514(b)(1)) consideration for the determiner:");
+    lines.push("");
+    for (const r of report.keyedSurrogateResiduals) {
+      lines.push(
+        `- ${r.locus}: ${r.category} (×${String(r.count)}, keyed surrogate: ${r.transform})`,
+      );
     }
   }
   const qi = report.quasiIdentifierStatistics;

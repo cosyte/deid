@@ -38,9 +38,10 @@ x12; // the de-identified interchange (byte-faithful for every untouched segment
 manifest; // value-free audit: category + locus + disposition, never a value
 ```
 
-A keyed transform (identifier pseudonymization, member ids, the `CLM`/`CLP` account number) requires a
-`context`; calling without one when the interchange needs it is a fatal `DEID_NO_KEY`: the engine never
-falls back to an unkeyed surrogate.
+The built-in Safe Harbor policy uses **no keyed transform**, so a Safe Harbor pass over an interchange
+needs no `context` at all. Under a preset that keeps consistent keyed surrogates instead, a `context`
+is required and calling without one when the interchange needs it is a fatal `DEID_NO_KEY`: the engine
+never falls back to an unkeyed surrogate.
 
 ## What is located, and how it is transformed
 
@@ -49,16 +50,16 @@ implicit, so the map keys off each **segment id** plus two **qualifier classifie
 
 | Locus                                                            | Handling                                                                                                            |
 | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| **`NM1`**: subscriber / patient / dependent (`IL` / `QC` / `03`) | name (`NM1-03..07`) **removed**; id (`NM1-09`) routed by the `NM1-08` qualifier: SSN **removed**, member **pseudonymized** |
+| **`NM1`**: subscriber / patient / dependent (`IL` / `QC` / `03`) | name (`NM1-03..07`) **removed**; id (`NM1-09`) routed by the `NM1-08` qualifier: SSN **removed**, member **removed** under Safe Harbor |
 | **`NM1`**: recognized provider / organization (`85` / `82` / …)  | **retained**: provider identity is not the individual's PHI (mirrors the HL7 adapter's provider retention)          |
 | **`NM1`**: unknown entity code                                  | **fails closed**: name and id blocked (an unrecognized entity could be the patient)                                |
 | **`N1`** (payer / provider org)                                 | **retained**; a patient-side or **unknown** party's name + id scrubbed / **fail closed** (same classification as `NM1`) |
-| **`SBR`** (subscriber)                                          | `SBR-03` group / policy number **pseudonymized**, `SBR-04` group name **removed**; relationship codes retained       |
+| **`SBR`** (subscriber)                                          | `SBR-03` group / policy number **removed** under Safe Harbor, `SBR-04` group name **removed**; relationship codes retained |
 | **`N3` / `N4`**                                                 | street + city **removed**; ZIP → safe 3-digit; state retained; an unmapped element (`N4-06` location id) **fails closed** |
 | **`DMG-02`**, **`DTP-03`**, **`DTM-02`**                        | dates → **year**                                                                                                    |
 | **`PER`**                                                       | contact name + communication numbers **removed**                                                                   |
-| **`REF`**                                                       | patient / member / group / SSN identifier removed or **pseudonymized**; recognized admin/provider reference retained; **unknown qualifier fails closed** |
-| **`CLM-01` / `CLP-01`**                                         | patient account number **pseudonymized** to a consistent surrogate                                                  |
+| **`REF`**                                                       | patient / member / group / SSN identifier **removed** under Safe Harbor; recognized admin/provider reference retained; **unknown qualifier fails closed** |
+| **`CLM-01` / `CLP-01`**                                         | patient account number **removed** under Safe Harbor (a consistent surrogate only under a preset that does not claim the label) |
 | **Free text** (`MSG-01`, `III-04`, `K3-01`, `NTE-02`)           | **fails closed**: blocked (coded siblings retained), never scrubbed by a naive pass                                |
 | **Clinical / financial** (`HI`, `SV*`, `SVC`, `AMT`, `CAS`, …)   | **retained untouched**: diagnosis / procedure / revenue codes, amounts, quantities survive byte-identical          |
 | Any **unmapped / unknown** segment                              | **fails closed**: every element blocked                                                                            |
@@ -67,7 +68,7 @@ implicit, so the map keys off each **segment id** plus two **qualifier classifie
 
 Distinguishing a patient identifier from an administrative reference is the hardest call. The adapter
 routes `REF` by its `REF-01` qualifier: patient identifiers (`SY` SSN, `1W` member, `0F` subscriber, `1L`
-group, `EA` medical-record) are removed or pseudonymized; recognized non-patient references (`F8` payer
+group, `EA` medical-record) are acted on under the configured policy; recognized non-patient references (`F8` payer
 claim control, `EI` EIN, `TJ` tax id, `G1` prior authorization, provider ids) are retained; and an
 **unrecognized qualifier fails closed**: the direct implementation of Safe Harbor category (R) for the
 "unusual REF qualifier" that a shape guess would miss.

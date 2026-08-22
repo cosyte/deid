@@ -165,13 +165,13 @@ describe("deidentifyHl7, the over-scrub test (clinical values survive byte-ident
 });
 
 describe("deidentifyHl7, structured per-category behavior", () => {
-  it("pseudonymizes the MRN (keeping the assigning authority) and redacts the SSN in a PID-3 list", () => {
+  it("removes the MRN (keeping the assigning authority) and redacts the SSN in a PID-3 list", () => {
     const msg = parseHL7(
       "MSH|^~\\&|A|B|C|D|20200101||ADT^A01|M1|P|2.5\rPID|1||ZZMRN001^^^HOSP^MR~900000001^^^SSA^SS",
     );
     const { document, manifest } = deidentifyHl7(msg, { context: ctx });
-    // MRN (CX.1) → HMAC surrogate; assigning authority + type code retained.
-    expect(document.get("PID.3[0].1")).toMatch(/^[0-9a-f]{64}$/);
+    // MRN (CX.1) → REMOVED under the Safe Harbor default; assigning authority + type code retained.
+    expect(document.get("PID.3[0].1")).toBe("");
     expect(document.get("PID.3[0].4")).toBe("HOSP");
     expect(document.get("PID.3[0].5")).toBe("MR");
     // SSN-typed identifier (CX.5 = SS) redacted, not pseudonymized.
@@ -341,9 +341,17 @@ describe("deidentifyHl7, fail closed on free text and unknown structure", () => 
 describe("deidentifyHl7, fatal + policy + immutability", () => {
   it("throws DEID_NO_KEY when the message needs a keyed transform but no context is supplied", () => {
     const msg = parseHL7("MSH|^~\\&|A|B|C|D|20200101||ADT^A01|M1|P|2.5\rPID|1||ZZMRN001^^^HOSP^MR");
-    expect(() => deidentifyHl7(msg, {})).toThrowError(
+    // The Safe Harbor default is no longer keyed at an identifier locus, so the keyed policy is named.
+    const keyed = defineDeidPolicy({ name: "keyed", transforms: { [C.MRN]: "pseudonymize" } });
+    expect(() => deidentifyHl7(msg, { policy: keyed })).toThrowError(
       expect.objectContaining({ code: FATAL_CODES.DEID_NO_KEY }),
     );
+  });
+
+  it("completes with NO key at all under the built-in Safe Harbor default", () => {
+    const msg = parseHL7("MSH|^~\\&|A|B|C|D|20200101||ADT^A01|M1|P|2.5\rPID|1||ZZMRN001^^^HOSP^MR");
+    const { document } = deidentifyHl7(msg, {});
+    expect(document.toString().includes("ZZMRN001")).toBe(false);
   });
 
   it("date-shifts under an Expert-Determination policy while preserving intervals", () => {

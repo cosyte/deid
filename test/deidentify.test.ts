@@ -41,13 +41,29 @@ describe("deidentify, Safe Harbor per-category defaults", () => {
     expect(manifest.every((e) => e.code === D.DEID_CATEGORY_REMOVED)).toBe(true);
   });
 
-  it("pseudonymizes MRN / beneficiary / account with a consistent surrogate", () => {
+  it("REMOVES MRN / beneficiary / account rather than emitting a keyed surrogate", () => {
+    // A keyed surrogate of one of these is derived from the individual's own value, so it is a
+    // re-identification code §164.514(c)(1) does not permit: the Safe Harbor default removes instead.
     const model = {
-      loci: [loc({ path: "PID-3", kind: "identifier", category: C.MRN, value: "SENTINEL_MRN" })],
+      loci: [
+        loc({ path: "PID-3", kind: "identifier", category: C.MRN, value: "SENTINEL_MRN" }),
+        loc({
+          path: "IN1-49",
+          kind: "identifier",
+          category: C.HEALTH_PLAN_BENEFICIARY,
+          value: "SENTINEL_BEN",
+        }),
+        loc({ path: "PID-18", kind: "identifier", category: C.ACCOUNT, value: "SENTINEL_ACCT" }),
+      ],
     };
     const out = deidentify(model, { context: ctx });
-    expect(out.document.loci[0]?.value).toMatch(/^[0-9a-f]{64}$/);
-    expect(out.manifest[0]?.code).toBe(D.DEID_CATEGORY_PSEUDONYMIZED);
+    expect(out.document.loci.map((l) => l.value)).toEqual([null, null, null]);
+    for (const e of out.manifest) {
+      expect(e.transform).toBe("redact");
+      expect(e.disposition).toBe("removed");
+      expect(e.code).toBe(D.DEID_CATEGORY_REMOVED);
+      expect(e.reidentificationCode).toBe(false);
+    }
   });
 
   it("generalizes geography (ZIP→3-digit residual) and dates (→year residual)", () => {
@@ -208,12 +224,35 @@ describe("deidentify, fatal conditions", () => {
   });
 
   it("throws DEID_NO_KEY when a keyed transform is needed but no context is supplied", () => {
+    // The demand is unchanged and still fatal; what moved is WHICH policy makes it at an MRN locus.
+    // The built-in Safe Harbor default now removes an MRN, so a keyed policy is named explicitly.
+    const keyed = defineDeidPolicy({ name: "keyed", transforms: { [C.MRN]: "pseudonymize" } });
     expect(() =>
       deidentify(
         { loci: [loc({ path: "PID-3", kind: "identifier", category: C.MRN, value: "M" })] },
-        {},
+        { policy: keyed },
       ),
     ).toThrowError(expect.objectContaining({ code: FATAL_CODES.DEID_NO_KEY }));
+  });
+
+  it("the built-in Safe Harbor default asks for NO key at an MRN / beneficiary / account locus", () => {
+    const out = deidentify(
+      {
+        loci: [
+          loc({ path: "PID-3", kind: "identifier", category: C.MRN, value: "M" }),
+          loc({
+            path: "IN1-49",
+            kind: "identifier",
+            category: C.HEALTH_PLAN_BENEFICIARY,
+            value: "B",
+          }),
+          loc({ path: "PID-18", kind: "identifier", category: C.ACCOUNT, value: "A" }),
+        ],
+      },
+      {},
+    );
+    expect(out.document.loci.map((l) => l.value)).toEqual([null, null, null]);
+    expect(out.manifest.every((e) => e.code === D.DEID_CATEGORY_REMOVED)).toBe(true);
   });
 
   it("throws DEID_NO_KEY when date-shift is requested without a per-patient scope", () => {
@@ -294,6 +333,7 @@ describe("deidentify, the mandatory offset/key-never-leak gate", () => {
     expect((Date.parse(b) - Date.parse(a)) / 86_400_000).toBe(30);
 
     // No manifest entry exposes a value; every entry's fields are category/transform/locus/count/…
+    // plus the additive boolean re-identification flag, which is a flag and never an offset.
     for (const e of out.manifest) {
       expect(Object.keys(e).sort()).toEqual([
         "category",
@@ -301,8 +341,10 @@ describe("deidentify, the mandatory offset/key-never-leak gate", () => {
         "count",
         "disposition",
         "locus",
+        "reidentificationCode",
         "transform",
       ]);
+      expect(typeof e.reidentificationCode).toBe("boolean");
     }
   });
 });

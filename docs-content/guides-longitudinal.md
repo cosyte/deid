@@ -12,10 +12,15 @@ history holds together, while absolute calendar positions and real identifiers a
 job of the **registry** (`createDeidRegistry`).
 
 > **Honesty note.** Date-shifting **retains dates in shifted form**, so a shifted-but-real date is still
-> "an element of a date" under 45 CFR §164.514(b)(2)(i)(C). Date-shift is therefore an
-> **Expert-Determination-supporting** technique, **not** Safe Harbor. The library enforces this: a
-> policy that date-shifts may **not** carry the `safe-harbor` label (see below). Under Safe Harbor,
-> dates are generalized to year instead.
+> "an element of a date" under 45 CFR §164.514(b)(2)(i)(C). A keyed surrogate of an identifier is
+> likewise **derived from information about the individual**, so it is not a §164.514(c)(1) code and
+> the (R) exception does not reach it. Both are therefore **Expert-Determination-supporting**
+> techniques, **not** Safe Harbor. The library enforces this: a policy carrying the `safe-harbor`
+> label may carry **neither** (see below), and it is refused with a typed fatal naming the offending
+> category and transform. Under Safe Harbor, dates are generalized to year and the medical record,
+> health plan beneficiary and account numbers are removed instead. Every keyed surrogate a
+> non-Safe-Harbor preset does emit is flagged `reidentificationCode` in the manifest and inventoried
+> in the Expert-Determination support report.
 
 ## Cross-document consistency
 
@@ -80,4 +85,15 @@ import { defineDeidPolicy, SAFE_HARBOR_CATEGORIES } from "@cosyte/deid";
 
 // A shifted real date is still a date element: this is Expert-Determination, not Safe Harbor.
 defineDeidPolicy({ name: "safe-harbor", transforms: { [SAFE_HARBOR_CATEGORIES.DATES]: "date-shift" } });
+```
+
+The same guard covers a keyed surrogate, which is derived from the individual's own value in exactly
+the same way. The fatal names the offending category and the offending transform:
+
+```ts runnable throws
+import { defineDeidPolicy, SAFE_HARBOR_CATEGORIES } from "@cosyte/deid";
+
+// A keyed surrogate of a medical record number is a re-identification code §164.514(c)(1) does not
+// permit, so it may not wear the label either.
+defineDeidPolicy({ name: "safe-harbor", transforms: { [SAFE_HARBOR_CATEGORIES.MRN]: "pseudonymize" } });
 ```

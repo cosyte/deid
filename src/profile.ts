@@ -6,12 +6,15 @@
  * Two presets ship:
  *
  * - {@link SAFE_HARBOR_PROFILE}, the fail-closed default: the built-in Safe Harbor policy, dates
- *   generalized to year, the catch-all (R) blocked.
+ *   generalized to year, medical record / beneficiary / account numbers removed, the catch-all (R)
+ *   blocked. It needs no key.
  * - {@link LIMITED_DATA_SET_PROFILE}: a **research / longitudinal** preset that **date-shifts** dates
- *   (interval-preserving) instead of generalizing them, so time-series utility survives. It is
- *   deliberately **less** protective than Safe Harbor for dates, so it is **not** labelled
- *   `safe-harbor`, it requires a keyed per-patient context, and it is **not** a certified de-identified
- *   output. See {@link LIMITED_DATA_SET_PROFILE} and `docs-content/limitations.md` for the exact posture.
+ *   (interval-preserving) instead of generalizing them and keeps **consistent keyed surrogates** for
+ *   the medical record, health plan beneficiary and account numbers, so time-series and
+ *   cross-document utility survive. It is deliberately **less** protective than Safe Harbor for both,
+ *   so it is **not** labelled `safe-harbor`, it requires a keyed per-patient context, and it is
+ *   **not** a certified de-identified output. See {@link LIMITED_DATA_SET_PROFILE} and
+ *   `docs-content/limitations.md` for the exact posture.
  *
  * {@link defineDeidProfile} derives a per-site profile from a base, under a **widen-never-narrow**
  * contract: a site may move a category to an equal-or-**stronger** transform (more removal), but may
@@ -37,6 +40,7 @@ import { type DeidContext } from "./context.js";
 import { type DeidOptions } from "./deidentify.js";
 import {
   assertPolicyContract,
+  assertSafeHarborTransformContract,
   defineDeidPolicy,
   SAFE_HARBOR_POLICY,
   type DeidPolicy,
@@ -66,6 +70,26 @@ const TRANSFORM_RANK: Readonly<Record<TransformName, number>> = Object.freeze({
 
 /** The named standard a profile targets, surfaced so output labelling can never overclaim. */
 export type DeidStandard = "safe-harbor" | "limited-data-set" | "custom";
+
+/** The reserved standard a profile DECLARES when it claims Safe Harbor. Matched by exact equality. */
+const SAFE_HARBOR_STANDARD = "safe-harbor";
+
+/**
+ * Enforce the label contract on the **second** surface that can claim it: a profile whose declared
+ * `standard` is exactly `safe-harbor`, whatever its policy happens to be named. Run at the point the
+ * profile is turned into engine options ({@link profileOptions}) and at the point it is used as a
+ * derivation base ({@link defineDeidProfile}), both before any locus is transformed.
+ */
+function assertProfileLabelContract(profile: DeidProfile): void {
+  if (profile.standard === SAFE_HARBOR_STANDARD) {
+    assertSafeHarborTransformContract(
+      profile.policy.transforms,
+      `a profile declaring the reserved "${SAFE_HARBOR_STANDARD}" standard`,
+    );
+  }
+  // The policy's own name is the other surface, and it is checked whatever the profile declares.
+  assertPolicyContract(profile.policy);
+}
 
 /**
  * A reusable, named de-identification preset: a policy plus its honest usage posture and an optional
@@ -110,8 +134,9 @@ const C = SAFE_HARBOR_CATEGORIES;
 
 /**
  * The **Safe Harbor** profile: the fail-closed default. Wraps {@link SAFE_HARBOR_POLICY}: direct
- * identifiers removed, MRN/beneficiary/account pseudonymized, geography and dates generalized, the
- * catch-all (R) blocked. Output is **"Safe-Harbor-transformed per the configured policy"**, never
+ * identifiers removed, medical record / beneficiary / account numbers **removed** rather than replaced
+ * by a keyed surrogate, geography and dates generalized, the catch-all (R) blocked. It therefore
+ * needs **no key at all**. Output is **"Safe-Harbor-transformed per the configured policy"**, never
  * "de-identified".
  *
  * @example
@@ -126,8 +151,10 @@ export const SAFE_HARBOR_PROFILE: DeidProfile = Object.freeze({
   standard: "safe-harbor",
   policy: SAFE_HARBOR_POLICY,
   description:
-    "HIPAA Safe Harbor (§164.514(b)(2)) transform set: the 18 categories removed/pseudonymized/" +
-    "generalized, dates to year, the (R) catch-all blocked. Retains no identifying locus: an " +
+    "HIPAA Safe Harbor (§164.514(b)(2)) transform set: the 18 categories removed/generalized/" +
+    "blocked, dates to year, the (R) catch-all blocked. Medical record, health plan beneficiary and " +
+    "account numbers are REMOVED, not replaced by a keyed surrogate, so no key is required and no " +
+    "re-identification code rides under the label. Retains no identifying locus: an " +
     "admission/discharge/service date is reduced to its year and an encounter or order number is " +
     "blocked as (R). Fails closed. Not a certification.",
   requiresContext: false,
@@ -135,9 +162,14 @@ export const SAFE_HARBOR_PROFILE: DeidProfile = Object.freeze({
 });
 
 /**
- * The **Limited Data Set / longitudinal research** profile. Identical to Safe Harbor **except** dates
- * are **date-shifted** (a single consistent per-patient offset, intervals preserved) rather than
- * generalized to year, so time-series analysis survives.
+ * The **Limited Data Set / longitudinal research** profile. Identical to Safe Harbor **except** that
+ * dates are **date-shifted** (a single consistent per-patient offset, intervals preserved) rather than
+ * generalized to year, and that the medical record, health plan beneficiary and account numbers are
+ * replaced by a **consistent keyed surrogate** rather than removed, so cross-document linkage
+ * survives. Both are keyed transforms, and both are why this preset does not, and may not, claim Safe
+ * Harbor: a surrogate derived from the individual's own value is a re-identification code
+ * §164.514(c)(1) does not permit. Every such locus is flagged `reidentificationCode` in the manifest
+ * and listed in the support report's keyed-surrogate residual inventory.
  *
  * It also **keeps**, unchanged, the two classes of identifying locus §164.514(e)(2) permits a limited
  * data set to carry and Safe Harbor does not: **encounter dates** (admission / discharge / service /
@@ -165,15 +197,25 @@ export const SAFE_HARBOR_PROFILE: DeidProfile = Object.freeze({
 export const LIMITED_DATA_SET_PROFILE: DeidProfile = Object.freeze({
   name: "limited-data-set",
   standard: "limited-data-set",
+  // Named explicitly, never inherited: the Safe Harbor base REMOVES these three, and a preset that
+  // silently followed it there would lose cross-document linkage without anyone deciding to.
   policy: defineDeidPolicy({
     name: "limited-data-set",
-    transforms: { [C.DATES]: "date-shift" },
+    transforms: {
+      [C.DATES]: "date-shift",
+      [C.MRN]: "pseudonymize",
+      [C.HEALTH_PLAN_BENEFICIARY]: "pseudonymize",
+      [C.ACCOUNT]: "pseudonymize",
+    },
   }),
   description:
-    "Longitudinal research preset: Safe-Harbor identifier handling, but dates are DATE-SHIFTED " +
-    "(interval-preserving), not generalized, and the encounter dates and encounter/order identifiers " +
-    "§164.514(e)(2) permits are KEPT UNCHANGED and recorded as residuals. Expert-Determination " +
-    "territory, NOT Safe Harbor, NOT a certified de-identification. Requires a keyed per-patient context.",
+    "Longitudinal research preset: Safe-Harbor identifier handling, EXCEPT that dates are " +
+    "DATE-SHIFTED (interval-preserving) rather than generalized, that medical record, health plan " +
+    "beneficiary and account numbers become CONSISTENT KEYED SURROGATES rather than being removed, " +
+    "and that the encounter dates and encounter/order identifiers §164.514(e)(2) permits are KEPT " +
+    "UNCHANGED and recorded as residuals. Every keyed surrogate is flagged as a re-identification " +
+    "code in the manifest and inventoried in the support report. Expert-Determination territory, " +
+    "NOT Safe Harbor, NOT a certified de-identification. Requires a keyed per-patient context.",
   requiresContext: true,
   retainedLoci: Object.freeze([
     RETAINED_LOCUS_CLASSES.ENCOUNTER_DATES,
@@ -191,7 +233,7 @@ export const LIMITED_DATA_SET_PROFILE: DeidProfile = Object.freeze({
  *
  * const spec: DeidProfileSpec = {
  *   name: "site-a",
- *   transforms: { [SAFE_HARBOR_CATEGORIES.MRN]: "redact" }, // tighten MRN from pseudonymize to redact
+ *   transforms: { [SAFE_HARBOR_CATEGORIES.GEOGRAPHIC]: "redact" }, // tighten: generalize -> redact
  * };
  * ```
  */
@@ -231,17 +273,19 @@ const RESERVED_NAMES: ReadonlySet<string> = new Set(["safe-harbor", "limited-dat
  * @returns A frozen {@link DeidProfile}.
  * @throws {@link DeidError} `DEID_PROFILE_INVALID` if an override weakens a category, if
  *   `retainedLoci` adds a retention class the base does not retain, or if the name reclaims a reserved
- *   standard label; `DEID_POLICY_INVALID` if the derived policy violates the key/label contract (e.g.
- *   a `safe-harbor`-labelled policy that date-shifts).
+ *   standard label; `DEID_POLICY_INVALID` if the base declares the `safe-harbor` standard while
+ *   carrying a derived-output pair, or if the derived policy violates the key/label contract (e.g. a
+ *   `safe-harbor`-labelled policy that date-shifts). A base refused at derive time is refused with
+ *   `DEID_PROFILE_INVALID` first: a profile that is refused never mints a policy to label.
  * @example
  * ```ts
  * import { defineDeidProfile, SAFE_HARBOR_CATEGORIES } from "@cosyte/deid";
  *
  * const strict = defineDeidProfile({
  *   name: "site-strict",
- *   transforms: { [SAFE_HARBOR_CATEGORIES.MRN]: "redact" }, // pseudonymize -> redact (stronger): OK
+ *   transforms: { [SAFE_HARBOR_CATEGORIES.GEOGRAPHIC]: "redact" }, // generalize -> redact: OK
  * });
- * strict.policy.transforms[SAFE_HARBOR_CATEGORIES.MRN]; // => "redact"
+ * strict.policy.transforms[SAFE_HARBOR_CATEGORIES.GEOGRAPHIC]; // => "redact"
  * ```
  */
 export function defineDeidProfile(spec: DeidProfileSpec): DeidProfile {
@@ -254,6 +298,12 @@ export function defineDeidProfile(spec: DeidProfileSpec): DeidProfile {
       `"${spec.name}" is a reserved standard label; name a derived site profile distinctly`,
     );
   }
+
+  // The label contract on the BASE, at the point it is used as a derivation base. It runs AFTER the
+  // reserved-name refusal on purpose: an input that would draw both is a profile that is refused at
+  // derive time, and a refused profile never mints a policy to label, so DEID_PROFILE_INVALID is the
+  // code a caller sees for that input.
+  assertProfileLabelContract(base);
 
   const retainedLoci = spec.retainedLoci ?? base.retainedLoci;
   const added = retainedLoci.filter((cls) => !base.retainedLoci.includes(cls));
@@ -310,10 +360,17 @@ export function defineDeidProfile(spec: DeidProfileSpec): DeidProfile {
  * (unless overridden). **Going through here is what carries the retention set**: an options bag built
  * by hand from `profile.policy` alone retains nothing, which is the fail-closed direction.
  *
+ * It is also where the **label contract** is enforced on a profile that DECLARES the `safe-harbor`
+ * standard: a profile claiming that standard while assigning a category a transform whose output is
+ * derived from that category's own value is refused here, before any locus is transformed, because
+ * the engine downstream sees only the policy and not the standard the profile claimed.
+ *
  * @param profile - The profile to apply.
  * @param context - The keyed per-patient context (required by profiles whose `requiresContext` is true).
  * @param overrides - Optional `context`/`redactor` overrides merged over the profile's defaults.
  * @returns The {@link DeidOptions} for an adapter call.
+ * @throws {@link DeidError} `DEID_POLICY_INVALID` when the profile claims the `safe-harbor` label, on
+ *   either its policy name or its declared standard, while carrying a derived-output pair.
  * @example
  * ```ts
  * import { SAFE_HARBOR_PROFILE, profileOptions, createDeidContext } from "@cosyte/deid";
@@ -327,6 +384,9 @@ export function profileOptions(
   context?: DeidContext,
   overrides?: { readonly context?: DeidContext; readonly redactor?: FreeTextRedactor },
 ): DeidOptions {
+  // The label contract fires here, before any locus is transformed: this is the point a profile that
+  // DECLARES the safe-harbor standard becomes engine options, and the engine sees only the policy.
+  assertProfileLabelContract(profile);
   const ctx = overrides?.context ?? context;
   const redactor = overrides?.redactor ?? profile.redactor;
   return {

@@ -27,20 +27,25 @@ const research = defineDeidPolicy({
 ## Keep records linkable without leaking
 
 Pseudonymize identifiers with a consumer-held key so the same MRN maps to the same surrogate
-everywhere, without the surrogate being reversible:
+everywhere, without the surrogate being reversible. **This is not Safe Harbor**: a surrogate derived
+from the individual's own value is a re-identification code §164.514(c)(1) does not permit, so the
+built-in Safe Harbor policy removes those identifiers instead, and keyed surrogates live behind a
+preset that does not claim the label:
 
 ```ts
-import { createDeidContext } from "@cosyte/deid";
+import { createDeidContext, profileOptions, LIMITED_DATA_SET_PROFILE } from "@cosyte/deid";
 
 const context = createDeidContext({ key: process.env.DEID_KEY!, patientId: "patient-1" });
-// Pass { context } to deidentify; the key never leaves your process.
+// Pass profileOptions(LIMITED_DATA_SET_PROFILE, context) to deidentify; the key never leaves your
+// process, and every surrogate is flagged in the manifest as a re-identification code.
 ```
 
 ## Read the manifest
 
 Every action is recorded value-free. Watch for `DEID_LOCUS_BLOCKED` / `DEID_FREETEXT_BLOCKED` (the
-fail-closed decisions) and `DEID_RESIDUAL_RETAINED` (a kept year or safe 3-digit ZIP): the residuals
-you surface to a human for the §164.514(b)(2)(ii) actual-knowledge test.
+fail-closed decisions), `DEID_RESIDUAL_RETAINED` (a kept year or safe 3-digit ZIP), and
+`reidentificationCode: true` (a keyed surrogate): the residuals you surface to a human for the
+§164.514(b)(2)(ii) actual-knowledge test and for an Expert Determination.
 
 ## Per-format guides
 

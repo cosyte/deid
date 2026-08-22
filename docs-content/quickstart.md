@@ -36,24 +36,26 @@ manifest[0].disposition; // => "removed"
 ```
 
 Each **manifest** entry records the category acted on, the transform applied, the **locus** (a path,
-never a value), a count, a disposition, and a stable code: the auditable record of *what* was acted
+never a value), a count, a disposition, a stable code, and a boolean `reidentificationCode` that is
+`true` only where the pass emitted a **keyed surrogate**: the auditable record of *what* was acted
 on, never *what the value was*.
 
 ## Keyed transforms
 
 Pseudonymization and keyed hashing use a **keyed HMAC**: the key is the consumer's and never leaves
-the process. Supply it through a context:
+the process. The **built-in Safe Harbor policy uses no keyed transform at all** - medical record,
+health plan beneficiary and account numbers are **removed** - so it needs no key. A keyed surrogate
+is derived from the individual's own value, which is why it belongs to a preset that does not claim
+Safe Harbor, such as `LIMITED_DATA_SET_PROFILE`. Supply the key through a context:
 
 ```ts
-import { deidentify, createDeidContext, SAFE_HARBOR_CATEGORIES } from "@cosyte/deid";
+import { deidentify, createDeidContext, profileOptions, LIMITED_DATA_SET_PROFILE } from "@cosyte/deid";
 
 const context = createDeidContext({ key: process.env.DEID_KEY!, patientId: "patient-1" });
 
-const result = deidentify(
-  { loci: [{ path: "PID-3", kind: "identifier", category: SAFE_HARBOR_CATEGORIES.MRN, value: mrn }] },
-  { context },
-);
-// The MRN is replaced by a consistent, non-reversible surrogate; the key is never emitted.
+const result = deidentify(model, profileOptions(LIMITED_DATA_SET_PROFILE, context));
+// Under THAT preset the MRN becomes a consistent, non-reversible surrogate; the key is never
+// emitted, and the locus is flagged `reidentificationCode` so the support report inventories it.
 ```
 
 > **About runnable examples.** The first block above is tagged ```` ```ts runnable ````: the docs

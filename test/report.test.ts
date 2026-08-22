@@ -14,6 +14,7 @@ import fc from "fast-check";
 import {
   DEID_DISPOSITION_CODES,
   EXPERT_DETERMINATION_DISCLAIMER,
+  KEYED_TRANSFORMS,
   OUTPUT_LABEL,
   SAFE_HARBOR_CATEGORIES,
   buildExpertDeterminationSupportReport,
@@ -27,17 +28,22 @@ import {
 const C = SAFE_HARBOR_CATEGORIES;
 const CODES = DEID_DISPOSITION_CODES;
 
-/** A small helper to build a manifest entry with a count of 1 by default. */
+/**
+ * A small helper to build a manifest entry with a count of 1 by default. `reidentificationCode`
+ * defaults to whatever the entry's transform implies, exactly as the engine derives it, so a fixture
+ * cannot accidentally describe a keyed surrogate as carrying no re-identification code.
+ */
 function entry(
   e: Partial<DeidManifestEntry> & Pick<DeidManifestEntry, "category" | "code">,
 ): DeidManifestEntry {
-  return {
-    transform: "redact",
+  const base = {
+    transform: "redact" as const,
     locus: "PID-5",
     count: 1,
-    disposition: "removed",
+    disposition: "removed" as const,
     ...e,
   };
+  return { reidentificationCode: KEYED_TRANSFORMS.has(base.transform), ...base };
 }
 
 describe("buildExpertDeterminationSupportReport, the honesty boundary", () => {
@@ -415,6 +421,142 @@ describe("formatExpertDeterminationSupportReport, human-readable rendering", () 
   });
 });
 
+describe("the keyed-surrogate residual inventory, built from the manifest's re-identification flag", () => {
+  const ctx = createDeidContext({ key: "keyed-inventory-key", patientId: "p1" });
+
+  /** A pass whose policy pseudonymizes an MRN, hashes a URL, and removes a name. */
+  function keyedPass(): ReturnType<typeof deidentify> {
+    const policy = defineDeidPolicy({
+      name: "research",
+      transforms: { [C.MRN]: "pseudonymize", [C.URL]: "hash" },
+    });
+    return deidentify(
+      {
+        loci: [
+          { path: "PID-3", kind: "identifier", category: C.MRN, value: "SENT-MRN" },
+          { path: "PID-5", kind: "identifier", category: C.NAMES, value: "SENT-NAME" },
+          { path: "Patient.link", kind: "identifier", category: C.URL, value: "SENT-URL" },
+          { path: "PID-11", kind: "zip", category: C.GEOGRAPHIC, value: "90210" },
+        ],
+      },
+      { policy, context: ctx },
+    );
+  }
+
+  it("flags EXACTLY the keyed loci in the manifest and false everywhere else", () => {
+    const { manifest } = keyedPass();
+    const byLocus = new Map(manifest.map((e) => [e.locus, e]));
+    expect(byLocus.get("PID-3")?.reidentificationCode).toBe(true);
+    expect(byLocus.get("Patient.link")?.reidentificationCode).toBe(true);
+    expect(byLocus.get("PID-5")?.reidentificationCode).toBe(false);
+    expect(byLocus.get("PID-11")?.reidentificationCode).toBe(false);
+    // The published disposition codes at those loci are UNCHANGED: the flag is additive.
+    expect(byLocus.get("PID-3")?.code).toBe(CODES.DEID_CATEGORY_PSEUDONYMIZED);
+    expect(byLocus.get("Patient.link")?.code).toBe(CODES.DEID_CATEGORY_HASHED);
+    expect(byLocus.get("PID-5")?.code).toBe(CODES.DEID_CATEGORY_REMOVED);
+  });
+
+  it("lists each keyed locus once, with locus / category / count / transform, and no value", () => {
+    const { manifest } = keyedPass();
+    const report = buildExpertDeterminationSupportReport(manifest, { policy: "research" });
+    expect(report.keyedSurrogateResiduals).toEqual([
+      { locus: "PID-3", category: C.MRN, count: 1, transform: "pseudonymize" },
+      { locus: "Patient.link", category: C.URL, count: 1, transform: "hash" },
+    ]);
+    const serialized =
+      JSON.stringify(report) + "\n" + formatExpertDeterminationSupportReport(report);
+    for (const sentinel of ["SENT-MRN", "SENT-NAME", "SENT-URL", "keyed-inventory-key"]) {
+      expect(serialized).not.toContain(sentinel);
+    }
+  });
+
+  it("counts each acted-on value exactly ONCE in the disposition roll-up", () => {
+    const { manifest } = keyedPass();
+    const report = buildExpertDeterminationSupportReport(manifest);
+    const total =
+      report.dispositionSummary.transformed +
+      report.dispositionSummary.removed +
+      report.dispositionSummary.blocked +
+      report.dispositionSummary.retained;
+    expect(total).toBe(4); // one per acted-on locus, never doubled by the new inventory
+    expect(report.keyedSurrogateResiduals).toHaveLength(2);
+  });
+
+  it("a keyed surrogate NEVER joins the retained-quasi-identifier inventory", () => {
+    const { manifest } = keyedPass();
+    const report = buildExpertDeterminationSupportReport(manifest);
+    // Only the coarse ZIP residual is a retained quasi-identifier; neither keyed locus is.
+    expect(report.retainedQuasiIdentifiers.map((r) => r.locus)).toEqual(["PID-11"]);
+    const keyedLoci = new Set(report.keyedSurrogateResiduals.map((r) => r.locus));
+    for (const r of report.retainedQuasiIdentifiers) expect(keyedLoci.has(r.locus)).toBe(false);
+  });
+
+  it("EVERY shifted date locus is flagged and inventoried, exactly as a pseudonymized id is", () => {
+    const shift = defineDeidPolicy({ name: "shift", transforms: { [C.DATES]: "date-shift" } });
+    const { manifest } = deidentify(
+      {
+        loci: [
+          { path: "PID-7", kind: "date", category: C.DATES, value: "2020-01-01" },
+          { path: "PV1-44", kind: "date", category: C.DATES, value: "2020-02-01" },
+        ],
+      },
+      { policy: shift, context: ctx },
+    );
+    expect(manifest.every((e) => e.reidentificationCode)).toBe(true);
+    const report = buildExpertDeterminationSupportReport(manifest);
+    expect(report.keyedSurrogateResiduals.map((r) => r.transform)).toEqual([
+      "date-shift",
+      "date-shift",
+    ]);
+    expect(report.keyedSurrogateResiduals.map((r) => r.locus).sort()).toEqual(["PID-7", "PV1-44"]);
+  });
+
+  it("a pass that emits NO keyed surrogate flags nothing and leaves the inventory empty", () => {
+    const { manifest } = deidentify(
+      {
+        loci: [
+          { path: "PID-5", kind: "identifier", category: C.NAMES, value: "SENT-NAME" },
+          { path: "PID-3", kind: "identifier", category: C.MRN, value: "SENT-MRN" },
+        ],
+      },
+      {}, // the built-in Safe Harbor default: no keyed transform anywhere
+    );
+    expect(manifest.every((e) => e.reidentificationCode === false)).toBe(true);
+    const report = buildExpertDeterminationSupportReport(manifest);
+    expect(report.keyedSurrogateResiduals).toEqual([]);
+  });
+
+  it("an empty document yields an empty manifest, two empty inventories and zero residual counts", () => {
+    const { manifest } = deidentify({ loci: [] }, {});
+    expect(manifest).toEqual([]);
+    const report = buildExpertDeterminationSupportReport(manifest);
+    expect(report.keyedSurrogateResiduals).toEqual([]);
+    expect(report.retainedQuasiIdentifiers).toEqual([]);
+    expect(report.dispositionSummary.residualRetained).toBe(0);
+    expect(report.dispositionSummary.retained).toBe(0);
+    expect(report.totals.loci).toBe(0);
+  });
+
+  it("renders the two inventories as separate sections a determiner can tell apart", () => {
+    const { manifest } = keyedPass();
+    const md = formatExpertDeterminationSupportReport(
+      buildExpertDeterminationSupportReport(manifest),
+    );
+    expect(md).toContain("## Retained quasi-identifiers");
+    expect(md).toContain("## Keyed surrogate residuals");
+    expect(md).toContain("PID-11: GEOGRAPHIC (×1, coarse residual)");
+    expect(md).toContain("PID-3: MRN (×1, keyed surrogate: pseudonymize)");
+    expect(md).toContain("Patient.link: URL (×1, keyed surrogate: hash)");
+  });
+
+  it("says NOT RECORDED rather than nothing when the keyed inventory is empty", () => {
+    const md = formatExpertDeterminationSupportReport(buildExpertDeterminationSupportReport([]));
+    expect(md).toContain("## Keyed surrogate residuals");
+    // An empty inventory means no keyed residual, never an unmeasured one.
+    expect(md).toContain("never that one went unmeasured");
+  });
+});
+
 describe("the residual inventory distinguishes a kept year from a kept whole value", () => {
   const manifest = [
     {
@@ -424,6 +566,7 @@ describe("the residual inventory distinguishes a kept year from a kept whole val
       count: 1,
       disposition: "transformed" as const,
       code: CODES.DEID_RESIDUAL_RETAINED,
+      reidentificationCode: false,
     },
     {
       category: C.DATES,
@@ -432,6 +575,7 @@ describe("the residual inventory distinguishes a kept year from a kept whole val
       count: 1,
       disposition: "retained" as const,
       code: CODES.DEID_RESIDUAL_RETAINED,
+      reidentificationCode: false,
     },
   ];
 
