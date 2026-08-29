@@ -51,7 +51,8 @@ implicit, so the map keys off each **segment id** plus two **qualifier classifie
 | Locus                                                            | Handling                                                                                                            |
 | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
 | **`NM1`**: subscriber / patient / dependent (`IL` / `QC` / `03`) | name (`NM1-03..07`) **removed**; id (`NM1-09`) routed by the `NM1-08` qualifier: SSN **removed**, member **removed** under Safe Harbor |
-| **`NM1`**: recognized provider / organization (`85` / `82` / …)  | **retained**: provider identity is not the individual's PHI (mirrors the HL7 adapter's provider retention)          |
+| **`NM1`** / **`N1`**: the individual's employer (`36`)          | name and id **removed**, on the same footing as a patient-side party: §164.514(b)(2)(i) removes the identifiers of the individual's **employers**, so an employer is not an unrelated organisation |
+| **`NM1`**: recognized provider / organization (`85` / `82` / …)  | **retained**: provider identity is not the individual's PHI (mirrors the HL7 adapter's provider retention), and the **entity-identifier code** it was classified on is recorded, value-free, at the party's locus |
 | **`NM1`**: unknown entity code                                  | **fails closed**: name and id blocked (an unrecognized entity could be the patient)                                |
 | **`N1`** (payer / provider org)                                 | **retained**; a patient-side or **unknown** party's name + id scrubbed / **fail closed** (same classification as `NM1`) |
 | **`SBR`** (subscriber)                                          | `SBR-03` group / policy number **removed** under Safe Harbor, `SBR-04` group name **removed**; relationship codes retained |
@@ -76,7 +77,10 @@ claim control, `EI` EIN, `TJ` tax id, `G1` prior authorization, provider ids) ar
 ## Known limitations
 
 Provider / organization identity is **retained** as non-patient identity, and there is **no** option to
-suppress it: the retention is structural, in the extractor, not a per-category policy choice. A retained
+suppress it: the retention is structural, in the extractor, not a per-category policy choice. It is not
+silent, though: every retained party emits a value-free manifest row naming the entity-identifier code
+that placed it outside the scope clause, so a reader can check the classification rather than infer it
+from an absence. A retained
 clinical segment may carry a residual
 patient-related date the map does not surface as `DTP` / `DTM`: a documented limitation mirroring the HL7
 adapter; forgetting one fails **safe** (retained, not leaked, but conversely not generalized).

@@ -12,10 +12,12 @@
  * provider NPI, independent of loop position:
  *
  * - **{@link classifyNm1Entity}**: the `NM1-01` entity-identifier code decides whether an `NM1` names a
- *   **patient-side individual** (subscriber / patient / dependent → scrub name + id) or a **recognized
- *   provider / organization** (retained as non-patient identity, mirroring the HL7 adapter's retention of
- *   provider segments). An **unrecognized** entity code **fails closed**: its name and id are blocked,
- *   because an unknown entity could be the patient.
+ *   party §164.514(b)(2)(i) reaches (subscriber / patient / dependent, **and the individual's employer**
+ *   → scrub name + id) or a **recognized provider / organization** the clause does not reach (retained
+ *   as non-patient identity, mirroring the HL7 adapter's retention of provider segments; the role code
+ *   it was classified on is recorded at the party's locus, so the retention is auditable). An
+ *   **unrecognized** entity code **fails closed**: its name and id are blocked, because an unknown
+ *   entity could be the patient.
  * - **{@link classifyRefQualifier}**: the `REF-01` qualifier decides whether `REF-02` is a **patient
  *   identifier** (SSN removed; member / subscriber / group / medical-record pseudonymized) or a
  *   **recognized administrative / provider reference** (payer claim-control number, provider tax id,
@@ -35,6 +37,11 @@
  */
 
 import { SAFE_HARBOR_CATEGORIES, type SafeHarborCategory } from "../categories.js";
+import {
+  classifyPartyRole,
+  type PartyRoleClassification,
+  type PartyRoleTable,
+} from "../party-role.js";
 
 const C = SAFE_HARBOR_CATEGORIES;
 
@@ -80,9 +87,15 @@ export type X12ElementRule =
 /**
  * The **provider / organization** `NM1-01` entity-identifier codes whose name and identifiers are
  * **retained**: they are the transaction's providers, payers, facilities, submitters, and receivers,
- * not the patient or a relative, so their identity is not the individual's Safe Harbor PHI (the X12
- * analogue of the HL7 adapter retaining `ROL` / `STF` / `PRD` provider segments untouched). Grounded in
- * the HIPAA 005010 TR3 entity-identifier code list (X12 element 98).
+ * not the individual, a relative, an employer or a household member, so their identity is not the
+ * individual's Safe Harbor PHI (the X12 analogue of the HL7 adapter retaining `ROL` / `STF` / `PRD`
+ * provider segments untouched). Grounded in the HIPAA 005010 TR3 entity-identifier code list (X12
+ * element 98).
+ *
+ * **The employer (`36`) is deliberately NOT on this list.** §164.514(b)(2)(i) removes the identifiers
+ * "of the individual **or of relatives, employers, or household members** of the individual", so an
+ * employer party is a Safe Harbor subject however organisational it looks: see
+ * {@link EMPLOYER_ENTITY_CODES}.
  *
  * @example
  * ```ts
@@ -90,6 +103,7 @@ export type X12ElementRule =
  *
  * PROVIDER_ENTITY_CODES.has("85"); // => true  (billing provider, retained)
  * PROVIDER_ENTITY_CODES.has("QC"); // => false (patient, scrubbed)
+ * PROVIDER_ENTITY_CODES.has("36"); // => false (employer: a Safe Harbor subject, scrubbed)
  * ```
  */
 export const PROVIDER_ENTITY_CODES: ReadonlySet<string> = new Set<string>([
@@ -113,7 +127,6 @@ export const PROVIDER_ENTITY_CODES: ReadonlySet<string> = new Set<string>([
   "PR", // Payer
   "PE", // Payee
   "2B", // Third-Party Administrator
-  "36", // Employer (an organization, not the individual)
   "40", // Receiver
   "41", // Submitter
   "45", // Drop-off Location
@@ -146,32 +159,83 @@ export const PATIENT_ENTITY_CODES: ReadonlySet<string> = new Set<string>([
   "S3", // Legal Representative
 ]);
 
+/**
+ * The **employer** `NM1-01` / `N1-01` entity-identifier codes. §164.514(b)(2)(i) removes the identifiers
+ * "of the individual **or of relatives, employers, or household members** of the individual", so the
+ * individual's employer is inside the removal list even though the party is an organisation: its name
+ * components and identifiers are transformed on exactly the same footing as a patient-side party's.
+ * Grounded in the HIPAA 005010 TR3 entity-identifier code list (X12 element 98).
+ *
+ * @example
+ * ```ts
+ * import { EMPLOYER_ENTITY_CODES } from "@cosyte/deid/x12";
+ *
+ * EMPLOYER_ENTITY_CODES.has("36"); // => true (employer: a Safe Harbor subject, scrubbed)
+ * ```
+ */
+export const EMPLOYER_ENTITY_CODES: ReadonlySet<string> = new Set<string>([
+  "36", // Employer (the individual's employer: §164.514(b)(2)(i) names it)
+]);
+
+/**
+ * The X12 **party-role table**: which side of §164.514(b)(2)(i)'s scope clause an `NM1-01` / `N1-01`
+ * entity-identifier code puts a party on. The subject side is the individual and their relatives
+ * ({@link PATIENT_ENTITY_CODES}) together with their employer ({@link EMPLOYER_ENTITY_CODES}); the
+ * outside side is {@link PROVIDER_ENTITY_CODES}. Anything on neither list fails closed.
+ */
+const X12_PARTY_ROLES: PartyRoleTable = Object.freeze({
+  subject: new Set<string>([...PATIENT_ENTITY_CODES, ...EMPLOYER_ENTITY_CODES]),
+  outside: PROVIDER_ENTITY_CODES,
+});
+
 /** How an `NM1` segment is classified for de-identification. */
-export type Nm1Disposition = "patient" | "provider" | "unknown";
+export type Nm1Disposition = "patient" | "employer" | "provider" | "unknown";
+
+/**
+ * Run the shared **party-role test** over an `NM1-01` / `N1-01` entity-identifier code (X12 element 98):
+ * the same test the HL7 v2 adapter applies to an organisation-typed party position. A recognized role
+ * comes back with the code from this library's own table, which is what a retained party's manifest row
+ * records; an unrecognized one comes back `unknown` and carries no code.
+ *
+ * @param entityCode - The `NM1-01` / `N1-01` entity-identifier code (e.g. `"IL"`, `"36"`, `"85"`).
+ * @returns Which side of the scope clause the role places the party on.
+ * @example
+ * ```ts
+ * import { classifyNm1Party } from "@cosyte/deid/x12";
+ *
+ * classifyNm1Party("36"); // => { scope: "safe-harbor-subject", roleCode: "36" }
+ * classifyNm1Party("85"); // => { scope: "outside-scope", roleCode: "85" }
+ * ```
+ */
+export function classifyNm1Party(entityCode: string): PartyRoleClassification {
+  return classifyPartyRole(entityCode, X12_PARTY_ROLES);
+}
 
 /**
  * Classify an `NM1` from its `NM1-01` entity-identifier code (X12 element 98): a **patient-side**
- * individual (scrub name + id), a recognized **provider / organization** (retain), or an **unknown**
- * entity (fail closed, block name + id, because an unrecognized entity could be the patient). This is
- * the structural, parser-typed inversion of a shape guess: an `NM1` is the patient's because the TR3
- * entity code says so, never because a string "looked like" a name.
+ * individual (scrub name + id), the individual's **employer** (scrubbed on the same footing, because
+ * §164.514(b)(2)(i) names employers), a recognized **provider / organization** (retain), or an
+ * **unknown** entity (fail closed, block name + id, because an unrecognized entity could be the
+ * patient). This is the structural, parser-typed inversion of a shape guess: an `NM1` is the patient's
+ * because the TR3 entity code says so, never because a string "looked like" a name.
  *
- * @param entityCode - The `NM1-01` entity-identifier code (e.g. `"IL"`, `"QC"`, `"85"`).
+ * @param entityCode - The `NM1-01` entity-identifier code (e.g. `"IL"`, `"QC"`, `"36"`, `"85"`).
  * @returns The disposition governing how the name and id elements are handled.
  * @example
  * ```ts
  * import { classifyNm1Entity } from "@cosyte/deid/x12";
  *
  * classifyNm1Entity("QC"); // => "patient"
+ * classifyNm1Entity("36"); // => "employer" (scrubbed like a patient-side party)
  * classifyNm1Entity("85"); // => "provider"
  * classifyNm1Entity("ZZ"); // => "unknown"  (fails closed)
  * ```
  */
 export function classifyNm1Entity(entityCode: string): Nm1Disposition {
-  const code = entityCode.toUpperCase();
-  if (PATIENT_ENTITY_CODES.has(code)) return "patient";
-  if (PROVIDER_ENTITY_CODES.has(code)) return "provider";
-  return "unknown";
+  const party = classifyNm1Party(entityCode);
+  if (party.scope === "unknown") return "unknown";
+  if (party.scope === "outside-scope") return "provider";
+  return EMPLOYER_ENTITY_CODES.has(party.roleCode) ? "employer" : "patient";
 }
 
 /**

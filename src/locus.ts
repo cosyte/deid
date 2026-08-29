@@ -61,6 +61,19 @@ export interface GenericLocus {
    * locus marked here **is** identifying and is always recorded when it is kept.
    */
   readonly retention?: RetainedLocusClass;
+  /**
+   * The **role code** an adapter classified a *party* on, present **only** at a locus that records a
+   * party whose role places it **outside** §164.514(b)(2)(i)'s scope clause and whose name and
+   * identifiers the pass therefore left in place. The engine records the code in the manifest at this
+   * locus (`DEID_PARTY_ROLE_RETAINED`) and writes nothing back, so a retention that used to be silent
+   * can be audited.
+   *
+   * It is a **code, never a value**: an adapter sets it from its own committed role table (see
+   * `classifyPartyRole`), and a locus carrying it must carry an empty {@link value}: a party-role
+   * record has no value to hand anywhere. A non-empty one **fails closed** (blocked) rather than being
+   * retained, so this marker can never become a route for passing an identifier through.
+   */
+  readonly partyRole?: string;
   /** The value at the locus. Consumed by the engine, never copied into the manifest. */
   readonly value: string;
 }

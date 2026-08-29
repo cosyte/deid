@@ -124,6 +124,20 @@ coded / a time of day); narrative (`TX`/`FT`), ambiguous String (`ST`), and any 
 closed, as do **NTE-3** comments, and a **date/time** value type makes OBX-5 a date the pass acts on.
 Structured clinical values, units, codes, and statuses survive untouched.
 
+**The individual's employer is a Safe Harbor subject, not an unrelated organisation.**
+§164.514(b)(2)(i) removes the identifiers of the individual "or of relatives, **employers**, or
+household members", so the employer positions the v2.5.1 financial segments type are acted on and
+recorded like any other mapped locus: the guarantor's employer name (**GT1-16**), address
+(**GT1-17**, reduced to the safe 3-digit ZIP) and phone (**GT1-18**); the guarantor employee and
+employer identification numbers (**GT1-19**, **GT1-29**); the insured's group employer id and name
+(**IN1-10**, **IN1-11**); the insured's employer name (**IN2-3**); the employer contact person's name
+and phone (**IN2-49**, **IN2-50**); and the insured's employer phone (**IN2-64**). **IN2-70** types an
+_organisation_ rather than a value, so it goes through the same party-role test the X12 adapter applies
+to an `NM1` / `N1` party and **fails closed**: an employer is never outside the scope clause, so the
+organisation's name and its identifier both go. The mirror control holds: the coded employment status
+(**GT1-20**) and the _insurer's own_ company id, name, address and phone (**IN1-3/4/5/7**) are
+untouched, because none of them is the individual's, a relative's or an employer's identity.
+
 **Inside a retained segment**, the identifying loci are carved back out: under a Safe-Harbor-labelled
 policy the admit (PV1-44), discharge (PV1-45), observation (OBR-7) and diagnosis (DG1-5) dates keep only
 their **year**, and the visit number (PV1-19) with the placer and filler order numbers (OBR-2/3, ORC-2/3)
@@ -144,9 +158,19 @@ The classification is structural and version-fixed: an eight-digit numeric resul
 **Known limitations (this release).** Free text is block-by-default (no built-in scrub; opt-in BYO
 redaction: see [Free text](#free-text-block-by-default--byo-redaction)); every **non-date** field of a
 retained segment that the carve-outs do not name is **not** de-identified and is recorded nowhere, which
-still includes the _provider_ names in PV1-7/8 and OBR-16 and the date components carried inside a
-person-name or address composite; a position only a version other than v2.5.1 types as a date is a
-stated residual; the address generalization keeps only the Safe Harbor 3-digit ZIP.
+still includes the _provider_ names in PV1-7/8 and OBR-16, the guarantor's employer organisation name at
+GT1-51, and the date components carried inside a person-name or address composite; a position only a
+version other than v2.5.1 types as a date is a stated residual; the address generalization keeps only
+the Safe Harbor 3-digit ZIP.
+
+**Employer surfaces that remain residual, in every format.** Two, named so a consumer can tell a
+covered surface from an uncovered one. **An employer named only in free text** (an OBX-5 narrative, an
+NTE comment, a C-CDA section `<text>`, a FHIR `note`) is reached only by an opt-in BYO redactor, never
+by this library. And **an employer carried as a separate organisation resource in a FHIR graph** is not
+reached either: in FHIR an employer arrives as a `Reference` (whose `display` is already blocked) to a
+standalone `Organization` whose `name` the map retains as administrative data, so classifying it would
+be a cross-resource role derivation rather than a typed position. The employer positions above are the
+covered ones: they are typed at the position by X12 and by HL7 v2, which is what makes them decidable.
 
 ## De-identify a C-CDA document
 
@@ -248,7 +272,10 @@ pseudonymization of resource ids across a corpus is **not** performed. Free-text
 (`note`, `contentString`, uncoded `valueString`) fail closed by default, or run through an opt-in BYO
 redactor (see [Free text](#free-text-block-by-default--byo-redaction)); a **built-in** semantic (NLP)
 narrative scrub, `contentAttachment` binary content, and person names embedded in non-person resources
-(`Organization.contact.name`, `Location.address`) remain out of scope for this release.
+(`Organization.contact.name`, `Location.address`) remain out of scope for this release. So does **the
+individual's employer carried as a separate `Organization` resource**: unlike X12 and HL7 v2, FHIR types
+no employer role at the position, so reaching it would be a cross-resource role derivation. The
+`Reference.display` that names it is blocked either way.
 
 ## De-identify an X12 EDI interchange
 
@@ -270,7 +297,8 @@ const { x12, manifest } = deidentifyX12(parseX12(raw), { context });
 | Locus                                                        | Handling                                                                                                                                                     |
 | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | **`NM1`** (subscriber / patient / dependent)                 | name (`03–07`) **removed**; id (`09`) routed by the `08` qualifier: SSN **removed**, member **removed** under Safe Harbor                                    |
-| **`NM1`** (recognized provider / organization)               | **retained** (provider identity is not the individual's PHI, mirroring the HL7 adapter)                                                                      |
+| **`NM1` / `N1`** (employer, entity code `36`)                | name + id **removed** on the same footing as a patient-side party: §164.514(b)(2)(i) names the individual's **employers**                                    |
+| **`NM1`** (recognized provider / organization)               | **retained** (provider identity is not the individual's PHI, mirroring the HL7 adapter), and the **role code** it was classified on is recorded at its locus |
 | **`NM1`** (unknown entity code)                              | **fails closed**: name + id blocked                                                                                                                          |
 | **`N1` / `SBR`**                                             | `N1` payer/provider org retained (patient-side/unknown party fails closed); `SBR-03` group/policy **removed** under Safe Harbor, `SBR-04` group name removed |
 | **`N3` / `N4`**                                              | street + city **removed**, ZIP → safe 3-digit, state retained (unmapped `N4-06` location id fails closed)                                                    |
@@ -482,8 +510,9 @@ determination**.
 - **Fail-closed rule**: anything uncertain is blocked, never passed through; clinical values are
   retained untouched.
 - **Value-free manifest**: category + transform + locus + count + disposition + code + a boolean
-  `reidentificationCode` (`true` only where a keyed surrogate was emitted), never a value, never the
-  key, never the date-shift offset. The locus is the one field built out of the document: a
+  `reidentificationCode` (`true` only where a keyed surrogate was emitted) + a `partyRole` code (only
+  where a party was left in place because its role sits outside the scope clause), never a value, never
+  the key, never the date-shift offset. The locus is the one field built out of the document: a
   per-format adapter names the position with the identifier that sits there, so each identifier is
   checked against the shape its position promises and a non-conforming one is refused as
   `WITHHELD_LOCUS_TOKEN` (`<withheld>`) rather than echoed.

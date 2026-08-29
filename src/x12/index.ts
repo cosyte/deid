@@ -14,8 +14,11 @@
  * loops of 837 / 835 / 270-271 and the other v1 transactions:
  * - **`NM1`**, entity-classified: a subscriber / patient / dependent name (`NM1-03..07`) is removed and
  *   its identifier (`NM1-09`) is routed by the `NM1-08` qualifier (SSN removed, member id
- *   pseudonymized); a recognized provider / organization `NM1` is **retained** (non-patient identity,
- *   mirroring the HL7 adapter's provider retention); an **unknown** entity code **fails closed**.
+ *   pseudonymized); the **individual's employer** (entity code `36`) is a Safe Harbor subject on the
+ *   same footing, because §164.514(b)(2)(i) removes the identifiers of the individual's **employers**; a
+ *   recognized provider / organization `NM1` is **retained** (non-patient identity, mirroring the HL7
+ *   adapter's provider retention) **and its role code is recorded** at the party's locus; an **unknown**
+ *   entity code **fails closed**.
  * - **`N3` / `N4`**: street + city removed, ZIP generalized to its safe 3-digit form, state retained.
  * - **`DMG-02`**: date of birth generalized to year.
  * - **`REF`**, qualifier-classified: a patient / member / subscriber / group / medical-record
@@ -33,7 +36,8 @@
  *
  * **Known limitations.** Provider / organization identity is **retained** as non-patient identity, and
  * there is **no** option to suppress it: the retention is structural, in the extractor, not a
- * per-category policy choice. Retained clinical segments may carry residual patient-related dates the
+ * per-category policy choice. It is no longer silent, though: every retained party emits a value-free
+ * `DEID_PARTY_ROLE_RETAINED` row naming the entity-identifier code it was classified on. Retained clinical segments may carry residual patient-related dates the
  * map does not surface as `DTP` / `DTM` (a documented limitation, mirroring the HL7 adapter): forgetting one
  * fails **safe** (retained, not leaked, but conversely a residual date is not generalized). NCPDP SCRIPT
  * de-identification is deferred; NCPDP Telecom ships alongside this adapter at `@cosyte/deid/ncpdp`.
@@ -131,6 +135,7 @@ export function deidentifyX12String(raw: string, options: DeidOptions = {}): X12
 export {
   PROVIDER_ENTITY_CODES,
   PATIENT_ENTITY_CODES,
+  EMPLOYER_ENTITY_CODES,
   X12_UNIVERSAL_SEGMENT_RULES,
   X12_FREE_TEXT_ELEMENTS,
   X12_GEO_SEGMENTS,
@@ -138,6 +143,7 @@ export {
   X12_ACCOUNT_SEGMENTS,
   X12_RETAIN_SEGMENTS,
   classifyNm1Entity,
+  classifyNm1Party,
   categoryForNm1IdQualifier,
   classifyRefQualifier,
   type X12ElementMode,

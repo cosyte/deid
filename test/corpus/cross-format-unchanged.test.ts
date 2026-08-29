@@ -129,8 +129,11 @@ describe("the other five adapters produce the same manifests, in the same order"
     const { manifest } = deidentifyX12String(FIX("x12", "837p.edi"), options());
     expect(order(manifest)).toMatchInlineSnapshot(`
       [
+        "837/N1[0]-1",
+        "837/NM1[0]-1",
         "837/PER[0]-2",
         "837/PER[0]-4",
+        "837/NM1[1]-1",
         "837/N3[0]-1",
         "837/N4[0]-1",
         "837/N4[0]-3",
@@ -150,12 +153,15 @@ describe("the other five adapters produce the same manifests, in the same order"
         "837/PER[1]-4",
         "837/NM1[3]-3",
         "837/NM1[3]-9",
+        "837/NM1[4]-3",
+        "837/NM1[4]-9",
         "837/N3[2]-1",
         "837/N4[2]-1",
         "837/N4[2]-3",
         "837/DMG[1]-2",
         "837/CLM[0]-1",
         "837/REF[3]-2",
+        "837/NM1[5]-1",
         "837/DTP[0]-3",
         "837/NTE[0]-2",
         "837/MSG[0]-1",

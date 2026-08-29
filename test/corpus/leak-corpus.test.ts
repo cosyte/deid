@@ -122,6 +122,57 @@ function hl7Case(): CorpusCase {
 }
 
 /**
+ * The HL7 v2 **employer** case: the guarantor / insurance employer positions, which no other fixture in
+ * this corpus carries. §164.514(b)(2)(i) removes the identifiers of the individual "or of relatives,
+ * **employers**, or household members", and those positions sit inside segments the pass otherwise
+ * retains, so without this case the headline gate is structurally blind to a whole class: an adapter
+ * that hands an employer name, address, phone or id straight through produces exactly the same green as
+ * one that removes it. The insurer's own company identity is asserted the other way, in `survivors`, so
+ * the case cannot be passed by a blanket scrub either.
+ */
+function hl7EmployerCase(): CorpusCase {
+  const ctx = createDeidContext({ key: "hl7-emp-corpus", patientId: "p-hl7-emp" });
+  const raw = hl7Wire("adt-a01");
+  const { document, manifest } = deidentifyHl7(parseHL7(raw), { context: ctx });
+  return {
+    name: "hl7-employer",
+    deidWire: document.toString(),
+    manifest,
+    originalWire: raw,
+    sentinels: [
+      // The employer as a set of fields: name, address, phone, employee id, employer id.
+      "ZZGTEMPFAMILY",
+      "ZZGTEMPGIVEN",
+      "ZZGTEMPSTREET",
+      "ZZGTEMPCITY",
+      "11201",
+      "5550000007",
+      "ZZGTEMPLOYERID",
+      "ZZGTEMPEIN",
+      "ZZINSGRPEMPID",
+      "ZZINSGRPEMPNAME",
+      "ZZEMPLOYERINC",
+      "ZZEMPCONTACTFAM",
+      "ZZEMPCONTACTGIV",
+      "5550000008",
+      "5550000009",
+      // The employer as an ORGANISATION-typed party (IN2-70): name and identifier both.
+      "ZZEMPORGNAME",
+      "ZZEMPORGID",
+      // The patient / guarantor / insured demographics carried alongside them.
+      "ZZMRN001",
+      "ZZFAMILY",
+      "ZZGTFAMILY",
+      "ZZINSURED",
+      "5550000001",
+    ],
+    // The over-scrub control: the INSURER is not the individual, a relative, an employer or a
+    // household member, and the coded employment status is not an identifier at all.
+    survivors: ["INSCO001", "SYNTH INSURANCE CO", "ORGADDR", "ORGCITY", "5559990000"],
+  };
+}
+
+/**
  * The HL7 v2 **encounter** case: the loci carved out of the RETAINED visit / order / diagnosis
  * segments, which no other fixture in this corpus carries. Without it the headline gate is
  * structurally blind to this whole class: the leak sweep can only report on sentinels a fixture
@@ -271,6 +322,10 @@ function x12Case(): CorpusCase {
       "ZZWEIRDPHI",
       "ZZNTEPHI",
       "ZZMSGPHI",
+      // The EMPLOYER party (NM1*36): §164.514(b)(2)(i) names employers, so its name and its employer
+      // identification number are Safe Harbor subjects, not retained organisation identity.
+      "ZZEMPLOYERX12",
+      "ZZEMPEIN12",
     ],
     // Distinctive clinical/financial survivors only (bare years like 2026/1985 recur in envelopes/OIDs).
     survivors: ["E1165", "99213", "100.00", "COMMERCIALPAYER", "PAYERID12345"],
@@ -323,6 +378,7 @@ function dicomCase(): CorpusCase {
 
 const CASES: readonly CorpusCase[] = [
   hl7Case(),
+  hl7EmployerCase(),
   hl7EncounterCase(),
   ccdaCase(),
   fhirCase(),

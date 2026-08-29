@@ -62,9 +62,11 @@ export const EXPERT_DETERMINATION_DISCLAIMER =
   "consumes and documents, never the determination itself.";
 
 /**
- * A manifest disposition: the four outcomes an acted-on locus can have. `retained` is an
- * **identifying** locus the configured profile's retention set deliberately kept unchanged; it is
- * always paired with `DEID_RESIDUAL_RETAINED`, so it also appears in the residual inventory below.
+ * A manifest disposition: the four outcomes an acted-on locus can have. `retained` covers two kept
+ * things, told apart by the entry's code: an **identifying** locus the configured profile's retention
+ * set deliberately kept unchanged (`DEID_RESIDUAL_RETAINED`, which also appears in the residual
+ * inventory below), and a **party** whose role places it outside §164.514(b)(2)(i)'s scope clause
+ * (`DEID_PARTY_ROLE_RETAINED`, which does not: it is not a residual of the individual's identity).
  */
 export type ReportDisposition = "transformed" | "removed" | "blocked" | "retained";
 
@@ -212,7 +214,11 @@ export interface DispositionSummary {
   readonly removed: number;
   /** Loci failed closed (blocked; value withheld). */
   readonly blocked: number;
-  /** Identifying loci the profile's retention set kept unchanged (each one a recorded residual). */
+  /**
+   * Loci the pass kept unchanged **and recorded**: identifying loci the profile's retention set kept
+   * (each one a residual below), plus parties whose role placed them outside §164.514(b)(2)(i)'s scope
+   * clause (each one naming the role code it was classified on, and none of them a residual).
+   */
   readonly retained: number;
   /** Of the transformed values, how many retained a coarse residual (`DEID_RESIDUAL_RETAINED`). */
   readonly residualRetained: number;
@@ -372,9 +378,14 @@ function toManifests(
   return input;
 }
 
-/** A stable aggregation key over the five identity fields of a manifest entry (all count, no value). */
+/**
+ * A stable aggregation key over the five identity fields of a manifest entry, plus the party-role code
+ * a `DEID_PARTY_ROLE_RETAINED` entry carries (all count, all code, no value). The role code is in the
+ * key because a corpus can hold the same structural locus from two documents that typed **different**
+ * roles there, and merging those would report one of the two role codes for both.
+ */
 function entryKey(e: DeidManifestEntry): string {
-  return `${e.category} ${e.transform} ${e.locus} ${e.disposition} ${e.code}`;
+  return `${e.category} ${e.transform} ${e.locus} ${e.disposition} ${e.code} ${e.partyRole ?? ""}`;
 }
 
 /** Merge every document's entries, summing counts for identical (category,transform,locus,disp,code). */

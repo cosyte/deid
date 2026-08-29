@@ -125,6 +125,20 @@ export const DEID_DISPOSITION_CODES = {
    * Surfaced so a human can apply the §164.514(b)(2)(ii) actual-knowledge test with the facts present.
    */
   DEID_RESIDUAL_RETAINED: "DEID_RESIDUAL_RETAINED",
+  /**
+   * A **party** was left in place because the role its format types at that party puts it **outside**
+   * §164.514(b)(2)(i)'s scope clause (a treating clinician, a facility, a payer, a payee, a submitter,
+   * a receiver, a clearinghouse: not the individual, a relative, an employer or a household member).
+   * The entry names the party's structural locus and, in `partyRole`, the **role code the pass
+   * classified on**, so a retention decision that used to be silent can be audited. It carries no name,
+   * no identifier and no other value.
+   *
+   * It is deliberately **not** `DEID_RESIDUAL_RETAINED`: that code is a residual of the *individual's*
+   * own identity (a kept year, a safe ZIP prefix, a whole value a limited-data-set retention set kept)
+   * and feeds the determiner's retained-quasi-identifier inventory. A party outside the scope clause is
+   * a different fact and stays out of that inventory. The disposition-code set is additions-only.
+   */
+  DEID_PARTY_ROLE_RETAINED: "DEID_PARTY_ROLE_RETAINED",
 } as const;
 
 /**

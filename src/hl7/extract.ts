@@ -6,7 +6,9 @@
  * order), no locus string ever has to be parsed back.
  *
  * PHI is located **structurally**: the mapped PHI fields of PID / NK1 / GT1 / IN1 / IN2 (the
- * {@link HL7_LOCUS_MAP}) and the OBX-5 / NTE-3 free text. The **fail-closed** rule governs everything
+ * {@link HL7_LOCUS_MAP}), the organisation-typed party positions those segments carry (the
+ * {@link HL7_ORGANISATION_PARTY_RULES}, decided by the shared party-role test rather than by a category
+ * rule) and the OBX-5 / NTE-3 free text. The **fail-closed** rule governs everything
  * else: a recognized segment is retained only if it is on the explicit {@link RETAIN_SEGMENTS}
  * clinical/administrative list, so a *known* patient-identity segment absent from the map (MRG / FAM /
  * ACC / PEO / PDA) is blocked exactly like a Z-segment or a segment unknown to the parser. A non-mapped
@@ -32,9 +34,16 @@ import { type Hl7Message, type Segment } from "@cosyte/hl7";
 import { SAFE_HARBOR_CATEGORIES } from "../categories.js";
 import { safeLocusToken } from "../derived-token.js";
 import type { GenericLocus } from "../locus.js";
+import { classifyPartyRole } from "../party-role.js";
 import { isRetainableCategory, retains, type RetainedLocusClass } from "../retention.js";
 import { DR_DATE_COMPONENTS, HL7_DATE_LOCI, OBX_DATE_VALUE_TYPES } from "./date-loci.js";
-import { HL7_LOCUS_MAP, categoryForIdentifierType, type Hl7FieldRule } from "./locus-map.js";
+import {
+  HL7_LOCUS_MAP,
+  HL7_ORGANISATION_PARTY_RULES,
+  HL7_PARTY_ROLE_TABLE,
+  categoryForIdentifierType,
+  type Hl7FieldRule,
+} from "./locus-map.js";
 import { RETAIN_SEGMENTS, RETAINED_LOCUS_RULES, type Hl7RetainedFieldRule } from "./retain.js";
 
 /**
@@ -254,6 +263,62 @@ function extractRule(
       }
       return;
     }
+  }
+}
+
+/**
+ * Extract the **organisation-typed party positions** of a mapped segment (`IN2-70` today) under the
+ * **same party-role test** the X12 adapter applies to an `NM1` / `N1` organisation party: the role the
+ * v2.5.1 field definition types at the party is looked up in the committed
+ * {@link HL7_PARTY_ROLE_TABLE}, and only a role that table establishes as **outside**
+ * §164.514(b)(2)(i)'s scope clause leaves the party in place, with the role code recorded value-free at
+ * the party's own locus.
+ *
+ * Anything else fails closed. The insured's employer is the case that matters: the clause names
+ * employers, so the role can never be established as outside it and the whole field goes, the
+ * organisation's name (`XON.1`) and its identifier (`XON.10`) together, recorded as a block.
+ *
+ * Emitted after the segment's flat field rules, and the positions are high-numbered, so the segment's
+ * loci stay in document order.
+ */
+function extractOrganisationParties(
+  out: Hl7Extraction,
+  seg: Segment,
+  type: string,
+  occ: number,
+): void {
+  const rules = HL7_ORGANISATION_PARTY_RULES[type];
+  if (rules === undefined) return;
+  for (const rule of rules) {
+    if (!hasContent(seg, rule.field)) continue;
+    const party = classifyPartyRole(rule.role, HL7_PARTY_ROLE_TABLE);
+    if (party.scope === "outside-scope") {
+      // The party is not the individual, a relative, an employer or a household member: its name and
+      // identifier stay, and the role code that placed it outside the clause is recorded instead of
+      // being left to be inferred from an absence. The `none` edit writes nothing back.
+      push(
+        out,
+        {
+          path: fieldPath(type, occ, rule.field),
+          kind: "identifier",
+          partyRole: party.roleCode,
+          value: "",
+        },
+        { segIndex: seg.absoluteIndex, field: rule.field, rep: 0, edit: "none" },
+      );
+      continue;
+    }
+    // Fail closed: a role the table cannot establish as outside the clause takes the whole field,
+    // omitting the category so the engine blocks it as the (R) catch-all.
+    push(
+      out,
+      {
+        path: fieldPath(type, occ, rule.field),
+        kind: "identifier",
+        value: seg.field(rule.field).value,
+      },
+      { segIndex: seg.absoluteIndex, field: rule.field, rep: 0, edit: "whole-field" },
+    );
   }
 }
 
@@ -549,6 +614,9 @@ export function extractHl7Loci(msg: Hl7Message, options: Hl7ExtractOptions = {})
     const rules = HL7_LOCUS_MAP[type];
     if (rules !== undefined) {
       for (const rule of rules) extractRule(out, seg, type, occ, rule);
+      // A position the standard types as a whole ORGANISATION is decided by the party-role test, not
+      // by a category rule. Emitted after the flat rules, and high-numbered, so document order holds.
+      extractOrganisationParties(out, seg, type, occ);
       continue;
     }
     if (type === "OBX") {

@@ -41,6 +41,7 @@ describe("code surface stability", () => {
         "DEID_FREETEXT_BLOCKED",
         "DEID_FREETEXT_CONSUMER_REDACTED",
         "DEID_LOCUS_BLOCKED",
+        "DEID_PARTY_ROLE_RETAINED",
         "DEID_RESIDUAL_RETAINED",
       ]
     `);
