@@ -27,6 +27,19 @@
  * the visit number (PV1-19) and the placer / filler order numbers (OBR-2/3, ORC-2/3) are **removed**. A
  * profile that names their retention class keeps them **unchanged and recorded**.
  *
+ * **The individual's employer is a Safe Harbor subject**, because §164.514(b)(2)(i) removes the
+ * identifiers of the individual "or of relatives, **employers**, or household members" of the
+ * individual. So the employer positions the financial segments type are acted on and recorded like any
+ * other mapped locus: the guarantor's employer name (GT1-16), address (GT1-17) and phone (GT1-18), the
+ * guarantor employee and employer ids (GT1-19, GT1-29), the insured's group employer id and name
+ * (IN1-10, IN1-11), the insured's employer name (IN2-3), the employer contact person's name and phone
+ * (IN2-49, IN2-50) and the insured's employer phone (IN2-64). **IN2-70** types an *organisation* rather
+ * than a value, so it goes through the shared party-role test ({@link HL7_ORGANISATION_PARTY_RULES},
+ * {@link HL7_PARTY_ROLE_TABLE}) that the X12 adapter applies to an `NM1` / `N1` party, and fails closed:
+ * the role there is the insured's employer, which the clause names, so name and identifier both go. The
+ * *insurer's* own company name, address and phone (IN1-3/4/5/7) and the coded employment status
+ * (GT1-20) are untouched: neither is the individual's, a relative's or an employer's identity.
+ *
  * **PV1-19 is a CX list routed by its CX-5 identifier-type code**, exactly like PID-3: a `VN`-typed or
  * untyped value is the encounter identifier (removed as the (R) catch-all, retainable), while an
  * `MR`/`AN`/`SS`-typed one is handled as the identifier it really is and is **transformed under both
@@ -152,9 +165,13 @@ function assertRoundTrips(document: Hl7Message): void {
 
 export {
   HL7_LOCUS_MAP,
+  HL7_ORGANISATION_PARTY_RULES,
+  HL7_PARTY_ROLES,
+  HL7_PARTY_ROLE_TABLE,
   categoryForIdentifierType,
   type Hl7FieldRule,
   type Hl7FieldMode,
+  type Hl7OrgPartyRule,
 } from "./locus-map.js";
 export {
   extractHl7Loci,

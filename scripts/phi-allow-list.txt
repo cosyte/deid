@@ -76,6 +76,17 @@ NAME ZZINSSTREET
 NAME ZZINSCITY
 NAME ZZEMPLOYERINC
 NAME ZZMEDICAIDNAME
+# The EMPLOYER positions of the guarantor / insurance segments (test/fixtures/hl7/adt-a01.hl7).
+# §164.514(b)(2)(i) removes the identifiers of the individual's employers, so each of these is seeded
+# in the clear and asserted ABSENT after the pass, exactly like a relative's name.
+NAME ZZGTEMPFAMILY
+NAME ZZGTEMPGIVEN
+NAME ZZGTEMPSTREET
+NAME ZZGTEMPCITY
+NAME ZZINSGRPEMPNAME
+NAME ZZEMPCONTACTFAM
+NAME ZZEMPCONTACTGIV
+NAME ZZEMPORGNAME
 NAME ZZLABFAMILY
 NAME ZZLABGIVEN
 NAME ZZLABSTREET
@@ -187,6 +198,10 @@ NAME ZZSUBFIRST
 NAME ZZPATLAST
 NAME ZZPATFIRST
 NAME ZZGROUPNAME
+# The employer party (NM1*36) of the same fixture: an organisation the scope clause names, so its name
+# and its employer identification number are seeded in the clear and asserted ABSENT after the pass.
+NAME ZZEMPLOYERX12
+ID ZZEMPEIN12
 
 # --- Synthetic NCPDP Telecom patient/cardholder/prescriber tokens (test/fixtures/ncpdp) ---
 # Patient + cardholder names, street/city, and identifiers. Checked structurally by the NCPDP Telecom
@@ -296,6 +311,16 @@ ID ZZDL001
 ID ZZMOTHERID001
 ID ZZGTNUM001
 ID ZZGTEMPLOYERID
+# The employer identifiers and phone numbers of the same fixture's guarantor / insurance segments, plus
+# the INSURER's own phone at IN1-7, which is the over-scrub control: it is asserted PRESENT afterwards
+# (an insurer is not the individual, a relative, an employer or a household member).
+ID ZZGTEMPEIN
+ID ZZINSGRPEMPID
+ID ZZEMPORGID
+ID 5550000007
+ID 5550000008
+ID 5550000009
+ID 5559990000
 ID ZZGROUP001
 ID ZZPOLICY001
 ID ZZMEMBER001

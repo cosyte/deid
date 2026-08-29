@@ -302,6 +302,76 @@ describe("deidentify, manifest shape + aggregation + empty model", () => {
   });
 });
 
+describe("deidentify, the party-role record (a retained party names its role code)", () => {
+  it("records the role code at the party's locus and writes nothing back", () => {
+    const { document, manifest } = deidentify(
+      { loci: [loc({ path: "837/NM1[0]-1", kind: "identifier", partyRole: "85", value: "" })] },
+      {},
+    );
+    expect(document.loci[0]).toMatchObject({ value: "", disposition: "retained" });
+    expect(manifest).toHaveLength(1);
+    expect(manifest[0]).toMatchObject({
+      locus: "837/NM1[0]-1",
+      partyRole: "85",
+      transform: "retain",
+      disposition: "retained",
+      code: D.DEID_PARTY_ROLE_RETAINED,
+      category: C.NAMES,
+      count: 1,
+      reidentificationCode: false,
+    });
+  });
+
+  it("keeps two parties with different role codes as two rows, never one", () => {
+    const { manifest } = deidentify(
+      {
+        loci: [
+          loc({ path: "837/NM1[0]-1", kind: "identifier", partyRole: "85", value: "" }),
+          loc({ path: "837/NM1[1]-1", kind: "identifier", partyRole: "PR", value: "" }),
+        ],
+      },
+      {},
+    );
+    expect(manifest.map((e) => e.partyRole)).toEqual(["85", "PR"]);
+  });
+
+  it("FAILS CLOSED on a party-role locus that carries a value: blocked, never retained", () => {
+    // The marker exists to record a position, not to hand a value through. A marked locus carrying one
+    // is refused, so the marker can never become a route past the policy.
+    const { document, manifest } = deidentify(
+      {
+        loci: [
+          loc({
+            path: "837/NM1[0]-1",
+            kind: "identifier",
+            category: C.NAMES,
+            partyRole: "85",
+            value: "SENTINEL_SMUGGLED_NAME",
+          }),
+        ],
+      },
+      {},
+    );
+    expect(document.loci[0]).toMatchObject({ value: null, disposition: "blocked" });
+    expect(manifest[0]).toMatchObject({ disposition: "blocked", code: D.DEID_LOCUS_BLOCKED });
+    expect(manifest[0]?.partyRole).toBeUndefined();
+    expect(JSON.stringify(manifest)).not.toContain("SENTINEL_SMUGGLED_NAME");
+  });
+
+  it("cannot be used to retain free text or an unrecognized structure", () => {
+    const { document } = deidentify(
+      {
+        loci: [
+          loc({ path: "NTE-3", kind: "freetext", partyRole: "85", value: "SENTINEL_PROSE" }),
+          loc({ path: "ZZZ-1", kind: "unknown", partyRole: "85", value: "SENTINEL_UNKNOWN" }),
+        ],
+      },
+      {},
+    );
+    expect(document.loci.every((l) => l.value === null && l.disposition === "blocked")).toBe(true);
+  });
+});
+
 describe("deidentify, the mandatory offset/key-never-leak gate", () => {
   it("never emits the key, the seed, or the raw shift material in the output or manifest", () => {
     const key = "SUPERSECRET-HMAC-KEY-9f3a";

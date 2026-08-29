@@ -69,6 +69,11 @@ export function applyX12(
     const coord = coords[i];
     const t = transformed[i];
     if (coord === undefined || t === undefined) continue;
+    // A coordinate with NO elements is a record about a position, not an edit to it: the party-role
+    // row a retained out-of-scope party emits. It must not even reach the edit map, because merely
+    // registering the segment would rebuild its raw text from the decoded elements, and a retained
+    // party has to survive BYTE-identical.
+    if (coord.elements.length === 0) continue;
     const value = t.value ?? ""; // removed / blocked → empty element
 
     const byTx = byGroup.get(coord.groupIndex) ?? new Map<number, Map<number, SegmentEdits>>();

@@ -31,7 +31,7 @@ import {
   X12_RETAIN_SEGMENTS,
   X12_UNIVERSAL_SEGMENT_RULES,
   categoryForNm1IdQualifier,
-  classifyNm1Entity,
+  classifyNm1Party,
   classifyRefQualifier,
   type X12ElementRule,
 } from "./locus-map.js";
@@ -51,7 +51,8 @@ export interface X12Coord {
   /**
    * The 1-based element position(s) this locus governs. A single-value transform (date / zip / id)
    * lists one element and the applier writes the transformed value there; a multi-element redact (a
-   * whole `NM1` name) lists every component and the applier clears them all.
+   * whole `NM1` name) lists every component and the applier clears them all. An **empty** list is the
+   * write-nothing coordinate of a party-role record: the party's bytes survive untouched.
    */
   readonly elements: readonly number[];
 }
@@ -160,16 +161,49 @@ function emitId(
   );
 }
 
+/**
+ * Record a party the pass is leaving in place because the role its `-01` entity-identifier code names
+ * puts it outside §164.514(b)(2)(i)'s scope clause. The record sits at the party's own structural locus
+ * (the `-01` element, where the role code lives), carries the role code and **no value at all**, and is
+ * given an empty coordinate so the applier writes nothing: the party's bytes are untouched.
+ *
+ * It is emitted only when the party actually had something to leave in place, so a bare party position
+ * with neither a name nor an identifier does not manufacture a row.
+ */
+function emitRetainedParty(
+  out: X12Extraction,
+  seg: X12Segment,
+  pos: SegPos,
+  roleCode: string,
+  identityElements: readonly number[],
+): void {
+  if (!identityElements.some((n) => has(seg, n))) return;
+  push(
+    out,
+    { path: path(pos, 1), kind: "identifier", partyRole: roleCode, value: "" },
+    coord(pos, []),
+  );
+}
+
 /** Handle an `NM1`: entity-classified name (03–07) + identifier (09 routed by the 08 qualifier). */
 function handleNm1(out: X12Extraction, seg: X12Segment, pos: SegPos): void {
-  const disposition = classifyNm1Entity(el(seg, 1));
-  if (disposition === "provider") return; // recognized provider / organization: retained (§5)
+  const party = classifyNm1Party(el(seg, 1));
+  if (party.scope === "outside-scope") {
+    // Recognized provider / organization: retained, and the role code that placed it outside the scope
+    // clause is recorded at its locus rather than left to be inferred from an absence.
+    emitRetainedParty(out, seg, pos, party.roleCode, [3, 4, 5, 6, 7, 9]);
+    return;
+  }
+  // A party the clause reaches: the individual, a relative, or the individual's EMPLOYER, all on the
+  // same footing. An unknown role is not one of them and is not established as outside either, so it
+  // fails closed.
+  const subject = party.scope === "safe-harbor-subject";
 
-  // Name components NM1-03..07. A patient entity redacts (category NAMES); an unknown entity fails
+  // Name components NM1-03..07. A subject entity redacts (category NAMES); an unknown entity fails
   // closed (blocked): an unrecognized entity could be the patient, so its name is never passed through.
   const nameElements = [3, 4, 5, 6, 7].filter((n) => has(seg, n));
   if (nameElements.length > 0) {
-    if (disposition === "patient") {
+    if (subject) {
       push(
         out,
         {
@@ -195,7 +229,7 @@ function handleNm1(out: X12Extraction, seg: X12Segment, pos: SegPos): void {
 
   // Identifier NM1-09, routed by the NM1-08 qualifier. An unknown/absent qualifier fails closed.
   if (has(seg, 9)) {
-    const category = disposition === "patient" ? categoryForNm1IdQualifier(el(seg, 8)) : undefined;
+    const category = subject ? categoryForNm1IdQualifier(el(seg, 8)) : undefined;
     emitId(out, seg, pos, 9, category);
   }
 }
@@ -203,17 +237,23 @@ function handleNm1(out: X12Extraction, seg: X12Segment, pos: SegPos): void {
 /**
  * Handle an `N1` (Party Identification) with the same entity classification as `NM1`: a recognized
  * provider / organization party is retained (payer / payee / provider org identity is not the
- * individual's PHI); a patient-side individual party has its name (`N1-02`) removed and its identifier
- * (`N1-04`) routed by the `N1-03` qualifier; an unknown entity code **fails closed** (name + id blocked).
- * `N1` shares the entity-identifier-code (element 98) and identification-code-qualifier (element 66)
- * semantics with `NM1`, so the classifiers are reused.
+ * individual's PHI) **and its role code is recorded** at its locus; a party the scope clause reaches,
+ * the individual, a relative or the individual's **employer**, has its name (`N1-02`) removed and its
+ * identifier (`N1-04`) routed by the `N1-03` qualifier; an unknown entity code **fails closed** (name +
+ * id blocked). `N1` shares the entity-identifier-code (element 98) and identification-code-qualifier
+ * (element 66) semantics with `NM1`, so the classifiers are reused.
  */
 function handleN1(out: X12Extraction, seg: X12Segment, pos: SegPos): void {
-  const disposition = classifyNm1Entity(el(seg, 1));
-  if (disposition === "provider") return; // recognized org / payer / provider party: retained
+  const party = classifyNm1Party(el(seg, 1));
+  if (party.scope === "outside-scope") {
+    // Recognized org / payer / provider party: retained, with the role code recorded at its locus.
+    emitRetainedParty(out, seg, pos, party.roleCode, [2, 4]);
+    return;
+  }
+  const subject = party.scope === "safe-harbor-subject";
 
   if (has(seg, 2)) {
-    if (disposition === "patient") {
+    if (subject) {
       push(
         out,
         {
@@ -229,7 +269,7 @@ function handleN1(out: X12Extraction, seg: X12Segment, pos: SegPos): void {
     }
   }
   if (has(seg, 4)) {
-    const category = disposition === "patient" ? categoryForNm1IdQualifier(el(seg, 3)) : undefined;
+    const category = subject ? categoryForNm1IdQualifier(el(seg, 3)) : undefined;
     emitId(out, seg, pos, 4, category);
   }
 }

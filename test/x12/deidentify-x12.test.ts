@@ -69,6 +69,8 @@ const SENTINELS = [
   "ZZMSGPHI", // MSG-01 message free text: blocked (was retained wholesale)
   "ZZIIIPHI", // III-04 free-form message text: blocked (III codes retained)
   "ZZK3PHI", // K3-01 file information free text: blocked
+  "ZZEMPLOYERX12", // NM1*36 employer party name: the individual's employer is a Safe Harbor subject
+  "ZZEMPEIN12", // NM1*36 employer id (FI qualifier): fails closed as the (R) catch-all
   // Provider address / submitter contact are universally scrubbed (a safe over-reach, never a leak).
   "PROVIDER RD",
   "PROVCITY",
@@ -116,9 +118,11 @@ describe("X12 de-identification, leak + over-scrub gates", () => {
 });
 
 describe("X12 structured behavior", () => {
-  it("entity-classifies NM1: patient scrubbed, provider retained, unknown fails closed", () => {
+  it("entity-classifies NM1: patient + employer scrubbed, provider retained, unknown fails closed", () => {
     expect(classifyNm1Entity("IL")).toBe("patient");
     expect(classifyNm1Entity("QC")).toBe("patient");
+    // The individual's employer is inside §164.514(b)(2)(i)'s scope clause, not an unrelated org.
+    expect(classifyNm1Entity("36")).toBe("employer");
     expect(classifyNm1Entity("85")).toBe("provider");
     expect(classifyNm1Entity("82")).toBe("provider");
     expect(classifyNm1Entity("ZQ")).toBe("unknown");

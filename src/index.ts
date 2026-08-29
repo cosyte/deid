@@ -98,6 +98,14 @@ export {
   type RetainedLocusClass,
 } from "./retention.js";
 
+// ── The party-role test: which side of §164.514(b)(2)(i)'s scope clause a party's role places it on.
+export {
+  classifyPartyRole,
+  type PartyRoleScope,
+  type PartyRoleTable,
+  type PartyRoleClassification,
+} from "./party-role.js";
+
 // ── The generic locus model.
 export {
   type LocusKind,

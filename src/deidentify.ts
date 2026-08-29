@@ -119,6 +119,33 @@ function retainedResidual(locus: GenericLocus, category: SafeHarborCategory): Lo
   };
 }
 
+/**
+ * Build the outcome for a **party-role record**: an adapter classified a party's role as **outside**
+ * §164.514(b)(2)(i)'s scope clause, left that party's name and identifiers in place, and is recording
+ * the role code it decided on at the party's own structural locus. Nothing is written back (the record
+ * carries no value at all) and the row names the code, so a retention that used to be silent is
+ * auditable.
+ *
+ * The category is (A) names: a party's identity is what the clause governs and what the pass left
+ * alone. The code is `DEID_PARTY_ROLE_RETAINED`, deliberately not the residual code, so this row never
+ * joins the determiner's retained-quasi-identifier inventory: an out-of-scope party is not a residual
+ * of the individual's own identity.
+ */
+function partyRoleRetained(locus: GenericLocus, roleCode: string): LocusOutcome {
+  return {
+    value: locus.value,
+    disposition: "retained",
+    manifest: {
+      category: SAFE_HARBOR_CATEGORIES.NAMES,
+      transform: "retain",
+      locus: locus.path,
+      disposition: "retained",
+      code: DEID_DISPOSITION_CODES.DEID_PARTY_ROLE_RETAINED,
+      partyRole: roleCode,
+    },
+  };
+}
+
 /** Choose the right generalization for a locus from its kind, then its category. `null` = can't. */
 function generalizeLocus(
   locus: GenericLocus,
@@ -315,6 +342,21 @@ function handleLocus(
   // may redact it in place, consumer-asserted, but a redactor failure still fails closed.
   if (locus.kind === "freetext") {
     return handleFreeText(locus, redactor);
+  }
+  // A PARTY-ROLE RECORD: the adapter's own role table established this party as outside the scope
+  // clause, so its name and identifiers stay where they are and the role code is recorded here. The
+  // record carries NO value, and a marked locus that carries one is refused rather than retained: that
+  // is the one way this marker could otherwise become a route for passing an identifier through. It
+  // sits after the free-text and clinical guards, so neither can be re-labelled into it.
+  if (locus.partyRole !== undefined) {
+    if (locus.value.length > 0) {
+      return blocked(
+        locus.path,
+        locus.category ?? SAFE_HARBOR_CATEGORIES.OTHER_UNIQUE_ID,
+        DEID_DISPOSITION_CODES.DEID_LOCUS_BLOCKED,
+      );
+    }
+    return partyRoleRetained(locus, locus.partyRole);
   }
   // Fail closed: an unrecognized structure or an unclassified PHI-bearing locus is category (R).
   if (locus.category === undefined || locus.kind === "unknown") {

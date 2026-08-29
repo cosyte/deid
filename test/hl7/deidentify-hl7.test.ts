@@ -40,11 +40,15 @@ function loadFixture(name: string): string {
 const ctx = createDeidContext({ key: "hl7-test-key", patientId: "patient-1" });
 
 /**
- * The patient / relative / guarantor / insured PHI sentinels seeded across `adt-a01.hl7`. Every one
- * must be GONE after a de-id pass. (Retained-by-design values, the MSH/EVN envelope timestamps, the
- * PV1 provider name and the insurer org name/address, are deliberately not `ZZ`-tagged and are not in
- * this list. The encounter dates and the encounter / order identifiers are NOT among them: they are
- * removed under this profile, and `adt-a03.hl7` is the fixture that seeds and proves it.)
+ * The patient / relative / guarantor / insured / **employer** PHI sentinels seeded across
+ * `adt-a01.hl7`. Every one must be GONE after a de-id pass. §164.514(b)(2)(i) removes the identifiers
+ * of the individual "or of relatives, **employers**, or household members", so the employer positions
+ * of the guarantor and insurance segments are on this list beside the relatives'. (Retained-by-design
+ * values, the MSH/EVN envelope timestamps, the PV1 provider name, the coded employment status and the
+ * insurer org id/name/address/phone, are deliberately not `ZZ`-tagged and are not in this list; the
+ * employer suite in `employer.test.ts` asserts those the other way. The encounter dates and the
+ * encounter / order identifiers are NOT among them either: they are removed under this profile, and
+ * `adt-a03.hl7` is the fixture that seeds and proves it.)
  */
 const ADT_SENTINELS: readonly string[] = [
   "ZZMRN001",
@@ -83,8 +87,17 @@ const ADT_SENTINELS: readonly string[] = [
   "5550000006",
   "19850302",
   "900000006",
+  "ZZGTEMPFAMILY",
+  "ZZGTEMPGIVEN",
+  "ZZGTEMPSTREET",
+  "ZZGTEMPCITY",
+  "11201",
+  "5550000007",
   "ZZGTEMPLOYERID",
+  "ZZGTEMPEIN",
   "ZZGROUP001",
+  "ZZINSGRPEMPID",
+  "ZZINSGRPEMPNAME",
   "ZZINSURED",
   "ZZINSGIVEN",
   "19850303",
@@ -98,6 +111,12 @@ const ADT_SENTINELS: readonly string[] = [
   "ZZMEDICARE001",
   "ZZMEDICAIDCASE001",
   "ZZMEDICAIDNAME",
+  "ZZEMPCONTACTFAM",
+  "ZZEMPCONTACTGIV",
+  "5550000008",
+  "5550000009",
+  "ZZEMPORGNAME",
+  "ZZEMPORGID",
   "ZZCUSTOM001",
   "ZZSECRETNOTE",
   "ZZEXTRAID001",

@@ -100,6 +100,17 @@ Two things follow, and the second is the one that surprises people:
   the support report either. **Do not read the named loci above as the complete set of what a retained
   structure can carry.** If your threat model includes these, filter them yourself.
 
+- **The employer is a Safe Harbor subject, and two employer surfaces still are not reached.**
+  §164.514(b)(2)(i) removes the identifiers of the individual "or of relatives, **employers**, or
+  household members", so an X12 party whose entity-identifier code is `36` and the employer positions
+  the HL7 v2.5.1 financial segments type (GT1-16/17/18/19/29, IN1-10/11, IN2-3/49/50/64, and IN2-70 as
+  an organisation) are acted on and recorded. What that does **not** reach: **an employer named only in
+  free text**, which is the consumer's redactor's business like any other prose; and **an employer
+  carried as a separate `Organization` resource in a FHIR graph**, where no role is typed at the
+  position and the reference `display` that names it is blocked rather than classified. The guarantor's
+  employer organisation name at **GT1-51** is likewise unreached: it is not among the positions this
+  pass names.
+
 Vendor-proprietary loci absent from public specs are deferred, **not invented**: a quirk is encoded
 only when a real de-identified document grounds it.
 
