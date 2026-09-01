@@ -93,7 +93,7 @@ export type RetainedLocusClass =
  * **This is the guard that makes the retention citation true rather than merely asserted.** The
  * argument for keeping an encounter or order number is that this list has no catch-all; the argument
  * for keeping a service date is that it has no date. **Neither argument survives if the value at the
- * locus turns out to be one of the sixteen** — and a visit number field routinely carries a medical
+ * locus turns out to be one of the sixteen** -- and a visit number field routinely carries a medical
  * record or account number, typed as such by the standard's own identifier-type code. So retention is
  * **refused** whenever the resolved category is on this list, whatever an adapter asked for, in both
  * the adapter and the engine.

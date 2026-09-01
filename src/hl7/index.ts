@@ -43,7 +43,7 @@
  * **PV1-19 is a CX list routed by its CX-5 identifier-type code**, exactly like PID-3: a `VN`-typed or
  * untyped value is the encounter identifier (removed as the (R) catch-all, retainable), while an
  * `MR`/`AN`/`SS`-typed one is handled as the identifier it really is and is **transformed under both
- * profiles, never retained** — §164.514(e)(2) names all three, so keeping one would republish in the
+ * profiles, never retained** -- §164.514(e)(2) names all three, so keeping one would republish in the
  * clear the identifier the pass pseudonymized at PID-3 in the same message.
  *
  * **Every other date inside a segment the pass hands through** is located from {@link HL7_DATE_LOCI},

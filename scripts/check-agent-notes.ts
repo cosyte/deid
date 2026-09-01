@@ -307,8 +307,11 @@ function stripInline(text: string): string {
  * THREE THINGS HERE ARE NOT COSMETIC, and all three are reachable on THIS tree.
  *
  * PER-SPACE, NOT PER-RUN: two spaces become two hyphens. Live here rather than hypothetical: the
- * narrative file's own H1 puts a deleted glyph between two spaces, so its real anchor carries a
- * DOUBLE hyphen, and a per-run collapse reds the pointer at it.
+ * narrative file's own H1 puts a KEPT hyphen pair between two spaces, so its real anchor carries a
+ * run of four hyphens, and a per-run collapse reds the pointer at it. The other half of the same
+ * rule, a DELETED glyph between two spaces, is pinned by its own row in `SLUG_CASES` because this
+ * repository leads load-bearing rules with marker glyphs and a heading of that shape is one edit
+ * away.
  *
  * NO `.trim()`. github-slugger does not trim: it deletes the disallowed character and leaves the
  * space behind, so a heading led by a marker glyph slugs with a LEADING HYPHEN. A trim makes a
@@ -489,7 +492,7 @@ function extractHeadings(lines: readonly string[]): Extraction {
     // WERE FALSE: a review deleted the length condition with everything else green, and a later
     // review deleted the MARKER condition with the self-test, the real tree and all fifteen suite
     // cases still green while three documents claimed otherwise. **Delete one conjunct and re-run
-    // before you believe this sentence again** — a mutation matrix that removes conditions in pairs
+    // before you believe this sentence again** -- a mutation matrix that removes conditions in pairs
     // proves nothing about either one, which is exactly how the marker case was missed.
     //
     // A BACKTICK FENCE'S INFO STRING MAY NOT CONTAIN A BACKTICK (CommonMark 4.5), so such a line
@@ -641,9 +644,15 @@ function emptySections(
  */
 const SLUG_CASES: ReadonlyArray<readonly [string, string]> = [
   // The narrative file's own H1, and the PER-SPACE rule in its live form on this tree: the package
-  // scope's `@` and `/` are deleted with no separator left behind, while the dash glyph between two
-  // spaces is deleted and BOTH spaces survive, giving a DOUBLE hyphen. A per-run collapse reds it.
-  ["@cosyte/deid — agent notes", "cosytedeid--agent-notes"],
+  // scope's `@` and `/` are deleted with no separator left behind, while the ASCII hyphen is KEPT
+  // and both surrounding spaces survive, giving a run of FOUR hyphens. A per-run collapse reds it,
+  // and so does dropping `-` from the keep class.
+  ["@cosyte/deid -- agent notes", "cosytedeid----agent-notes"],
+  // THE DELETED-GLYPH SHAPE, KEPT AS ITS OWN ROW rather than lost with the H1 it used to ride on.
+  // A glyph outside the keep class sitting between two spaces is deleted while BOTH spaces survive,
+  // so the slug carries a DOUBLE hyphen. The marker glyphs this repository leads its load-bearing
+  // rules with are exactly that shape, so a heading of this form is one edit away at any time.
+  ["The rule ▶ and its reason", "the-rule--and-its-reason"],
   // Real, and the live target of a pointer in `CLAUDE.md`. Backticks, `@`, `/` and `*` all delete.
   ["Tech Stack (the shared `@cosyte/*` standard)", "tech-stack-the-shared-cosyte-standard"],
   // Real. Square brackets delete with no separator, so the bracketed word runs into its neighbours.
