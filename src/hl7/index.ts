@@ -70,6 +70,7 @@ import { parseHL7, type Hl7Message } from "@cosyte/hl7";
 import { DeidError, FATAL_CODES } from "../codes.js";
 import { deidentify, type DeidOptions } from "../deidentify.js";
 import { type DeidManifestEntry } from "../manifest.js";
+import { type UnexaminedResidual } from "../residual.js";
 import { applyHl7 } from "./apply.js";
 import { extractHl7Loci } from "./extract.js";
 
@@ -91,6 +92,14 @@ export interface Hl7DeidResult {
   readonly document: Hl7Message;
   /** The value-free audit of every action, in locus order (never a value, never a key). */
   readonly manifest: readonly DeidManifestEntry[];
+  /**
+   * The manifest's **second list**: every value-bearing position inside a segment this pass handed
+   * through that **no locus rule named**, counted and located. Nothing here was transformed, blocked or
+   * kept by a decision, because nothing reached it; an empty list is therefore a **measured zero**, not
+   * a silence. Hand it to `buildExpertDeterminationSupportReport` alongside the manifest so the support
+   * report can say which of the two it is.
+   */
+  readonly unexaminedResiduals: readonly UnexaminedResidual[];
 }
 
 /**
@@ -121,14 +130,14 @@ export interface Hl7DeidResult {
  * ```
  */
 export function deidentifyHl7(msg: Hl7Message, options: DeidOptions = {}): Hl7DeidResult {
-  const { loci, coords } = extractHl7Loci(
+  const { loci, coords, unexaminedResiduals } = extractHl7Loci(
     msg,
     options.retainedLoci !== undefined ? { retainedLoci: options.retainedLoci } : {},
   );
   const { document, manifest } = deidentify({ loci }, options);
   const deidentified = applyHl7(msg, document.loci, coords);
   assertRoundTrips(deidentified);
-  return { document: deidentified, manifest };
+  return { document: deidentified, manifest, unexaminedResiduals };
 }
 
 /**
@@ -192,4 +201,5 @@ export {
   type Hl7SegmentDateLoci,
 } from "./date-loci.js";
 export { RETAINED_LOCUS_CLASSES, retains, type RetainedLocusClass } from "../retention.js";
+export { type UnexaminedResidual } from "../residual.js";
 export { SAFE_HARBOR_CATEGORIES, type SafeHarborCategory } from "../categories.js";

@@ -49,6 +49,7 @@ import { parseX12, type X12Interchange } from "@cosyte/x12";
 
 import { deidentify, type DeidOptions } from "../deidentify.js";
 import { type DeidManifestEntry } from "../manifest.js";
+import { type UnexaminedResidual } from "../residual.js";
 import { applyX12 } from "./apply.js";
 import { extractX12Loci } from "./extract.js";
 
@@ -73,6 +74,13 @@ export interface X12DeidResult {
   readonly x12: string;
   /** The value-free audit of every action, in locus order (never a value, never a key). */
   readonly manifest: readonly DeidManifestEntry[];
+  /**
+   * The manifest's **second list**: every value-bearing element this pass handed through that **no
+   * locus rule named**, counted and located. A retained clinical / financial / control segment
+   * contributes all of its elements, because retaining a structure names no position inside it. An
+   * empty list is a **measured zero**, not a silence.
+   */
+  readonly unexaminedResiduals: readonly UnexaminedResidual[];
 }
 
 /**
@@ -104,10 +112,10 @@ export function deidentifyX12(
   interchange: X12Interchange,
   options: DeidOptions = {},
 ): X12DeidResult {
-  const { loci, coords } = extractX12Loci(interchange);
+  const { loci, coords, unexaminedResiduals } = extractX12Loci(interchange);
   const { document, manifest } = deidentify({ loci }, options);
   const x12 = applyX12(interchange, document.loci, coords);
-  return { x12, manifest };
+  return { x12, manifest, unexaminedResiduals };
 }
 
 /**
@@ -153,4 +161,5 @@ export {
 } from "./locus-map.js";
 export { extractX12Loci, type X12Coord, type X12Extraction } from "./extract.js";
 export { applyX12 } from "./apply.js";
+export { type UnexaminedResidual } from "../residual.js";
 export { SAFE_HARBOR_CATEGORIES, type SafeHarborCategory } from "../categories.js";

@@ -24,6 +24,11 @@ import { SAFE_HARBOR_CATEGORIES, type SafeHarborCategory } from "../categories.j
 import { safeLocusToken } from "../derived-token.js";
 import type { GenericLocus } from "../locus.js";
 import {
+  enumerateOrFail,
+  UnexaminedResidualBuilder,
+  type UnexaminedResidual,
+} from "../residual.js";
+import {
   X12_ACCOUNT_SEGMENTS,
   X12_FREE_TEXT_ELEMENTS,
   X12_GEO_RETAIN_ELEMENTS,
@@ -63,6 +68,24 @@ export interface X12Extraction {
   readonly loci: GenericLocus[];
   /** The write-back coordinates, index-aligned with {@link loci}. */
   readonly coords: X12Coord[];
+  /**
+   * Every **value-bearing element the pass hands through that no locus rule named**: the elements of a
+   * retained clinical / financial / control segment, and the unmapped positions of a segment whose
+   * mapped ones were acted on. Counted and located, never transformed.
+   */
+  readonly unexaminedResiduals: readonly UnexaminedResidual[];
+}
+
+/** The mutable pair the walk accumulates into, before it is frozen into an {@link X12Extraction}. */
+interface X12LocusAccumulator {
+  readonly loci: GenericLocus[];
+  readonly coords: X12Coord[];
+  /**
+   * The elements a locus rule **named**, keyed by segment position: the ones a coordinate writes to,
+   * plus the ones a rule reached and decided to leave alone (a party the scope clause does not reach,
+   * a recognized administrative `REF`, a geographic element on a segment's non-identifier safe list).
+   */
+  readonly named: Map<string, Set<number>>;
 }
 
 /** The per-segment position needed to build a coord and a value-free path. */
@@ -88,10 +111,31 @@ function has(seg: X12Segment, n: number): boolean {
   return el(seg, n).length > 0;
 }
 
-/** Append a locus + its coordinate to the accumulator. */
-function push(out: X12Extraction, locus: GenericLocus, coord: X12Coord): void {
+/** A segment's identity inside the interchange, the key the named-element sets are held under. */
+function segKey(pos: SegPos): string {
+  return `${String(pos.groupIndex)}:${String(pos.txIndex)}:${String(pos.segIndex)}`;
+}
+
+/**
+ * Record that a locus rule **named** these elements of this segment, whatever it then decided about
+ * them. A named element is examined and is never an unexamined residual; an element no rule names is
+ * exactly what the enumeration measures.
+ */
+function name(out: X12LocusAccumulator, pos: SegPos, elements: readonly number[]): void {
+  const key = segKey(pos);
+  const set = out.named.get(key) ?? new Set<number>();
+  for (const element of elements) set.add(element);
+  out.named.set(key, set);
+}
+
+/** Append a locus + its coordinate to the accumulator; the coordinate's elements are named by it. */
+function push(out: X12LocusAccumulator, locus: GenericLocus, coord: X12Coord): void {
   out.loci.push(locus);
   out.coords.push(coord);
+  const key = `${String(coord.groupIndex)}:${String(coord.txIndex)}:${String(coord.segIndex)}`;
+  const set = out.named.get(key) ?? new Set<number>();
+  for (const element of coord.elements) set.add(element);
+  out.named.set(key, set);
 }
 
 /** Build a value-free manifest path for a segment element (`837/NM1[1]-03`). */
@@ -110,7 +154,13 @@ function coord(pos: SegPos, elements: readonly number[]): X12Coord {
 }
 
 /** Emit a fail-closed block locus for one element (category omitted → engine blocks as (R)). */
-function blockElement(out: X12Extraction, seg: X12Segment, pos: SegPos, element: number): void {
+function blockElement(
+  out: X12LocusAccumulator,
+  seg: X12Segment,
+  pos: SegPos,
+  element: number,
+): void {
+  name(out, pos, [element]);
   if (!has(seg, element)) return;
   push(
     out,
@@ -120,7 +170,13 @@ function blockElement(out: X12Extraction, seg: X12Segment, pos: SegPos, element:
 }
 
 /** Emit a direct-category locus for one element (redact / date / zip). */
-function emitRule(out: X12Extraction, seg: X12Segment, pos: SegPos, rule: X12ElementRule): void {
+function emitRule(
+  out: X12LocusAccumulator,
+  seg: X12Segment,
+  pos: SegPos,
+  rule: X12ElementRule,
+): void {
+  name(out, pos, [rule.element]);
   if (!has(seg, rule.element)) return;
   if (rule.mode === "block") {
     blockElement(out, seg, pos, rule.element);
@@ -143,12 +199,13 @@ function emitRule(out: X12Extraction, seg: X12Segment, pos: SegPos, rule: X12Ele
 
 /** Emit an identifier locus routed to a resolved category, or fail closed when the category is unknown. */
 function emitId(
-  out: X12Extraction,
+  out: X12LocusAccumulator,
   seg: X12Segment,
   pos: SegPos,
   element: number,
   category: SafeHarborCategory | undefined,
 ): void {
+  name(out, pos, [element]);
   if (!has(seg, element)) return;
   if (category === undefined) {
     blockElement(out, seg, pos, element); // unknown identifier qualifier → fail closed
@@ -171,12 +228,15 @@ function emitId(
  * with neither a name nor an identifier does not manufacture a row.
  */
 function emitRetainedParty(
-  out: X12Extraction,
+  out: X12LocusAccumulator,
   seg: X12Segment,
   pos: SegPos,
   roleCode: string,
   identityElements: readonly number[],
 ): void {
+  // The party-role test named the role code AND the identity elements it decided to leave in place, so
+  // none of them is an unexamined residual: they were retained under a rule, not passed over in silence.
+  name(out, pos, [1, ...identityElements]);
   if (!identityElements.some((n) => has(seg, n))) return;
   push(
     out,
@@ -186,7 +246,10 @@ function emitRetainedParty(
 }
 
 /** Handle an `NM1`: entity-classified name (03–07) + identifier (09 routed by the 08 qualifier). */
-function handleNm1(out: X12Extraction, seg: X12Segment, pos: SegPos): void {
+function handleNm1(out: X12LocusAccumulator, seg: X12Segment, pos: SegPos): void {
+  // The `NM1` rules name the entity code the classification reads, the five name components, the
+  // identifier and the qualifier that routes it, whichever branch the party classification then takes.
+  name(out, pos, [1, 3, 4, 5, 6, 7, 8, 9]);
   const party = classifyNm1Party(el(seg, 1));
   if (party.scope === "outside-scope") {
     // Recognized provider / organization: retained, and the role code that placed it outside the scope
@@ -243,7 +306,10 @@ function handleNm1(out: X12Extraction, seg: X12Segment, pos: SegPos): void {
  * id blocked). `N1` shares the entity-identifier-code (element 98) and identification-code-qualifier
  * (element 66) semantics with `NM1`, so the classifiers are reused.
  */
-function handleN1(out: X12Extraction, seg: X12Segment, pos: SegPos): void {
+function handleN1(out: X12LocusAccumulator, seg: X12Segment, pos: SegPos): void {
+  // The `N1` rules name the same four positions: the entity code, the organisation name, the
+  // identification-code qualifier and the identifier it routes.
+  name(out, pos, [1, 2, 3, 4]);
   const party = classifyNm1Party(el(seg, 1));
   if (party.scope === "outside-scope") {
     // Recognized org / payer / provider party: retained, with the role code recorded at its locus.
@@ -275,7 +341,10 @@ function handleN1(out: X12Extraction, seg: X12Segment, pos: SegPos): void {
 }
 
 /** Handle a `REF`: `REF-02` routed by the `REF-01` qualifier (phi → scrub, retain, unknown → block). */
-function handleRef(out: X12Extraction, seg: X12Segment, pos: SegPos): void {
+function handleRef(out: X12LocusAccumulator, seg: X12Segment, pos: SegPos): void {
+  // The qualifier table names both elements on every branch: the qualifier the routing reads and the
+  // value it routes. A `retain` outcome is a decision about that value, not a position nothing reached.
+  name(out, pos, [1, 2]);
   if (!has(seg, 2)) return;
   const disposition = classifyRefQualifier(el(seg, 1));
   if (disposition.kind === "retain") return; // recognized administrative / provider reference
@@ -287,7 +356,7 @@ function handleRef(out: X12Extraction, seg: X12Segment, pos: SegPos): void {
 }
 
 /** Handle a `CLM` / `CLP`: pseudonymize the `-01` patient account number; retain the rest. */
-function handleAccount(out: X12Extraction, seg: X12Segment, pos: SegPos): void {
+function handleAccount(out: X12LocusAccumulator, seg: X12Segment, pos: SegPos): void {
   emitId(out, seg, pos, 1, SAFE_HARBOR_CATEGORIES.ACCOUNT);
 }
 
@@ -298,7 +367,7 @@ function handleAccount(out: X12Extraction, seg: X12Segment, pos: SegPos): void {
  * location identifier (`N4-06`) can never ride through in the clear.
  */
 function handleGeoSegment(
-  out: X12Extraction,
+  out: X12LocusAccumulator,
   seg: X12Segment,
   pos: SegPos,
   rules: readonly X12ElementRule[],
@@ -306,8 +375,12 @@ function handleGeoSegment(
   const ruleByElement = new Map<number, X12ElementRule>();
   for (const rule of rules) ruleByElement.set(rule.element, rule);
   const retain = X12_GEO_RETAIN_ELEMENTS[pos.segId] ?? new Set<number>();
+  // The sweep is exhaustive over the segment, so every element of it is named: acted on by its mapped
+  // rule, kept because the safe list says it is not an identifier, or blocked. None goes unexamined.
+  name(out, pos, [...retain]);
   for (let n = 1; n < seg.elements.length; n += 1) {
     if (!has(seg, n)) continue;
+    name(out, pos, [n]);
     const rule = ruleByElement.get(n);
     if (rule !== undefined) {
       emitRule(out, seg, pos, rule);
@@ -323,11 +396,12 @@ function handleGeoSegment(
  * (coded) elements are retained (the over-scrub guard).
  */
 function handleFreeTextSegment(
-  out: X12Extraction,
+  out: X12LocusAccumulator,
   seg: X12Segment,
   pos: SegPos,
   elements: readonly number[],
 ): void {
+  name(out, pos, elements);
   for (const n of elements) {
     if (!has(seg, n)) continue;
     push(
@@ -344,12 +418,12 @@ function handleFreeTextSegment(
 }
 
 /** Fail closed on an unknown segment: block every populated element (unrecognized structure). */
-function handleUnknown(out: X12Extraction, seg: X12Segment, pos: SegPos): void {
+function handleUnknown(out: X12LocusAccumulator, seg: X12Segment, pos: SegPos): void {
   for (let n = 1; n < seg.elements.length; n += 1) blockElement(out, seg, pos, n);
 }
 
 /** Dispatch one segment through the X12 PHI rules. */
-function handleSegment(out: X12Extraction, seg: X12Segment, pos: SegPos): void {
+function handleSegment(out: X12LocusAccumulator, seg: X12Segment, pos: SegPos): void {
   const id = pos.segId;
   if (id === "NM1") {
     handleNm1(out, seg, pos);
@@ -392,8 +466,16 @@ function handleSegment(out: X12Extraction, seg: X12Segment, pos: SegPos): void {
  * Walk a parsed X12 interchange and extract every PHI-bearing (or fail-closed) locus, structurally,
  * from the `@cosyte/x12` model. Never mutates the interchange.
  *
+ * Every segment is also **enumerated**: the value-bearing elements it hands through that no rule above
+ * named are counted and located as unexamined residuals. A retained clinical / financial / control
+ * segment contributes all of its elements, because retaining a STRUCTURE names no position inside it,
+ * and the `ST` / `SE` envelope control pair contributes its own. Nothing is transformed by the count.
+ *
  * @param interchange - The parsed X12 interchange (`parseX12(raw)`).
- * @returns The loci (for the engine) and their index-aligned write-back coordinates.
+ * @returns The loci (for the engine), their index-aligned write-back coordinates, and the unexamined
+ *   residual positions the pass hands through.
+ * @throws {@link DeidError} `DEID_POSITIONS_UNENUMERABLE` when a segment's value-bearing elements
+ *   cannot be enumerated: the pass fails rather than emit a zero or a partial count.
  * @example
  * ```ts
  * import { parseX12 } from "@cosyte/x12";
@@ -404,7 +486,8 @@ function handleSegment(out: X12Extraction, seg: X12Segment, pos: SegPos): void {
  * ```
  */
 export function extractX12Loci(interchange: X12Interchange): X12Extraction {
-  const out: X12Extraction = { loci: [], coords: [] };
+  const out: X12LocusAccumulator = { loci: [], coords: [], named: new Map<string, Set<number>>() };
+  const enumerated: { readonly seg: X12Segment; readonly pos: SegPos }[] = [];
 
   interchange.groups.forEach((group, groupIndex) => {
     group.transactions.forEach((tx, txIndex) => {
@@ -415,7 +498,6 @@ export function extractX12Loci(interchange: X12Interchange): X12Extraction {
       const stId = safeLocusToken(tx.st.elements[1] ?? "", "x12TransactionSetId");
       const occ = new Map<string, number>();
       tx.segments.forEach((seg, segIndex) => {
-        if (seg.id === "ST" || seg.id === "SE") return; // envelope control, no patient PHI
         const segId = safeLocusToken(seg.id, "x12SegmentId");
         const n = occ.get(segId) ?? 0;
         occ.set(segId, n + 1);
@@ -427,10 +509,37 @@ export function extractX12Loci(interchange: X12Interchange): X12Extraction {
           segId,
           segIdBracket: `${segId}[${String(n)}]`,
         };
-        handleSegment(out, seg, pos);
+        // The envelope control pair carries no patient PHI and no rule looks at it, which is exactly
+        // why it is enumerated below rather than skipped: it is handed through, so it is measured.
+        if (seg.id !== "ST" && seg.id !== "SE") handleSegment(out, seg, pos);
+        enumerated.push({ seg, pos });
       });
     });
   });
 
-  return out;
+  const residuals = new UnexaminedResidualBuilder();
+  for (const { seg, pos } of enumerated) {
+    enumerateOrFail(pos.segIdBracket, () => {
+      recordUnexaminedX12Positions(residuals, seg, pos, out.named.get(segKey(pos)));
+    });
+  }
+  return { loci: out.loci, coords: out.coords, unexaminedResiduals: residuals.build() };
+}
+
+/**
+ * Enumerate one segment's value-bearing elements and record the ones no locus rule named. A **position**
+ * here is one element of one segment (`837/DTP[0]-2`), the unit every X12 locus already uses; element 0
+ * is the segment identifier itself and is structure, not a value.
+ */
+function recordUnexaminedX12Positions(
+  residuals: UnexaminedResidualBuilder,
+  seg: X12Segment,
+  pos: SegPos,
+  named: ReadonlySet<number> | undefined,
+): void {
+  for (let n = 1; n < seg.elements.length; n += 1) {
+    if (named?.has(n) === true) continue;
+    if (!has(seg, n)) continue;
+    residuals.record(path(pos, n));
+  }
 }

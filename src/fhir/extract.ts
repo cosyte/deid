@@ -36,6 +36,11 @@ import { SAFE_HARBOR_CATEGORIES } from "../categories.js";
 import { isWithheldToken, safeLocusToken } from "../derived-token.js";
 import type { GenericLocus } from "../locus.js";
 import {
+  enumerateOrFail,
+  UnexaminedResidualBuilder,
+  type UnexaminedResidual,
+} from "../residual.js";
+import {
   FHIR_DATE_CATEGORY,
   FHIR_DEMOGRAPHIC_ELEMENTS,
   PERSON_RESOURCE_TYPES,
@@ -75,10 +80,29 @@ export interface FhirExtraction {
   readonly loci: GenericLocus[];
   /** The write-back coordinates, index-aligned with {@link loci}. */
   readonly coords: FhirCoord[];
+  /**
+   * Every **value-bearing position the pass hands through that no locus rule named**: a primitive
+   * carrying a non-empty value that neither a PHI rule nor the fail-closed person sweep reached. The
+   * clinical resources' codes, units and statuses are the bulk of it, and that is the honest answer:
+   * nothing examined them. Counted and located, never transformed.
+   */
+  readonly unexaminedResiduals: readonly UnexaminedResidual[];
+}
+
+/** The mutable pair the walk accumulates into, before it is frozen into a {@link FhirExtraction}. */
+interface FhirLocusAccumulator {
+  readonly loci: GenericLocus[];
+  readonly coords: FhirCoord[];
+  /**
+   * Nodes a locus rule **reached and decided about** without emitting a coordinate: a `resourceType`
+   * discriminant, a recognized person element the allow-list keeps, a `Coding.display` the pass
+   * positively typed as a coded term rather than a person label.
+   */
+  readonly ruleReached: Set<FhirNode>;
 }
 
 /** Append a locus + its coordinate to the accumulator. */
-function push(out: FhirExtraction, locus: GenericLocus, coord: FhirCoord): void {
+function push(out: FhirLocusAccumulator, locus: GenericLocus, coord: FhirCoord): void {
   out.loci.push(locus);
   out.coords.push(coord);
 }
@@ -145,7 +169,7 @@ function isNarrative(node: FhirNode): node is FhirComplex {
 }
 
 /** Emit a fail-closed block locus for a node (category omitted → the engine blocks it as (R)). */
-function blockNode(out: FhirExtraction, node: FhirNode, path: string): void {
+function blockNode(out: FhirLocusAccumulator, node: FhirNode, path: string): void {
   push(out, { path, kind: "unknown", value: collectText(node) }, { node, edit: "drop" });
 }
 
@@ -163,7 +187,7 @@ const FREE_TEXT_STRING_ELEMENTS: ReadonlySet<string> = new Set<string>([
 ]);
 
 /** Emit a fail-closed **free-text** block locus (engine → `DEID_FREETEXT_BLOCKED`). */
-function blockFreeText(out: FhirExtraction, node: FhirNode, path: string): void {
+function blockFreeText(out: FhirLocusAccumulator, node: FhirNode, path: string): void {
   push(
     out,
     {
@@ -177,7 +201,7 @@ function blockFreeText(out: FhirExtraction, node: FhirNode, path: string): void 
 }
 
 /** Emit a date locus for a primitive whose value is a real calendar date; returns `true` if it did. */
-function dateEmit(out: FhirExtraction, node: FhirPrimitive, path: string): boolean {
+function dateEmit(out: FhirLocusAccumulator, node: FhirPrimitive, path: string): boolean {
   const v = primitiveString(node);
   if (!isFhirDateValue(v)) return false;
   push(
@@ -189,7 +213,7 @@ function dateEmit(out: FhirExtraction, node: FhirPrimitive, path: string): boole
 }
 
 /** Extract one `Identifier` complex: the `value` primitive, routed to SSN (redact) or MRN (pseudonymize). */
-function handleIdentifier(out: FhirExtraction, id: FhirComplex, path: string): void {
+function handleIdentifier(out: FhirLocusAccumulator, id: FhirComplex, path: string): void {
   const valueNode = getProperty(id, "value");
   if (valueNode === undefined || !isPrimitive(valueNode)) return; // no value → nothing to transform
   const systemNode = getProperty(id, "system");
@@ -208,7 +232,7 @@ function handleIdentifier(out: FhirExtraction, id: FhirComplex, path: string): v
 }
 
 /** Handle an `identifier` property: one locus per `Identifier` in the list (or a single complex). */
-function handleIdentifiers(out: FhirExtraction, value: FhirNode, path: string): void {
+function handleIdentifiers(out: FhirLocusAccumulator, value: FhirNode, path: string): void {
   const items = isList(value) ? value.items : [value];
   items.forEach((item, i) => {
     if (!isComplex(item)) return;
@@ -217,7 +241,7 @@ function handleIdentifiers(out: FhirExtraction, value: FhirNode, path: string): 
 }
 
 /** Handle an `address` property: one generalize locus per `Address` complex (ZIP → safe 3-digit form). */
-function handleAddresses(out: FhirExtraction, value: FhirNode, path: string): void {
+function handleAddresses(out: FhirLocusAccumulator, value: FhirNode, path: string): void {
   const items = isList(value) ? value.items : [value];
   items.forEach((item, i) => {
     if (!isComplex(item)) return;
@@ -237,7 +261,12 @@ function handleAddresses(out: FhirExtraction, value: FhirNode, path: string): vo
 }
 
 /** Handle a mapped person demographic element (redact whole, or generalize an address). */
-function handleDemographic(out: FhirExtraction, name: string, value: FhirNode, path: string): void {
+function handleDemographic(
+  out: FhirLocusAccumulator,
+  name: string,
+  value: FhirNode,
+  path: string,
+): void {
   const mode = FHIR_DEMOGRAPHIC_ELEMENTS[name];
   if (mode === "address") {
     handleAddresses(out, value, path);
@@ -259,7 +288,7 @@ function handleDemographic(out: FhirExtraction, name: string, value: FhirNode, p
  * extension), and the reader preserves unknown extensions verbatim, so the value is dropped
  * unconditionally: fail closed on an unknown extension carrying a value.
  */
-function blockExtension(out: FhirExtraction, value: FhirNode, path: string): void {
+function blockExtension(out: FhirLocusAccumulator, value: FhirNode, path: string): void {
   if (isList(value)) {
     value.items.forEach((item, i) => blockExtension(out, item, idx(path, i)));
     return;
@@ -287,7 +316,7 @@ function blockExtension(out: FhirExtraction, value: FhirNode, path: string): voi
 }
 
 /** Block the `div` of a `Narrative` (rendered PHI): at any depth (resource-, section-, entry-level). */
-function blockNarrativeDiv(out: FhirExtraction, narrative: FhirComplex, path: string): void {
+function blockNarrativeDiv(out: FhirLocusAccumulator, narrative: FhirComplex, path: string): void {
   const div = getProperty(narrative, "div");
   if (div !== undefined && isPrimitive(div)) {
     blockNode(out, div, join(path, "div"));
@@ -295,13 +324,23 @@ function blockNarrativeDiv(out: FhirExtraction, narrative: FhirComplex, path: st
 }
 
 /** Recurse into a list value, applying the property rules to each item in document order. */
-function walkList(out: FhirExtraction, value: FhirNode, path: string, personCtx: boolean): void {
+function walkList(
+  out: FhirLocusAccumulator,
+  value: FhirNode,
+  path: string,
+  personCtx: boolean,
+): void {
   if (!isList(value)) return;
   value.items.forEach((item, i) => walkValue(out, item, idx(path, i), personCtx));
 }
 
 /** Recurse into a value node reached during descent (a list item or a non-mapped complex/primitive). */
-function walkValue(out: FhirExtraction, node: FhirNode, path: string, personCtx: boolean): void {
+function walkValue(
+  out: FhirLocusAccumulator,
+  node: FhirNode,
+  path: string,
+  personCtx: boolean,
+): void {
   if (isComplex(node)) {
     walkComplex(out, node, path, personCtx);
     return;
@@ -316,7 +355,7 @@ function walkValue(out: FhirExtraction, node: FhirNode, path: string, personCtx:
 
 /** Dispatch one property of a complex through the FHIR PHI rules. */
 function handleProperty(
-  out: FhirExtraction,
+  out: FhirLocusAccumulator,
   name: string,
   value: FhirNode,
   path: string,
@@ -324,7 +363,12 @@ function handleProperty(
   isPersonTop: boolean,
   parentIsCoding: boolean,
 ): void {
-  if (name === "resourceType") return; // retained (structural)
+  if (name === "resourceType") {
+    // Retained (structural), and NAMED: the walk reads it to derive the person/clinical role at every
+    // resource boundary, so the discriminant is a position the pass examined rather than one it missed.
+    out.ruleReached.add(value);
+    return;
+  }
   if (name === "extension" || name === "modifierExtension") {
     blockExtension(out, value, path);
     return;
@@ -347,6 +391,12 @@ function handleProperty(
     blockNode(out, value, path);
     return;
   }
+  if (name === "display" && parentIsCoding && isPrimitive(value)) {
+    // The mirror decision: a Coding's `display` is a coded term (`Sodium`), positively identified as one
+    // by a `code` or `system` sibling and kept on purpose. Naming it is all that happens here; the
+    // dispatch continues exactly as it did, so what the pass emits is untouched by the measurement.
+    out.ruleReached.add(value);
+  }
   if (FREE_TEXT_STRING_ELEMENTS.has(name) && isStringPrimitive(value)) {
     blockFreeText(out, value, path); // uncoded free-text string (contentString / valueString)
     return;
@@ -362,13 +412,18 @@ function handleProperty(
     blockNode(out, value, path);
     return;
   }
+  // The other half of that sweep: a string the person allow-list DOES recognize is kept by name, which
+  // is a decision at the position and not a silence, so it is examined.
+  if (isPersonTop && isStringPrimitive(value) && RECOGNIZED_PERSON_ELEMENTS.has(name)) {
+    out.ruleReached.add(value);
+  }
   // Otherwise descend (universal rules apply within); a retained scalar code/boolean is left untouched.
   walkValue(out, value, path, personCtx);
 }
 
 /** Walk a complex, re-deriving the person/clinical role at a `resourceType` boundary. */
 function walkComplex(
-  out: FhirExtraction,
+  out: FhirLocusAccumulator,
   complex: FhirComplex,
   path: string,
   personCtx: boolean,
@@ -397,8 +452,16 @@ function walkComplex(
  * structurally, from the `@cosyte/fhir` model. Never mutates the tree: the applier rebuilds a fresh
  * tree from the returned coordinates.
  *
+ * The tree is also **enumerated**: every primitive carrying a value that no rule above named is counted
+ * and located as an unexamined residual. The clinical resources are the bulk of that, and honestly so:
+ * this adapter has no `clinical` locus at all, it simply descends past a code, a unit and a status
+ * without deciding anything, so those positions are unexamined and the measurement says so.
+ *
  * @param resource - The parsed FHIR resource (`parseResource(json).resource`).
- * @returns The loci (for the engine) and their index-aligned write-back coordinates.
+ * @returns The loci (for the engine), their index-aligned write-back coordinates, and the unexamined
+ *   residual positions the pass hands through.
+ * @throws {@link DeidError} `DEID_POSITIONS_UNENUMERABLE` when the resource's value-bearing positions
+ *   cannot be enumerated: the pass fails rather than emit a zero or a partial count.
  * @example
  * ```ts
  * import { parseResource } from "@cosyte/fhir";
@@ -410,10 +473,55 @@ function walkComplex(
  * ```
  */
 export function extractFhirLoci(resource: FhirComplex): FhirExtraction {
-  const out: FhirExtraction = { loci: [], coords: [] };
+  const out: FhirLocusAccumulator = { loci: [], coords: [], ruleReached: new Set<FhirNode>() };
   // `resourceType` is a JSON string VALUE, not a checked identifier, and it is the ROOT of every path
   // in the manifest, so an unbounded one prefixes the whole audit with document content.
   const rt = safeLocusToken(resourceType(resource) ?? "", "fhirElementName");
   walkComplex(out, resource, rt, false);
-  return out;
+
+  const residuals = new UnexaminedResidualBuilder();
+  enumerateOrFail(rt, () => {
+    const decided = new Set<FhirNode>(out.ruleReached);
+    for (const coord of out.coords) decided.add(coord.node);
+    recordUnexaminedFhirPositions(residuals, resource, rt, decided, false);
+  });
+  return { loci: out.loci, coords: out.coords, unexaminedResiduals: residuals.build() };
+}
+
+/**
+ * Enumerate every value-bearing position of the resource tree and record the ones no locus rule named.
+ *
+ * A **position** here is one **primitive carrying a non-empty value**: the leaf a FHIR value actually
+ * sits at. A decision covers the node it was made at **and everything beneath it**, which is the shape
+ * every rule in this adapter has: a `drop` removes a whole `name` / `telecom` / `note` subtree, an
+ * `address` rebuilds an `Address` from its parts, and a `set-primitive` rewrites the leaf itself. So a
+ * decided node ends the descent, and only what the walk reaches outside one is enumerated.
+ */
+function recordUnexaminedFhirPositions(
+  residuals: UnexaminedResidualBuilder,
+  node: FhirNode,
+  path: string,
+  decided: ReadonlySet<FhirNode>,
+  underDecidedSubtree: boolean,
+): void {
+  const consumed = underDecidedSubtree || decided.has(node);
+  if (isPrimitive(node)) {
+    if (!consumed && primitiveString(node).length > 0) residuals.record(path);
+    return;
+  }
+  if (isList(node)) {
+    node.items.forEach((item, i) => {
+      recordUnexaminedFhirPositions(residuals, item, idx(path, i), decided, consumed);
+    });
+    return;
+  }
+  node.properties.forEach((prop, i) => {
+    recordUnexaminedFhirPositions(
+      residuals,
+      prop.value,
+      join(path, elementSegment(prop.name, i)),
+      decided,
+      consumed,
+    );
+  });
 }

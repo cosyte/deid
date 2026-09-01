@@ -118,6 +118,9 @@ export {
 // ── The value-free manifest.
 export { type DeidManifestEntry, type DeidResult } from "./manifest.js";
 
+// ── The manifest's second list: positions handed through that no locus rule named.
+export { type UnexaminedResidual } from "./residual.js";
+
 // ── The engine.
 export { deidentify, type DeidOptions } from "./deidentify.js";
 

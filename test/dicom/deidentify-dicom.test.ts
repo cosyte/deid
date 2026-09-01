@@ -128,10 +128,13 @@ describe("consistent UID remapping, relationships survive", () => {
         "manifest",
         "metadataOnly",
         "retained",
+        "unexaminedResiduals",
         "warnings",
       ].sort(),
     );
     expect(JSON.stringify(result.manifest)).not.toContain(UID.study);
+    // The second list is held to the same bar: it locates positions, so it can never carry a UID.
+    expect(JSON.stringify(result.unexaminedResiduals)).not.toContain(UID.study);
   });
 });
 

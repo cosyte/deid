@@ -24,6 +24,7 @@ import { SAFE_HARBOR_CATEGORIES, type SafeHarborCategory } from "../categories.j
 import { DEID_DISPOSITION_CODES, type DeidDispositionCode } from "../codes.js";
 import { ManifestBuilder, type DeidManifestEntry } from "../manifest.js";
 import type { TransformName } from "../policy.js";
+import { UnexaminedResidualBuilder, type UnexaminedResidual } from "../residual.js";
 
 import type { DicomDeidWarning } from "./types.js";
 
@@ -203,6 +204,92 @@ export function foldReport(report: FoldableReport): readonly DeidManifestEntry[]
   }
 
   return builder.build();
+}
+
+/**
+ * One attribute of the de-identified dataset as this module needs to see it: its tag, and the items of
+ * a sequence so nested attributes are reachable. Structural facts only; the decoded value is never read.
+ */
+export interface EnumerableElement {
+  readonly tag: string;
+  readonly items?: readonly EnumerableDataset[] | undefined;
+}
+
+/** A dataset (or a sequence item) whose elements can be enumerated in parse order. */
+export interface EnumerableDataset {
+  elements(): readonly EnumerableElement[];
+}
+
+/**
+ * Derive the **unexamined residual positions** of a DICOM pass from the dataset the delegated PS3.15
+ * Annex E pass returned.
+ *
+ * This adapter holds **no position map of its own**: the Annex E pass owns what was done to each
+ * attribute, so the measurement is a derivation rather than an enumeration of a table. An attribute
+ * present in the returned dataset that the folded report does not account for is one **no rule reached**,
+ * and it is counted and located here. The report accounts for an attribute in three ways, and all three
+ * are decisions: it acted on it, it **kept** it (`applied: "kept"` is the profile's `K`, a decision, not
+ * a silence), or it removed it as a private tag.
+ *
+ * **Nested items are enumerated too**, because a sequence is exactly where an unaccounted attribute
+ * hides: the walk descends through `Element.items`, which the peer exposes, and matches a nested
+ * attribute against the report's own sequence-context entries by tag. The match is by **tag**, so an
+ * attribute the report names anywhere is treated as reached everywhere it occurs: the conservative
+ * direction, which under-counts rather than reporting a position the pass did decide about.
+ *
+ * **The derivation is deliberately literal, and one consequence is worth stating rather than quietly
+ * filtering.** The Annex E pass writes its own Patient Identity Removed and De-identification Method
+ * attributes into the result, and the report does not account for those either, so they appear in the
+ * measurement like any other unaccounted attribute. Forgiving them would mean this adapter keeping a
+ * hand-written list of tags to exclude, which is the position map it deliberately does not hold: the
+ * moment such a list exists it is one more thing to keep in step with the peer's profile, and a stale
+ * entry there would hide a real attribute rather than a self-signature.
+ *
+ * @param dataset - The dataset the Annex E pass returned.
+ * @param report - The value-free report it returned alongside.
+ * @returns The unexamined residual positions, aggregated by locus, in dataset order.
+ * @internal
+ */
+export function deriveUnexaminedResiduals(
+  dataset: EnumerableDataset,
+  report: FoldableReport,
+): readonly UnexaminedResidual[] {
+  const accounted = new Set<string>();
+  for (const attribute of report.attributes) accounted.add(normalizeTag(attribute.tag));
+  for (const tag of report.removedPrivateTags) accounted.add(normalizeTag(tag));
+
+  const residuals = new UnexaminedResidualBuilder();
+  walkDataset(dataset, [], accounted, residuals);
+  return residuals.build();
+}
+
+/** Case-fold a tag so a report entry and a dataset element agree on identity. */
+function normalizeTag(tag: string): string {
+  return tag.toUpperCase();
+}
+
+/** Walk a dataset and its sequence items, recording every attribute the report does not account for. */
+function walkDataset(
+  dataset: EnumerableDataset,
+  context: readonly string[],
+  accounted: ReadonlySet<string>,
+  residuals: UnexaminedResidualBuilder,
+): void {
+  dataset.elements().forEach((element) => {
+    const items = element.items;
+    if (!accounted.has(normalizeTag(element.tag))) {
+      residuals.record(formatLocus(element.tag, "", context));
+    }
+    if (items === undefined) return;
+    items.forEach((item, index) => {
+      walkDataset(
+        item,
+        [...context, `${formatTag(element.tag)}[${String(index)}]`],
+        accounted,
+        residuals,
+      );
+    });
+  });
 }
 
 /**

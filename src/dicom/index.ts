@@ -29,7 +29,12 @@
 
 import { Dataset, deidentify as dicomDeidentify, parseDicom, serializeDicom } from "@cosyte/dicom";
 
-import { BURNED_IN_ANNOTATION_CODE, foldReport, foldWarnings } from "./fold.js";
+import {
+  BURNED_IN_ANNOTATION_CODE,
+  deriveUnexaminedResiduals,
+  foldReport,
+  foldWarnings,
+} from "./fold.js";
 import { resolveDicomOptions } from "./policy-map.js";
 import type { DicomBufferDeidResult, DicomDeidOptions, DicomDeidResult } from "./types.js";
 
@@ -100,9 +105,14 @@ export function deidentifyDicom(dataset: Dataset, options: DicomDeidOptions = {}
   });
 
   const warnings = foldWarnings(report.warnings);
+  const result = withoutInputWarnings(deidentified);
   return Object.freeze({
-    dataset: withoutInputWarnings(deidentified),
+    dataset: result,
     manifest: foldReport(report),
+    // The Annex E pass is delegated, so the measurement is DERIVED from what it returned rather than
+    // enumerated from a map this adapter does not hold: an attribute present in the result that the
+    // report does not account for is one no rule reached. Nested sequence items included.
+    unexaminedResiduals: deriveUnexaminedResiduals(result, report),
     warnings,
     metadataOnly: true,
     burnedInAnnotationHazard: warnings.some((w) => w.code === BURNED_IN_ANNOTATION_CODE),
@@ -133,13 +143,12 @@ export function deidentifyDicomBuffer(
   bytes: Buffer | Uint8Array | ArrayBuffer,
   options: DicomDeidOptions = {},
 ): DicomBufferDeidResult {
-  const { dataset, manifest, warnings, burnedInAnnotationHazard, retained } = deidentifyDicom(
-    parseDicom(bytes),
-    options,
-  );
+  const { dataset, manifest, unexaminedResiduals, warnings, burnedInAnnotationHazard, retained } =
+    deidentifyDicom(parseDicom(bytes), options);
   return Object.freeze({
     bytes: serializeDicom(dataset),
     manifest,
+    unexaminedResiduals,
     warnings,
     metadataOnly: true,
     burnedInAnnotationHazard,
@@ -148,6 +157,7 @@ export function deidentifyDicomBuffer(
 }
 
 export { BURNED_IN_ANNOTATION_CODE } from "./fold.js";
+export { type UnexaminedResidual } from "../residual.js";
 export type {
   DicomDeidOptions,
   DicomDeidResult,

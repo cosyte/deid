@@ -71,6 +71,20 @@ export const FATAL_CODES = {
    * document. The fatal set is additions-only.
    */
   DEID_OUTPUT_INVALID: "DEID_OUTPUT_INVALID",
+  /**
+   * The **value-bearing positions of a structure the pass would hand through could not be enumerated**,
+   * so the pass cannot say how much of that structure it never examined.
+   *
+   * Fail closed on the measurement itself. The alternative outcomes are both worse than a failure: a
+   * count of **zero** would tell a determiner the structure held nothing unexamined, and a **partial**
+   * count would understate it, and either is read as a measurement rather than as a gap. A pass that
+   * cannot enumerate a structure therefore returns nothing at all rather than a number nobody can
+   * qualify.
+   *
+   * The message names the **structure** (a bounded structural token: a segment identifier, an element
+   * name, a tag) and carries no value, no key and no offset. The fatal set is additions-only.
+   */
+  DEID_POSITIONS_UNENUMERABLE: "DEID_POSITIONS_UNENUMERABLE",
 } as const;
 
 /**
@@ -139,6 +153,26 @@ export const DEID_DISPOSITION_CODES = {
    * a different fact and stays out of that inventory. The disposition-code set is additions-only.
    */
   DEID_PARTY_ROLE_RETAINED: "DEID_PARTY_ROLE_RETAINED",
+  /**
+   * A **value-bearing position inside a structure the pass handed through that no locus rule names**.
+   * The pass reached **no decision** there: it neither acted on the position, nor blocked it, nor
+   * decided to keep it. The record exists so that a position which used to pass through in silence is
+   * counted and located.
+   *
+   * It is deliberately **not** `DEID_RESIDUAL_RETAINED`, and the difference is the whole point of the
+   * code: that one is a residual of a value the pass **examined** (a kept year, a safe 3-digit ZIP
+   * prefix, a whole value a retention class kept) and it feeds the determiner's retained-quasi-identifier
+   * inventory. This one is the opposite fact, an **unexamined** position, and it has its own inventory
+   * so a kept year and a position nothing looked at can never be read as the same thing.
+   *
+   * **It is a measurement, not an allegation.** An unexamined position is not thereby an identifier: a
+   * clinical code, a unit and a status all sit at positions no locus rule names. Nothing is scrubbed,
+   * removed or generalized on account of this record, and the position has **no established Safe Harbor
+   * category**, because no rule established one. The record carries the structural locus, a count and
+   * the fact of being unexamined: never a value, never a key, never an offset. The disposition-code set
+   * is additions-only.
+   */
+  DEID_POSITION_UNEXAMINED: "DEID_POSITION_UNEXAMINED",
 } as const;
 
 /**

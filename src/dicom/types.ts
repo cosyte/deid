@@ -8,6 +8,7 @@ import type { Dataset } from "@cosyte/dicom";
 
 import type { DeidManifestEntry } from "../manifest.js";
 import type { DeidPolicy } from "../policy.js";
+import type { UnexaminedResidual } from "../residual.js";
 
 /**
  * Options controlling a DICOM de-identification run. Extends the unified options with the two DICOM-only
@@ -87,6 +88,13 @@ export interface DicomDeidResult {
   readonly dataset: Dataset;
   /** The value-free audit of every attribute acted on: category + locus + action, never a value. */
   readonly manifest: readonly DeidManifestEntry[];
+  /**
+   * The manifest's **second list**: every attribute present in the returned dataset, nested sequence
+   * items included, that the delegated Annex E report does **not** account for, counted and located.
+   * Those are the positions no rule reached; an attribute the profile **kept** is not one of them,
+   * because keeping it is a decision. An empty list is a **measured zero**, not a silence.
+   */
+  readonly unexaminedResiduals: readonly UnexaminedResidual[];
   /** Value-free safety warnings from the delegated Annex E pass (notably burned-in annotation). */
   readonly warnings: readonly DicomDeidWarning[];
   /** Always `true`: this is a metadata-only de-identifier; pixels are not inspected or cleaned. */
@@ -120,6 +128,8 @@ export interface DicomBufferDeidResult {
   readonly bytes: Buffer;
   /** The value-free audit of every attribute acted on. */
   readonly manifest: readonly DeidManifestEntry[];
+  /** Every attribute the delegated report does not account for: the positions no rule reached. */
+  readonly unexaminedResiduals: readonly UnexaminedResidual[];
   /** Value-free safety warnings from the delegated Annex E pass. */
   readonly warnings: readonly DicomDeidWarning[];
   /** Always `true`: metadata-only de-identification. */

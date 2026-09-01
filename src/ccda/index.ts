@@ -42,6 +42,7 @@ import { parseCcda, parseSecureXml, resolveLimits, type CcdaDocument } from "@co
 import { deidentify, type DeidOptions } from "../deidentify.js";
 import { DeidError, FATAL_CODES } from "../codes.js";
 import { type DeidManifestEntry } from "../manifest.js";
+import { type UnexaminedResidual } from "../residual.js";
 import { applyCcda } from "./apply.js";
 import { extractCcdaLoci } from "./extract.js";
 
@@ -66,6 +67,13 @@ export interface CcdaDeidResult {
   readonly document: CcdaDocument;
   /** The value-free audit of every action, in locus order (never a value, never a key). */
   readonly manifest: readonly DeidManifestEntry[];
+  /**
+   * The manifest's **second list**: every value-bearing position this pass handed through that **no
+   * locus rule named**, counted and located. The retained clinical body's entry dates, entry ids,
+   * in-entry performer names and family-history relative demographics are measured here rather than
+   * passing through in silence. An empty list is a **measured zero**, not a silence.
+   */
+  readonly unexaminedResiduals: readonly UnexaminedResidual[];
 }
 
 /**
@@ -110,7 +118,7 @@ export function deidentifyCcda(doc: CcdaDocument, options: DeidOptions = {}): Cc
     );
   }
 
-  const { loci, coords } = extractCcdaLoci(root);
+  const { loci, coords, unexaminedResiduals } = extractCcdaLoci(root);
   const { document, manifest } = deidentify({ loci }, options);
   applyCcda(document.loci, coords);
 
@@ -119,7 +127,7 @@ export function deidentifyCcda(doc: CcdaDocument, options: DeidOptions = {}): Cc
   const serializable: { toString(): string } = root;
   const serialized = serializable.toString();
   const xml = serialized.startsWith("<?xml") ? serialized : `${XML_DECLARATION}\n${serialized}`;
-  return { document: parseCcda(xml), manifest };
+  return { document: parseCcda(xml), manifest, unexaminedResiduals };
 }
 
 export {
@@ -137,4 +145,5 @@ export {
   type CcdaEditKind,
 } from "./extract.js";
 export { applyCcda } from "./apply.js";
+export { type UnexaminedResidual } from "../residual.js";
 export { SAFE_HARBOR_CATEGORIES, type SafeHarborCategory } from "../categories.js";
