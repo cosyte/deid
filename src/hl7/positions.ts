@@ -2,10 +2,10 @@
  * The HL7 v2 **position enumeration**: which value-bearing positions of a segment the pass hands
  * through, and which of them no locus rule named.
  *
- * The extractor's tables say what is *acted on*. This module answers the complementary question the
- * manifest could not answer before it existed: **what did the pass hand through without reaching a
- * decision at all?** A retained segment carries far more than the fields the carve-out and date tables
- * name, and every one of those positions used to leave in the clear and unrecorded.
+ * The extractor's tables say what is *acted on*. This module answers the complementary question:
+ * **what did the pass hand through without reaching a decision at all?** A retained segment carries far
+ * more than the fields the carve-out and date tables name, and every one of those positions leaves in
+ * the clear, so each is counted and located here rather than left unrecorded.
  *
  * ## What a position is here
  *

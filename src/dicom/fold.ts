@@ -24,7 +24,11 @@ import { SAFE_HARBOR_CATEGORIES, type SafeHarborCategory } from "../categories.j
 import { DEID_DISPOSITION_CODES, type DeidDispositionCode } from "../codes.js";
 import { ManifestBuilder, type DeidManifestEntry } from "../manifest.js";
 import type { TransformName } from "../policy.js";
-import { UnexaminedResidualBuilder, type UnexaminedResidual } from "../residual.js";
+import {
+  enumerateOrFail,
+  UnexaminedResidualBuilder,
+  type UnexaminedResidual,
+} from "../residual.js";
 
 import type { DicomDeidWarning } from "./types.js";
 
@@ -207,11 +211,18 @@ export function foldReport(report: FoldableReport): readonly DeidManifestEntry[]
 }
 
 /**
- * One attribute of the de-identified dataset as this module needs to see it: its tag, and the items of
- * a sequence so nested attributes are reachable. Structural facts only; the decoded value is never read.
+ * One attribute of the de-identified dataset as this module needs to see it. **Structural facts only:
+ * the decoded value is never read**, and the two length facts below are read as numbers, never as
+ * content, exactly as a locus carries a coordinate and never a byte.
  */
 export interface EnumerableElement {
   readonly tag: string;
+  /** The Value Representation. `"SQ"` marks a sequence **container**, which carries no value of its own. */
+  readonly vr: string;
+  /** The declared value length. Zero means the attribute was sent empty. */
+  readonly length: number;
+  /** The on-wire value bytes; only their **count** is read, never a byte of their content. */
+  readonly rawBytes: { readonly length: number };
   readonly items?: readonly EnumerableDataset[] | undefined;
 }
 
@@ -237,6 +248,10 @@ export interface EnumerableDataset {
  * attribute the report names anywhere is treated as reached everywhere it occurs: the conservative
  * direction, which under-counts rather than reporting a position the pass did decide about.
  *
+ * **Only value-bearing positions are counted** (see {@link isValueBearing}): an attribute sent empty
+ * carries no value, and a sequence container is a structure rather than a position. Both are read off
+ * the peer's own structural surface as numbers and a VR, never by decoding a value.
+ *
  * **The derivation is deliberately literal, and one consequence is worth stating rather than quietly
  * filtering.** The Annex E pass writes its own Patient Identity Removed and De-identification Method
  * attributes into the result, and the report does not account for those either, so they appear in the
@@ -248,6 +263,9 @@ export interface EnumerableDataset {
  * @param dataset - The dataset the Annex E pass returned.
  * @param report - The value-free report it returned alongside.
  * @returns The unexamined residual positions, aggregated by locus, in dataset order.
+ * @throws {@link DeidError} `DEID_POSITIONS_UNENUMERABLE` when a dataset or a sequence item will not
+ *   yield its elements: the pass fails rather than emit a zero or a partial count, exactly as it does
+ *   for a segment that will not yield its fields.
  * @internal
  */
 export function deriveUnexaminedResiduals(
@@ -268,26 +286,64 @@ function normalizeTag(tag: string): string {
   return tag.toUpperCase();
 }
 
-/** Walk a dataset and its sequence items, recording every attribute the report does not account for. */
+/**
+ * Whether an attribute is a **value-bearing position**: one that carries a non-empty value in the
+ * document being processed. An absent or empty position is not a residual and is not counted, which is
+ * the same test the five structural adapters apply to a field, an element and an attribute.
+ *
+ * Two things are not value-bearing positions, for different reasons:
+ *
+ * - **A sequence is a structure, not a position.** An `SQ` element holds items, and the positions it
+ *   holds are the attributes inside those items, which the walk reaches on their own and counts there.
+ *   Counting the container as well would count one structure as if it were a value. The test is the VR
+ *   rather than the presence of items, because encapsulated Pixel Data also carries items and *is* a
+ *   value-bearing position.
+ * - **A zero-length attribute carries no value.** A Type 2 attribute sent empty is routine in DICOM and
+ *   is exactly the "absent or empty position" the definition excludes.
+ *
+ * Both length facts are read, and either one being non-zero counts the position: a declared length the
+ * bytes do not back is a malformed element, and over-reporting one is the safe direction.
+ */
+function isValueBearing(element: EnumerableElement): boolean {
+  if (element.vr === "SQ") return false;
+  return element.length > 0 || element.rawBytes.length > 0;
+}
+
+/** The bounded structural token naming the root dataset in an enumeration failure. */
+const ROOT_DATASET_STRUCTURE = "dataset";
+
+/**
+ * Walk a dataset and its sequence items, recording every attribute the report does not account for.
+ *
+ * The walk of each structure runs under the second fail-safe, so a dataset or a sequence item that will
+ * not yield its elements fails the pass with the typed `DEID_POSITIONS_UNENUMERABLE` rather than
+ * escaping as the peer's own error or leaving a partial count behind. The structure named is the
+ * innermost one that refused: the nested call raises first, and `enumerateOrFail` passes an existing
+ * `DeidError` outward unchanged. The token is the same structurally-composed context path a locus
+ * carries, so nothing document-derived reaches the message.
+ */
 function walkDataset(
   dataset: EnumerableDataset,
   context: readonly string[],
   accounted: ReadonlySet<string>,
   residuals: UnexaminedResidualBuilder,
 ): void {
-  dataset.elements().forEach((element) => {
-    const items = element.items;
-    if (!accounted.has(normalizeTag(element.tag))) {
-      residuals.record(formatLocus(element.tag, "", context));
-    }
-    if (items === undefined) return;
-    items.forEach((item, index) => {
-      walkDataset(
-        item,
-        [...context, `${formatTag(element.tag)}[${String(index)}]`],
-        accounted,
-        residuals,
-      );
+  const structure = context.length > 0 ? context.join("/") : ROOT_DATASET_STRUCTURE;
+  enumerateOrFail(structure, () => {
+    dataset.elements().forEach((element) => {
+      const items = element.items;
+      if (isValueBearing(element) && !accounted.has(normalizeTag(element.tag))) {
+        residuals.record(formatLocus(element.tag, "", context));
+      }
+      if (items === undefined) return;
+      items.forEach((item, index) => {
+        walkDataset(
+          item,
+          [...context, `${formatTag(element.tag)}[${String(index)}]`],
+          accounted,
+          residuals,
+        );
+      });
     });
   });
 }

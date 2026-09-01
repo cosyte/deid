@@ -156,8 +156,8 @@ export const DEID_DISPOSITION_CODES = {
   /**
    * A **value-bearing position inside a structure the pass handed through that no locus rule names**.
    * The pass reached **no decision** there: it neither acted on the position, nor blocked it, nor
-   * decided to keep it. The record exists so that a position which used to pass through in silence is
-   * counted and located.
+   * decided to keep it. The record exists so that such a position is counted and located rather than
+   * passing through in silence.
    *
    * It is deliberately **not** `DEID_RESIDUAL_RETAINED`, and the difference is the whole point of the
    * code: that one is a residual of a value the pass **examined** (a kept year, a safe 3-digit ZIP

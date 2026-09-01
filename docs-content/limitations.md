@@ -100,10 +100,10 @@ Two things follow, and the second is the one that surprises people:
   would record half a position. **Do not read the named loci above as the complete set of what a
   retained structure can carry.** If your threat model includes these, filter them yourself.
 
-- **Every one of those positions IS counted and located, as an unexamined residual.** This is the part
-  that changed: a value-bearing position inside a structure the pass hands through that no locus rule
-  names is recorded on `result.unexaminedResiduals` with its **structural locus**, a **count** and the
-  fact that nothing examined it. It carries no value, no key and no offset, exactly like the manifest,
+- **Every one of those positions IS counted and located, as an unexamined residual.** A value-bearing
+  position inside a structure the pass hands through that no locus rule names is recorded on
+  `result.unexaminedResiduals` with its **structural locus**, a **count** and the fact that nothing
+  examined it. It carries no value, no key and no offset, exactly like the manifest,
   and it is a separate list precisely so that a position nothing looked at can never be mistaken for a
   residual of a value the pass did examine. All six adapters produce it: the fields of a retained HL7 v2
   segment, the entry dates / entry ids / in-entry performers and family-history demographics inside a

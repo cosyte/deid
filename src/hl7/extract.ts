@@ -654,9 +654,9 @@ function extractUnknownSegment(
  * the `@cosyte/hl7` model. Never mutates the message.
  *
  * Every segment is also **enumerated**: the value-bearing positions it hands through that no rule above
- * named are counted and located as unexamined residuals, so a position that used to pass through in
- * silence is measured. Nothing is transformed on account of that measurement, and a structure whose
- * positions cannot be enumerated fails the pass rather than contributing a zero.
+ * named are counted and located as unexamined residuals, so such a position is measured rather than
+ * passing through in silence. Nothing is transformed on account of that measurement, and a structure
+ * whose positions cannot be enumerated fails the pass rather than contributing a zero.
  *
  * @param msg - The parsed HL7 v2 message.
  * @param options - The configured profile's retention classes. Omitted retains nothing (fail closed).
@@ -710,44 +710,42 @@ function extractSegment(
   retainedLoci: readonly RetainedLocusClass[] | undefined,
   examined: Hl7ExaminedPositions,
 ): void {
-  {
-    if (type === "MSH") {
-      // The message envelope carries no patient identity, but it is on the retain-list and it does
-      // carry a date the standard types: sweep its date loci and nothing else.
-      extractRetainedSegment(out, seg, type, occ, retainedLoci, examined);
-      return;
-    }
-
-    const rules = HL7_LOCUS_MAP[type];
-    if (rules !== undefined) {
-      for (const rule of rules) extractRule(out, seg, type, occ, rule, examined);
-      // A position the standard types as a whole ORGANISATION is decided by the party-role test, not
-      // by a category rule. Emitted after the flat rules, and high-numbered, so document order holds.
-      extractOrganisationParties(out, seg, type, occ, examined);
-      return;
-    }
-    if (type === "OBX") {
-      // NOT on the retain-list, and passed through all the same: OBX-2 decides OBX-5 and the rest of
-      // the segment keeps its bytes. Its enumerated date positions are swept here for that reason.
-      extractObx(out, seg, occ, examined);
-      return;
-    }
-    if (type === "NTE") {
-      extractNte(out, seg, occ, examined);
-      return;
-    }
-    // Fail-closed rule: retain a recognized segment ONLY if it is on the explicit clinical/administrative
-    // retain-list. Everything else is blocked: a Z-segment, a segment unknown to the parser, OR a
-    // *known* patient/relative-identity segment absent from the map and the retain-list (MRG / ACC /
-    // FAM / PEO / PDA). A merge message's prior name + MRN can never ride through in the clear.
-    if (RETAIN_SEGMENTS.has(type)) {
-      // Retaining the SEGMENT does not retain every field in it: the identifying dates and the
-      // encounter / order identifiers are carved back out, and every date position the committed
-      // v2.5.1 enumeration names is handed to the engine alongside them. Retaining a STRUCTURE is not
-      // naming a POSITION, so every field of it the tables miss is enumerated as an unexamined residual.
-      extractRetainedSegment(out, seg, type, occ, retainedLoci, examined);
-      return;
-    }
-    extractUnknownSegment(out, seg, type, occ, examined);
+  if (type === "MSH") {
+    // The message envelope carries no patient identity, but it is on the retain-list and it does
+    // carry a date the standard types: sweep its date loci and nothing else.
+    extractRetainedSegment(out, seg, type, occ, retainedLoci, examined);
+    return;
   }
+
+  const rules = HL7_LOCUS_MAP[type];
+  if (rules !== undefined) {
+    for (const rule of rules) extractRule(out, seg, type, occ, rule, examined);
+    // A position the standard types as a whole ORGANISATION is decided by the party-role test, not
+    // by a category rule. Emitted after the flat rules, and high-numbered, so document order holds.
+    extractOrganisationParties(out, seg, type, occ, examined);
+    return;
+  }
+  if (type === "OBX") {
+    // NOT on the retain-list, and passed through all the same: OBX-2 decides OBX-5 and the rest of
+    // the segment keeps its bytes. Its enumerated date positions are swept here for that reason.
+    extractObx(out, seg, occ, examined);
+    return;
+  }
+  if (type === "NTE") {
+    extractNte(out, seg, occ, examined);
+    return;
+  }
+  // Fail-closed rule: retain a recognized segment ONLY if it is on the explicit clinical/administrative
+  // retain-list. Everything else is blocked: a Z-segment, a segment unknown to the parser, OR a
+  // *known* patient/relative-identity segment absent from the map and the retain-list (MRG / ACC /
+  // FAM / PEO / PDA). A merge message's prior name + MRN can never ride through in the clear.
+  if (RETAIN_SEGMENTS.has(type)) {
+    // Retaining the SEGMENT does not retain every field in it: the identifying dates and the
+    // encounter / order identifiers are carved back out, and every date position the committed
+    // v2.5.1 enumeration names is handed to the engine alongside them. Retaining a STRUCTURE is not
+    // naming a POSITION, so every field of it the tables miss is enumerated as an unexamined residual.
+    extractRetainedSegment(out, seg, type, occ, retainedLoci, examined);
+    return;
+  }
+  extractUnknownSegment(out, seg, type, occ, examined);
 }

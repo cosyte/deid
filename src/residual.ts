@@ -4,11 +4,10 @@
  *
  * The engine fails closed on **structures**: an unrecognized segment, resource, loop or extension is
  * blocked. It does not fail closed on **positions inside a structure it hands through**. A value-bearing
- * position inside such a structure that no locus rule names is passed through untouched, and until this
- * module existed it was recorded nowhere at all. The consequence was not the pass-through, which is a
- * stated limitation a consumer can filter for, but the **silence**: a support report whose residual
- * inventories are empty reads the same whether the pass found nothing or measured nothing, and a
- * determiner acts on that emptiness.
+ * position inside such a structure that no locus rule names is passed through untouched. The hazard is
+ * not the pass-through, which is a stated limitation a consumer can filter for, but the **silence** an
+ * unmeasured pass-through leaves behind: a support report whose residual inventories are empty reads the
+ * same whether the pass found nothing or measured nothing, and a determiner acts on that emptiness.
  *
  * So every such position is **counted and located**, in the value-free record, as an
  * {@link UnexaminedResidual}. Three things follow, and each is load-bearing:

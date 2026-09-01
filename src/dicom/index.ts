@@ -83,6 +83,8 @@ function withoutInputWarnings(dataset: Dataset): Dataset {
  * @param dataset - The parsed dataset (`parseDicom(bytes)`).
  * @param options - The policy and (for cross-file UID consistency) a shared `uidMap` / `uidRoot`.
  * @returns The de-identified dataset, the value-free manifest, the warnings, and the metadata-only stance.
+ * @throws {@link DeidError} `DEID_POSITIONS_UNENUMERABLE` when a dataset or a sequence item will not
+ *   yield its elements, so no honest count of unexamined positions exists for this study.
  * @example
  * ```ts
  * import { parseDicom } from "@cosyte/dicom";
@@ -111,7 +113,8 @@ export function deidentifyDicom(dataset: Dataset, options: DicomDeidOptions = {}
     manifest: foldReport(report),
     // The Annex E pass is delegated, so the measurement is DERIVED from what it returned rather than
     // enumerated from a map this adapter does not hold: an attribute present in the result that the
-    // report does not account for is one no rule reached. Nested sequence items included.
+    // report does not account for is one no rule reached. Nested sequence items included, and a
+    // structure that will not yield its elements fails the pass rather than emit a partial count.
     unexaminedResiduals: deriveUnexaminedResiduals(result, report),
     warnings,
     metadataOnly: true,

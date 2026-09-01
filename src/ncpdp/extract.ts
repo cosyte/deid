@@ -17,7 +17,7 @@
  * @packageDocumentation
  */
 
-import { type TelecomTransaction } from "@cosyte/ncpdp/telecom";
+import { type TelecomResponseHeader, type TelecomTransaction } from "@cosyte/ncpdp/telecom";
 
 import { SAFE_HARBOR_CATEGORIES, type SafeHarborCategory } from "../categories.js";
 import { isWithheldToken, safeLocusToken } from "../derived-token.js";
@@ -52,8 +52,8 @@ export interface TelecomExtraction {
   readonly coords: TelecomCoord[];
   /**
    * Every **value-bearing field the pass hands through that no locus rule named**: the fields of a
-   * retained clinical / financial segment, and the fixed header's own positions. Counted and located,
-   * never transformed.
+   * retained clinical / financial segment, and the positions of the transmission header that is emitted
+   * (the response header's own, on a response). Counted and located, never transformed.
    */
   readonly unexaminedResiduals: readonly UnexaminedResidual[];
 }
@@ -122,8 +122,8 @@ function emitRule(
  *
  * The transaction is also **enumerated**: the value-bearing fields it hands through that no rule above
  * named are counted and located as unexamined residuals. The retained clinical / financial segments'
- * fields are the bulk of it, and the fixed header's own positions join them: only its Date of Service is
- * named. Nothing is transformed on account of the measurement.
+ * fields are the bulk of it, and the emitted transmission header's own positions join them: only a
+ * request's Date of Service is named. Nothing is transformed on account of the measurement.
  *
  * @param tx - The parsed Telecom transaction (`parseTelecom(raw)`).
  * @returns The loci (for the engine), their index-aligned write-back coordinates, and the unexamined
@@ -222,19 +222,44 @@ export function extractTelecomLoci(tx: TelecomTransaction): TelecomExtraction {
 }
 
 /**
- * The fixed Transaction Header's own value-bearing positions, minus the one a locus rule names.
+ * The transmission header's own value-bearing positions, minus the one a locus rule names.
  *
- * The header is a **fixed, committed set of nine fields**, so it is enumerated by name rather than by
+ * Both headers are a **fixed, committed set of fields**, so they are enumerated by name rather than by
  * walking bytes: only the Date of Service is named by a rule, and the routing, version, transaction,
- * processor-control, count, service-provider and software-certification positions are handed through
- * with no decision reached at any of them.
+ * processor-control, count, response-status, service-provider and software-certification positions are
+ * handed through with no decision reached at any of them.
  */
 function recordUnexaminedHeaderPositions(
   residuals: UnexaminedResidualBuilder,
   tx: TelecomTransaction,
 ): void {
+  for (const [name, value] of handedThroughHeaderPositions(tx)) {
+    if (value.trim().length > 0) residuals.record(`header/${name}`);
+  }
+}
+
+/**
+ * The positions of **the header this pass actually hands through**, which is not always `tx.header`.
+ *
+ * A response transmission is serialized from its own {@link TelecomResponseHeader} (the applier spreads
+ * the parsed transaction, so `serializeTelecom` re-emits that header verbatim), and `tx.header` is a
+ * *derived view* of it: five of its six fields are lifted across, the request-only fields are left
+ * empty, and the Date of Service is not carried at all. Enumerating the derived view instead of the
+ * emitted header therefore both **misses** a position - the Header Response Status (501-F1), which the
+ * lift does not carry - and would **double-count** the five wire positions it does carry if both were
+ * enumerated. So exactly one of the two is enumerated: the one whose bytes reach the output.
+ *
+ * A transaction that says it is a response but carries no response header is serialized from the
+ * request header like any other, so that is the header enumerated for it.
+ */
+function handedThroughHeaderPositions(
+  tx: TelecomTransaction,
+): readonly (readonly [string, string])[] {
+  const response = tx.responseHeader;
+  if (tx.kind === "response" && response !== undefined) return responseHeaderPositions(response);
+
   const header = tx.header;
-  const positions: readonly (readonly [string, string])[] = [
+  const positions: (readonly [string, string])[] = [
     ["binNumber", header.binNumber],
     ["versionRelease", header.versionRelease],
     ["transactionCode", header.transactionCode],
@@ -244,12 +269,26 @@ function recordUnexaminedHeaderPositions(
     ["serviceProviderId", header.serviceProviderId],
     ["softwareCertificationId", header.softwareCertificationId],
   ];
-  for (const [name, value] of positions) {
-    if (value.trim().length > 0) residuals.record(`header/${name}`);
-  }
-  // A RESPONSE transaction's Date of Service is not reached by the request-only rule above, so it is
+  // Only a REQUEST's Date of Service is reached by the rule above, so on anything else the position is
   // handed through with nothing decided at it and belongs in the measurement rather than in silence.
-  if (tx.kind !== "request" && header.dateOfService.trim().length > 0) {
-    residuals.record("header/dateOfService");
-  }
+  if (tx.kind !== "request") positions.push(["dateOfService", header.dateOfService]);
+  return positions;
+}
+
+/**
+ * The Response Transaction Header's six positions. None is named by a locus rule: the Header Response
+ * Status (501-F1) is a transmission-level accept/reject flag, and the rest are routing and version
+ * stamps, so all six are handed through with nothing decided at any of them.
+ */
+function responseHeaderPositions(
+  header: TelecomResponseHeader,
+): readonly (readonly [string, string])[] {
+  return [
+    ["versionRelease", header.versionRelease],
+    ["transactionCode", header.transactionCode],
+    ["transactionCount", header.transactionCount],
+    ["headerResponseStatus", header.headerResponseStatus],
+    ["serviceProviderIdQualifier", header.serviceProviderIdQualifier],
+    ["serviceProviderId", header.serviceProviderId],
+  ];
 }

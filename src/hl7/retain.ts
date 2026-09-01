@@ -32,10 +32,10 @@
  * the date enumeration is derived over the whole of this list rather than over the segments a limitation
  * happened to name.
  *
- * **What has changed is the silence, not the pass-through.** Every one of those positions is now
- * **counted and located** as an unexamined residual (`positions.ts`), because retaining a STRUCTURE
- * names no position inside it. The value still passes through; what no longer happens is its passing
- * through unrecorded, which is what made an empty residual inventory unreadable.
+ * **The pass-through is not the silence.** Every one of those positions is **counted and located** as an
+ * unexamined residual (`positions.ts`), because retaining a STRUCTURE names no position inside it. The
+ * value passes through and is recorded all the same: an unrecorded pass-through is what makes an empty
+ * residual inventory unreadable.
  *
  * @packageDocumentation
  */

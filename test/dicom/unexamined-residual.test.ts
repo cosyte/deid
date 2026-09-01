@@ -7,6 +7,8 @@
  *
  * The negative control is the load-bearing half: an attribute the report DOES account for, whether it was
  * removed, remapped, or **kept** (the profile's `K` is a decision, not a silence), may never appear here.
+ * Two more negative controls sit beside it, both from the definition of a **value-bearing** position: an
+ * attribute sent empty carries no value, and a sequence container is a structure rather than a position.
  *
  * Everything is synthetic and built in memory; the sentinels are declared in `scripts/phi-allow-list.txt`.
  */
@@ -15,9 +17,22 @@ import { Buffer } from "node:buffer";
 
 import { describe, expect, it } from "vitest";
 
-import { DEID_DISPOSITION_CODES } from "../../src/index.js";
+import { DeidError, DEID_DISPOSITION_CODES, FATAL_CODES } from "../../src/index.js";
 import { deidentifyDicom } from "../../src/dicom/index.js";
+import {
+  deriveUnexaminedResiduals,
+  type EnumerableDataset,
+  type FoldableReport,
+} from "../../src/dicom/fold.js";
 import { buildPhiDataset, pad, SENTINEL } from "./helpers/fixtures.js";
+
+/** An empty Annex E report: nothing accounted for, so every element of a dataset is unaccounted. */
+const EMPTY_REPORT: FoldableReport = {
+  attributes: [],
+  removedPrivateTags: [],
+  warnings: [],
+  retained: [],
+};
 
 /**
  * A dataset carrying a **sequence the Basic Profile keeps** (`(0028,3010)` VOI LUT Sequence, which
@@ -98,6 +113,60 @@ describe("DICOM unexamined residual positions", () => {
     expect(nestedLoci.some((locus) => locus.includes("(0020,4000)"))).toBe(false);
   });
 
+  it("NEGATIVE CONTROL: an attribute sent EMPTY is not a residual and is not counted", () => {
+    // A Type 2 attribute sent zero-length is routine in DICOM, and an empty position carries no value.
+    const withEmpty = buildPhiDataset({
+      extra: [{ tag: "00280002", vr: "US", value: Buffer.alloc(0) }], // Samples per Pixel, sent empty
+    });
+    const result = deidentifyDicom(withEmpty);
+    // Non-vacuity: the attribute really did survive the pass, and really carries no value.
+    const survivor = result.dataset.get("00280002");
+    expect(survivor).toBeDefined();
+    expect(survivor?.length).toBe(0);
+    expect(survivor?.rawBytes.length).toBe(0);
+    // Nor is the exclusion vacuous the other way: the same attribute IS counted when it carries a value.
+    const withValue = deidentifyDicom(
+      buildPhiDataset({ extra: [{ tag: "00280002", vr: "US", value: Buffer.from([0x01, 0x00]) }] }),
+    );
+    expect(withValue.unexaminedResiduals.map((r) => r.locus)).toContain("(0028,0002)");
+    expect(result.unexaminedResiduals.map((r) => r.locus)).not.toContain("(0028,0002)");
+  });
+
+  it("NEGATIVE CONTROL: a sequence CONTAINER is a structure, never a value-bearing position", () => {
+    const nested = deidentifyDicom(datasetWithSequence());
+    const nestedLoci = nested.unexaminedResiduals.map((r) => r.locus);
+    // Non-vacuity: the container really is present in the returned dataset, really is an SQ, and the
+    // walk really does reach the position inside it - so its absence below is an exclusion, not a miss.
+    const container = nested.dataset.get("00283010");
+    expect(container?.vr).toBe("SQ");
+    expect(container?.items?.length).toBe(1);
+    expect(nestedLoci).toContain("(0028,3010)[0]/(0028,3002)");
+    expect(nestedLoci).not.toContain("(0028,3010)");
+  });
+
+  it("but carrying items is NOT what excludes it: encapsulated Pixel Data is still counted", () => {
+    // Encapsulated Pixel Data is `VR=OB` with fragment items, and it is a real value-bearing position.
+    // Excluding a container by the presence of items rather than by its VR would drop the one
+    // attribute this metadata-only adapter is least able to speak for.
+    const encapsulated = buildPhiDataset({
+      extra: [
+        {
+          tag: "7FE00010",
+          items: [],
+          undefinedLength: true,
+          encapsulatedPixelData: true,
+          encapsulatedFragments: [Buffer.alloc(0), Buffer.alloc(8, 0x41)],
+        },
+      ],
+    });
+    const result = deidentifyDicom(encapsulated);
+    // Non-vacuity: it really is an items-carrying element, and its VR really is not SQ.
+    const pixels = result.dataset.get("7FE00010");
+    expect(pixels?.vr).toBe("OB");
+    expect(pixels?.items?.length).toBe(2);
+    expect(result.unexaminedResiduals.map((r) => r.locus)).toContain("(7fe0,0010)");
+  });
+
   it("every record is value-free and carries the unexamined code", () => {
     expect(unexaminedResiduals.length).toBeGreaterThan(0);
     for (const residual of unexaminedResiduals) {
@@ -111,5 +180,70 @@ describe("DICOM unexamined residual positions", () => {
     }
     // Nothing binary rides along either: the record is a locus, a count and two booleans.
     expect(serialized).not.toContain(Buffer.alloc(2, 0x08).toString("latin1"));
+  });
+});
+
+describe("DICOM enumeration fail-safe: a dataset that will not yield its elements fails the pass", () => {
+  it("a root dataset that refuses becomes the typed, value-free fatal naming the structure", () => {
+    const hostile: EnumerableDataset = {
+      elements(): never {
+        throw new TypeError("the dataset would not yield its elements");
+      },
+    };
+    let thrown: unknown;
+    try {
+      deriveUnexaminedResiduals(hostile, EMPTY_REPORT);
+    } catch (err) {
+      thrown = err;
+    }
+    expect(thrown).toBeInstanceOf(DeidError);
+    expect((thrown as DeidError).code).toBe(FATAL_CODES.DEID_POSITIONS_UNENUMERABLE);
+    expect((thrown as DeidError).message).toContain("dataset");
+    // Value-free: the peer's own message never rides out on the fatal.
+    expect((thrown as DeidError).message).not.toContain("would not yield");
+  });
+
+  it("a sequence ITEM that refuses names the item, not the root: the innermost structure raises", () => {
+    const hostileItem: EnumerableDataset = {
+      elements(): never {
+        throw new TypeError("the item would not yield its elements");
+      },
+    };
+    const root: EnumerableDataset = {
+      elements: () => [
+        { tag: "00283010", vr: "SQ", length: 8, rawBytes: { length: 8 }, items: [hostileItem] },
+      ],
+    };
+    let thrown: unknown;
+    try {
+      deriveUnexaminedResiduals(root, EMPTY_REPORT);
+    } catch (err) {
+      thrown = err;
+    }
+    expect((thrown as DeidError).code).toBe(FATAL_CODES.DEID_POSITIONS_UNENUMERABLE);
+    expect((thrown as DeidError).message).toContain("(0028,3010)[0]");
+  });
+
+  it("the same shape enumerates cleanly when it does yield: the fatal is not vacuous", () => {
+    const root: EnumerableDataset = {
+      elements: () => [
+        {
+          tag: "00283010",
+          vr: "SQ",
+          length: 8,
+          rawBytes: { length: 8 },
+          items: [
+            {
+              elements: () => [
+                { tag: "00283002", vr: "US", length: 2, rawBytes: { length: 2 }, items: undefined },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+    expect(deriveUnexaminedResiduals(root, EMPTY_REPORT).map((r) => r.locus)).toEqual([
+      "(0028,3010)[0]/(0028,3002)",
+    ]);
   });
 });
