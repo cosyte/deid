@@ -34,6 +34,12 @@
  * document `id` / `title` / `code` envelope is retained (like HL7's MSH); the address generalization
  * keeps state + country (permitted) and the safe 3-digit ZIP, dropping every finer component.
  *
+ * **Every one of those positions is enumerated.** A value-bearing position inside the retained body or
+ * the envelope that no locus rule names is **counted and located** as an unexamined residual on
+ * {@link CcdaDeidResult.unexaminedResiduals}, at its own coordinates (an element's attribute, an
+ * element's direct text). Nothing is transformed on account of it: the measurement exists so an empty
+ * residual inventory can be told apart from an unmeasured one.
+ *
  * @packageDocumentation
  */
 

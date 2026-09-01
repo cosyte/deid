@@ -23,6 +23,7 @@ import {
   deidentify,
   formatExpertDeterminationSupportReport,
   type DeidManifestEntry,
+  type UnexaminedResidual,
 } from "../src/index.js";
 
 const C = SAFE_HARBOR_CATEGORIES;
@@ -595,5 +596,201 @@ describe("the residual inventory distinguishes a kept year from a kept whole val
     expect(md).toContain("PID-7: DATES (×1, coarse residual)");
     expect(md).toContain("PV1-44: DATES (×1, whole value kept)");
     expect(md).toContain("retained: 1");
+  });
+});
+
+/**
+ * **The unexamined-residual inventory**: the sibling of the retained quasi-identifiers, and the reason an
+ * empty residual section can now be read at all.
+ *
+ * The three inventories answer three different questions and a determiner reasons about each differently:
+ * a retained quasi-identifier is a piece of a value the pass EXAMINED and kept, a keyed surrogate is a
+ * computed replacement that preserves linkage, and an unexamined position is one nothing reached. Folding
+ * any into another would tell a determiner they are the same kind of fact.
+ */
+describe("the unexamined-residual inventory, beside the retained quasi-identifiers", () => {
+  const unexamined = (locus: string, count = 1): UnexaminedResidual => ({
+    locus,
+    count,
+    examined: false,
+    locusWithheld: false,
+    code: CODES.DEID_POSITION_UNEXAMINED,
+  });
+
+  const RETAINED = entry({
+    category: C.DATES,
+    transform: "generalize",
+    locus: "PID-7",
+    disposition: "transformed",
+    code: CODES.DEID_RESIDUAL_RETAINED,
+  });
+
+  it("lists the unexamined positions in their own inventory, with locus and count", () => {
+    const report = buildExpertDeterminationSupportReport([RETAINED], {
+      unexaminedResiduals: [unexamined("PV1-8.1"), unexamined("PV1-8.2", 3)],
+    });
+    expect(report.unexaminedResiduals).toEqual([unexamined("PV1-8.1"), unexamined("PV1-8.2", 3)]);
+    expect(report.dispositionSummary.unexaminedResidualPositions).toBe(4);
+  });
+
+  it("carries no value from any enumerated position: locus, count and the fact, nothing else", () => {
+    const report = buildExpertDeterminationSupportReport([RETAINED], {
+      unexaminedResiduals: [unexamined("PV1-8.1")],
+    });
+    const [row] = report.unexaminedResiduals;
+    expect(Object.keys(row ?? {}).sort()).toEqual([
+      "code",
+      "count",
+      "examined",
+      "locus",
+      "locusWithheld",
+    ]);
+  });
+
+  it("renders as a section BESIDE the retained quasi-identifiers, never inside it", () => {
+    const md = formatExpertDeterminationSupportReport(
+      buildExpertDeterminationSupportReport([RETAINED], {
+        unexaminedResiduals: [unexamined("PV1-8.1")],
+      }),
+    );
+    const retainedAt = md.indexOf("## Retained quasi-identifiers");
+    const unexaminedAt = md.indexOf("## Unexamined residual positions");
+    const keyedAt = md.indexOf("## Keyed surrogate residuals");
+    expect(retainedAt).toBeGreaterThan(-1);
+    expect(unexaminedAt).toBeGreaterThan(retainedAt);
+    expect(keyedAt).toBeGreaterThan(unexaminedAt);
+    expect(md).toContain("- PV1-8.1: unexamined (×1)");
+    // The retained inventory still lists only what it listed before.
+    expect(md).toContain("- PID-7: DATES (×1, coarse residual)");
+  });
+
+  it("says WITHHELD in the rendering when a position's locus could not be expressed", () => {
+    const md = formatExpertDeterminationSupportReport(
+      buildExpertDeterminationSupportReport([], {
+        unexaminedResiduals: [{ ...unexamined("<withheld>-7"), locusWithheld: true }],
+      }),
+    );
+    expect(md).toContain("(structural locus withheld)");
+  });
+
+  it("sums counts for the same locus across a corpus of passes", () => {
+    const report = buildExpertDeterminationSupportReport([[RETAINED], [RETAINED]], {
+      unexaminedResiduals: [[unexamined("PV1-8.1")], [unexamined("PV1-8.1", 2)]],
+    });
+    expect(report.unexaminedResiduals).toEqual([unexamined("PV1-8.1", 3)]);
+    expect(report.dispositionSummary.unexaminedResidualPositions).toBe(3);
+  });
+});
+
+/**
+ * **A measured zero is not silence.** The whole point of the measurement: an empty residual inventory used
+ * to read the same whether the pass found nothing or measured nothing, and a determiner acts on that
+ * emptiness. The report now says which it is, in both the structured object and the rendering.
+ */
+describe("a measured empty inventory is distinguishable from an unmeasured one", () => {
+  it("MEASURED and empty: the section is rendered, and says so", () => {
+    const report = buildExpertDeterminationSupportReport([], { unexaminedResiduals: [] });
+    expect(report.unexaminedResidualsMeasured).toBe(true);
+    expect(report.unexaminedResiduals).toEqual([]);
+    expect(report.dispositionSummary.unexaminedResidualPositions).toBe(0);
+    const md = formatExpertDeterminationSupportReport(report);
+    expect(md).toContain("## Unexamined residual positions");
+    expect(md).toContain("_Measured, and empty._");
+    expect(md).toContain("· unexamined residual positions: 0");
+    expect(md).not.toContain("NOT MEASURED");
+  });
+
+  it("NOT measured: the section is still rendered, and refuses to print a zero", () => {
+    const report = buildExpertDeterminationSupportReport([]);
+    expect(report.unexaminedResidualsMeasured).toBe(false);
+    expect(report.unexaminedResiduals).toEqual([]);
+    expect(report.dispositionSummary.unexaminedResidualPositions).toBeNull();
+    const md = formatExpertDeterminationSupportReport(report);
+    // The section is never OMITTED: an absent section is exactly the silence the measurement retires.
+    expect(md).toContain("## Unexamined residual positions");
+    expect(md).toContain("**NOT MEASURED.**");
+    expect(md).toContain("· unexamined residual positions: NOT MEASURED");
+    expect(md).not.toContain("_Measured, and empty._");
+  });
+
+  it("the two renderings are not the same document, which is the whole point", () => {
+    const measured = formatExpertDeterminationSupportReport(
+      buildExpertDeterminationSupportReport([], { unexaminedResiduals: [] }),
+    );
+    const unmeasured = formatExpertDeterminationSupportReport(
+      buildExpertDeterminationSupportReport([]),
+    );
+    expect(measured).not.toBe(unmeasured);
+  });
+});
+
+/**
+ * **The retained-quasi-identifier inventory keeps its membership**, and the Safe Harbor category coverage
+ * keeps its totals. Admitting an unexamined position into either would corrupt the two things a determiner
+ * reads most directly: a kept year would become indistinguishable from a position nothing looked at, and a
+ * category no rule established would be reported as acted on.
+ */
+describe("an unexamined position joins no other inventory and no category", () => {
+  const unexamined: UnexaminedResidual = {
+    locus: "PV1-8.1",
+    count: 5,
+    examined: false,
+    locusWithheld: false,
+    code: CODES.DEID_POSITION_UNEXAMINED,
+  };
+
+  const KEPT_YEAR = entry({
+    category: C.DATES,
+    transform: "generalize",
+    locus: "PID-7",
+    disposition: "transformed",
+    code: CODES.DEID_RESIDUAL_RETAINED,
+  });
+
+  it("the retained-quasi-identifier inventory lists only residuals of EXAMINED values", () => {
+    const report = buildExpertDeterminationSupportReport([KEPT_YEAR], {
+      unexaminedResiduals: [unexamined],
+    });
+    expect(report.retainedQuasiIdentifiers.map((r) => r.locus)).toEqual(["PID-7"]);
+    expect(report.keyedSurrogateResiduals).toEqual([]);
+    expect(report.dispositionSummary.residualRetained).toBe(1);
+  });
+
+  it("no Safe Harbor category is credited with it, and the categories-acted-on total is unmoved", () => {
+    const withoutMeasurement = buildExpertDeterminationSupportReport([KEPT_YEAR]);
+    const withMeasurement = buildExpertDeterminationSupportReport([KEPT_YEAR], {
+      unexaminedResiduals: [unexamined],
+    });
+    expect(withMeasurement.totals.categoriesActedOn).toBe(
+      withoutMeasurement.totals.categoriesActedOn,
+    );
+    expect(withMeasurement.categoryCoverage).toEqual(withoutMeasurement.categoryCoverage);
+    // Nowhere in the 18 categories does the unexamined code or its count appear.
+    for (const coverage of withMeasurement.categoryCoverage) {
+      expect(coverage.codes).not.toContain(CODES.DEID_POSITION_UNEXAMINED);
+    }
+    const acted = withMeasurement.categoryCoverage.reduce((sum, c) => sum + c.totalCount, 0);
+    expect(acted).toBe(1);
+  });
+
+  it("and the rendered category table is byte-identical with and without the measurement", () => {
+    const section = (md: string): string =>
+      md.slice(md.indexOf("## Safe Harbor category coverage"), md.indexOf("## Retained quasi"));
+    const withoutMeasurement = formatExpertDeterminationSupportReport(
+      buildExpertDeterminationSupportReport([KEPT_YEAR]),
+    );
+    const withMeasurement = formatExpertDeterminationSupportReport(
+      buildExpertDeterminationSupportReport([KEPT_YEAR], { unexaminedResiduals: [unexamined] }),
+    );
+    expect(section(withMeasurement)).toBe(section(withoutMeasurement));
+  });
+
+  it("determination stays null and the disclaimer still leads, measurement or not", () => {
+    const report = buildExpertDeterminationSupportReport([KEPT_YEAR], {
+      unexaminedResiduals: [unexamined],
+    });
+    expect(report.determination).toBeNull();
+    expect(report.disclaimer).toBe(EXPERT_DETERMINATION_DISCLAIMER);
+    expect(formatExpertDeterminationSupportReport(report)).toContain("NOT A DETERMINATION.");
   });
 });

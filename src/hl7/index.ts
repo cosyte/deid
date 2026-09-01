@@ -54,13 +54,19 @@
  * other even though the retain-list does not name the segment. Each outcome is recorded, so a consumer
  * reads the manifest and knows which dates the output still carries.
  *
+ * **Every position the pass hands through is enumerated.** A value-bearing position inside a segment
+ * this adapter hands through that no locus rule names is **counted and located** as an unexamined
+ * residual on {@link Hl7DeidResult.unexaminedResiduals}: the provider names in PV1-7/8 and OBR-16, the
+ * date components carried inside a person-name or address composite, and the coded positions of every
+ * retained segment. Nothing is transformed on account of it: the measurement exists so an empty residual
+ * inventory can be told apart from an unmeasured one.
+ *
  * **Known limitations.** Free text is block-only (no scrub); every **non-date** field of a retained
- * segment that the maps do not name is still passed through untouched and unrecorded, which includes
- * the provider names in PV1-7/8 and OBR-16 and the date components carried inside a person-name or
- * address composite. The date classification is fixed at v2.5.1, so a position only another version
- * types as a date is a stated residual, as are the file and batch envelope headers. The address
- * generalization keeps only the Safe Harbor 3-digit ZIP and conservatively drops the (permitted) state
- * as well.
+ * segment that the maps do not name is still passed through untouched, which includes the provider names
+ * in PV1-7/8 and OBR-16 and the date components carried inside a person-name or address composite. The
+ * date classification is fixed at v2.5.1, so a position only another version types as a date is a stated
+ * residual, as are the file and batch envelope headers. The address generalization keeps only the Safe
+ * Harbor 3-digit ZIP and conservatively drops the (permitted) state as well.
  *
  * @packageDocumentation
  */

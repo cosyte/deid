@@ -42,10 +42,12 @@ import { serializeDicom } from "@cosyte/dicom";
 import {
   buildExpertDeterminationSupportReport,
   createDeidContext,
+  formatExpertDeterminationSupportReport,
   LIMITED_DATA_SET_PROFILE,
   profileOptions,
   SAFE_HARBOR_PROFILE,
   type DeidManifestEntry,
+  type UnexaminedResidual,
 } from "../../src/index.js";
 import { deidentifyHl7 } from "../../src/hl7/index.js";
 import { deidentifyCcda } from "../../src/ccda/index.js";
@@ -68,6 +70,15 @@ interface CorpusCase {
   readonly deidWire: string;
   /** The value-free manifest the pass produced; swept for the same sentinels as the wire. */
   readonly manifest: readonly DeidManifestEntry[];
+  /**
+   * The pass's **unexamined residual positions**: the second value-free list, swept by the same gate.
+   *
+   * It is here because it is the newest diagnostic surface, and in this package a diagnostic surface IS a
+   * PHI surface: a residual record that carried the value at the position it enumerates would leak, in the
+   * audit trail, exactly the PHI the pass could not examine. It enumerates far more positions than the
+   * manifest names, so a locus composed there is the widest interpolation this library performs.
+   */
+  readonly unexaminedResiduals: readonly UnexaminedResidual[];
   /** The serialized ORIGINAL (un-de-identified) wire: used to prove the sentinels are really present. */
   readonly originalWire: string;
   /** Synthetic PHI sentinels that must be ABSENT from `deidWire` and PRESENT in `originalWire`. */
@@ -82,7 +93,9 @@ interface CorpusCase {
 function hl7Case(): CorpusCase {
   const ctx = createDeidContext({ key: "hl7-corpus", patientId: "p-hl7" });
   const original = parseHL7(hl7Wire("oru-r01"));
-  const { document, manifest } = deidentifyHl7(parseHL7(hl7Wire("oru-r01")), { context: ctx });
+  const { document, manifest, unexaminedResiduals } = deidentifyHl7(parseHL7(hl7Wire("oru-r01")), {
+    context: ctx,
+  });
   const clinicalPaths = [
     "OBX[0].5",
     "OBX[0].6",
@@ -99,6 +112,7 @@ function hl7Case(): CorpusCase {
     name: "hl7",
     deidWire: document.toString(),
     manifest,
+    unexaminedResiduals,
     originalWire: hl7Wire("oru-r01"),
     sentinels: [
       "ZZMRN002",
@@ -133,11 +147,14 @@ function hl7Case(): CorpusCase {
 function hl7EmployerCase(): CorpusCase {
   const ctx = createDeidContext({ key: "hl7-emp-corpus", patientId: "p-hl7-emp" });
   const raw = hl7Wire("adt-a01");
-  const { document, manifest } = deidentifyHl7(parseHL7(raw), { context: ctx });
+  const { document, manifest, unexaminedResiduals } = deidentifyHl7(parseHL7(raw), {
+    context: ctx,
+  });
   return {
     name: "hl7-employer",
     deidWire: document.toString(),
     manifest,
+    unexaminedResiduals,
     originalWire: raw,
     sentinels: [
       // The employer as a set of fields: name, address, phone, employee id, employer id.
@@ -187,7 +204,7 @@ function hl7EmployerCase(): CorpusCase {
 function hl7EncounterCase(): CorpusCase {
   const ctx = createDeidContext({ key: "hl7-enc-corpus", patientId: "p-hl7-enc" });
   const raw = hl7Wire("adt-a03");
-  const { document, manifest } = deidentifyHl7(
+  const { document, manifest, unexaminedResiduals } = deidentifyHl7(
     parseHL7(raw),
     profileOptions(SAFE_HARBOR_PROFILE, ctx),
   );
@@ -195,6 +212,7 @@ function hl7EncounterCase(): CorpusCase {
     name: "hl7-encounter",
     deidWire: document.toString(),
     manifest,
+    unexaminedResiduals,
     originalWire: raw,
     sentinels: [
       // The encounter loci: the visit number, the admit / discharge / observation / diagnosis dates,
@@ -227,11 +245,14 @@ function hl7EncounterCase(): CorpusCase {
 function ccdaCase(): CorpusCase {
   const ctx = createDeidContext({ key: "ccda-corpus", patientId: "p-ccda" });
   const raw = FIX("ccda", "ccd.xml");
-  const { document, manifest } = deidentifyCcda(parseCcda(raw), { context: ctx });
+  const { document, manifest, unexaminedResiduals } = deidentifyCcda(parseCcda(raw), {
+    context: ctx,
+  });
   return {
     name: "ccda",
     deidWire: document.toString(),
     manifest,
+    unexaminedResiduals,
     originalWire: raw,
     sentinels: [
       "ZZMRNCCDA1",
@@ -264,11 +285,12 @@ function fhirCase(): CorpusCase {
   const ctx = createDeidContext({ key: "fhir-corpus", patientId: "p-fhir" });
   const raw = FIX("fhir", "bundle.json");
   const { resource } = parseResource(raw);
-  const { document, manifest } = deidentifyFhir(resource, { context: ctx });
+  const { document, manifest, unexaminedResiduals } = deidentifyFhir(resource, { context: ctx });
   return {
     name: "fhir",
     deidWire: serializeResource(document),
     manifest,
+    unexaminedResiduals,
     originalWire: raw,
     sentinels: [
       "ZZPATNARRATIVE",
@@ -302,11 +324,12 @@ function fhirCase(): CorpusCase {
 function x12Case(): CorpusCase {
   const ctx = createDeidContext({ key: "x12-corpus", patientId: "p-x12" });
   const raw = FIX("x12", "837p.edi");
-  const { x12, manifest } = deidentifyX12String(raw, { context: ctx });
+  const { x12, manifest, unexaminedResiduals } = deidentifyX12String(raw, { context: ctx });
   return {
     name: "x12",
     deidWire: x12,
     manifest,
+    unexaminedResiduals,
     originalWire: raw,
     sentinels: [
       "ZZSUBLAST",
@@ -336,11 +359,12 @@ function x12Case(): CorpusCase {
 function ncpdpCase(): CorpusCase {
   const ctx = createDeidContext({ key: "ncpdp-corpus", patientId: "p-ncpdp" });
   const raw = FIX("ncpdp", "telecom-b1.ncpdp");
-  const { telecom, manifest } = deidentifyTelecomString(raw, { context: ctx });
+  const { telecom, manifest, unexaminedResiduals } = deidentifyTelecomString(raw, { context: ctx });
   return {
     name: "ncpdp",
     deidWire: telecom,
     manifest,
+    unexaminedResiduals,
     originalWire: raw,
     sentinels: [
       "ZZPATFIRST",
@@ -365,11 +389,12 @@ function ncpdpCase(): CorpusCase {
 // ── DICOM (metadata-only, delegated PS3.15 Annex E) ───────────────────────────────────────────────
 function dicomCase(): CorpusCase {
   const original = serializeDicom(buildPhiDataset()).toString("latin1");
-  const { dataset, manifest } = deidentifyDicom(buildPhiDataset());
+  const { dataset, manifest, unexaminedResiduals } = deidentifyDicom(buildPhiDataset());
   return {
     name: "dicom",
     deidWire: serializeDicom(dataset).toString("latin1"),
     manifest,
+    unexaminedResiduals,
     originalWire: original,
     sentinels: [...ALL_SENTINELS, UID.sop, UID.study, UID.series],
     survivors: [CLINICAL.modality, CLINICAL.photometric, CLINICAL.sopClassUid],
@@ -402,9 +427,45 @@ describe("consolidated leak corpus, every format, zero leak", () => {
     // out of the input, so it can carry document content the output document never sees.
     it(`${c.name}: no seeded PHI sentinel reaches the value-free manifest or the report`, () => {
       const manifestText = JSON.stringify(c.manifest);
-      const reportText = JSON.stringify(buildExpertDeterminationSupportReport(c.manifest));
+      const reportText = JSON.stringify(
+        buildExpertDeterminationSupportReport(c.manifest, {
+          unexaminedResiduals: c.unexaminedResiduals,
+        }),
+      );
       expect(leaks(manifestText, c.sentinels)).toEqual([]);
       expect(leaks(reportText, c.sentinels)).toEqual([]);
+    });
+
+    // The THIRD artifact, and the one with the widest reach: the unexamined-residual list enumerates
+    // every value-bearing position the pass handed through, so it composes far more loci than the
+    // manifest names and touches parts of the document no other artifact describes. A record that
+    // carried the value at a position it enumerates would leak, in the audit trail, exactly the PHI the
+    // pass could not examine, and a manifest already handed to a determiner cannot be recalled.
+    it(`${c.name}: no seeded PHI sentinel reaches the unexamined-residual inventory`, () => {
+      const residualText = JSON.stringify(c.unexaminedResiduals);
+      const renderedText = formatExpertDeterminationSupportReport(
+        buildExpertDeterminationSupportReport(c.manifest, {
+          unexaminedResiduals: c.unexaminedResiduals,
+        }),
+      );
+      expect(leaks(residualText, c.sentinels)).toEqual([]);
+      expect(leaks(renderedText, c.sentinels)).toEqual([]);
+    });
+
+    // And the record shape itself: a locus, a count and two booleans. Nothing that could hold a value.
+    it(`${c.name}: every unexamined-residual record carries a locus, a count and the fact, only`, () => {
+      for (const residual of c.unexaminedResiduals) {
+        expect(Object.keys(residual).sort()).toEqual([
+          "code",
+          "count",
+          "examined",
+          "locus",
+          "locusWithheld",
+        ]);
+        expect(typeof residual.locus).toBe("string");
+        expect(Number.isInteger(residual.count)).toBe(true);
+        expect(residual.examined).toBe(false);
+      }
     });
   }
 });
@@ -419,6 +480,22 @@ describe("corpus non-vacuity, the sweep and the corpus both have teeth", () => {
     it(`${c.name}: the manifest sweep has a haystack (pre-condition)`, () => {
       // A manifest sweep over an empty manifest reports zero for the wrong reason.
       expect(c.manifest.length).toBeGreaterThan(0);
+    });
+
+    it(`${c.name}: the unexamined-residual sweep has a haystack (pre-condition)`, () => {
+      // Same reasoning: a zero-leak result over an empty inventory proves nothing about the inventory.
+      expect(c.unexaminedResiduals.length).toBeGreaterThan(0);
+    });
+
+    it(`${c.name}: a sentinel injected into the residual inventory IS caught (tamper)`, () => {
+      const canary = c.sentinels[0];
+      expect(canary).toBeDefined();
+      // The very same sweep that reports zero on the real inventory must report a forged locus.
+      const tampered = JSON.stringify([
+        ...c.unexaminedResiduals,
+        { locus: canary, count: 1, examined: false, locusWithheld: false, code: "X" },
+      ]);
+      expect(leaks(tampered, c.sentinels)).toContain(canary);
     });
 
     it(`${c.name}: a sentinel re-injected into the de-identified wire IS caught (tamper)`, () => {

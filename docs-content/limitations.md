@@ -88,17 +88,42 @@ Two things follow, and the second is the one that surprises people:
   date inside one cannot survive to be recorded.
 - **The version that classification is fixed at is a residual of its own.** It is HL7 v2.5.1 and it is
   never re-read from the message, so identical bytes always yield the same set of positions. A position
-  only some other version types as a date is therefore **not** classified, not acted on and not
-  recorded; the same holds for a retained segment v2.5.1 does not define, and for the file and batch
-  envelope headers (`FHS`, `BHS`), which number their fields from a leading delimiter.
-- **Every NON-DATE field of a retained structure is still passed through untouched, and recorded
-  nowhere.** The carve-outs above narrow this class; they do not close it. The attending / referring
-  **provider** names survive in PV1-7/8 and OBR-16, among others, and so do the date/time components
-  carried **inside** a person-name or address composite (a provider name's effective or expiration
-  date, an authenticator's timestamp, a licence expiry), because acting on those dates while leaving
-  the names they qualify would record half a position. None of them is in the manifest, so none is in
-  the support report either. **Do not read the named loci above as the complete set of what a retained
-  structure can carry.** If your threat model includes these, filter them yourself.
+  only some other version types as a date is therefore **not** classified and **not acted on** (it is
+  counted as an unexamined position, per the next bullets, which is not the same as being classified);
+  the same holds for a retained segment v2.5.1 does not define, and for the file and batch envelope
+  headers (`FHS`, `BHS`), which number their fields from a leading delimiter.
+- **Every NON-DATE field of a retained structure is still passed through untouched.** The carve-outs
+  above narrow this class; they do not close it. The attending / referring **provider** names survive
+  in PV1-7/8 and OBR-16, among others, and so do the date/time components carried **inside** a
+  person-name or address composite (a provider name's effective or expiration date, an authenticator's
+  timestamp, a licence expiry), because acting on those dates while leaving the names they qualify
+  would record half a position. **Do not read the named loci above as the complete set of what a
+  retained structure can carry.** If your threat model includes these, filter them yourself.
+
+- **Every one of those positions IS counted and located, as an unexamined residual.** This is the part
+  that changed: a value-bearing position inside a structure the pass hands through that no locus rule
+  names is recorded on `result.unexaminedResiduals` with its **structural locus**, a **count** and the
+  fact that nothing examined it. It carries no value, no key and no offset, exactly like the manifest,
+  and it is a separate list precisely so that a position nothing looked at can never be mistaken for a
+  residual of a value the pass did examine. All six adapters produce it: the fields of a retained HL7 v2
+  segment, the entry dates / entry ids / in-entry performers and family-history demographics inside a
+  retained C-CDA clinical body, the codes and statuses a FHIR walk descends past, the elements of a
+  retained X12 segment, the fields of a retained NCPDP segment and its fixed header, and every DICOM
+  attribute the delegated Annex E report does not account for, nested sequence items included.
+
+- **Counting is not removal, and it is not an allegation.** Nothing is scrubbed, generalized, blocked
+  or otherwise transformed on account of the count: what to do about a measured residual is a separate
+  decision, and the mirror risk of acting on it blindly is over-removal, which destroys clinical
+  meaning. A position no rule examined also has **no established Safe Harbor category**, so it is
+  attributed to none of the 18 and moves no category total: a clinical code, a dose unit and an order
+  status all sit at positions like these.
+
+- **Two fail-safes, because a count nobody can qualify is worse than no count.** A position whose
+  structural locus cannot be expressed is **still counted**, recorded under a withheld locus token and
+  flagged, so losing the "where" never also loses the "how many". And a structure whose value-bearing
+  positions cannot be enumerated **fails the pass** with a typed `DEID_POSITIONS_UNENUMERABLE` error
+  naming the structure, rather than emitting a zero or a partial count that a reader would take for a
+  clearance.
 
 - **The employer is a Safe Harbor subject, and two employer surfaces still are not reached.**
   §164.514(b)(2)(i) removes the identifiers of the individual "or of relatives, **employers**, or

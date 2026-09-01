@@ -157,11 +157,26 @@ The classification is structural and version-fixed: an eight-digit numeric resul
 
 **Known limitations (this release).** Free text is block-by-default (no built-in scrub; opt-in BYO
 redaction: see [Free text](#free-text-block-by-default--byo-redaction)); every **non-date** field of a
-retained segment that the carve-outs do not name is **not** de-identified and is recorded nowhere, which
-still includes the _provider_ names in PV1-7/8 and OBR-16, the guarantor's employer organisation name at
-GT1-51, and the date components carried inside a person-name or address composite; a position only a
-version other than v2.5.1 types as a date is a stated residual; the address generalization keeps only
-the Safe Harbor 3-digit ZIP.
+retained segment that the carve-outs do not name is **not** de-identified, which still includes the
+_provider_ names in PV1-7/8 and OBR-16, the guarantor's employer organisation name at GT1-51, and the
+date components carried inside a person-name or address composite; a position only a version other than
+v2.5.1 types as a date is a stated residual; the address generalization keeps only the Safe Harbor
+3-digit ZIP.
+
+**Those positions are now counted and located, which is a different thing from being cleaned.** Every
+value-bearing position a pass hands through that no locus rule names is recorded as an **unexamined
+residual** on `result.unexaminedResiduals`, with its structural locus, a count and the fact that nothing
+examined it, and never a value. Hand that list to the support report alongside the manifest and the
+report says how many there were; hand it an empty list and the report says the inventory was **measured
+and empty**, which reads differently from a pass that measured nothing at all.
+
+**Counting is not removal, and an unexamined position is not an allegation.** Nothing is scrubbed,
+generalized or blocked on account of the count, and a position no rule examined has no established Safe
+Harbor category, so it joins none of the 18 and moves no category total. A clinical code, a dose unit and
+an order status all sit at positions like these. The two fail-safes are worth knowing: a position whose
+locus cannot be expressed is still counted, under a withheld locus token, and a structure whose positions
+cannot be enumerated **fails the pass** rather than contribute a zero a reader would take for a
+clearance.
 
 **Employer surfaces that remain residual, in every format.** Two, named so a consumer can tell a
 covered surface from an uncovered one. **An employer named only in free text** (an OBX-5 narrative, an
