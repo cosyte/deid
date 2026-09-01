@@ -70,8 +70,9 @@ export interface X12Extraction {
   readonly coords: X12Coord[];
   /**
    * Every **value-bearing element the pass hands through that no locus rule named**: the elements of a
-   * retained clinical / financial / control segment, and the unmapped positions of a segment whose
-   * mapped ones were acted on. Counted and located, never transformed.
+   * retained clinical / financial / control segment, the unmapped positions of a segment whose mapped
+   * ones were acted on, and the interchange and functional-group envelope around them. Counted and
+   * located, never transformed.
    */
   readonly unexaminedResiduals: readonly UnexaminedResidual[];
 }
@@ -88,12 +89,14 @@ interface X12LocusAccumulator {
   readonly named: Map<string, Set<number>>;
 }
 
-/** The per-segment position needed to build a coord and a value-free path. */
+/**
+ * The value-free identity of one segment: what a manifest path and a named-element set are keyed on.
+ * Held by every segment the pass sees, inside a transaction set or in the envelope around one.
+ */
 interface SegPos {
-  readonly groupIndex: number;
-  readonly txIndex: number;
-  readonly segIndex: number;
-  /** The bounded `ST-01` transaction-set id, e.g. `837`. */
+  /** This segment's unique identity inside the interchange; the named-element sets are held under it. */
+  readonly key: string;
+  /** The bounded `ST-01` transaction-set id (`837`), or `""` for a segment outside every transaction set. */
   readonly stId: string;
   /** The bounded segment id, e.g. `NM1`; the key every rule lookup uses. */
   readonly segId: string;
@@ -101,19 +104,44 @@ interface SegPos {
   readonly segIdBracket: string;
 }
 
+/** A {@link SegPos} inside a transaction set, which additionally locates the applier's write-back. */
+interface TxSegPos extends SegPos {
+  readonly groupIndex: number;
+  readonly txIndex: number;
+  readonly segIndex: number;
+}
+
+/** The only thing reading an element position needs: the 1-indexed element list the parser decoded. */
+interface SegmentElements {
+  readonly elements: readonly string[];
+}
+
 /** Read a 1-indexed raw element value from a segment (`""` when absent). */
-function el(seg: X12Segment, n: number): string {
+function el(seg: SegmentElements, n: number): string {
   return seg.elements[n] ?? "";
 }
 
 /** `true` when the element at position `n` carries a non-empty value. */
-function has(seg: X12Segment, n: number): boolean {
+function has(seg: SegmentElements, n: number): boolean {
   return el(seg, n).length > 0;
+}
+
+/**
+ * `true` when the element at position `n` is a **value-bearing position**: one carrying a value in the
+ * document being processed, which is what the measurement counts.
+ *
+ * Blank-filled counts as absent, and that is not a convenience: X12 fixes the `ISA` at 106 bytes and
+ * space-pads every element in it to its declared width, so an all-blank `ISA-02` is the standard's own
+ * spelling of "not used" rather than a value handed through. The rules above keep using {@link has}: what
+ * is de-identified may not move on account of a measurement.
+ */
+function isValueBearing(seg: SegmentElements, n: number): boolean {
+  return el(seg, n).trim().length > 0;
 }
 
 /** A segment's identity inside the interchange, the key the named-element sets are held under. */
 function segKey(pos: SegPos): string {
-  return `${String(pos.groupIndex)}:${String(pos.txIndex)}:${String(pos.segIndex)}`;
+  return pos.key;
 }
 
 /**
@@ -129,22 +157,25 @@ function name(out: X12LocusAccumulator, pos: SegPos, elements: readonly number[]
 }
 
 /** Append a locus + its coordinate to the accumulator; the coordinate's elements are named by it. */
-function push(out: X12LocusAccumulator, locus: GenericLocus, coord: X12Coord): void {
+function push(out: X12LocusAccumulator, pos: TxSegPos, locus: GenericLocus, coord: X12Coord): void {
   out.loci.push(locus);
   out.coords.push(coord);
-  const key = `${String(coord.groupIndex)}:${String(coord.txIndex)}:${String(coord.segIndex)}`;
-  const set = out.named.get(key) ?? new Set<number>();
-  for (const element of coord.elements) set.add(element);
-  out.named.set(key, set);
+  name(out, pos, coord.elements);
 }
 
-/** Build a value-free manifest path for a segment element (`837/NM1[1]-03`). */
+/**
+ * Build a value-free manifest path for a segment element (`837/NM1[1]-3`). A segment outside every
+ * transaction set - the interchange and functional-group envelope - has no `ST-01` to root its path in
+ * and prints its own coordinates alone (`ISA[0]-6`), exactly as HL7 v2's `MSH-1` and the CDA document
+ * envelope's `title` print theirs.
+ */
 function path(pos: SegPos, element: number): string {
-  return `${pos.stId}/${pos.segIdBracket}-${String(element)}`;
+  const at = `${pos.segIdBracket}-${String(element)}`;
+  return pos.stId === "" ? at : `${pos.stId}/${at}`;
 }
 
 /** Build a coord for a set of elements at this segment. */
-function coord(pos: SegPos, elements: readonly number[]): X12Coord {
+function coord(pos: TxSegPos, elements: readonly number[]): X12Coord {
   return {
     groupIndex: pos.groupIndex,
     txIndex: pos.txIndex,
@@ -157,13 +188,14 @@ function coord(pos: SegPos, elements: readonly number[]): X12Coord {
 function blockElement(
   out: X12LocusAccumulator,
   seg: X12Segment,
-  pos: SegPos,
+  pos: TxSegPos,
   element: number,
 ): void {
   name(out, pos, [element]);
   if (!has(seg, element)) return;
   push(
     out,
+    pos,
     { path: path(pos, element), kind: "identifier", value: el(seg, element) },
     coord(pos, [element]),
   );
@@ -173,7 +205,7 @@ function blockElement(
 function emitRule(
   out: X12LocusAccumulator,
   seg: X12Segment,
-  pos: SegPos,
+  pos: TxSegPos,
   rule: X12ElementRule,
 ): void {
   name(out, pos, [rule.element]);
@@ -187,6 +219,7 @@ function emitRule(
     rule.mode === "date" ? "date" : rule.mode === "zip" ? "zip" : "identifier";
   push(
     out,
+    pos,
     {
       path: path(pos, rule.element),
       kind,
@@ -201,7 +234,7 @@ function emitRule(
 function emitId(
   out: X12LocusAccumulator,
   seg: X12Segment,
-  pos: SegPos,
+  pos: TxSegPos,
   element: number,
   category: SafeHarborCategory | undefined,
 ): void {
@@ -213,6 +246,7 @@ function emitId(
   }
   push(
     out,
+    pos,
     { path: path(pos, element), kind: "identifier", category, value: el(seg, element) },
     coord(pos, [element]),
   );
@@ -230,7 +264,7 @@ function emitId(
 function emitRetainedParty(
   out: X12LocusAccumulator,
   seg: X12Segment,
-  pos: SegPos,
+  pos: TxSegPos,
   roleCode: string,
   identityElements: readonly number[],
 ): void {
@@ -240,13 +274,14 @@ function emitRetainedParty(
   if (!identityElements.some((n) => has(seg, n))) return;
   push(
     out,
+    pos,
     { path: path(pos, 1), kind: "identifier", partyRole: roleCode, value: "" },
     coord(pos, []),
   );
 }
 
 /** Handle an `NM1`: entity-classified name (03–07) + identifier (09 routed by the 08 qualifier). */
-function handleNm1(out: X12LocusAccumulator, seg: X12Segment, pos: SegPos): void {
+function handleNm1(out: X12LocusAccumulator, seg: X12Segment, pos: TxSegPos): void {
   // The `NM1` rules name the entity code the classification reads, the five name components, the
   // identifier and the qualifier that routes it, whichever branch the party classification then takes.
   name(out, pos, [1, 3, 4, 5, 6, 7, 8, 9]);
@@ -269,6 +304,7 @@ function handleNm1(out: X12LocusAccumulator, seg: X12Segment, pos: SegPos): void
     if (subject) {
       push(
         out,
+        pos,
         {
           path: path(pos, 3),
           kind: "identifier",
@@ -280,6 +316,7 @@ function handleNm1(out: X12LocusAccumulator, seg: X12Segment, pos: SegPos): void
     } else {
       push(
         out,
+        pos,
         {
           path: path(pos, 3),
           kind: "identifier",
@@ -306,7 +343,7 @@ function handleNm1(out: X12LocusAccumulator, seg: X12Segment, pos: SegPos): void
  * id blocked). `N1` shares the entity-identifier-code (element 98) and identification-code-qualifier
  * (element 66) semantics with `NM1`, so the classifiers are reused.
  */
-function handleN1(out: X12LocusAccumulator, seg: X12Segment, pos: SegPos): void {
+function handleN1(out: X12LocusAccumulator, seg: X12Segment, pos: TxSegPos): void {
   // The `N1` rules name the same four positions: the entity code, the organisation name, the
   // identification-code qualifier and the identifier it routes.
   name(out, pos, [1, 2, 3, 4]);
@@ -322,6 +359,7 @@ function handleN1(out: X12LocusAccumulator, seg: X12Segment, pos: SegPos): void 
     if (subject) {
       push(
         out,
+        pos,
         {
           path: path(pos, 2),
           kind: "identifier",
@@ -341,7 +379,7 @@ function handleN1(out: X12LocusAccumulator, seg: X12Segment, pos: SegPos): void 
 }
 
 /** Handle a `REF`: `REF-02` routed by the `REF-01` qualifier (phi → scrub, retain, unknown → block). */
-function handleRef(out: X12LocusAccumulator, seg: X12Segment, pos: SegPos): void {
+function handleRef(out: X12LocusAccumulator, seg: X12Segment, pos: TxSegPos): void {
   // The qualifier table names both elements on every branch: the qualifier the routing reads and the
   // value it routes. A `retain` outcome is a decision about that value, not a position nothing reached.
   name(out, pos, [1, 2]);
@@ -356,7 +394,7 @@ function handleRef(out: X12LocusAccumulator, seg: X12Segment, pos: SegPos): void
 }
 
 /** Handle a `CLM` / `CLP`: pseudonymize the `-01` patient account number; retain the rest. */
-function handleAccount(out: X12LocusAccumulator, seg: X12Segment, pos: SegPos): void {
+function handleAccount(out: X12LocusAccumulator, seg: X12Segment, pos: TxSegPos): void {
   emitId(out, seg, pos, 1, SAFE_HARBOR_CATEGORIES.ACCOUNT);
 }
 
@@ -369,7 +407,7 @@ function handleAccount(out: X12LocusAccumulator, seg: X12Segment, pos: SegPos): 
 function handleGeoSegment(
   out: X12LocusAccumulator,
   seg: X12Segment,
-  pos: SegPos,
+  pos: TxSegPos,
   rules: readonly X12ElementRule[],
 ): void {
   const ruleByElement = new Map<number, X12ElementRule>();
@@ -398,7 +436,7 @@ function handleGeoSegment(
 function handleFreeTextSegment(
   out: X12LocusAccumulator,
   seg: X12Segment,
-  pos: SegPos,
+  pos: TxSegPos,
   elements: readonly number[],
 ): void {
   name(out, pos, elements);
@@ -406,6 +444,7 @@ function handleFreeTextSegment(
     if (!has(seg, n)) continue;
     push(
       out,
+      pos,
       {
         path: path(pos, n),
         kind: "freetext",
@@ -418,12 +457,12 @@ function handleFreeTextSegment(
 }
 
 /** Fail closed on an unknown segment: block every populated element (unrecognized structure). */
-function handleUnknown(out: X12LocusAccumulator, seg: X12Segment, pos: SegPos): void {
+function handleUnknown(out: X12LocusAccumulator, seg: X12Segment, pos: TxSegPos): void {
   for (let n = 1; n < seg.elements.length; n += 1) blockElement(out, seg, pos, n);
 }
 
 /** Dispatch one segment through the X12 PHI rules. */
-function handleSegment(out: X12LocusAccumulator, seg: X12Segment, pos: SegPos): void {
+function handleSegment(out: X12LocusAccumulator, seg: X12Segment, pos: TxSegPos): void {
   const id = pos.segId;
   if (id === "NM1") {
     handleNm1(out, seg, pos);
@@ -463,13 +502,36 @@ function handleSegment(out: X12LocusAccumulator, seg: X12Segment, pos: SegPos): 
 }
 
 /**
+ * The **envelope** the pass hands through around every transaction set, in the order `serializeX12`
+ * re-emits it from the verbatim `raw` text the parser preserved: the interchange header and trailer, any
+ * envelope-level `TA1` acknowledgment, and each functional group's header and trailer.
+ *
+ * All of them are retained structures under exactly the reasoning the `ST` / `SE` pair is: no locus rule
+ * looks at one, and retaining a STRUCTURE names no position inside it, so their elements are enumerated
+ * rather than passing through in silence. This mirrors the other adapters' envelopes, HL7 v2's `MSH` and
+ * the CDA document envelope, both of which are counted.
+ *
+ * An envelope segment identifier is **not document-derived**: `@cosyte/x12` types each of these as raw
+ * text plus decoded elements with no `id` field of its own, so the identifier a caller passes here is the
+ * one the standard fixes for that envelope position. Nothing read out of the document is interpolated,
+ * which is why these are not passed through {@link safeLocusToken} the way an `X12Segment.id` is.
+ */
+function envelopePos(segId: string, occurrence: number): SegPos {
+  // A group's header and trailer are indexed by the group's own position, so `GS[1]` and `GE[1]` name
+  // the same group even when an earlier group arrived truncated with no trailer at all.
+  const segIdBracket = `${segId}[${String(occurrence)}]`;
+  return { key: `envelope:${segIdBracket}`, stId: "", segId, segIdBracket };
+}
+
+/**
  * Walk a parsed X12 interchange and extract every PHI-bearing (or fail-closed) locus, structurally,
  * from the `@cosyte/x12` model. Never mutates the interchange.
  *
  * Every segment is also **enumerated**: the value-bearing elements it hands through that no rule above
  * named are counted and located as unexamined residuals. A retained clinical / financial / control
- * segment contributes all of its elements, because retaining a STRUCTURE names no position inside it,
- * and the `ST` / `SE` envelope control pair contributes its own. Nothing is transformed by the count.
+ * segment contributes all of its elements, because retaining a STRUCTURE names no position inside it;
+ * the `ST` / `SE` transaction-set control pair contributes its own, and so does the interchange and
+ * functional-group envelope around them ({@link envelopePos}). Nothing is transformed by the count.
  *
  * @param interchange - The parsed X12 interchange (`parseX12(raw)`).
  * @returns The loci (for the engine), their index-aligned write-back coordinates, and the unexamined
@@ -487,9 +549,20 @@ function handleSegment(out: X12LocusAccumulator, seg: X12Segment, pos: SegPos): 
  */
 export function extractX12Loci(interchange: X12Interchange): X12Extraction {
   const out: X12LocusAccumulator = { loci: [], coords: [], named: new Map<string, Set<number>>() };
-  const enumerated: { readonly seg: X12Segment; readonly pos: SegPos }[] = [];
+  const enumerated: { readonly seg: SegmentElements; readonly pos: SegPos }[] = [];
+  const envelope = (seg: SegmentElements | undefined, segId: string, occurrence: number): void => {
+    if (seg !== undefined) enumerated.push({ seg, pos: envelopePos(segId, occurrence) });
+  };
 
+  // Document order, which is the order `serializeX12` re-emits these in and the order the inventory
+  // reads in: the interchange header, any envelope-level acknowledgment, then each group wrapping its
+  // transaction sets, then the interchange trailer.
+  envelope(interchange.isa, "ISA", 0);
+  interchange.ta1Segments.forEach((ta1, i) => {
+    envelope(ta1, "TA1", i);
+  });
   interchange.groups.forEach((group, groupIndex) => {
+    envelope(group.gs, "GS", groupIndex);
     group.transactions.forEach((tx, txIndex) => {
       // `ST-01` is a data element the parser copies verbatim, and it is the ROOT of every path this
       // transaction produces; `X12Segment.id` is the token before the first element separator on a
@@ -501,7 +574,8 @@ export function extractX12Loci(interchange: X12Interchange): X12Extraction {
         const segId = safeLocusToken(seg.id, "x12SegmentId");
         const n = occ.get(segId) ?? 0;
         occ.set(segId, n + 1);
-        const pos: SegPos = {
+        const pos: TxSegPos = {
+          key: `${String(groupIndex)}:${String(txIndex)}:${String(segIndex)}`,
           groupIndex,
           txIndex,
           segIndex,
@@ -515,7 +589,9 @@ export function extractX12Loci(interchange: X12Interchange): X12Extraction {
         enumerated.push({ seg, pos });
       });
     });
+    envelope(group.ge, "GE", groupIndex);
   });
+  envelope(interchange.iea, "IEA", 0);
 
   const residuals = new UnexaminedResidualBuilder();
   for (const { seg, pos } of enumerated) {
@@ -533,13 +609,13 @@ export function extractX12Loci(interchange: X12Interchange): X12Extraction {
  */
 function recordUnexaminedX12Positions(
   residuals: UnexaminedResidualBuilder,
-  seg: X12Segment,
+  seg: SegmentElements,
   pos: SegPos,
   named: ReadonlySet<number> | undefined,
 ): void {
   for (let n = 1; n < seg.elements.length; n += 1) {
     if (named?.has(n) === true) continue;
-    if (!has(seg, n)) continue;
+    if (!isValueBearing(seg, n)) continue;
     residuals.record(path(pos, n));
   }
 }

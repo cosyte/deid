@@ -38,6 +38,46 @@ describe("X12 unexamined residual positions", () => {
     expect(loci.has("837/ST[0]-2")).toBe(true);
   });
 
+  it("lists the INTERCHANGE and GROUP envelope, which sits outside every transaction set", () => {
+    const { x12 } = deidentifyX12String(RAW, { context: ctx });
+    // Non-vacuity: the envelope really is emitted into the output document, values and all.
+    expect(x12).toContain("ISA*00*");
+    expect(x12).toContain("GS*HC*COMMERCIAL*CLINICSUBMTR*");
+    expect(x12).toContain("GE*1*2~");
+    expect(x12).toContain("IEA*1*000000002~");
+    // The sender and receiver ids, the interchange and group dates and times, the control numbers.
+    for (const position of [
+      "ISA[0]-6",
+      "ISA[0]-8",
+      "ISA[0]-9",
+      "ISA[0]-10",
+      "ISA[0]-13",
+      "GS[0]-2",
+      "GS[0]-3",
+      "GS[0]-4",
+      "GS[0]-5",
+      "GS[0]-6",
+      "GE[0]-1",
+      "GE[0]-2",
+      "IEA[0]-1",
+      "IEA[0]-2",
+    ]) {
+      expect(loci.has(position)).toBe(true);
+    }
+    // An envelope position carries no transaction-set root, because it sits inside no transaction set.
+    expect(loci.has("837/ISA[0]-6")).toBe(false);
+  });
+
+  it("NEGATIVE CONTROL: a blank-filled ISA element is not a value-bearing position", () => {
+    // X12 fixes the ISA at 106 bytes and space-pads every element to its declared width, so an
+    // all-blank ISA-02 / ISA-04 is the standard spelling of "not used", not a value handed through.
+    expect(RAW).toContain("ISA*00*          *00*          *ZZ*");
+    expect(loci.has("ISA[0]-2")).toBe(false);
+    expect(loci.has("ISA[0]-4")).toBe(false);
+    // Not vacuous: a populated fixed-width element on the same segment IS counted, padding and all.
+    expect(loci.has("ISA[0]-6")).toBe(true);
+  });
+
   it("lists the elements of a retained segment and the unmapped elements of a mapped one", () => {
     expect(loci.has("837/BHT[0]-3")).toBe(true);
     expect(loci.has("837/HL[0]-3")).toBe(true);
@@ -84,6 +124,73 @@ describe("X12 unexamined residual positions", () => {
     }
     const serialized = JSON.stringify(unexaminedResiduals);
     for (const value of ["ZZSUBLAST", "ZZMEMBERX12", "ZZACCTX12", "ZZNTEPHI", "19850302"]) {
+      expect(serialized).not.toContain(value);
+    }
+  });
+});
+
+/**
+ * The two envelope shapes the committed fixture does not carry: an envelope-level `TA1` acknowledgment,
+ * and a second functional group. Both ride into the output from their verbatim raw text, so both are
+ * enumerated, and the group index has to keep the two groups' headers and trailers apart.
+ */
+const TWO_GROUPS_WITH_TA1 = [
+  "ISA*00*          *00*          *ZZ*SENDERONE      *ZZ*RECEIVERONE    *260615*0930*^*00501*000000009*0*P*:",
+  "TA1*000000008*260614*1200*A*000",
+  "GS*HC*SENDERONE*RECEIVERONE*20260615*0930*11*X*005010X222A2",
+  "ST*837*0001",
+  "BHT*0019*00*REF01*20260615*0930*CH",
+  "SE*3*0001",
+  "GE*1*11",
+  "GS*HP*SENDERONE*RECEIVERONE*20260615*0931*12*X*005010X221A1",
+  "ST*835*0002",
+  "BHT*0019*00*REF02*20260615*0931*CH",
+  "SE*3*0002",
+  "GE*1*12",
+  "IEA*1*000000009",
+  "",
+].join("~");
+
+describe("X12 envelope shapes the committed fixture does not carry", () => {
+  const { x12, unexaminedResiduals } = deidentifyX12String(TWO_GROUPS_WITH_TA1, { context: ctx });
+  const loci = new Set(unexaminedResiduals.map((r) => r.locus));
+
+  it("the acknowledgment and both groups really reach the output document (non-vacuity)", () => {
+    expect(x12).toContain("TA1*000000008*260614*1200*A*000~");
+    expect(x12).toContain("GS*HC*");
+    expect(x12).toContain("GS*HP*");
+    expect(x12).toContain("GE*1*11~");
+    expect(x12).toContain("GE*1*12~");
+  });
+
+  it("counts a TA1, which is an envelope segment and not a transaction set", () => {
+    for (const position of ["TA1[0]-1", "TA1[0]-2", "TA1[0]-3", "TA1[0]-4", "TA1[0]-5"]) {
+      expect(loci.has(position)).toBe(true);
+    }
+  });
+
+  it("indexes a group's header and trailer by the group, so two groups stay distinguishable", () => {
+    for (const position of ["GS[0]-1", "GS[1]-1", "GE[0]-2", "GE[1]-2"]) {
+      expect(loci.has(position)).toBe(true);
+    }
+    // GS-01 is `HC` in the first group and `HP` in the second: two positions, not one row of count 2.
+    const gs01 = unexaminedResiduals.filter((r) => /^GS\[\d\]-1$/.test(r.locus));
+    expect(gs01.map((r) => r.count)).toEqual([1, 1]);
+  });
+
+  it("reads in document order: the header before the transactions, the trailer after them", () => {
+    const order = unexaminedResiduals.map((r) => r.locus);
+    expect(order.indexOf("ISA[0]-6")).toBeLessThan(order.indexOf("TA1[0]-1"));
+    expect(order.indexOf("TA1[0]-1")).toBeLessThan(order.indexOf("GS[0]-1"));
+    expect(order.indexOf("GS[0]-1")).toBeLessThan(order.indexOf("837/ST[0]-1"));
+    expect(order.indexOf("837/ST[0]-1")).toBeLessThan(order.indexOf("GE[0]-1"));
+    expect(order.indexOf("GE[0]-1")).toBeLessThan(order.indexOf("GS[1]-1"));
+    expect(order.indexOf("GS[1]-1")).toBeLessThan(order.indexOf("IEA[0]-1"));
+  });
+
+  it("every envelope record is value-free: a locus, a count and the fact", () => {
+    const serialized = JSON.stringify(unexaminedResiduals);
+    for (const value of ["SENDERONE", "RECEIVERONE", "000000009", "20260615", "005010X222A2"]) {
       expect(serialized).not.toContain(value);
     }
   });

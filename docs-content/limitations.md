@@ -111,6 +111,18 @@ Two things follow, and the second is the one that surprises people:
   retained X12 segment, the fields of a retained NCPDP segment and its fixed header, and every DICOM
   attribute the delegated Annex E report does not account for, nested sequence items included.
 
+- **The envelope around a document is counted too, in every format that has one.** Retaining a
+  *structure* names no position inside it, so the positions of an HL7 v2 `MSH`, of a CDA document
+  envelope, of the X12 interchange and functional-group envelope (`ISA` / `TA1` / `GS` / `GE` / `IEA`)
+  and of the DICOM Part 10 File Meta group `(0002,xxxx)` are all enumerated and reported. Read those
+  counts as the measurement they are: control numbers, trading-partner ids, timestamps and transfer
+  syntaxes sit there, and the number says only that no rule examined them.
+
+- **The unit is the position, never the element it sits on.** A rule that reaches one position says
+  nothing about the ones beside it: a C-CDA `<telecom use="HP" value="...">` has its `@value` removed
+  and its `@use` handed through, and the `@use` is counted. That is why the inventory can list a
+  coordinate on an element the manifest also names.
+
 - **Counting is not removal, and it is not an allegation.** Nothing is scrubbed, generalized, blocked
   or otherwise transformed on account of the count: what to do about a measured residual is a separate
   decision, and the mirror risk of acting on it blindly is over-removal, which destroys clinical

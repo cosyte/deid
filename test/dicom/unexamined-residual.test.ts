@@ -16,6 +16,7 @@
 import { Buffer } from "node:buffer";
 
 import { describe, expect, it } from "vitest";
+import { parseDicom } from "@cosyte/dicom";
 
 import { DeidError, DEID_DISPOSITION_CODES, FATAL_CODES } from "../../src/index.js";
 import { deidentifyDicom } from "../../src/dicom/index.js";
@@ -24,7 +25,8 @@ import {
   type EnumerableDataset,
   type FoldableReport,
 } from "../../src/dicom/fold.js";
-import { buildPhiDataset, pad, SENTINEL } from "./helpers/fixtures.js";
+import { buildDicom } from "./helpers/build-dicom.js";
+import { buildPhiDataset, pad, SENTINEL, TS_EXPLICIT_LE, UID } from "./helpers/fixtures.js";
 
 /** An empty Annex E report: nothing accounted for, so every element of a dataset is unaccounted. */
 const EMPTY_REPORT: FoldableReport = {
@@ -180,6 +182,113 @@ describe("DICOM unexamined residual positions", () => {
     }
     // Nothing binary rides along either: the record is a locus, a count and two booleans.
     expect(serialized).not.toContain(Buffer.alloc(2, 0x08).toString("latin1"));
+  });
+});
+
+/**
+ * **The Part 10 File Meta group `(0002,xxxx)`.** It is outside `Dataset.elements()`, which is the peer
+ * modelling PS3.10 faithfully, and it rides on the dataset the Annex E pass returns straight into the
+ * bytes a serializer writes. Nothing in the delegated report accounts for a single position in it, so
+ * every one of them is handed through and the derivation counts them like the interchange envelope of an
+ * X12 pass or an HL7 `MSH`.
+ */
+describe("DICOM File Meta positions are enumerated with the rest", () => {
+  /** A Part 10 file whose File Meta group carries a modeled AE title and a non-modeled extra element. */
+  const withFileMetaExtras = (): ReturnType<typeof parseDicom> =>
+    parseDicom(
+      buildDicom({
+        transferSyntax: TS_EXPLICIT_LE,
+        mediaStorageSOPInstanceUID: UID.sop,
+        implementationVersionName: "ZZIMPLVER01",
+        fileMetaExtraElements: [
+          { tag: "00020016", vr: "AE", value: pad("ZZSENDAE") }, // Source Application Entity Title
+          { tag: "00020100", vr: "UI", value: pad("1.2.826.0.1.3680043.8.498.99") }, // non-modeled
+        ],
+        elements: [
+          { tag: "00080018", vr: "UI", value: pad(UID.sop) }, // SOP Instance UID (remapped)
+          { tag: "00080060", vr: "CS", value: pad("CT") }, // Modality (survives, unaccounted)
+        ],
+      }),
+    );
+
+  it("the File Meta positions really reach the returned dataset (non-vacuity)", () => {
+    const { dataset } = deidentifyDicom(withFileMetaExtras());
+    expect(dataset.fileMeta?.transferSyntaxUID).toBe(TS_EXPLICIT_LE);
+    expect(dataset.fileMeta?.sourceApplicationEntityTitle).toBeDefined();
+    expect(dataset.fileMeta?.extraElements?.length).toBe(1);
+    // And none of them is in `Dataset.elements()`, which is why the dataset walk alone cannot see them.
+    expect(dataset.elements().some((e) => e.tag.startsWith("0002"))).toBe(false);
+  });
+
+  it("lists the modeled, the non-modeled and the transfer-syntax positions", () => {
+    const loci = deidentifyDicom(withFileMetaExtras()).unexaminedResiduals.map((r) => r.locus);
+    expect(loci).toContain("(0002,0010)"); // Transfer Syntax UID
+    expect(loci).toContain("(0002,0013)"); // Implementation Version Name
+    expect(loci).toContain("(0002,0016)"); // Source Application Entity Title: names the sender
+    expect(loci).toContain("(0002,0100)"); // a `(0002,xxxx)` the typed view does not model
+    // Ordered ahead of the Data Set, because that is the order the bytes carry them in.
+    expect(loci.indexOf("(0002,0010)")).toBeLessThan(loci.indexOf("(0008,0060)"));
+  });
+
+  it("NEGATIVE CONTROL: a File Meta field the document did not carry is not a position", () => {
+    // A serializer substitutes its own File Meta Information Version and Implementation Class UID when
+    // the model carries none. A constant this library composes is not a value the document handed
+    // through, so an absent field contributes nothing - and the exclusion is not vacuous either way,
+    // since the same group's populated fields above ARE listed.
+    const { dataset, unexaminedResiduals } = deidentifyDicom(withFileMetaExtras());
+    expect(dataset.fileMeta?.fileMetaInformationVersion).toBeUndefined();
+    expect(dataset.fileMeta?.mediaStorageSOPClassUID).toBeUndefined();
+    const loci = unexaminedResiduals.map((r) => r.locus);
+    expect(loci).not.toContain("(0002,0001)");
+    expect(loci).not.toContain("(0002,0002)");
+  });
+
+  it("DELIBERATE: the UID the delegated pass rebuilds with no report entry IS listed", () => {
+    // `(0002,0003)` mirrors the SOP Instance UID, and the Annex E pass remaps it without auditing that.
+    // The derivation stays literal rather than keeping a table of File-Meta-to-Data-Set mirrors: what
+    // the record claims is exactly what is true, that the pass's audit says nothing at this position.
+    const { manifest, unexaminedResiduals } = deidentifyDicom(withFileMetaExtras());
+    expect(manifest.some((e) => e.locus.startsWith("(0008,0018)"))).toBe(true);
+    expect(manifest.some((e) => e.locus.startsWith("(0002,0003)"))).toBe(false);
+    expect(unexaminedResiduals.map((r) => r.locus)).toContain("(0002,0003)");
+  });
+
+  it("a dataset with no File Meta group at all enumerates cleanly", () => {
+    const rootOnly: EnumerableDataset = {
+      elements: () => [
+        { tag: "00080060", vr: "CS", length: 2, rawBytes: { length: 2 }, items: undefined },
+      ],
+    };
+    expect(deriveUnexaminedResiduals(rootOnly, EMPTY_REPORT).map((r) => r.locus)).toEqual([
+      "(0008,0060)",
+    ]);
+  });
+
+  it("every File Meta record is value-free: a locus, a count and the fact", () => {
+    const { unexaminedResiduals } = deidentifyDicom(withFileMetaExtras());
+    const serialized = JSON.stringify(unexaminedResiduals);
+    for (const value of [UID.sop, TS_EXPLICIT_LE, "ZZSENDAE", "ZZIMPLVER01"]) {
+      expect(serialized).not.toContain(value);
+    }
+  });
+
+  it("the File Meta enumeration runs under the same fail-safe: a hostile group fails the pass", () => {
+    const hostile: EnumerableDataset = {
+      elements: () => [],
+      get fileMeta(): never {
+        throw new TypeError("the File Meta group would not yield its positions");
+      },
+    };
+    let thrown: unknown;
+    try {
+      deriveUnexaminedResiduals(hostile, EMPTY_REPORT);
+    } catch (err) {
+      thrown = err;
+    }
+    expect(thrown).toBeInstanceOf(DeidError);
+    expect((thrown as DeidError).code).toBe(FATAL_CODES.DEID_POSITIONS_UNENUMERABLE);
+    expect((thrown as DeidError).message).toContain("(0002,xxxx)");
+    expect((thrown as DeidError).message).not.toContain("would not yield");
   });
 });
 

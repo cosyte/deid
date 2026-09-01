@@ -36,12 +36,18 @@ import {
   categoryForIdRoot,
   isRetainedCcdaElement,
 } from "./locus-map.js";
-import type { Element } from "@xmldom/xmldom";
+import type { Attr, Element } from "@xmldom/xmldom";
 
 /** DOM `Node.TEXT_NODE`. @internal */
 const TEXT_NODE = 3 as const;
 /** `xsi:type` prefixes that denote a periodic/dosing interval, NOT a calendar date, never generalized. */
 const PERIOD_TYPES: readonly string[] = ["PIVL", "EIVL", "SXPR", "PPD"];
+/**
+ * The XML Schema instance namespace `xsi:type` lives in. Read by namespace rather than by the `xsi:`
+ * prefix, because a document is free to bind that namespace to any prefix it likes and the date rule
+ * resolves it the same way.
+ */
+const XSI_NS = "http://www.w3.org/2001/XMLSchema-instance";
 
 /** How the applier writes one transformed locus back onto the CDA DOM node it came from. */
 export type CcdaEditKind =
@@ -73,30 +79,105 @@ export interface CcdaExtraction {
   /**
    * Every **value-bearing position the pass hands through that no locus rule named**: an attribute or a
    * run of direct text on an element inside the retained clinical body, the document envelope, or a
-   * wrapper the header sweep passed over. Counted and located, never transformed.
+   * wrapper the header sweep passed over. The unit is the position, so an attribute no rule reached is
+   * listed even where the pass acted on a *different* attribute of the same element. Counted and
+   * located, never transformed.
    */
   readonly unexaminedResiduals: readonly UnexaminedResidual[];
+}
+
+/**
+ * The positions of one element a locus rule **reached and decided about**, whatever it then decided: a
+ * `nullFlavor`-only `<id>`, a dosing-interval `<effectiveTime>` and a recognized coded element whose
+ * coded attributes the over-scrub guard keeps are all decisions, not silences.
+ *
+ * The unit is the **position**, never the element. A rule that reaches one attribute of an element says
+ * nothing about the element's other attributes: `actTelecom` clears a `<telecom>`'s `@value` and its
+ * `@use` is handed through untouched, so `@use` is a position nothing examined and is measured as one.
+ */
+interface NamedPositions {
+  /**
+   * The attribute **nodes** a rule read or wrote. Node identity rather than name, because an attribute
+   * is addressed two ways here: by name (`@value`) and by namespace (`xsi:type`, whose prefix a document
+   * chooses), and only the node is the same thing under both.
+   */
+  readonly attributes: Set<Attr>;
+  /** `true` when a rule reached the element's own run of direct character text. */
+  text: boolean;
+  /**
+   * `true` when a decision consumed everything **below** the element. Deliberately says nothing about
+   * the element's own positions: `clear-element` empties an element's children and leaves every one of
+   * its attributes in place, so those attributes are still handed through.
+   */
+  subtree: boolean;
 }
 
 /** The mutable pair the sweep accumulates into, before it is frozen into a {@link CcdaExtraction}. */
 interface CcdaLocusAccumulator {
   readonly loci: GenericLocus[];
   readonly coords: CcdaCoord[];
-  /**
-   * Elements a locus rule **reached and decided about**, so their own positions are examined even when
-   * the decision recorded nothing (a `nullFlavor`-only `<id>`, a dosing-interval `<effectiveTime>`, a
-   * recognized coded element whose coded attributes the over-scrub guard keeps). Whether the decision
-   * also covers the element's **descendants** is read off the coordinate's edit kind, not from here:
-   * the sweep descends into a recognized coded element on purpose, so covering its subtree would hide
-   * a nested position nothing reached.
-   */
-  readonly ruleReached: Set<Element>;
+  /** What each rule named, recorded at the decision site, keyed by the element the decision was about. */
+  readonly named: Map<Element, NamedPositions>;
 }
 
 /** Append a locus + its coordinate to the accumulator. */
 function push(out: CcdaLocusAccumulator, locus: GenericLocus, coord: CcdaCoord): void {
   out.loci.push(locus);
   out.coords.push(coord);
+}
+
+/** The named-position record for an element, created empty on first use. */
+function named(out: CcdaLocusAccumulator, el: Element): NamedPositions {
+  const existing = out.named.get(el);
+  if (existing !== undefined) return existing;
+  const fresh: NamedPositions = { attributes: new Set<Attr>(), text: false, subtree: false };
+  out.named.set(el, fresh);
+  return fresh;
+}
+
+/** Record that a rule named these attributes of this element, whatever it then decided about them. */
+function nameAttributes(out: CcdaLocusAccumulator, el: Element, names: readonly string[]): void {
+  const record = named(out, el);
+  for (const name of names) {
+    const node = el.getAttributeNode(name);
+    if (node !== null) record.attributes.add(node);
+  }
+}
+
+/** Record that a rule named an attribute resolved by namespace, whatever prefix the document bound it to. */
+function nameAttributeNS(
+  out: CcdaLocusAccumulator,
+  el: Element,
+  namespace: string,
+  localName: string,
+): void {
+  const node = el.getAttributeNodeNS(namespace, localName);
+  if (node !== null) named(out, el).attributes.add(node);
+}
+
+/**
+ * Record that a rule named **every one** of this element's own positions: all of its attributes and its
+ * direct text. Reserved for the over-scrub guard, whose decision is explicitly about the whole coded
+ * element ("its coded attributes are retained"), never for a rule that reaches a named attribute.
+ */
+function nameOwnPositions(out: CcdaLocusAccumulator, el: Element): void {
+  const record = named(out, el);
+  const attributes = el.attributes;
+  for (let i = 0; i < attributes.length; i += 1) {
+    const attribute = attributes.item(i);
+    if (attribute !== null) record.attributes.add(attribute);
+  }
+  record.text = true;
+}
+
+/** Record that a rule reached the element's own run of direct character text. */
+function nameText(out: CcdaLocusAccumulator, el: Element): void {
+  named(out, el).text = true;
+}
+
+/** Record that a decision consumed everything below the element (its children, not its attributes). */
+function nameSubtree(out: CcdaLocusAccumulator, el: Element): void {
+  named(out, el).subtree = true;
 }
 
 /** The concatenated **direct** (non-descendant) text of an element, trimmed. `""` when there is none. */
@@ -175,6 +256,10 @@ function join(base: string, seg: string): string {
 
 /** Extract a person `<name>` locus: redacted (whole element cleared). */
 function actName(out: CcdaLocusAccumulator, el: Element, path: string): void {
+  // The rule reads the element's whole text and the applier empties it: its text and everything below it
+  // are decided. Its attributes are not - `clear-element` leaves every one of them in place.
+  nameText(out, el);
+  nameSubtree(out, el);
   push(
     out,
     { path, kind: "identifier", category: SAFE_HARBOR_CATEGORIES.NAMES, value: text(el) ?? "" },
@@ -184,6 +269,11 @@ function actName(out: CcdaLocusAccumulator, el: Element, path: string): void {
 
 /** Extract a `<telecom>` locus: redacted (its `@value` cleared). */
 function actTelecom(out: CcdaLocusAccumulator, el: Element, path: string): void {
+  // The rule's subject is the `@value` that carries the number, plus the children the applier removes
+  // with it. A `<telecom use="HP">`'s `@use` is not in that set and is handed through untouched.
+  nameAttributes(out, el, ["value"]);
+  nameText(out, el);
+  nameSubtree(out, el);
   push(
     out,
     {
@@ -198,6 +288,9 @@ function actTelecom(out: CcdaLocusAccumulator, el: Element, path: string): void 
 
 /** Extract an `<addr>` locus: generalized to the safe 3-digit ZIP; finer geography dropped by apply. */
 function actAddr(out: CcdaLocusAccumulator, el: Element, path: string): void {
+  // The rule decides every geographic child as a unit: the ZIP is generalized, state and country are
+  // retained as permitted, the rest are dropped. The `<addr>`'s own attributes are decided by nothing.
+  nameSubtree(out, el);
   const postal = children(el, "postalCode")[0];
   const zip = postal === undefined ? "" : (text(postal) ?? "");
   push(
@@ -209,6 +302,8 @@ function actAddr(out: CcdaLocusAccumulator, el: Element, path: string): void {
 
 /** Extract a person-role `<id>` locus: pseudonymized (SSN-rooted → redacted); assigning root retained. */
 function actId(out: CcdaLocusAccumulator, el: Element, path: string): void {
+  // The id rule reads the assigning authority and the id value, and the applier rewrites one of them.
+  nameAttributes(out, el, ["root", "extension"]);
   const root = attr(el, "root");
   const ext = attr(el, "extension");
   const value = ext !== undefined ? ext : (root ?? "");
@@ -222,6 +317,11 @@ function actId(out: CcdaLocusAccumulator, el: Element, path: string): void {
 
 /** Extract calendar-date loci from a `<birthTime>` / `<time>` / `<effectiveTime>`: generalized to year. */
 function actDate(out: CcdaLocusAccumulator, el: Element, path: string): void {
+  // The date rule's subject is the timestamp and the `xsi:type` that says whether it is a calendar one at
+  // all. Both are named on every branch, including the dosing-period branch, which is a decision about
+  // them ("this is an interval, not a date, so it is retained") rather than a position nothing reached.
+  nameAttributes(out, el, ["value"]);
+  nameAttributeNS(out, el, XSI_NS, "type");
   const xt = xsiType(el);
   if (xt !== undefined && PERIOD_TYPES.some((p) => xt.startsWith(p))) return; // dosing period, not a date
   const own = attr(el, "value");
@@ -234,6 +334,7 @@ function actDate(out: CcdaLocusAccumulator, el: Element, path: string): void {
   }
   for (const bound of ["low", "high", "center"] as const) {
     for (const c of children(el, bound)) {
+      nameAttributes(out, c, ["value"]);
       const v = attr(c, "value");
       if (v === undefined) continue;
       push(
@@ -253,13 +354,22 @@ function actDate(out: CcdaLocusAccumulator, el: Element, path: string): void {
  * (the sweep descends) nor stray direct text (blocked here).
  */
 function blockRetainedText(out: CcdaLocusAccumulator, el: Element, path: string): void {
+  nameText(out, el);
   const dt = directText(el);
   if (dt.length === 0) return;
   push(out, { path, kind: "unknown", value: dt }, { node: el, edit: "block-text" });
 }
 
-/** Fail closed on an unrecognized element that carries a value: block its direct text + value attrs. */
+/**
+ * Fail closed on an unrecognized element that carries a value: block its direct text + value attrs.
+ *
+ * **The decision is partial by design and the measurement says so.** The rule's subject is the direct
+ * text and the three value-carrying attributes below; an unrecognized element's *other* attributes are
+ * neither blocked nor decided here, so they are handed through and the enumeration counts each one.
+ */
 function blockUnknown(out: CcdaLocusAccumulator, el: Element, path: string): void {
+  nameAttributes(out, el, ["value", "extension", "root"]);
+  nameText(out, el);
   const dt = directText(el);
   const hasVal = hasAttr(el, "value") || hasAttr(el, "extension") || hasAttr(el, "root");
   if (dt.length === 0 && !hasVal) return; // pure structural wrapper, nothing to block here
@@ -283,9 +393,9 @@ function sweep(out: CcdaLocusAccumulator, el: Element, path: string): void {
     const ln = childEl.localName ?? "";
     const rule = CCDA_LOCUS_MAP[ln];
     if (rule !== undefined) {
-      // The map NAMES this element, so its own positions are examined whatever the rule then recorded:
-      // a `nullFlavor`-only `<id>` and a dosing-interval `<effectiveTime>` are both decisions reached.
-      out.ruleReached.add(childEl);
+      // The map NAMES this element, so the positions its rule reaches are examined whatever the rule
+      // then recorded: a `nullFlavor`-only `<id>` and a dosing-interval `<effectiveTime>` are both
+      // decisions reached. Each rule below names the positions it actually reaches, and only those.
       switch (rule.mode) {
         case "name":
           actName(out, childEl, childPath);
@@ -312,7 +422,7 @@ function sweep(out: CcdaLocusAccumulator, el: Element, path: string): void {
       // could nest a `<name>`; neither may ride through because their parent was recognized.
       // Recognizing the element is a decision about ITS OWN positions (the over-scrub guard keeps its
       // coded attributes on purpose), and about nothing below it: the descent decides that separately.
-      out.ruleReached.add(childEl);
+      nameOwnPositions(out, childEl);
       blockRetainedText(out, childEl, childPath);
       sweep(out, childEl, childPath);
       continue;
@@ -335,6 +445,8 @@ function blockNarrative(out: CcdaLocusAccumulator, el: Element, path: string): v
     const childPath = join(path, seg);
     if (child.namespaceURI === V3_NS && (child.localName ?? "") === "text") {
       if (text(child) === undefined) continue; // empty narrative: nothing to block
+      nameText(out, child);
+      nameSubtree(out, child);
       push(
         out,
         {
@@ -366,6 +478,8 @@ function handleBody(out: CcdaLocusAccumulator, componentEl: Element, path: strin
   for (const nx of children(componentEl, "nonXMLBody")) {
     for (const t of children(nx, "text")) {
       // Fail closed on unstructured content (an opaque base64 blob can carry any PHI, un-de-identifiable).
+      nameText(out, t);
+      nameSubtree(out, t);
       push(
         out,
         {
@@ -406,7 +520,11 @@ function handleBody(out: CcdaLocusAccumulator, componentEl: Element, path: strin
  * ```
  */
 export function extractCcdaLoci(root: Element): CcdaExtraction {
-  const out: CcdaLocusAccumulator = { loci: [], coords: [], ruleReached: new Set<Element>() };
+  const out: CcdaLocusAccumulator = {
+    loci: [],
+    coords: [],
+    named: new Map<Element, NamedPositions>(),
+  };
   for (const { el, path } of childSegments(root)) {
     if (el.namespaceURI !== V3_NS) {
       blockUnknown(out, el, path);
@@ -415,7 +533,6 @@ export function extractCcdaLoci(root: Element): CcdaExtraction {
     }
     const ln = el.localName ?? "";
     if (ln === "effectiveTime") {
-      out.ruleReached.add(el);
       actDate(out, el, path); // the document (service-related) date
       continue;
     }
@@ -434,43 +551,18 @@ export function extractCcdaLoci(root: Element): CcdaExtraction {
   const residuals = new UnexaminedResidualBuilder();
   const rootName = safeLocusToken(root.localName ?? "", "xmlName");
   enumerateOrFail(rootName, () => {
-    const covered = coverage(out);
     // The root element's own positions print under its name; its children print from the same empty
     // base the sweep composes their loci from, so an enumerated position and a locus agree on "where".
-    recordOwnPositions(residuals, root, rootName, covered);
+    recordOwnPositions(residuals, root, rootName, out.named);
     for (const { el, path } of childSegments(root)) {
-      recordUnexaminedCcdaPositions(residuals, el, path, covered, false);
+      recordUnexaminedCcdaPositions(residuals, el, path, out.named);
     }
   });
   return { loci: out.loci, coords: out.coords, unexaminedResiduals: residuals.build() };
 }
 
-/** What the pass decided about, split by how far each decision reaches. */
-interface CcdaCoverage {
-  /** Elements whose whole **subtree** a decision consumed: the element and everything under it. */
-  readonly subtree: ReadonlySet<Element>;
-  /** Elements whose **own** positions a decision reached, leaving their children to be decided apart. */
-  readonly self: ReadonlySet<Element>;
-}
-
-/**
- * Split what the sweep decided about into subtree-deep and element-only coverage, read off the write-back
- * coordinates plus the elements a rule reached without recording anything.
- *
- * Only two edits consume an element **as a unit**: `clear-element` empties the whole element (a person
- * `<name>`, a narrative `<text>`) and `address` rebuilds an `<addr>` from its parts. Every other edit
- * rewrites one attribute or the element's own text and leaves its children to be decided on their own,
- * which is exactly how the sweep treats them.
- */
-function coverage(out: CcdaLocusAccumulator): CcdaCoverage {
-  const subtree = new Set<Element>();
-  const self = new Set<Element>(out.ruleReached);
-  for (const coord of out.coords) {
-    if (coord.edit === "clear-element" || coord.edit === "address") subtree.add(coord.node);
-    else self.add(coord.node);
-  }
-  return { subtree, self };
-}
+/** What the pass decided about, position by position, keyed by the element each decision was about. */
+type CcdaCoverage = ReadonlyMap<Element, NamedPositions>;
 
 /** `true` when an attribute name is an XML namespace declaration rather than a document value. */
 function isNamespaceDeclaration(name: string): boolean {
@@ -478,13 +570,17 @@ function isNamespaceDeclaration(name: string): boolean {
 }
 
 /**
- * Enumerate every value-bearing position of the CDA tree and record the ones no locus rule named.
+ * Enumerate every value-bearing position of one element and record the ones no locus rule named.
  *
  * A **position** here is one attribute of an element, or the element's own run of direct character text.
  * Both are places a value sits, and both are enumerated at their own coordinates: `…/observation@classCode`
  * names the attribute, `…/observation/value` names the text. XML **namespace declarations are not
  * document values** and are excluded; every other attribute is enumerated, an OID root and a code system
  * included, because a position nothing examined is counted whether or not it looks like an identifier.
+ *
+ * **The exclusion is per position, not per element**, which is the whole point of the unit: an element a
+ * rule reached at one attribute keeps every other attribute in the measurement, because the rule decided
+ * nothing about them and they are handed through exactly as they arrived.
  *
  * The attribute name is **bounded before it is interpolated**, exactly as an element name is: an XML
  * attribute name is unbounded by the specification, so it is only an identifier by convention.
@@ -495,15 +591,16 @@ function recordOwnPositions(
   path: string,
   covered: CcdaCoverage,
 ): void {
-  if (covered.self.has(el) || covered.subtree.has(el)) return;
+  const decided = covered.get(el);
   const attributes = el.attributes;
   for (let i = 0; i < attributes.length; i += 1) {
     const attribute = attributes.item(i);
     if (attribute === null) continue;
     if (isNamespaceDeclaration(attribute.name) || attribute.value.length === 0) continue;
+    if (decided?.attributes.has(attribute) === true) continue;
     residuals.record(`${path}@${safeLocusToken(attribute.name, "xmlName")}`);
   }
-  if (directText(el).length > 0) residuals.record(path);
+  if (decided?.text !== true && directText(el).length > 0) residuals.record(path);
 }
 
 /** Recurse the tree, recording each element's own unexamined positions in document order. */
@@ -512,11 +609,12 @@ function recordUnexaminedCcdaPositions(
   el: Element,
   path: string,
   covered: CcdaCoverage,
-  underDecidedSubtree: boolean,
 ): void {
-  const consumed = underDecidedSubtree || covered.subtree.has(el);
-  if (!consumed) recordOwnPositions(residuals, el, path, covered);
+  recordOwnPositions(residuals, el, path, covered);
+  // A decision that consumed everything below this element (a cleared `<name>`, a rebuilt `<addr>`, a
+  // blocked narrative `<text>`) leaves no descendant position for anything else to have missed.
+  if (covered.get(el)?.subtree === true) return;
   for (const { el: child, path: seg } of childSegments(el)) {
-    recordUnexaminedCcdaPositions(residuals, child, join(path, seg), covered, consumed);
+    recordUnexaminedCcdaPositions(residuals, child, join(path, seg), covered);
   }
 }

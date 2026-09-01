@@ -77,8 +77,10 @@ export interface X12DeidResult {
   /**
    * The manifest's **second list**: every value-bearing element this pass handed through that **no
    * locus rule named**, counted and located. A retained clinical / financial / control segment
-   * contributes all of its elements, because retaining a structure names no position inside it. An
-   * empty list is a **measured zero**, not a silence.
+   * contributes all of its elements, because retaining a structure names no position inside it, and so
+   * does the interchange and functional-group envelope around them (`ISA` / `TA1` / `GS` / `GE` /
+   * `IEA`), whose positions print without a transaction-set root. An empty list is a **measured zero**,
+   * not a silence.
    */
   readonly unexaminedResiduals: readonly UnexaminedResidual[];
 }

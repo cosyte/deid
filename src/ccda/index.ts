@@ -37,7 +37,9 @@
  * **Every one of those positions is enumerated.** A value-bearing position inside the retained body or
  * the envelope that no locus rule names is **counted and located** as an unexamined residual on
  * {@link CcdaDeidResult.unexaminedResiduals}, at its own coordinates (an element's attribute, an
- * element's direct text). Nothing is transformed on account of it: the measurement exists so an empty
+ * element's direct text). The unit is that position and never the element it sits on, so a
+ * `<telecom use="HP" value="...">` whose `@value` is removed still reports its `@use`, which is handed
+ * through untouched. Nothing is transformed on account of it: the measurement exists so an empty
  * residual inventory can be told apart from an unmeasured one.
  *
  * @packageDocumentation
