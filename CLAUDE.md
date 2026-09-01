@@ -158,7 +158,7 @@ Every line here is clinical-safety content. Full cases: `documentation/agent-not
   example target path in the docblock, CHANGELOG or changeset.
   → `documentation/agent-notes.md#closed-by-no-renames`
 - **Two things NOT covered, both measured:** explicit-path mode still reads through a link; a file
-  that vanishes between enumeration and read fails **closed** (exit 2) — a false-red risk, not a
+  that vanishes between enumeration and read fails **closed** (exit 2) -- a false-red risk, not a
   false-green one. → `documentation/agent-notes.md#closed-by-no-renames`
 - **THE WALK ROOTS ARE `src/`, `test/` (ALL of it) AND `scripts/`: A DIFFERENT DECISION FROM EVERY
   SIBLING'S. DO NOT PORT ONE OVER IT.** The old scopes missed **38 tracked files**, four carrying
@@ -195,8 +195,8 @@ Every line here is clinical-safety content. Full cases: `documentation/agent-not
   catching by type. → `documentation/agent-notes.md#exit-1-means-hits`
 - **ALL MODE READS THE BYTES GIT CARRIES, AS A UNION WITH THE WALK.** Five states printed `OK, no
 hits` at exit 0 on base; the decoy at a tracked path is why it exists. **The mechanism is written
-  ONCE, at `buildTargetsForIndex`.** **Refusals run AFTER the walk is scanned — a refusal must not
-  swallow a real hit — `makeRepo()` commits its baseline, and `--allow-fixture` is subtracted here
+  ONCE, at `buildTargetsForIndex`.** **Refusals run AFTER the walk is scanned -- a refusal must not
+  swallow a real hit -- `makeRepo()` commits its baseline, and `--allow-fixture` is subtracted here
   too: live, not dead code.** → `documentation/agent-notes.md#all-mode-reads-the-bytes-git-carries`
 - **`vendor/` IS EXCLUDED FROM THAT ROUTE, AS A LITERAL PATH** (45 mojibake hits without it). **A
   "binary blob" PREDICATE was measured and REJECTED: two hand-written `src/*.ts` embed NUL bytes.**

@@ -1,4 +1,4 @@
-# @cosyte/deid — agent notes
+# @cosyte/deid -- agent notes
 
 **The relocated narrative behind `CLAUDE.md`. Read on demand, not every session.**
 
@@ -11,7 +11,7 @@ that left it is below, **verbatim**, under a heading `CLAUDE.md` links to by anc
 **These are the lessons that cost a defect to learn.** Every refuted claim here became a paragraph and
 none were ever removed. Do not compress a paragraph into a summary of itself: the measurements, the
 shas, the counts and the negative controls are why a claim here can be trusted, and a summary of a
-measurement is only an assertion. If you are shortening this file you are doing the wrong thing — the
+measurement is only an assertion. If you are shortening this file you are doing the wrong thing -- the
 remedy for size is moving bytes out of the always-read set, which is what this file already is.
 
 **This is the PHI package.** A dropped redaction-coverage, identifier-class or PHI-in-logs trap is a
@@ -23,20 +23,20 @@ them was read as a standing fact after it had gone stale.
 
 **This file is BYTE-VERBATIM and is deliberately NOT prettier-formatted.** It sits outside
 `format:check`'s globs only because `*.{json,md,yml}` is root-only. **Widening that glob to
-`documentation/**/*.md` would silently reflow the relocated prose** — if you widen it, exclude this
+`documentation/**/*.md` would silently reflow the relocated prose** -- if you widen it, exclude this
 file, and never run prettier over it by name.
 
 ## Project
 
-**`@cosyte/deid`** — a developer-focused healthcare **de-identification** library for Node.js/TypeScript,
+**`@cosyte/deid`** -- a developer-focused healthcare **de-identification** library for Node.js/TypeScript,
 published under the Cosyte brand. Open-source (MIT). It is a **consumer** of the `@cosyte/*` parsers,
 **not a parser sibling**: it borrows the archetype's disciplines (typed diagnostics, immutable output,
-the policy/profile system) but **inverts the reflex** — a parser is liberal on input (Postel's Law); a
+the policy/profile system) but **inverts the reflex** -- a parser is liberal on input (Postel's Law); a
 de-identifier is conservative and **fails closed**.
 
 **North star:** a developer holds a parsed healthcare document full of PHI and calls
 `deidentify(model, { policy: "safe-harbor" })`, getting back a Safe-Harbor-transformed model plus a
-**value-free manifest** — without reading 45 CFR §164.514, without hand-writing a scrubber, and without
+**value-free manifest** -- without reading 45 CFR §164.514, without hand-writing a scrubber, and without
 ever being handed a document that silently still contains a name/DOB/MRN, or one whose clinical values
 were destroyed. The governing honesty line: output is **"Safe-Harbor-transformed per the configured
 policy,"** never "de-identified" / "HIPAA-compliant"; Expert Determination is supported (later phases),
@@ -45,7 +45,7 @@ never rendered.
 ## Status
 
 Two sections: what shipped, and the publish/visibility state. The second carries a staleness
-warning — read it before quoting anything from it.
+warning -- read it before quoting anything from it.
 
 ### Shipped phases DEID-1 through DEID-10
 
@@ -55,10 +55,10 @@ warning — read it before quoting anything from it.
   fail-closed rule, the value-free manifest) plus **all six per-format adapters** on the core's generic
   locus model: **HL7 v2** (`@cosyte/deid/hl7`, DEID-2), **C-CDA** (`@cosyte/deid/ccda`, DEID-3),
   **FHIR R4** (`@cosyte/deid/fhir`, DEID-4), **X12 EDI** (`@cosyte/deid/x12`) and **NCPDP Telecom**
-  (`@cosyte/deid/ncpdp`) (DEID-5), and **DICOM** (`@cosyte/deid/dicom`, DEID-6 — the one adapter that
+  (`@cosyte/deid/ncpdp`) (DEID-5), and **DICOM** (`@cosyte/deid/dicom`, DEID-6 -- the one adapter that
   **delegates** to `@cosyte/dicom`'s PS3.15 Annex E pass, metadata-only, burned-in pixels flagged not
   cleaned). Each format's parser is an **optional peer dep** consumed only from its subpath (vendored
-  `pnpm pack` tarballs pre PUB-FLIP). **NCPDP SCRIPT remains deferred** — its lossy serialize +
+  `pnpm pack` tarballs pre PUB-FLIP). **NCPDP SCRIPT remains deferred** -- its lossy serialize +
   address-less `Patient` model block a faithful structural de-id through the current parser surface.
   **DEID-7** adds the format-agnostic **longitudinal layer** over all six adapters: the corpus registry
   (`createDeidRegistry`) for cross-document consistency, the formalized key contract (consumer-supplied
@@ -74,26 +74,26 @@ warning — read it before quoting anything from it.
   fuzz** gating CI across all six formats, proven **non-vacuous** (sentinels present pre-de-id + a
   re-injected sentinel is caught); a **release smoke** (`pnpm smoke`) that loads every subpath in ESM+CJS
   against the built `dist/`; a `docs-content/limitations.md` **honesty doc**; the **tsup shared-core
-  chunk fix** (`splitting: true`, so one `DeidContext` registry is shared across subpaths — mixing
+  chunk fix** (`splitting: true`, so one `DeidContext` registry is shared across subpaths -- mixing
   `createDeidContext` with a per-format `deidentify*` no longer throws a fail-closed `DEID_NO_KEY`); and
   two date-shift fixes (timezone-independent ISO-datetime shifting; `maxShiftDays: 0` now fails closed
   with `DEID_CONTEXT_INVALID`). **Third-party runtime deps: zero (`node:crypto` only).**
 
 ### Publish state and visibility
 
-**⚠ POINT-IN-TIME, ON BOTH SIDES — READ BEFORE QUOTING ANY OF THIS.** The paragraph below is itself
+**⚠ POINT-IN-TIME, ON BOTH SIDES -- READ BEFORE QUOTING ANY OF THIS.** The paragraph below is itself
 a *correction*: it replaced an earlier paragraph that claimed the package was still unpublished. So
 there are two dated claims in play and **neither is a standing fact**:
 
 1. The paragraph below, which is a dated observation of the registry and of repo visibility.
 2. The umbrella backlog entry `CHANGELOG-PREAMBLE-FUTURE-TENSE`, which names this file alongside
    `hl7`, `mllp` and `transform` as *still saying* "not yet published to npm". **That entry is out
-   of date for `deid`** — the correction below had already landed when it was read.
+   of date for `deid`** -- the correction below had already landed when it was read.
 
 **Do not lift a sentence out of either into another document as fact.** Publish state and repo
 visibility are independent; check each, every time, with `npm view @cosyte/deid version`, `git tag`
 and `gh api repos/cosyte/deid --jq .visibility`. **No version number belongs in this section or in
-`CLAUDE.md`** — quoting one is precisely how the paragraph this corrects went stale in the first
+`CLAUDE.md`** -- quoting one is precisely how the paragraph this corrects went stale in the first
 place.
 
 - **The repo is PUBLIC and the package IS published.** Those two are independent here and neither
@@ -113,21 +113,21 @@ place.
 ## Tech Stack (the shared `@cosyte/*` standard)
 
 This repo inherits the canonical toolchain by depending on the published `@cosyte/*` config packages,
-not by copying files. The source of truth is the meta-repo's `documentation/conventions.md` — this is
+not by copying files. The source of truth is the meta-repo's `documentation/conventions.md` -- this is
 a summary.
 
 - **Language:** TypeScript (strict, full rigor set incl. `noUncheckedIndexedAccess`) via
   `@cosyte/tsconfig`. **Target ES2023**, `NodeNext`. TypeScript 5.9.x, exact-pinned.
 - **Build:** dual ESM + CJS + `.d.ts` via `tsup` (`@cosyte/tsup-config`); `attw` is a publish gate
   (per-condition types: `.d.ts` for `import`, `.d.cts` for `require`). The `attw` script is
-  **`node scripts/attw.mjs --profile node16`, not the bare CLI** — see the guardrail below.
+  **`node scripts/attw.mjs --profile node16`, not the bare CLI** -- see the guardrail below.
 - **Node:** **>= 22** (CI matrix 22 + 24).
 - **Package manager:** `pnpm@10`.
 - **Lint/format:** **ESLint 10** + unified `typescript-eslint` (type-checked) via
   `@cosyte/eslint-config`; Prettier via `@cosyte/prettier-config`. Lint at `--max-warnings=0`.
 - **Testing:** **Vitest 4** + v8 coverage (`@cosyte/vitest-config`), per-directory >= 90 gates; the
   property-based conformance invariants come from `@cosyte/test-utils` (round-trip, lenient-mode,
-  immutability, warning-code stability) — the format-specific arbitraries stay in this repo.
+  immutability, warning-code stability) -- the format-specific arbitraries stay in this repo.
 - **CI/CD:** thin callers of the reusable `cosyte/.github` workflows.
 - **Runtime deps:** **Zero.** Node stdlib only.
 - **License:** MIT.
@@ -222,12 +222,12 @@ a summary.
     outside `src/` that **imports one of the seven published `exports` subpaths**
     (`test/corpus/leak-corpus.test.ts` among them), every module under `test/` referencing
     `scripts/phi-scan`, and the `.test.`/`.spec.` filename shape. The first two are
-    name-independent — a module in them survives a rename, a move to another directory and a
-    symlinked path — and they reach every test file but **TWO**: `test/docs-content.test.ts` and
+    name-independent -- a module in them survives a rename, a move to another directory and a
+    symlinked path -- and they reach every test file but **TWO**: `test/docs-content.test.ts` and
     `test/scripts/attw-gate.test.ts`, neither of which imports this package, rest on the filename
     shape alone. **The tallies that used to be written here are gone deliberately**: they were
     already stale by one before the second of those two files existed, and the OK line of
-    `pnpm check:test-selection` prints the live figures on every run — including how many modules
+    `pnpm check:test-selection` prints the live figures on every run -- including how many modules
     under `test/` no rule watches (all genuine helpers today).
   - **The subject is DERIVED from `exports`, not listed here, and that choice is the gate.** `ncpdp`
     derives its equivalent from a workflow that hands a path to `vitest run`; **no workflow here does
@@ -295,9 +295,9 @@ than tidiness: the rules those anchors ground are the fail-closed reflex, the sc
 the PHI-scan roots and the allow-list traps, and each was learned by shipping a defect.
 
 **THE MATCHER, THE ANCHOR SPACE AND THE CORPUS PARTITION WERE EACH DERIVED BY MEASURING THIS TREE, AND
-NONE OF THE THREE PORTS.** Two pointer spellings are live across the ecosystem — QUALIFIED (the
+NONE OF THE THREE PORTS.** Two pointer spellings are live across the ecosystem -- QUALIFIED (the
 basename, a hash, an anchor run, optionally path-prefixed) and BARE (an inline code span holding
-nothing but a hash and an anchor run) — and which dominates is a property of the tree, not of the
+nothing but a hash and an anchor run) -- and which dominates is a property of the tree, not of the
 convention. The record, which is why nothing here was copied:
 
 - `ncpdp`: a verbatim port of `mllp`'s qualified matcher would have printed "all resolving" while
@@ -312,16 +312,16 @@ convention. The record, which is why nothing here was copied:
 premise check is a matcher too and ports no better than a gate's: a coordinator's pre-dispatch count
 of `astm` read 2 and was wrong (it grepped the literal basename, which cannot see a bare anchor at
 all), and `grep` in this container has been observed reporting **no match** on a file `rg` and a Node
-read both find hits in — which happened again during this slice, on this gate's own test file. The
+read both find hits in -- which happened again during this slice, on this gate's own test file. The
 figures were **53 qualified pointers, all of them in `CLAUDE.md`; zero bare pointers in any file the
 gate can read as text; 54 heading slugs; zero explicit anchor tags; zero headings inside HTML
-comments.** All 53 resolved. **Do not trust those numbers from this paragraph** — a figure written
+comments.** All 53 resolved. **Do not trust those numbers from this paragraph** -- a figure written
 into prose goes stale on the next commit with nobody touching it. **The OK line prints every count on
 every run**, because it measures rather than remembers.
 
 **THE BARE CENSUS is how "the bare form is dead here" stays a measurement.** A per-form refusal keyed
 on a bare count of zero would refuse forever on a healthy tree, so instead every opened file is
-censused on every run — every file, not just the pair, because a bare pointer in a third file would
+censused on every run -- every file, not just the pair, because a bare pointer in a third file would
 otherwise be seen by neither the matcher nor a pair-scoped census. A span whose anchor is all decimal
 digits is a pull-request reference and is **counted and reported**; anything else **REFUSES at exit 2**
 and tells you to re-derive the matcher. That converts the scope from an assumption into a
@@ -361,14 +361,14 @@ emptied-section case asserts that the heading and the pointer at it both survive
 **RE-RUN A CORPUS-SCANNING GATE AFTER `git add`.** The corpus is the index, so a new file is invisible
 until it is staged. `astm`'s local verify was green while both new files were untracked and CI went red
 on both Node versions the moment they were staged, because **the gate's own test fixtures spelled
-pointers**. The gate was right. **Exempting the gate's own files was rejected — that is the exclusion
-list this gate refuses to have** — so every sample pointer and every sample bare span in both files
+pointers**. The gate was right. **Exempting the gate's own files was rejected -- that is the exclusion
+list this gate refuses to have** -- so every sample pointer and every sample bare span in both files
 here is **assembled from parts at runtime**, and the gate was re-run staged before anything shipped.
 
 **WHAT AN ADVERSARIAL REVIEW TOOK OUT BEFORE THIS SHIPPED, recorded because two of the four were
 ported shapes rather than new mistakes.** (1) **A WRAP JOIN WAS DELETED.** Carried over from a
 sibling, it re-tried a failed anchor joined to the next line's leading run, and its comment claimed it
-"cannot manufacture a pass for a pointer the line pass already resolved" — **a tautology dressed as a
+"cannot manufacture a pass for a pointer the line pass already resolved" -- **a tautology dressed as a
 safety property**, since the direction that matters is a pointer the line pass did *not* resolve. It
 was reproduced printing "all resolving" at exit 0 over a truncated anchor whose continuation began
 with the missing character, and it rescued **zero** of this tree's real pointers, so it bought nothing
@@ -400,10 +400,10 @@ the three fence conditions has its own self-test case, verified by removing each
 gate refuse."* **Measured false.** The fence rule has **four** conditions, not three (the closer's
 three, plus the opener's backtick-info restriction), and `marker ===
 fenceMarker` could be deleted with the self-test, the real tree and all fifteen suite cases still
-green — while, with it gone, one input yields a phantom anchor and a lost real anchor at the same
+green -- while, with it gone, one input yields a phantom anchor and a lost real anchor at the same
 time. The mutation matrix behind the sentence had removed conditions **in pairs**, which proves
-nothing about either one. All four conditions of the fence rule — three on the closer, one on the
-opener — now have their own case, each verified by deleting that
+nothing about either one. All four conditions of the fence rule -- three on the closer, one on the
+opener -- now have their own case, each verified by deleting that
 conjunct **alone**; cases 13, 14 and 15 were each verified by reverting their fix and watching the
 case fail.
 
@@ -431,7 +431,7 @@ check-run context**: requiring a context before its workflow has run on `main` l
 directory, so moving it while the pointers keep their old prefix exits 0 with every rendered link
 broken. A file that is not valid UTF-8 is skipped whole, and the tell is the skipped count. A pointer
 at any other file's anchor is out of scope. A section with a body is not a section with the **right**
-body — that half stays human. And it checks no byte budget: `CLAUDE.md`'s ceiling belongs to the
+body -- that half stays human. And it checks no byte budget: `CLAUDE.md`'s ceiling belongs to the
 umbrella's hook, and a second copy of that number inside this package would go stale. The full list,
 with which items a test pins, is the disclosed-miss block in the script header.
 
@@ -506,7 +506,7 @@ repos/cosyte/deid/rulesets/19907854`, not off this file):
 ## Engineering Guardrails
 
 The short guardrails (no `any`, JSDoc, immutability, no `console.*`, fail-closed, the sanctioned
-fatal set, coverage) stay in `CLAUDE.md` in full — they are rules, not narrative, and nothing about
+fatal set, coverage) stay in `CLAUDE.md` in full -- they are rules, not narrative, and nothing about
 them was relocated. What follows is the case behind the two long ones: the PHI scan and the `attw`
 wrapper.
 
@@ -521,18 +521,18 @@ wrapper.
   with it); `--staged` reads `git show :<path>`, and **git stores a link as its target path under
   mode `120000`**, so it scanned path text and never the target's bytes. Reproduced on `e040ffc`
   with a name-bearing synthetic payload outside the walk roots: both routes exit 0 while naming the
-  target directly returned 8 hits. **Do not "fix" this by following the link** — that reads bytes
+  target directly returned 8 hits. **Do not "fix" this by following the link** -- that reads bytes
   the enumeration does not control (outside the repo, a loop, a device, a FIFO that blocks the gate
   forever), and git does not carry them anyway, so a hit on them would be a claim about something no
   commit contains. The enumeration is narrowed instead, and the decision is **structural** on both
   routes: the walk admits `isDirectory()`/`isFile()` and refuses what is left, `--staged` admits the
   two regular blob modes and refuses what is left. The kind tokens are labels with a catch-all arm,
-  never the decision — **do not turn either into a list of shapes to match.**
+  never the decision -- **do not turn either into a list of shapes to match.**
 
 ### The one-letter trap, T in the diff filter
 
   **▶ THE ONE-LETTER TRAP: `--diff-filter` MUST KEEP `T`.** Replacing a **tracked** regular file
-  with a link is neither an add nor a modify — git raises `:100644 120000 <sha> <sha> T` — so
+  with a link is neither an add nor a modify -- git raises `:100644 120000 <sha> <sha> T` -- so
   `--diff-filter=AM` deleted the record before any mode could be read and the `pre-commit` hook
   (`simple-git-hooks` runs `pnpm phi-scan --staged`) passed a mode-`120000` blob **green** while the
   changelog claimed it refused one. A conformance gate caught exactly that here. `T` also buys the
@@ -560,33 +560,33 @@ R100` and this route printed its clean line (measured on git 2.39.5; the all-mod
   the fifth is the no-regression control that is green on both. **A REFUSAL NAMES THE ENTRY'S OWN
   REPO-RELATIVE PATH AND AN ENGINE-OWNED KIND TOKEN, NEVER THE LINK TARGET**, which is working-tree
   text that can itself carry PHI; that is why no example target path appears in the docblock, the
-  CHANGELOG or the changeset either — a diagnostic about a PHI leak is itself a PHI surface, and so
+  CHANGELOG or the changeset either -- a diagnostic about a PHI leak is itself a PHI surface, and so
   is the prose explaining it. Pinned in `test/scripts/phi-scan.test.ts`, 9 cases red on `e040ffc`.
   Two things this does **not** cover, both measured: explicit-path mode still reads through a link
   (unchanged), and there is still **no** tolerance for a file that vanishes between enumeration and
-  read — that one fails **closed** (a read failure refuses the whole sweep with exit 2), so it is a
+  read -- that one fails **closed** (a read failure refuses the whole sweep with exit 2), so it is a
   false-red risk rather than this false-green one, and the siblings' TOCTOU machinery was
   deliberately not ported.
 
 ### The scan roots
 
-- **▶ THE SCAN ROOTS ARE `src/`, `test/` AND `scripts/` — ALL of `test/`, and that is a DIFFERENT
+- **▶ THE SCAN ROOTS ARE `src/`, `test/` AND `scripts/` -- ALL of `test/`, and that is a DIFFERENT
   DECISION FROM EVERY SIBLING'S. DO NOT PORT ONE OVER IT.** The bullet above NARROWED what the
   scopes admit; it did not widen the scopes, and the scopes were the bigger hole. The walk covered
   `test/fixtures/` + `src/` and `--staged` covered `test/fixtures/**` + `src/**.ts`, so **38 tracked
   files under `test/` were enumerated by NEITHER route**, four of them already carrying inline HL7
   `PID|…` literals. Both routes now share one `isUnderScanRoot`. **`mllp` walks `test/` too but
-  EXCLUDES `.ts` from it** — correct there, and it would have closed **none** of these 38, because
+  EXCLUDES `.ts` from it** -- correct there, and it would have closed **none** of these 38, because
   every one is a `.ts`. **`ccda` roots at the repo root**, which this tree cannot do without walking
   `node_modules/`, `dist/`, `coverage/` and six binary `vendor/*.tgz`. Out of scope **for the walk
   and for `--staged`**, stated as such: `.github/`, `docs-content/`, `vendor/`, the root manifests.
 
-  **▶ ALL MODE ALSO READS THE INDEX, SO THAT LIST IS NO LONGER THE WHOLE ANSWER — AND IT IS EASY TO
+  **▶ ALL MODE ALSO READS THE INDEX, SO THAT LIST IS NO LONGER THE WHOLE ANSWER -- AND IT IS EASY TO
   OVERSTATE IN EITHER DIRECTION.** `.github/` and the root manifests **are** swept from their
   committed bytes; `vendor/` and **every `.md`** are excluded there. **So `docs-content/` REMAINS A
   PUBLISHED CONSUMER SURFACE THIS GATE DOES NOT SCAN FOR PHI: 16 of its 17 tracked files are `.md`,
   and the index route adds only `sidebars.json`.** A draft of this slice wrote that `docs-content/`
-  was "no longer out of scope full stop" and **deleted the sentence that said otherwise** — the
+  was "no longer out of scope full stop" and **deleted the sentence that said otherwise** -- the
   refuter measured it in one command and it was a **false green about the one surface that ships to
   docs.cosyte.com**, in the de-identification package. **No `.md` is scanned by either ENUMERATING
   route or by the index route** (`isDocFile`), which is the pre-existing exemption that decides it;
@@ -602,11 +602,11 @@ R100` and this route printed its clean line (measured on git 2.39.5; the all-mod
   RECOGNISE THE DOCUMENT FIRST, AND EVERY RECOGNISER WAS WRITTEN FOR A FILE THAT _IS_ THE
   DOCUMENT.** This repo's HL7 and NCPDP text is a SINGLE-LINE STRING LITERAL in a `.ts` module, so
   the bytes carry a backslash and an `r`, not a CR. Each file is therefore also scanned as its
-  **string literals, decoded and joined**, in addition to its raw bytes — and four recognisers had
+  **string literals, decoded and joined**, in addition to its raw bytes -- and four recognisers had
   to widen with it, each measured red-before / green-after and pinned:
   **X12 required its `ISA` at offset 0** (a `.ts` never starts with `ISA`, so three files carrying
   inline interchanges read clean while the same wire as a fixture returned five hits); **a bare
-  `PID|…` with no `MSH`** — the shape pasted out of a ticket — now falls back to the default
+  `PID|…` with no `MSH`** -- the shape pasted out of a ticket -- now falls back to the default
   delimiters; **an INDENTED segment** in a multi-line template literal was invisible to a column-0
   anchor; and **a source literal spells HL7's backslash doubled**, so `MSH-2` arrived five characters
   long and the sub-component separator was read as `\` rather than `&`.
@@ -614,7 +614,7 @@ R100` and this route printed its clean line (measured on git 2.39.5; the all-mod
 ### Widening a recogniser is two-sided
 
   **▶ WIDENING A RECOGNISER IS TWO-SIDED, AND THE SECOND SIDE COST A GATE ROUND. EVERY ONE OF THESE
-  IS "IN ADDITION TO", NEVER "INSTEAD OF" — DO NOT SIMPLIFY ONE AWAY.** The per-line X12 split that
+  IS "IN ADDITION TO", NEVER "INSTEAD OF" -- DO NOT SIMPLIFY ONE AWAY.** The per-line X12 split that
   made the `wrap()` idiom readable also stopped reading a segment broken by a HARD WRAP, which the
   code it replaced handled by removing line breaks first: a wrapped `NM1*IL` went from **three
   patient identifiers at base to zero, silently.** Each piece is now read both per line and
@@ -622,7 +622,7 @@ R100` and this route printed its clean line (measured on git 2.39.5; the all-mod
   separator at offset 6 (ISA01 is two characters wide) or a prose `ISA-IEA` captures the delimiters
   and suppresses the real interchange below it. Indentation is stripped **in the literal view
   only**; doing it in the raw view re-opened the trailing-source-syntax false red. **Each of those
-  four mechanisms has a case that goes RED when the mechanism is removed — verified by removing each
+  four mechanisms has a case that goes RED when the mechanism is removed -- verified by removing each
   one, not by reading the code.**
   Two drafts of the decode were wrong and both were measured here: decoding the whole file in place
   glued the source line's closing quote and comma onto the last field (a declared DOB reported as
@@ -635,7 +635,7 @@ R100` and this route printed its clean line (measured on git 2.39.5; the all-mod
   `scripts/phi-scan.ts` enumerates what is not: a fragment with neither a `urn:hl7-org:v3` namespace
   nor NCPDP control-char framing gets the floor only; a message assembled at run time from pieces no
   literal contains is invisible; two documents with different delimiters in one file are read with
-  the first one's. **When you widen a recogniser, prove it with a case RED before and GREEN after —
+  the first one's. **When you widen a recogniser, prove it with a case RED before and GREEN after --
   a recogniser that quietly matches nothing reports "no hits".**
 
 ### A comment in the scanner is inside a scan root
@@ -651,12 +651,12 @@ R100` and this route printed its clean line (measured on git 2.39.5; the all-mod
 
 ### Exactly one file is bypassed
 
-  **▶ EXACTLY ONE FILE IS BYPASSED, AND IT NEEDS BOTH HALVES.** `test/scripts/phi-scan.test.ts` — the
+  **▶ EXACTLY ONE FILE IS BYPASSED, AND IT NEEDS BOTH HALVES.** `test/scripts/phi-scan.test.ts` -- the
   scanner's own suite, whose positive cases are necessarily real-looking violator literals. It works
   because `package.json`'s `phi-scan` script passes `--allow-fixture` **and** `phi-scan-overrides.md`
   logs it; drop either half and CI reddens or the scan refuses. Pinned. A logged path must be an
   existing regular file inside a scan root or the scan refuses, and every applied bypass prints a
-  `BYPASSED` line. **Real PHI pasted into that one file is not caught — that is the stated cost.**
+  `BYPASSED` line. **Real PHI pasted into that one file is not caught -- that is the stated cost.**
 
 ### Unmerged entries are refused
 
@@ -667,7 +667,7 @@ R100` and this route printed its clean line (measured on git 2.39.5; the all-mod
 ### Exit 1 means hits
 
   **▶ EXIT 1 MEANS HITS AND NOTHING ELSE MAY SPEND IT.** `loadAllowList()` and `readdirSync` used to
-  escape as uncaught exceptions, which Node exits **1** for — a gate that could not read its own
+  escape as uncaught exceptions, which Node exits **1** for -- a gate that could not read its own
   allow-list reporting "I found PHI in your corpus". Failure is the default path now; do not go back
   to catching by type, because the set of things that can fail is open.
 
@@ -679,7 +679,7 @@ R100` and this route printed its clean line (measured on git 2.39.5; the all-mod
   reproduced on `880c79b`, every one printing `[phi-scan] OK, no hits` at exit 0** over a synthetic
   HL7 message carrying a patient name, a birthdate, an MRN and a dashed SSN:
 
-  1. **a DECOY at a tracked path** — committed bytes carrying PHI, working-tree bytes clean.
+  1. **a DECOY at a tracked path** -- committed bytes carrying PHI, working-tree bytes clean.
      **Reconciling path SETS is not reading bytes**, and this is the escape the route exists for: a
      set comparison is satisfied *completely* by that tree.
   2. **a tracked path OUTSIDE every scan root.** `SCAN_ROOT_NAMES` is three names, so nothing
@@ -690,7 +690,7 @@ R100` and this route printed its clean line (measured on git 2.39.5; the all-mod
      floor-of-one and no reconciliation here, so `enterRoot` returns silently from an absent root
      and **deleting all three left the sweep reporting `OK, no hits` over the entire corpus.** A
      sibling that already refused an unobserved root closed this elsewhere; **this route must not be
-     credited with it there.** Closed **for tracked content only** — tracked content is the only
+     credited with it there.** Closed **for tracked content only** -- tracked content is the only
      kind git can hand back.
   4. **a tracked symlink or gitlink OUTSIDE every scan root.** `walk()` classifies entries *inside*
      a root, so such an entry was reached by neither route. Refused **by mode**, through the same
@@ -705,8 +705,8 @@ R100` and this route printed its clean line (measured on git 2.39.5; the all-mod
   **▶ EVERY REFUSAL RUNS *AFTER* THE WALK HAS BEEN SCANNED, AND THAT ORDERING IS A FIX, NOT A
   PREFERENCE. A REFUSAL MUST NOT SWALLOW A REAL HIT.** Refused first, the run would be strictly
   **worse** than the base commit's for one input: exit 1 naming every locus before, exit 2 naming
-  nothing after. The exit code is still **2** — an incomplete sweep is not a verdict whatever it
-  found on the way — but the hits are printed first. Two cases pin it.
+  nothing after. The exit code is still **2** -- an incomplete sweep is not a verdict whatever it
+  found on the way -- but the hits are printed first. Two cases pin it.
 
   **▶ `--allow-fixture` IS SUBTRACTED ON THE INDEX ROUTE TOO, AND HERE THAT IS LOAD-BEARING RATHER
   THAN DEAD CODE.** `parseArgs` does **not** seed the positional path set from the flag, so
@@ -727,7 +727,7 @@ R100` and this route printed its clean line (measured on git 2.39.5; the all-mod
   three declared roots and this route reads what the **index** carries, so the two miss the same
   place from opposite sides. PHI edited into a tracked file outside the roots and left **unstaged**
   is not read; an **untracked** file out there is not read at all. **Both halves are
-  base-identical** — nothing outside the roots was read before either — and what is new is only that
+  base-identical** -- nothing outside the roots was read before either -- and what is new is only that
   the claim is written down. Closing it means a third enumeration with its own refusal semantics.
   **The route also does not reach `--staged` or `paths`**: `--staged` is the pre-commit hook, so its
   scope decides what a **commit** is blocked on, which is a HOOK decision and not a rider on this.
@@ -743,14 +743,14 @@ R100` and this route printed its clean line (measured on git 2.39.5; the all-mod
   detector here can read it without decompressing an archive, which this scanner does not do.
   Handing the compressed bytes to the detectors as UTF-8 is **noise, not weak coverage**: with the
   exclusion removed, all mode over this repo reports **45 hits across all six tarballs and exits
-  1 — 44 spurious NCPDP Telecom field tokens and one spurious email address.** The Telecom detector
+  1 -- 44 spurious NCPDP Telecom field tokens and one spurious email address.** The Telecom detector
   splits on `0x1C`/`0x1D`/`0x1E` and reads the next two bytes as a field id; those bytes occur
   throughout compressed data, so it fires indefinitely. **A gate that red-locks the repo on mojibake
   teaches developers to bypass it.** Re-derive that figure rather than trusting it: it is a function
   of what is vendored *and* of the detector set, and both move.
 
   **▶ A "BINARY BLOB" PREDICATE WAS MEASURED AND REJECTED, AND THIS IS THE REASON TO WRITE DOWN.**
-  Two real TypeScript sources here — `src/context.ts` and `src/manifest.ts` — **embed NUL bytes as
+  Two real TypeScript sources here -- `src/context.ts` and `src/manifest.ts` -- **embed NUL bytes as
   HMAC domain separators**, so git's own NUL-in-the-first-8000-bytes heuristic calls them binary. A
   predicate would have dropped two hand-written source files out of the decoy defence the route
   exists to provide.
@@ -760,11 +760,11 @@ R100` and this route printed its clean line (measured on git 2.39.5; the all-mod
   a PHI surface, so naming a link `vendor/x.tgz` or `x.md` must not buy it a pass. Pinned by a case
   that stages a link under each name and expects exit 2.
 
-  **▶ THE SKIP IS A BYTE COMPARISON — NOT A STAT, NOT AN MTIME, NOT A HASH.** Those are exactly what
+  **▶ THE SKIP IS A BYTE COMPARISON -- NOT A STAT, NOT AN MTIME, NOT A HASH.** Those are exactly what
   a decoy defeats. **AND IT MAY NOT NORMALIZE LINE ENDINGS FIRST**: that compares a *derived* form
   of the two byte strings, and a decoy differing only in what the normalizer erases would then be
   skipped, reopening the escape. Under `.gitattributes eol=crlf` or `core.autocrlf=true` the skip
-  stops firing and every text file is scanned twice — **fail-safe (a duplicate finding, never a
+  stops firing and every text file is scanned twice -- **fail-safe (a duplicate finding, never a
   miss), and wrong-looking enough that someone will want to "fix" it.** **Neither condition is live
   here, measured rather than assumed: no `.gitattributes` at all, `core.autocrlf` and `core.eol`
   both unset, Linux CI.** So the doubling is recorded, not handled. **Check the condition before
@@ -772,7 +772,7 @@ R100` and this route printed its clean line (measured on git 2.39.5; the all-mod
 
   **▶ GITIGNORE IS NOT CONSULTED ON THIS ROUTE, deliberately unlike the walk.** A tracked file that
   also matches an ignore rule is still content git carries; the walk's ignore rule is about entries
-  it found on disk. **And it reads the INDEX, not `HEAD`** — staged bytes are what the next commit
+  it found on disk. **And it reads the INDEX, not `HEAD`** -- staged bytes are what the next commit
   carries, and what the working tree can no longer be trusted to show.
 
 ### The positive control and its floor hit
@@ -786,7 +786,7 @@ R100` and this route printed its clean line (measured on git 2.39.5; the all-mod
 
   **▶ THE FLOOR HIT IS REAL AND IT IS NOT PHI.** `package.json`'s `author` field carries a company
   mailbox at our own domain. It is **registry metadata that ships in every published tarball and is
-  already public on the npm page** — not patient data. It surfaced only because all mode began
+  already public on the npm page** -- not patient data. It surfaced only because all mode began
   reading what git carries; `package.json` sits outside every scan root, so no route had ever opened
   it. **The declaration (`EMAILDOMAIN cosyte.com`) is the honest answer** rather than narrowing the
   sweep back to where it could not see the file.
@@ -798,7 +798,7 @@ R100` and this route printed its clean line (measured on git 2.39.5; the all-mod
 
   **▶ THE ADDRESS IS DELIBERATELY NOT SPELLED OUT IN THE ALLOW-LIST'S OWN COMMENT, AND THAT IS A
   DEFECT THIS SLICE MADE AND CAUGHT.** The allow-list sits **inside a scan root**, so an earlier
-  draft that wrote the address out made *that file* red whenever the declaration was struck — and
+  draft that wrote the address out made *that file* red whenever the declaration was struck -- and
   the control then **passed against the base scanner** without the manifest ever being opened. **A
   control that reds on two files cannot tell you which one it read.** The cases now assert the hit is
   **named** (`HIT: package.json`), carries `origin="git index"`, and is **`1 hit(s) across 1
@@ -810,7 +810,7 @@ R100` and this route printed its clean line (measured on git 2.39.5; the all-mod
 
 - **▶ `attw` SAYS "does not contain types" AND EXITS 0, SO THE `attw` SCRIPT IS A WRAPPER, NOT THE
   BARE CLI.** `getExitCode.js` in `@arethetypeswrong/cli` opens with `if (!analysis.types) return 0`
-  — an untyped package is a legitimate npm package, so "no types at all" is a description, not a
+  -- an untyped package is a legitimate npm package, so "no types at all" is a description, not a
   problem, and the problem list is never consulted. No `--profile`, `--ignore-rules` or config
   setting reaches that early return. For a package that ships types it means the declarations were
   **not in the tarball**, which is a broken publish reported as a pass. A false red costs an hour; a
@@ -820,7 +820,7 @@ R100` and this route printed its clean line (measured on git 2.39.5; the all-mod
 
   **Concurrency only supplies the condition; the trigger is the build order.** `tsup` emits JS in one
   pass and declarations in a later one, so every build has a window where `dist/` holds `.mjs`/`.cjs`
-  and no declarations — measured here from `dist/index.mjs` to `dist/index.d.ts` at 6.9 s and 10.0 s
+  and no declarations -- measured here from `dist/index.mjs` to `dist/index.d.ts` at 6.9 s and 10.0 s
   on two builds. **Do not read those as a constant**: this box runs under a hard 2.0-CPU quota and the
   figure moves with load. So the answer is **not** a lock, a lease or a build queue: the gate must be
   able to say its own inputs were missing, whatever removed them.
@@ -831,30 +831,30 @@ R100` and this route printed its clean line (measured on git 2.39.5; the all-mod
   differs from the single-entry siblings** (no version is quoted, because a quoted one drifts): no
   `dist` at all, and `dist` built with every
   declaration deleted, both print the sentence and exit 0. But deleting only the **entry**
-  declarations exits **1** — `tsup` emits shared declaration chunks this manifest never names, so a
+  declarations exits **1** -- `tsup` emits shared declaration chunks this manifest never names, so a
   PARTIAL loss still leaves `analysis.types` true and `attw` does its job. It is TOTAL loss that is
   silent, and total loss is the shape of the build window. Deleting only `dist/index.mjs` and
-  `dist/index.cjs` still reports every node16 resolution 🟢 and exits 0 — a missing JS entry point is
+  `dist/index.cjs` still reports every node16 resolution 🟢 and exits 0 -- a missing JS entry point is
   invisible to a tool that analyses types. **Do not carry a sibling's sentence about this over
   without re-running it here**, and specifically **do not write "No problems found" into that last
   row**: that is what a single-entry FIXTURE prints, a draft of this entry generalized it to the
-  package, and it is false here — `render/typed.js` emits it only on an empty problem list, and this
+  package, and it is false here -- `render/typed.js` emits it only on an empty problem list, and this
   package always carries ignored node10 `NoResolution` problems, so it is absent even from a
   PRISTINE run. Measured both ways.
 
 ### The two nets
 
-  `scripts/attw.mjs` carries **two nets that catch different things** — a preflight that every
+  `scripts/attw.mjs` carries **two nets that catch different things** -- a preflight that every
   relative path `package.json` promises (`main`, `module`, `types`, `typings`, every string leaf of
   `exports`) exists and is non-empty, which catches the window, reaches the missing-JS case, and
   _names the files_; and a post-check on the untyped sentence, which catches what the preflight
-  structurally cannot — declarations on disk but excluded from the tarball by `files`/`.npmignore`.
+  structurally cannot -- declarations on disk but excluded from the tarball by `files`/`.npmignore`.
   No instance of that second case is on record here. **The post-check reads a string, so what would
   hide that string is refused, not tolerated**: `--quiet`, `--format json` and a `.attw.json` setting
   either were each measured against this repo's own binary to hand back exit 0 with the sentence
   unreadable; `--config-path` is refused **by inference, not measurement**. The refusal is by option
   name and never by value, and "by name" means **two matched shapes**: an argv token (before any
-  `=`), **and a combined short-option cluster containing `q` or `f`** — commander reads `-Pf json` as
+  `=`), **and a combined short-option cluster containing `q` or `f`** -- commander reads `-Pf json` as
   `--pack --format json`, so `-f` is never a token, and a whole-token-only draft of this guard let
   that spelling walk back to **exit 0 over an untyped pack**. Both shapes are pinned. **That is a
   claim about two shapes, not a claim that no spelling remains**; the empty-transcript net is there
@@ -867,19 +867,19 @@ R100` and this route printed its clean line (measured on git 2.39.5; the all-mod
   exit-0 itself, a negative control on a well-formed package, and that a real `attw` failure still
   fails. It also pins **`--profile node16` end to end** on a fixture shaped like this package
   (subpath exports into a directory) that exits 1 without the flag and 0 with it, plus the manifest
-  line that sends it — a port that wired up the wrapper and dropped the flag would otherwise be green.
+  line that sends it -- a port that wired up the wrapper and dropped the flag would otherwise be green.
   **This is a per-repo script.** Landing it here fixes this repo only; check the siblings before
   claiming the class is closed.
 
 ## Standing disciplines (every change)
 
-Mirrors the three disciplines in the meta-repo's `documentation/conventions.md` — they bind here too:
+Mirrors the three disciplines in the meta-repo's `documentation/conventions.md` -- they bind here too:
 
-1. **Documentation follows code** — a change to the public surface/stack/status isn't done until the
+1. **Documentation follows code** -- a change to the public surface/stack/status isn't done until the
    docs are: this repo's docs content (`README.md`, `docs-content/`), the meta-repo
    `documentation/repos/deid.md` (bump its "last verified" date), and the `ecosystem-map.md`
    status table.
-2. **Version + changelog** — a Changeset (`patch` on the `0.0.x` ladder) per meaningful change.
+2. **Version + changelog** -- a Changeset (`patch` on the `0.0.x` ladder) per meaningful change.
    **The changeset summary IS the changelog entry.** `.changeset/config.json` names a `changelog`
    generator, so the release writes the version heading and the entry itself, above
    `## Released before this file was generated`. **Do not hand-edit `CHANGELOG.md`, and do not
@@ -892,14 +892,14 @@ Mirrors the three disciplines in the meta-repo's `documentation/conventions.md` 
 package's published history `.changeset/config.json` set `"changelog": false`, so no release ever
 wrote a version heading into it. The file was hand-maintained under one `[Unreleased]` heading that
 nothing rolled over, beneath a preamble promising that the first pre-alpha release "will ship" the
-API surface listed under it — a surface that had already shipped, several versions earlier, in that
+API surface listed under it -- a surface that had already shipped, several versions earlier, in that
 same file. Every installed copy carried a changelog calling its own contents unreleased.
 
 **The fix was the flag, not the prose** (founder decision, 2026-08-05): correcting the sentence by
 hand leaves the mechanism that wrote it and it drifts again at the next release.
 
 What the fix depends on, each pinned by `test/scripts/changelog-generation.test.ts`. **No case count
-and no red-on-parent tally is written here, deliberately** — the same rule `CLAUDE.md` states for the
+and no red-on-parent tally is written here, deliberately** -- the same rule `CLAUDE.md` states for the
 `check:test-selection` figures. A count went stale inside the very commit that added it (a remedy
 added a bullet and a case, and left "five things / 9 of 15" standing), and a stale count is worse than
 none: it certifies a suite that has lost a case as correct. **Run the file and read the number.**
@@ -914,7 +914,7 @@ none: it certifies a suite that has lost a case as correct. **Run the file and r
 - **`## 0.0.1` is a substring of `## 0.0.10`,** and this package has published past that pair. **Every
   assertion that a version heading IS or IS NOT present** is a whole-heading match against a heading
   list, never `indexOf` or a substring `toContain`. **Stated as a rule about VERSION headings, and
-  deliberately not as a census of substring calls in the file** — a census is falsified by the next
+  deliberately not as a census of substring calls in the file** -- a census is falsified by the next
   legitimate one, which is the rot this bullet is about. Substring matching is right elsewhere and is
   used: the `[Unreleased]` check is `h.includes("[Unreleased]")` precisely so it still catches
   `## [Unreleased] - 2026-08-06`, the collision **exhibit** asserts a substring search *is* satisfied
@@ -932,7 +932,7 @@ none: it certifies a suite that has lost a case as correct. **Run the file and r
   keep the two in step, since it once stated the exact opposite of the config sitting beside it.
   **THE SCOPE OF THE DIGEST, STATED SO NOBODY READS IT AS MORE: it covers the archive BELOW the
   divider and nothing else.** A hand-written `## 0.0.99` / `### Patch Changes` block inserted between
-  the H1 and the divider passes **every** case here — measured, by inserting one. That would ship a
+  the H1 and the divider passes **every** case here -- measured, by inserting one. That would ship a
   tarball announcing a release that never happened. It is an **untested region, not a guarded one**,
   and the region above the divider is generated territory precisely so nobody writes there by hand.
   **Do not upgrade this sentence to a claim; either close it with a case or leave it stated.**
@@ -947,7 +947,7 @@ none: it certifies a suite that has lost a case as correct. **Run the file and r
   with the pass ON the archived history comes through **byte identical** and the released document
   passes `format:check`; with it OFF `changeset version` writes `## <version>` and `### Patch
   Changes` on adjacent lines, which this repo's Prettier rejects. **A sibling whose `.prettierignore`
-  lists `*.md` needs the opposite value** — there the pass rewrites already-published text that was
+  lists `*.md` needs the opposite value** -- there the pass rewrites already-published text that was
   never Prettier-canonical, and it has eaten characters out of a shipped tarball. **Never resync this
   value between repos.** Stated honestly, because this repo differs from every sibling: the `version`
   script ends with `prettier --write ... CHANGELOG.md`, a second net no sibling has, so the OFF arm
@@ -957,14 +957,14 @@ none: it certifies a suite that has lost a case as correct. **Run the file and r
 - **Changesets swallows a changelog-write failure with `console.warn`.** A tree whose declared
   Prettier config cannot be resolved bumps the version, consumes the changeset, and writes **no
   changelog at all**. **A release that publishes with an unchanged changelog is that failure, not a
-  flag that quietly reverted** — do not diagnose it as the flag. Nothing in this repo guards it.
+  flag that quietly reverted** -- do not diagnose it as the flag. Nothing in this repo guards it.
 
 **A changeset summary must never open a line at column 0 with an ATX heading.** `getReleaseLine`
 indents continuation lines by two spaces, exactly the `- ` bullet's content column, so a `## …` line
 in a summary renders as a **second heading inside the published release section, permanently**. Write
 the divider as an inline code span. The test's probe does the unsafe thing on purpose, to prove the
 whole-line anchoring survives it; that is what makes it safe there and unsafe in a real changeset.
-3. **Crew + knowledgebase loop** — if this parser's public API or warning codes change, flag/update
+3. **Crew + knowledgebase loop** -- if this parser's public API or warning codes change, flag/update
    the matching `crew` healthcare skill + the KB product doc.
 
 ### No internal project bookkeeping on a public surface
@@ -1030,7 +1030,7 @@ whole-line anchoring survives it; that is what makes it safe there and unsafe in
      A changeset that states exactly those facts in none of those words is KEPT and published, which is
      what `deid-ci-required-checks.md` and `deid-smoke-ci-gate.md` both did. The fix is to reword the
      changeset so the renderer drops it. **Never widen the word list in `cosyte/.github` to cover a
-     changeset here** — that grows a shared gate to fit one repo's prose.
+     changeset here** -- that grows a shared gate to fit one repo's prose.
    - **The renderer strips phase language from the first sentence and cannot check the result reads.**
      It refuses several _shapes_ a bad cut leaves in the bytes (a tail ending in a function word, a
      single-letter stump, doubled or orphaned clause punctuation, an emptied parenthetical, a headline
@@ -1038,7 +1038,7 @@ whole-line anchoring survives it; that is what makes it safe there and unsafe in
      translated sentence that is well-formed but wrong passes all of them.
      `deid-10-release-hardening.md` opened with the item identifier, a parenthesised roadmap phase,
      and the trailing clause "the final roadmap phase". The phase-strip rendered the public bullet
-     `Release hardening, the final` — no rule catches it, because `final` is not a function word.
+     `Release hardening, the final` -- no rule catches it, because `final` is not a function word.
      Open every changeset with a sentence that stands on its own once the identifier is gone.
 
 ### The word list is in another repo
@@ -1055,7 +1055,7 @@ whole-line anchoring survives it; that is what makes it safe there and unsafe in
    over all 25 alternatives on 2026-07-28: `deid-ci-required-checks.md` matches **four** (`CodeQL`,
    `actionlint`, `Dependabot`, `no runtime impact`) and `deid-smoke-ci-gate.md` matches **three**
    (`CodeQL`, `actionlint`, `no runtime impact`). **Removing any single alternative republishes
-   neither** — dropping `\bCodeQL\b` alone leaves both dropped. What would republish them is losing
+   neither** -- dropping `\bCodeQL\b` alone leaves both dropped. What would republish them is losing
    _all_ of the words one entry uses, and the residual risk is that they are all CI vocabulary, so a
    single cleanup of that regex could plausibly remove them together. Do not read this paragraph as
    the measurement; re-run it against the renderer, which is the only thing that can answer:

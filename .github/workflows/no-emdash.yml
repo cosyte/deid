@@ -1,0 +1,129 @@
+name: Em-dash gate
+
+# Founder directive, 2026-07-24: the character U+2014 EM DASH is banned outright across every
+# cosyte surface, and COMMIT MESSAGES ARE NAMED EXPLICITLY. The rule is stated canonically in the
+# brand voice document; `scripts/check-no-emdash.sh` is what enforces it here, and this file is what
+# runs it. Plain hyphens only.
+#
+# THE CHARACTER IS NOT SPELLED ANYWHERE IN THIS REPOSITORY, THIS FILE INCLUDED. The tracked-file
+# scan below is `git ls-files` over the whole tree with no exemption for the gate's own source, its
+# own tests or this workflow, so writing the glyph out here would red this job on itself. That is
+# the correct outcome: the checker constructs the character from its code point instead.
+#
+# ---------------------------------------------------------------------------
+# TWO JOBS, DELIBERATELY, AND THE SPLIT IS THE DESIGN RATHER THAN A TIDINESS CHOICE.
+#
+#   no-emdash           the TRACKED-FILE scan. Nothing outside this repository can put a character
+#                       into a tracked file, so a hit is always something an author here wrote and
+#                       clearing one is always a text edit inside this tree. This is the half that
+#                       guards what a consumer reads.
+#   no-emdash-messages  the MESSAGE scan: the pull request's title, its body, and every commit
+#                       message in its range. That text has a different trust profile. A bot
+#                       composes a pull-request body by pasting upstream release notes, em dashes
+#                       included, and no edit inside this tree prevents it.
+#
+# They are separate JOBS, so they emit SEPARATE CHECK-RUN CONTEXTS and are separately addressable.
+# A sibling repository shipped both halves as one job, found the message half noisy, and exempted
+# the whole job: that un-protected the tracked-file half too. Keeping them apart is what makes any
+# future decision about the message half safe to take on its own.
+#
+# ▶ NEITHER CONTEXT IS REQUIRED, AND NOTHING HERE MAKES ONE REQUIRED. Adding a context to this
+# repository's branch ruleset is a GitHub settings act with a precondition (the workflow must first
+# have completed on `main`), it is not a file in this repository, and it is out of scope for the
+# change that adds this gate. This repository has already paid the cost of getting that order wrong
+# twice: a required context a branch cannot yet emit leaves every pull request PENDING and
+# unmergeable, with nothing anywhere saying why. Wire the workflow first, let it run on `main`, then
+# require a context as its own deliberate change, and read a real context name off a live check run
+# rather than off the `name:` at the top of this file.
+#
+# ▶ THE JOB IDS ARE THE CHECK-RUN CONTEXT NAMES. There is no matrix, so there is no suffix. If
+# either context is ever added to the ruleset, rename the job and the ruleset together or neither.
+#
+# ---------------------------------------------------------------------------
+# WHY A SEPARATE WORKFLOW AND NOT A JOB IN ci.yml. Same reasoning as the three gate workflows next
+# door, and the first half is the deciding one:
+#
+#   `ci.yml` is a THIN CALLER of cosyte/.github/.github/workflows/ci.yml@main, which runs a fixed
+#   ladder and no arbitrary repository script. There is no reusable workflow published for this
+#   rule, so there is nowhere upstream to put it, and adding it upstream would flip every other
+#   caller in the estate red on its next run over text nobody has swept yet.
+#
+#   Within this repository, keeping it out of ci.yml also keeps it cheap: the tracked-file job is a
+#   checkout and one grep pass over a small tree, with no install and no build, while ci.yml drives
+#   the full Node 22 + 24 matrix.
+#
+# ---------------------------------------------------------------------------
+# NO STEP HERE CAN FAIL SILENTLY, AND THAT IS ASSERTED RATHER THAN PROMISED. No step is marked to
+# keep going past a failure, no command has its exit status discarded, and no condition swallows a
+# result. `test/scripts/no-emdash.test.ts` reads this file back and fails if any of those appear.
+# The checker self-tests before it reports anything, including an end-to-end pass over a seeded
+# file, so a green from it is a green from a detector that has just been shown able to red.
+#
+# Run either half locally: `pnpm check:no-emdash`, and `pnpm check:no-emdash --messages` with
+# PR_TITLE, PR_BODY, PR_BASE_SHA and PR_HEAD_SHA set.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # The job id is the check-run context name. See the banner before renaming it.
+  #
+  # Runs on every pull request AND on every push to the default branch: a gate that only runs on
+  # pull requests cannot tell you that `main` itself is clean, and a direct push, a revert or an
+  # imported branch reaches `main` without one.
+  no-emdash:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      # No install, no build: the checker is bash, git and grep. The scan surface is every tracked
+      # file, minus three exclusions that are stated in the script with their reasons (the vendored
+      # sibling tarballs, byte-exact test fixtures, and the frozen changelog archive that is pinned
+      # by digest in the test suite). Each of those rules REDS when the thing it names stops
+      # existing, so the scope cannot shrink quietly.
+      - name: Check every tracked file
+        run: bash scripts/check-no-emdash.sh
+
+  # The message half. Pull requests only: there is no pull-request title or body on a push, and the
+  # commit messages that arrive on `main` were already scanned on the pull request that carried
+  # them.
+  no-emdash-messages:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      # ▶ fetch-depth: 0 IS LOAD-BEARING, NOT A CONVENIENCE. The default checkout is SHALLOW, and a
+      # shallow clone does not contain the base commit: `git log base..head` then reports nothing,
+      # which is byte-for-byte what a clean pull request looks like. The checker refuses rather than
+      # reporting clean in that case (it rejects a shallow repository, a missing base or head
+      # object, and a range that resolves to zero commits), so losing this line turns the job RED
+      # rather than green. Both halves are kept: the fetch here so the range is readable, and the
+      # refusal there so an unreadable range can never be mistaken for an absence of findings.
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+
+      # ▶ THE PULL-REQUEST TEXT IS PASSED AS DATA AND NEVER AS CODE. The title and the body are
+      # attacker-controlled strings that may hold quotes, backticks, `$(...)`, newlines or anything
+      # else. They reach the checker through this `env:` block, so GitHub's expression substitution
+      # happens into an ENVIRONMENT VARIABLE and never into the text of the shell script below. The
+      # `run:` body is a fixed string with no `${{ }}` in it at all, and the checker reads the
+      # variables itself and writes them to a file with `printf '%s'` before scanning. Interpolating
+      # either value into the script body would be a script-injection hole, and it is the reason
+      # this step looks more indirect than it needs to.
+      - name: Check the pull request title, body and commit messages
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: bash scripts/check-no-emdash.sh --messages
