@@ -178,6 +178,14 @@ locus cannot be expressed is still counted, under a withheld locus token, and a 
 cannot be enumerated **fails the pass** rather than contribute a zero a reader would take for a
 clearance.
 
+**What counts as a position is derived from what each parser's model can carry**, not from the places a
+value usually sits, so the enumeration reaches the easily-overlooked ones: XML character data delivered
+as a CDATA section rather than as text, the comments and processing instructions a document is
+re-serialized with, a FHIR primitive's `_`-sibling element id, and whatever a partly rewritten structure
+keeps (the state and country of a generalized address travel exactly as they arrived, with anything
+riding inside them). Conversely a position the pass _removes_ is not counted: the number measures what
+left the pass untouched. [Limitations](./docs-content/limitations.md) states the count's two edges.
+
 **Employer surfaces that remain residual, in every format.** Two, named so a consumer can tell a
 covered surface from an uncovered one. **An employer named only in free text** (an OBX-5 narrative, an
 NTE comment, a C-CDA section `<text>`, a FHIR `note`) is reached only by an opt-in BYO redactor, never

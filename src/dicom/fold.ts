@@ -237,8 +237,14 @@ export interface EnumerableFileMetaElement {
  * The Part 10 **File Meta Information** group as this module needs to see it: the peer's typed view over
  * the `(0002,xxxx)` elements, plus whatever the source carried that the view does not model. Structural
  * facts only, and each field is read for its **length**, never for what it says.
+ *
+ * A **type alias rather than an interface**, deliberately: the enumeration reads this group by asking the
+ * object for its own keys, so it needs the implicit index signature TypeScript grants an object type and
+ * withholds from an interface. That is what lets a field the peer's view gains be enumerated without this
+ * module being changed, which is the difference between an enumeration that is correct and one that stays
+ * correct.
  */
-export interface EnumerableFileMeta {
+export type EnumerableFileMeta = {
   readonly transferSyntaxUID: string;
   readonly mediaStorageSOPClassUID?: string | undefined;
   readonly mediaStorageSOPInstanceUID?: string | undefined;
@@ -247,7 +253,7 @@ export interface EnumerableFileMeta {
   readonly implementationVersionName?: string | undefined;
   readonly sourceApplicationEntityTitle?: string | undefined;
   readonly extraElements?: readonly EnumerableFileMetaElement[] | undefined;
-}
+};
 
 /** A dataset (or a sequence item) whose elements can be enumerated in parse order. */
 export interface EnumerableDataset {
@@ -318,29 +324,60 @@ export function deriveUnexaminedResiduals(
 const FILE_META_STRUCTURE = "(0002,xxxx)";
 
 /**
- * The `(0002,xxxx)` positions of a File Meta group, each at the tag PS3.10 §7.1 assigns it, plus any
- * element the source carried that the peer's typed view does not model. The length is the only thing
- * read off each one.
+ * The `(0002,xxxx)` tag PS3.10 §7.1 assigns to each field of the peer's typed File Meta view.
+ *
+ * `extraElements` is not here because it is not one position: it is the escape hatch the view keeps for
+ * whatever `(0002,xxxx)` elements the source carried that it does not model, and each of those carries
+ * its own tag.
+ */
+const FILE_META_TAGS: Readonly<Record<string, string>> = {
+  fileMetaInformationVersion: "00020001",
+  mediaStorageSOPClassUID: "00020002",
+  mediaStorageSOPInstanceUID: "00020003",
+  transferSyntaxUID: "00020010",
+  implementationClassUID: "00020012",
+  implementationVersionName: "00020013",
+  sourceApplicationEntityTitle: "00020016",
+};
+
+/**
+ * The positions of a File Meta group, read off **the group's own keys** rather than from a list of
+ * fields written here.
+ *
+ * That is the difference between an enumeration that is correct and one that stays correct. The typed
+ * view is the peer's projection over the `(0002,xxxx)` elements, and a field it gains is a position that
+ * reaches the output the day the peer ships it; a hand-written list would keep counting the old set and
+ * say nothing about the new one, which is exactly the silence this measurement exists to end. So every
+ * key the object carries yields a position, and a key {@link FILE_META_TAGS} does not name **keeps its
+ * count and loses only its "where"** (the first fail-safe): it is recorded under the withheld-locus token
+ * rather than dropped, and rather than failing a pass that is otherwise enumerable.
  *
  * An **absent** field contributes no position, which matters here in particular: a serializer substitutes
  * its own File Meta Information Version and Implementation Class UID when the model carries none, and a
- * constant this library composes is not a value the document handed through.
+ * constant this library composes is not a value the document handed through. The length is the only
+ * thing read off any of them, never the content.
  */
-function fileMetaPositions(fileMeta: EnumerableFileMeta): { tag: string; length: number }[] {
-  const text = (tag: string, value: string | undefined): { tag: string; length: number } => ({
-    tag,
-    length: value?.length ?? 0,
-  });
-  return [
-    { tag: "00020001", length: fileMeta.fileMetaInformationVersion?.length ?? 0 },
-    text("00020002", fileMeta.mediaStorageSOPClassUID),
-    text("00020003", fileMeta.mediaStorageSOPInstanceUID),
-    text("00020010", fileMeta.transferSyntaxUID),
-    text("00020012", fileMeta.implementationClassUID),
-    text("00020013", fileMeta.implementationVersionName),
-    text("00020016", fileMeta.sourceApplicationEntityTitle),
-    ...(fileMeta.extraElements ?? []).map((e) => ({ tag: e.tag, length: e.value.length })),
-  ];
+/** Every value shape a {@link EnumerableFileMeta} field can hold. All of them carry a `length`. */
+type EnumerableFileMetaField = EnumerableFileMeta[keyof EnumerableFileMeta];
+
+function fileMetaPositions(
+  fileMeta: EnumerableFileMeta,
+): { tag: string | undefined; length: number }[] {
+  const positions: { tag: string | undefined; length: number }[] = [];
+  // Read by KEY, off the object itself, so a field the typed view gains is enumerated the day it
+  // appears rather than the day this module is told about it.
+  for (const [key, value] of Object.entries<EnumerableFileMetaField>(fileMeta)) {
+    if (key === "extraElements") continue; // enumerated below, each under its own tag
+    if (value === undefined) continue; // absent: not a value-bearing position
+    // Every remaining shape is read for its LENGTH and for nothing else, which is the one number all
+    // of them have: a decoded text field (`transferSyntaxUID`) and a field the view keeps as bytes
+    // (`fileMetaInformationVersion`). No content is read off either.
+    positions.push({ tag: FILE_META_TAGS[key], length: value.length });
+  }
+  for (const extra of fileMeta.extraElements ?? []) {
+    positions.push({ tag: extra.tag, length: extra.value.length });
+  }
+  return positions;
 }
 
 /**
@@ -368,6 +405,13 @@ function recordFileMetaPositions(
     if (fileMeta === undefined) return;
     for (const position of fileMetaPositions(fileMeta)) {
       if (position.length === 0) continue; // absent or empty: not a value-bearing position
+      if (position.tag === undefined) {
+        // A field of the group whose PS3.10 tag this module does not name: its locus cannot be
+        // expressed, so it is recorded WITHHELD and never dropped. Losing the "where" may not also
+        // lose the "how many".
+        residuals.record(undefined);
+        continue;
+      }
       if (accounted.has(normalizeTag(position.tag))) continue;
       residuals.record(formatLocus(position.tag, ""));
     }

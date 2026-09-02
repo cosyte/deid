@@ -84,6 +84,20 @@ export const FHIR_DEMOGRAPHIC_ELEMENTS: Readonly<Record<string, FhirDemographicM
   });
 
 /**
+ * The `Address` properties at or above state level, which Safe Harbor permits and the address edit
+ * therefore **keeps** (every finer part is dropped and `postalCode` is replaced by its generalized
+ * 3-digit prefix).
+ *
+ * Held here, in the map both halves already read, because the applier and the enumeration have to agree
+ * on it exactly: the applier re-emits a kept property **verbatim, its `_`-sibling metadata included**, so
+ * what rides through inside one is a position the enumeration owes a record. Two copies of this set
+ * would let the two answers drift apart silently.
+ *
+ * @internal
+ */
+export const FHIR_KEPT_ADDRESS_PARTS: ReadonlySet<string> = new Set<string>(["state", "country"]);
+
+/**
  * The **positive allow-list** of person-resource top-level element names whose own primitive value is
  * recognized structural / coded / administrative data (not free PHI): the over-scrub guard for the
  * fail-closed person sweep. A **bare-string** top-level property of a person resource that is neither a

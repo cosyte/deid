@@ -43,6 +43,7 @@ import {
 import {
   FHIR_DATE_CATEGORY,
   FHIR_DEMOGRAPHIC_ELEMENTS,
+  FHIR_KEPT_ADDRESS_PARTS,
   PERSON_RESOURCE_TYPES,
   RECOGNIZED_PERSON_ELEMENTS,
   categoryForIdentifierSystem,
@@ -481,47 +482,167 @@ export function extractFhirLoci(resource: FhirComplex): FhirExtraction {
 
   const residuals = new UnexaminedResidualBuilder();
   enumerateOrFail(rt, () => {
-    const decided = new Set<FhirNode>(out.ruleReached);
-    for (const coord of out.coords) decided.add(coord.node);
-    recordUnexaminedFhirPositions(residuals, resource, rt, decided, false);
+    const edits = new Map<FhirNode, FhirEditKind>();
+    for (const coord of out.coords) edits.set(coord.node, coord.edit);
+    recordUnexaminedFhirPositions(residuals, resource, rt, {
+      edits,
+      ruleReached: out.ruleReached,
+      valueDecided: false,
+    });
   });
   return { loci: out.loci, coords: out.coords, unexaminedResiduals: residuals.build() };
 }
 
 /**
+ * What each of the applier's edits does to the node its coordinate names, which is the only thing that
+ * lets the enumeration stop descending.
+ *
+ * - `replaces-node`: the node is removed, or replaced by one this library composes. Nothing that arrived
+ *   at or below it reaches the output - not its value, not its `_`-sibling metadata.
+ * - `rebuilds-address`: the `Address` complex is rebuilt from its parts. The finer geographic parts are
+ *   dropped and `postalCode` is replaced, but every part in {@link FHIR_KEPT_ADDRESS_PARTS} is re-emitted
+ *   **verbatim**, so its metadata rides through and is enumerated.
+ *
+ * A `Record` keyed by {@link FhirEditKind} makes this **exhaustive**: a new edit cannot be added without
+ * deciding here what it hands through, which is what keeps the enumeration closed rather than merely
+ * correct today.
+ */
+const EDIT_REACH: Readonly<Record<FhirEditKind, "replaces-node" | "rebuilds-address">> = {
+  drop: "replaces-node",
+  "set-primitive": "replaces-node",
+  address: "rebuilds-address",
+};
+
+/** What the enumeration carries down the tree: the pass's decisions, and whether a value was decided. */
+interface FhirEnumerationState {
+  /** The edit each coordinate wrote, keyed by the node it names. */
+  readonly edits: ReadonlyMap<FhirNode, FhirEditKind>;
+  /** Nodes a rule reached without editing them: their VALUE is examined, their metadata is not. */
+  readonly ruleReached: ReadonlySet<FhirNode>;
+  /** `true` when a rule already decided the value at (or above) this node. */
+  readonly valueDecided: boolean;
+}
+
+/**
+ * The `_`-sibling spelling of a primitive's path: FHIR JSON carries a primitive's `id` and `extension`
+ * on a sibling key prefixed with `_`, so `Observation.status`'s metadata sits at `Observation._status`.
+ *
+ * Composed from the value-free path this module already built, by prefixing the last segment. The result
+ * is a coordinate a reader can look up in the wire, and it carries no more document content than the
+ * path it is derived from.
+ */
+function underscoreSibling(path: string): string {
+  const cut = path.lastIndexOf(".");
+  return cut === -1 ? `_${path}` : `${path.slice(0, cut + 1)}_${path.slice(cut + 1)}`;
+}
+
+/**
+ * Record the positions a primitive's **`_`-sibling metadata** hands through.
+ *
+ * `@cosyte/fhir` models the JSON `_`-sibling as first-class metadata on the primitive
+ * (`FhirPrimitive.id`, `FhirPrimitive.extension`) rather than as a literal `_`-prefixed key, so a walk
+ * that reads `value` and returns at the leaf never sees it. Both are document values that can reach the
+ * output, and which of them does is decided by the applier, not by this module:
+ *
+ * - **`id` always rides through.** Every primitive the applier re-emits is rebuilt keeping its value and
+ *   its `id`, so a primitive that survives at all survives with its element id, whatever the pass decided
+ *   about the value beside it.
+ * - **`extension` rides through only where the applier re-emits the primitive verbatim**, which is the
+ *   kept part of a rebuilt `Address`. Everywhere else the applier's primitive-extension guard drops it,
+ *   and a position the pass removes is not one it hands through.
+ */
+function recordPrimitiveMetadata(
+  residuals: UnexaminedResidualBuilder,
+  node: FhirPrimitive,
+  path: string,
+  state: FhirEnumerationState,
+  verbatim: boolean,
+): void {
+  const meta = underscoreSibling(path);
+  if ((node.id ?? "").length > 0) residuals.record(join(meta, "id"));
+  if (!verbatim) return;
+  (node.extension ?? []).forEach((ext, i) => {
+    recordUnexaminedFhirPositions(residuals, ext, idx(join(meta, "extension"), i), {
+      ...state,
+      valueDecided: false,
+    });
+  });
+}
+
+/**
  * Enumerate every value-bearing position of the resource tree and record the ones no locus rule named.
  *
- * A **position** here is one **primitive carrying a non-empty value**: the leaf a FHIR value actually
- * sits at. A decision covers the node it was made at **and everything beneath it**, which is the shape
- * every rule in this adapter has: a `drop` removes a whole `name` / `telecom` / `note` subtree, an
- * `address` rebuilds an `Address` from its parts, and a `set-primitive` rewrites the leaf itself. So a
- * decided node ends the descent, and only what the walk reaches outside one is enumerated.
+ * A **position** here is one **primitive carrying a non-empty value**, plus the two places FHIR JSON
+ * lets a value sit beside one: the `_`-sibling element `id` and, where the applier re-emits a primitive
+ * verbatim, its `_`-sibling extensions ({@link recordPrimitiveMetadata}).
+ *
+ * The descent stops **only where the applier replaces the node**, which is a fact about the edit
+ * ({@link EDIT_REACH}) rather than about the rule that produced it. A rule that merely *reached* a
+ * position decides that position's value and nothing else: the primitive is still re-emitted, so its
+ * metadata is still handed through and is still measured.
  */
 function recordUnexaminedFhirPositions(
   residuals: UnexaminedResidualBuilder,
   node: FhirNode,
   path: string,
-  decided: ReadonlySet<FhirNode>,
-  underDecidedSubtree: boolean,
+  state: FhirEnumerationState,
 ): void {
-  const consumed = underDecidedSubtree || decided.has(node);
+  const edit = state.edits.get(node);
+  // The node (and everything under it) is removed or replaced: nothing here reaches the output.
+  if (edit !== undefined && EDIT_REACH[edit] === "replaces-node") return;
+  const valueDecided = state.valueDecided || state.ruleReached.has(node);
+
   if (isPrimitive(node)) {
-    if (!consumed && primitiveString(node).length > 0) residuals.record(path);
+    if (!valueDecided && primitiveString(node).length > 0) residuals.record(path);
+    recordPrimitiveMetadata(residuals, node, path, state, false);
+    return;
+  }
+  if (edit !== undefined && isComplex(node)) {
+    recordKeptAddressParts(residuals, node, path, state);
     return;
   }
   if (isList(node)) {
     node.items.forEach((item, i) => {
-      recordUnexaminedFhirPositions(residuals, item, idx(path, i), decided, consumed);
+      recordUnexaminedFhirPositions(residuals, item, idx(path, i), { ...state, valueDecided });
     });
     return;
   }
   node.properties.forEach((prop, i) => {
-    recordUnexaminedFhirPositions(
-      residuals,
-      prop.value,
-      join(path, elementSegment(prop.name, i)),
-      decided,
-      consumed,
-    );
+    recordUnexaminedFhirPositions(residuals, prop.value, join(path, elementSegment(prop.name, i)), {
+      ...state,
+      valueDecided,
+    });
+  });
+}
+
+/**
+ * Enumerate what a rebuilt `Address` hands through: the parts Safe Harbor permits it to keep, which the
+ * applier re-emits **verbatim** rather than rebuilding.
+ *
+ * The rule decided about each part's VALUE - keep the state and the country, drop the line and the city,
+ * generalize the ZIP - so no part's value is a residual. It decided nothing about the metadata riding
+ * beside a kept value, and the applier's verbatim re-emission carries that metadata into the output, so
+ * the `_`-sibling `id` and extensions of a kept part are exactly the positions this measures. A dropped
+ * part and the replaced `postalCode` contribute nothing: they do not reach the output at all.
+ */
+function recordKeptAddressParts(
+  residuals: UnexaminedResidualBuilder,
+  node: FhirComplex,
+  path: string,
+  state: FhirEnumerationState,
+): void {
+  node.properties.forEach((prop, i) => {
+    if (!FHIR_KEPT_ADDRESS_PARTS.has(prop.name)) return;
+    const partPath = join(path, elementSegment(prop.name, i));
+    if (isPrimitive(prop.value)) {
+      recordPrimitiveMetadata(residuals, prop.value, partPath, state, true);
+      return;
+    }
+    // Not a primitive: the whole part is re-emitted verbatim, so every value inside it is handed
+    // through and none of it was decided.
+    recordUnexaminedFhirPositions(residuals, prop.value, partPath, {
+      ...state,
+      valueDecided: false,
+    });
   });
 }

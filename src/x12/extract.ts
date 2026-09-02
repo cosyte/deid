@@ -127,16 +127,28 @@ function has(seg: SegmentElements, n: number): boolean {
 }
 
 /**
- * `true` when the element at position `n` is a **value-bearing position**: one carrying a value in the
- * document being processed, which is what the measurement counts.
- *
- * Blank-filled counts as absent, and that is not a convenience: X12 fixes the `ISA` at 106 bytes and
- * space-pads every element in it to its declared width, so an all-blank `ISA-02` is the standard's own
- * spelling of "not used" rather than a value handed through. The rules above keep using {@link has}: what
- * is de-identified may not move on account of a measurement.
+ * The one X12 segment whose elements are **fixed-width and space-padded by the standard**: the `ISA` is
+ * exactly 106 bytes, and every element in it is padded to its declared width, so an all-blank `ISA-02`
+ * is the standard's own spelling of "not used" rather than a value the sender wrote. Every other segment
+ * is variable-length and pads nothing, so whitespace there is content.
  */
-function isValueBearing(seg: SegmentElements, n: number): boolean {
-  return el(seg, n).trim().length > 0;
+const FIXED_WIDTH_SEGMENT_ID = "ISA";
+
+/**
+ * `true` when the element at position `n` is a **value-bearing position**: one carrying a non-empty value
+ * in the document being processed, which is what the measurement counts.
+ *
+ * The test is `length > 0`, the same one the locus rules use, **except inside the `ISA`**
+ * ({@link FIXED_WIDTH_SEGMENT_ID}), where the standard's own padding makes an all-blank element an
+ * absence rather than a value. Everywhere else a whitespace-only element is content the serializer
+ * re-emits from the segment's verbatim `raw` text, so it is handed through and is counted: the
+ * definition says non-empty, and reading it as "non-blank" would silently drop a class of position the
+ * pass really does pass on. The rules themselves are untouched by any of this: what is de-identified may
+ * not move on account of a measurement.
+ */
+function isValueBearing(seg: SegmentElements, segId: string, n: number): boolean {
+  const raw = el(seg, n);
+  return segId === FIXED_WIDTH_SEGMENT_ID ? raw.trim().length > 0 : raw.length > 0;
 }
 
 /** A segment's identity inside the interchange, the key the named-element sets are held under. */
@@ -615,7 +627,7 @@ function recordUnexaminedX12Positions(
 ): void {
   for (let n = 1; n < seg.elements.length; n += 1) {
     if (named?.has(n) === true) continue;
-    if (!isValueBearing(seg, n)) continue;
+    if (!isValueBearing(seg, pos.segId, n)) continue;
     residuals.record(path(pos, n));
   }
 }

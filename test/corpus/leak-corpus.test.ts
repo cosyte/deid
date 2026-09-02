@@ -511,6 +511,98 @@ describe("corpus non-vacuity, the sweep and the corpus both have teeth", () => {
 });
 
 /**
+ * **The carriers the measurement counts but the pass does not remove.** The corpus above sweeps a
+ * sentinel that must be gone from the wire; these positions are the opposite case and need their own
+ * gate, because this phase **counts and does not scrub**. A value delivered as a CDATA section, a
+ * comment or a processing instruction rides into the output on purpose, and a FHIR primitive's
+ * `_`-sibling element id rides with the primitive it belongs to.
+ *
+ * So the wire keeps them, deliberately, and that is asserted rather than glossed - and the artifact a
+ * determiner reads must still carry no byte of any of them. That is the exposure that cannot be
+ * recalled: a residual record naming a position it could not examine, with the value written beside it.
+ */
+describe("counted, not removed: a carrier's value reaches the wire and never the audit trail", () => {
+  const CARRIER_XML = `<?xml version="1.0" encoding="UTF-8"?>
+<ClinicalDocument xmlns="urn:hl7-org:v3">
+  <title>ZZTITLE</title>
+  <component><structuredBody><component><section>
+    <code code="11450-4" codeSystem="2.16.840.1.113883.6.1"/>
+    <entry><observation classCode="OBS" moodCode="EVN">
+      <zzCdataNote><![CDATA[ZZCARRIERCDATA]]></zzCdataNote>
+      <zzCommentNote><!-- ZZCARRIERCOMMENT --></zzCommentNote>
+      <zzPiNote><?zzproc ZZCARRIERPI?></zzPiNote>
+    </observation></entry>
+  </section></component></structuredBody></component>
+</ClinicalDocument>`;
+  const CARRIER_JSON = JSON.stringify({
+    resourceType: "Observation",
+    status: "final",
+    _status: { id: "ZZCARRIERELEMENTID" },
+  });
+  const CARRIER_SENTINELS = [
+    "ZZCARRIERCDATA",
+    "ZZCARRIERCOMMENT",
+    "ZZCARRIERPI",
+    "ZZCARRIERELEMENTID",
+  ];
+
+  const ccda = deidentifyCcda(parseCcda(CARRIER_XML), {
+    context: createDeidContext({ key: "carrier-corpus", patientId: "p-carrier" }),
+  });
+  const fhir = deidentifyFhir(parseResource(CARRIER_JSON).resource, {
+    context: createDeidContext({ key: "carrier-corpus", patientId: "p-carrier" }),
+  });
+  const residuals = [...ccda.unexaminedResiduals, ...fhir.unexaminedResiduals];
+
+  it("the carriers really do reach the wire: this phase counts, it does not scrub", () => {
+    const wire = `${ccda.document.toString()}\n${serializeResource(fhir.document)}`;
+    expect(leaks(wire, CARRIER_SENTINELS).sort()).toEqual([...CARRIER_SENTINELS].sort());
+  });
+
+  it("each one is measured, so the inventory is a haystack and not an empty list", () => {
+    const loci = new Set(residuals.map((r) => r.locus));
+    expect(
+      loci.has(
+        "component/structuredBody/component/section/entry/observation/zzCdataNote/#cdata-section",
+      ),
+    ).toBe(true);
+    expect(
+      loci.has(
+        "component/structuredBody/component/section/entry/observation/zzCommentNote/#comment",
+      ),
+    ).toBe(true);
+    expect(
+      loci.has(
+        "component/structuredBody/component/section/entry/observation/zzPiNote/#processing-instruction/zzproc",
+      ),
+    ).toBe(true);
+    expect(loci.has("Observation._status.id")).toBe(true);
+  });
+
+  it("and no value from any of them reaches the inventory, the report or its Markdown", () => {
+    const built = [ccda, fhir].map((r) =>
+      buildExpertDeterminationSupportReport(r.manifest, {
+        unexaminedResiduals: r.unexaminedResiduals,
+      }),
+    );
+    const artifacts = [
+      JSON.stringify(residuals),
+      JSON.stringify(built),
+      built.map((r) => formatExpertDeterminationSupportReport(r)).join("\n"),
+    ].join("\n");
+    expect(leaks(artifacts, CARRIER_SENTINELS)).toEqual([]);
+  });
+
+  it("the same sweep catches a forged one, so the zero above has teeth (tamper)", () => {
+    const forged = JSON.stringify([
+      ...residuals,
+      { locus: "ZZCARRIERCDATA", count: 1, examined: false, locusWithheld: false, code: "X" },
+    ]);
+    expect(leaks(forged, CARRIER_SENTINELS)).toContain("ZZCARRIERCDATA");
+  });
+});
+
+/**
  * The **other direction**, and it is not optional. Every gate above proves a value is ABSENT, and a
  * detector that reports zero can be a gap rather than a clearance: an adapter that dropped the whole
  * PV1 segment, or a fixture whose loci the extractor never reached, would pass all of them. This

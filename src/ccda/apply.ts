@@ -19,13 +19,12 @@
 import { childElements } from "@cosyte/ccda";
 
 import type { TransformedLocus } from "../locus.js";
+import { CCDA_KEPT_ADDRESS_PARTS } from "./locus-map.js";
 import type { CcdaCoord } from "./extract.js";
 import type { Element, Node } from "@xmldom/xmldom";
 
 /** DOM `Node.TEXT_NODE`. @internal */
 const TEXT_NODE = 3 as const;
-/** Geographic address components at or above state level, retained under Safe Harbor. @internal */
-const KEEP_ADDRESS_PARTS: ReadonlySet<string> = new Set(["state", "country"]);
 
 /** Remove every child node of an element (elements + text), leaving it empty. */
 function removeAllChildren(el: Element): void {
@@ -71,7 +70,7 @@ function applyAddress(el: Element, value: string | null): void {
     if (ln === "postalCode") {
       if (value === null) el.removeChild(child);
       else setElementText(child, value);
-    } else if (!KEEP_ADDRESS_PARTS.has(ln)) {
+    } else if (!CCDA_KEPT_ADDRESS_PARTS.has(ln)) {
       // Street / city / county / precinct / postBox / … dropped. Fail closed: an un-generalizable ZIP
       // (value === null) drops the whole address, so every geographic component is gone.
       el.removeChild(child);

@@ -37,6 +37,19 @@ export const V3_NS = "urn:hl7-org:v3";
 const SSN_ROOT_OID = "2.16.840.1.113883.4.1";
 
 /**
+ * The geographic components of an `<addr>` at or above state level, which Safe Harbor permits and the
+ * address edit therefore **keeps** (every finer component is dropped and the `<postalCode>` is
+ * generalized to its 3-digit prefix).
+ *
+ * Held here, in the map both halves already read, because the applier and the enumeration have to agree
+ * on it exactly: the applier keeps these children, so what rides through inside one is a position the
+ * enumeration owes a record. Two copies of this set would let the two answers drift apart silently.
+ *
+ * @internal
+ */
+export const CCDA_KEPT_ADDRESS_PARTS: ReadonlySet<string> = new Set<string>(["state", "country"]);
+
+/**
  * The **document-envelope** elements: direct children of `ClinicalDocument` that carry no direct
  * patient/relative Safe Harbor identifier and are retained untouched, exactly as HL7 v2's MSH envelope
  * is. The document `effectiveTime` is handled separately (it is a service-related

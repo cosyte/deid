@@ -22,7 +22,7 @@
 import { attr, childElements, children, text, xsiType } from "@cosyte/ccda";
 
 import { SAFE_HARBOR_CATEGORIES } from "../categories.js";
-import { isWithheldToken, safeLocusToken } from "../derived-token.js";
+import { WITHHELD_LOCUS_TOKEN, isWithheldToken, safeLocusToken } from "../derived-token.js";
 import type { GenericLocus } from "../locus.js";
 import {
   enumerateOrFail,
@@ -31,15 +31,24 @@ import {
 } from "../residual.js";
 import {
   CCDA_ENVELOPE_ELEMENTS,
+  CCDA_KEPT_ADDRESS_PARTS,
   CCDA_LOCUS_MAP,
   V3_NS,
   categoryForIdRoot,
   isRetainedCcdaElement,
 } from "./locus-map.js";
-import type { Attr, Element } from "@xmldom/xmldom";
+import type { Attr, Element, Node } from "@xmldom/xmldom";
 
+/** DOM `Node.ELEMENT_NODE`: a child the walk descends into rather than reading as character data. */
+const ELEMENT_NODE = 1 as const;
 /** DOM `Node.TEXT_NODE`. @internal */
 const TEXT_NODE = 3 as const;
+/** DOM `Node.CDATA_SECTION_NODE`: character data an XML parser keeps as its own node kind. */
+const CDATA_SECTION_NODE = 4 as const;
+/** DOM `Node.PROCESSING_INSTRUCTION_NODE`. */
+const PROCESSING_INSTRUCTION_NODE = 7 as const;
+/** DOM `Node.COMMENT_NODE`. */
+const COMMENT_NODE = 8 as const;
 /** `xsi:type` prefixes that denote a periodic/dosing interval, NOT a calendar date, never generalized. */
 const PERIOD_TYPES: readonly string[] = ["PIVL", "EIVL", "SXPR", "PPD"];
 /**
@@ -120,10 +129,35 @@ interface CcdaLocusAccumulator {
   readonly named: Map<Element, NamedPositions>;
 }
 
-/** Append a locus + its coordinate to the accumulator. */
+/**
+ * Which of the applier's edits removes **every child node** of the element it is written onto, and
+ * therefore leaves nothing below it for the enumeration to have missed.
+ *
+ * This is the one fact the enumeration's early return rests on, so it is derived from the edit kind at
+ * the single place a coordinate is created ({@link push}) rather than asserted by hand at each rule. A
+ * `Record` keyed by {@link CcdaEditKind} makes it **exhaustive**: a new edit cannot be added without
+ * deciding, here, whether the enumeration may stop descending under it.
+ *
+ * Only the two `clear-*` edits qualify, because only they call the applier's `removeAllChildren`. The
+ * others each hand something below the element through: `address` **keeps** the state / country children
+ * ({@link CCDA_KEPT_ADDRESS_PARTS}) verbatim, `block` and `block-text` remove the element's own text
+ * nodes and leave every child element where it was, and `id` / `date-value` rewrite one attribute.
+ */
+const EDIT_REMOVES_EVERY_CHILD_NODE: Readonly<Record<CcdaEditKind, boolean>> = {
+  "clear-element": true,
+  "clear-telecom": true,
+  address: false,
+  block: false,
+  "block-text": false,
+  id: false,
+  "date-value": false,
+};
+
+/** Append a locus + its coordinate to the accumulator, recording what its edit reaches below the node. */
 function push(out: CcdaLocusAccumulator, locus: GenericLocus, coord: CcdaCoord): void {
   out.loci.push(locus);
   out.coords.push(coord);
+  if (EDIT_REMOVES_EVERY_CHILD_NODE[coord.edit]) named(out, coord.node).subtree = true;
 }
 
 /** The named-position record for an element, created empty on first use. */
@@ -175,12 +209,34 @@ function nameText(out: CcdaLocusAccumulator, el: Element): void {
   named(out, el).text = true;
 }
 
-/** Record that a decision consumed everything below the element (its children, not its attributes). */
+/**
+ * Record that the applier removes **every child node** of this element, so nothing below it is handed
+ * through. Set from the edit kind in {@link push}, never asserted by a rule: "the rule decided about
+ * this subtree" and "the applier deletes this subtree" are different claims, and only the second one
+ * lets the enumeration stop descending.
+ *
+ * Called directly for an element **no coordinate names** whose content the applier nonetheless removes
+ * as part of an edit written onto its parent (an `<addr>`'s finer geographic children).
+ */
 function nameSubtree(out: CcdaLocusAccumulator, el: Element): void {
   named(out, el).subtree = true;
 }
 
-/** The concatenated **direct** (non-descendant) text of an element, trimmed. `""` when there is none. */
+/** Record that an element is removed outright: its own positions and everything below it are gone. */
+function nameWholeElement(out: CcdaLocusAccumulator, el: Element): void {
+  nameOwnPositions(out, el);
+  nameSubtree(out, el);
+}
+
+/**
+ * The concatenated **direct** (non-descendant) text of an element, trimmed. `""` when there is none.
+ *
+ * **Text nodes only, deliberately, and it is the applier's reach that fixes that.** The applier's
+ * `removeDirectText` deletes text nodes and nothing else, so a CDATA section on a blocked element rides
+ * through untouched; summing one here would put a value in a `block` locus that the applier then fails
+ * to remove, which is a false audit entry rather than a fix. Character data the rules do not reach is
+ * **measured** instead, by {@link recordOwnCharacterData} - what this phase is for.
+ */
 function directText(el: Element): string {
   let acc = "";
   const nodes = el.childNodes;
@@ -257,9 +313,9 @@ function join(base: string, seg: string): string {
 /** Extract a person `<name>` locus: redacted (whole element cleared). */
 function actName(out: CcdaLocusAccumulator, el: Element, path: string): void {
   // The rule reads the element's whole text and the applier empties it: its text and everything below it
-  // are decided. Its attributes are not - `clear-element` leaves every one of them in place.
+  // are decided (the subtree half comes from the edit kind, in `push`). Its attributes are not -
+  // `clear-element` leaves every one of them in place.
   nameText(out, el);
-  nameSubtree(out, el);
   push(
     out,
     { path, kind: "identifier", category: SAFE_HARBOR_CATEGORIES.NAMES, value: text(el) ?? "" },
@@ -273,7 +329,6 @@ function actTelecom(out: CcdaLocusAccumulator, el: Element, path: string): void 
   // with it. A `<telecom use="HP">`'s `@use` is not in that set and is handed through untouched.
   nameAttributes(out, el, ["value"]);
   nameText(out, el);
-  nameSubtree(out, el);
   push(
     out,
     {
@@ -286,11 +341,31 @@ function actTelecom(out: CcdaLocusAccumulator, el: Element, path: string): void 
   );
 }
 
-/** Extract an `<addr>` locus: generalized to the safe 3-digit ZIP; finer geography dropped by apply. */
+/**
+ * Extract an `<addr>` locus: generalized to the safe 3-digit ZIP; finer geography dropped by apply.
+ *
+ * **The decision is per geographic CHILD, and only part of the `<addr>` goes away**, so the coverage is
+ * recorded child by child rather than as one blanket "the subtree is decided". The applier drops every
+ * finer component outright, replaces the `<postalCode>`'s content with the generalized prefix, and keeps
+ * the state / country children **verbatim** - so what rides through inside a kept child (its own
+ * attributes, its descendants, a comment) is a position no rule reached, and the enumeration descends to
+ * count it. The `<addr>`'s own attributes and its own character data are decided by nothing either.
+ */
 function actAddr(out: CcdaLocusAccumulator, el: Element, path: string): void {
-  // The rule decides every geographic child as a unit: the ZIP is generalized, state and country are
-  // retained as permitted, the rest are dropped. The `<addr>`'s own attributes are decided by nothing.
-  nameSubtree(out, el);
+  for (const child of childElements(el)) {
+    const ln = child.localName ?? "";
+    if (ln === "postalCode") {
+      // `setElementText` replaces the element's content and leaves its attributes in place.
+      nameText(out, child);
+      nameSubtree(out, child);
+    } else if (CCDA_KEPT_ADDRESS_PARTS.has(ln)) {
+      // Retained as Safe Harbor permits: a decision about this element's VALUE, and about nothing else
+      // on it. Its attributes and everything below it are handed through and are enumerated.
+      nameText(out, child);
+    } else {
+      nameWholeElement(out, child); // removed outright: nothing here reaches the output
+    }
+  }
   const postal = children(el, "postalCode")[0];
   const zip = postal === undefined ? "" : (text(postal) ?? "");
   push(
@@ -446,7 +521,6 @@ function blockNarrative(out: CcdaLocusAccumulator, el: Element, path: string): v
     if (child.namespaceURI === V3_NS && (child.localName ?? "") === "text") {
       if (text(child) === undefined) continue; // empty narrative: nothing to block
       nameText(out, child);
-      nameSubtree(out, child);
       push(
         out,
         {
@@ -479,7 +553,6 @@ function handleBody(out: CcdaLocusAccumulator, componentEl: Element, path: strin
     for (const t of children(nx, "text")) {
       // Fail closed on unstructured content (an opaque base64 blob can carry any PHI, un-de-identifiable).
       nameText(out, t);
-      nameSubtree(out, t);
       push(
         out,
         {
@@ -553,10 +626,7 @@ export function extractCcdaLoci(root: Element): CcdaExtraction {
   enumerateOrFail(rootName, () => {
     // The root element's own positions print under its name; its children print from the same empty
     // base the sweep composes their loci from, so an enumerated position and a locus agree on "where".
-    recordOwnPositions(residuals, root, rootName, out.named);
-    for (const { el, path } of childSegments(root)) {
-      recordUnexaminedCcdaPositions(residuals, el, path, out.named);
-    }
+    recordUnexaminedCcdaPositions(residuals, root, rootName, "", out.named);
   });
   return { loci: out.loci, coords: out.coords, unexaminedResiduals: residuals.build() };
 }
@@ -603,18 +673,87 @@ function recordOwnPositions(
   if (decided?.text !== true && directText(el).length > 0) residuals.record(path);
 }
 
-/** Recurse the tree, recording each element's own unexamined positions in document order. */
-function recordUnexaminedCcdaPositions(
+/**
+ * The locus segment naming one **non-element child node** of an element by the kind of carrier it is.
+ *
+ * The DOM's own node names for these begin with `#`, which no XML `Name` may contain, so a character-data
+ * position can never be mistaken for a child element (`/name`) or an attribute (`@name`).
+ *
+ * **The three named kinds are the whole space an element child can be** once elements and text nodes are
+ * taken out: the hardened DOM this walk runs on refuses every other node kind as a child of an element,
+ * which a test pins by asking it to accept one. The `default` is therefore not a case that fires today
+ * but the **fail-safe for a DOM that admits one**: such a node would still be a carrier the serializer
+ * re-emits, so it keeps its count and loses only its "where" rather than going uncounted, which is the
+ * first fail-safe applied to a node kind instead of to a token.
+ */
+function characterDataSegment(node: Node): string {
+  switch (node.nodeType) {
+    case CDATA_SECTION_NODE:
+      return "#cdata-section";
+    case COMMENT_NODE:
+      return "#comment";
+    case PROCESSING_INSTRUCTION_NODE: {
+      // The target is a document-derived name, so it is bounded exactly as an element name is.
+      const target = safeLocusToken((node as { target?: string }).target ?? "", "xmlName");
+      return `#processing-instruction/${target}`;
+    }
+    default:
+      return `#${WITHHELD_LOCUS_TOKEN}`;
+  }
+}
+
+/**
+ * Enumerate the **character data an element carries in a node kind the rules do not read**, and record
+ * every non-empty one.
+ *
+ * An element's value does not only arrive as text nodes. XML delivers the same character data as a
+ * **CDATA section**, and `@cosyte/ccda` preserves comments and processing instructions and re-emits all
+ * three verbatim, so each is a value the pass hands through. None is reachable by any rule here: the
+ * locus map reads attributes and `directText`, and `directText` sums text nodes alone because the
+ * applier's removal does. So these positions are **always** unexamined, whatever the rules decided about
+ * the element's text, and the only thing that removes them is an edit that deletes every child node -
+ * which is why the caller checks that first ({@link EDIT_REMOVES_EVERY_CHILD_NODE}).
+ *
+ * Text nodes are excluded here and only here: they are the element's own direct text and are already
+ * counted, at the element's own path, by {@link recordOwnPositions}.
+ */
+function recordOwnCharacterData(
   residuals: UnexaminedResidualBuilder,
   el: Element,
   path: string,
+): void {
+  const nodes = el.childNodes;
+  for (let i = 0; i < nodes.length; i += 1) {
+    const n = nodes[i];
+    if (n === null || n === undefined) continue;
+    if (n.nodeType === ELEMENT_NODE || n.nodeType === TEXT_NODE) continue;
+    if ((n.nodeValue ?? "").trim().length === 0) continue; // carries no value: not a residual
+    residuals.record(join(path, characterDataSegment(n)));
+  }
+}
+
+/**
+ * Recurse the tree, recording each element's own unexamined positions in document order.
+ *
+ * `ownPath` names the element itself and `childBase` is what its children's segments hang off; the two
+ * differ only at the root, whose own positions print under `ClinicalDocument` while its children print
+ * from the empty base the sweep composes their loci from.
+ */
+function recordUnexaminedCcdaPositions(
+  residuals: UnexaminedResidualBuilder,
+  el: Element,
+  ownPath: string,
+  childBase: string,
   covered: CcdaCoverage,
 ): void {
-  recordOwnPositions(residuals, el, path, covered);
-  // A decision that consumed everything below this element (a cleared `<name>`, a rebuilt `<addr>`, a
-  // blocked narrative `<text>`) leaves no descendant position for anything else to have missed.
+  recordOwnPositions(residuals, el, ownPath, covered);
+  // An edit that deletes every child node of this element (a cleared `<name>`, a blocked narrative
+  // `<text>`) leaves nothing below it for anything else to have missed. Every other edit hands something
+  // below through, so the descent continues under it - an `<addr>` keeps its state / country children.
   if (covered.get(el)?.subtree === true) return;
+  recordOwnCharacterData(residuals, el, ownPath);
   for (const { el: child, path: seg } of childSegments(el)) {
-    recordUnexaminedCcdaPositions(residuals, child, join(path, seg), covered);
+    const childPath = join(childBase, seg);
+    recordUnexaminedCcdaPositions(residuals, child, childPath, childPath, covered);
   }
 }

@@ -222,24 +222,39 @@ export function extractTelecomLoci(tx: TelecomTransaction): TelecomExtraction {
 }
 
 /**
- * The transmission header's own value-bearing positions, minus the one a locus rule names.
+ * The transmission header's own value-bearing positions, minus the ones a locus rule names.
  *
- * Both headers are a **fixed, committed set of fields**, so they are enumerated by name rather than by
- * walking bytes: only the Date of Service is named by a rule, and the routing, version, transaction,
- * processor-control, count, response-status, service-provider and software-certification positions are
- * handed through with no decision reached at any of them.
+ * A header is a fixed-width struct rather than a run of `{ id, value }` fields, so the positions are
+ * read off the **decoded header object itself** ({@link headerPositions}) instead of from a list of
+ * names written here. That is deliberate and is the difference between an enumeration that is correct
+ * and one that stays correct: a hand-written list is right only until the parser's header view grows a
+ * field, and a position missing from such a list is exactly the silence this measurement exists to end.
  */
 function recordUnexaminedHeaderPositions(
   residuals: UnexaminedResidualBuilder,
   tx: TelecomTransaction,
 ): void {
-  for (const [name, value] of handedThroughHeaderPositions(tx)) {
+  const named = namedHeaderPositions(tx);
+  for (const [name, value] of headerPositions(handedThroughHeader(tx))) {
+    if (named.has(name)) continue;
     if (value.trim().length > 0) residuals.record(`header/${name}`);
   }
 }
 
 /**
- * The positions of **the header this pass actually hands through**, which is not always `tx.header`.
+ * The positions a locus rule names on the header this pass hands through.
+ *
+ * Only one rule reaches a header position at all: a **request**'s Date of Service is a date of the
+ * individual's care and is generalized to its year. Everything else on either header - the routing,
+ * version, transaction, processor-control, count, response-status, service-provider and
+ * software-certification positions - is handed through with no decision reached at it.
+ */
+function namedHeaderPositions(tx: TelecomTransaction): ReadonlySet<string> {
+  return tx.kind === "request" ? new Set(["dateOfService"]) : new Set<string>();
+}
+
+/**
+ * **The header this pass actually hands through**, which is not always `tx.header`.
  *
  * A response transmission is serialized from its own {@link TelecomResponseHeader} (the applier spreads
  * the parsed transaction, so `serializeTelecom` re-emits that header verbatim), and `tx.header` is a
@@ -250,45 +265,33 @@ function recordUnexaminedHeaderPositions(
  * enumerated. So exactly one of the two is enumerated: the one whose bytes reach the output.
  *
  * A transaction that says it is a response but carries no response header is serialized from the
- * request header like any other, so that is the header enumerated for it.
+ * request header like any other, so that is the header returned for it.
  */
-function handedThroughHeaderPositions(
+function handedThroughHeader(
   tx: TelecomTransaction,
-): readonly (readonly [string, string])[] {
+): TelecomTransaction["header"] | TelecomResponseHeader {
   const response = tx.responseHeader;
-  if (tx.kind === "response" && response !== undefined) return responseHeaderPositions(response);
-
-  const header = tx.header;
-  const positions: (readonly [string, string])[] = [
-    ["binNumber", header.binNumber],
-    ["versionRelease", header.versionRelease],
-    ["transactionCode", header.transactionCode],
-    ["processorControlNumber", header.processorControlNumber],
-    ["transactionCount", header.transactionCount],
-    ["serviceProviderIdQualifier", header.serviceProviderIdQualifier],
-    ["serviceProviderId", header.serviceProviderId],
-    ["softwareCertificationId", header.softwareCertificationId],
-  ];
-  // Only a REQUEST's Date of Service is reached by the rule above, so on anything else the position is
-  // handed through with nothing decided at it and belongs in the measurement rather than in silence.
-  if (tx.kind !== "request") positions.push(["dateOfService", header.dateOfService]);
-  return positions;
+  return tx.kind === "response" && response !== undefined ? response : tx.header;
 }
 
 /**
- * The Response Transaction Header's six positions. None is named by a locus rule: the Header Response
- * Status (501-F1) is a transmission-level accept/reject flag, and the rest are routing and version
- * stamps, so all six are handed through with nothing decided at any of them.
+ * Every position a decoded header carries, read off **its own keys**.
+ *
+ * The parser hands back a frozen object of `string` fields, one per positional header field, each named
+ * for the field it decoded. Iterating that object is what makes the enumeration closed: a field the
+ * parser's header view gains is enumerated the day it appears, under its own name, without this module
+ * being told about it. A non-string property (were one ever added) is not a decoded wire position and is
+ * skipped rather than stringified, which would put a shape into a locus.
+ *
+ * The key is the parser's own field name, not document content: it is fixed by the header's type and no
+ * byte of the transmission can change it, so nothing document-derived reaches the locus here.
  */
-function responseHeaderPositions(
-  header: TelecomResponseHeader,
+function headerPositions(
+  header: TelecomTransaction["header"] | TelecomResponseHeader,
 ): readonly (readonly [string, string])[] {
-  return [
-    ["versionRelease", header.versionRelease],
-    ["transactionCode", header.transactionCode],
-    ["transactionCount", header.transactionCount],
-    ["headerResponseStatus", header.headerResponseStatus],
-    ["serviceProviderIdQualifier", header.serviceProviderIdQualifier],
-    ["serviceProviderId", header.serviceProviderId],
-  ];
+  const positions: (readonly [string, string])[] = [];
+  for (const [name, value] of Object.entries(header)) {
+    if (typeof value === "string") positions.push([name, value]);
+  }
+  return positions;
 }

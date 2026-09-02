@@ -133,6 +133,16 @@ no rule examined has **no established Safe Harbor category**: it is credited to 
 no category total. A clinical code, a dose unit and an order status all sit at positions like these, so
 read the number as the size of what went unexamined, never as a count of PHI.
 
+**What the number is a count of.** The set of positions is derived from what each parser's model can
+actually carry, not from the places a value usually sits, so it includes carriers a reader might not
+think to ask about: XML character data that arrived as a CDATA section rather than as text, the comments
+and processing instructions a document is re-serialized with, a FHIR primitive's `_`-sibling element id,
+and whatever a partly rewritten structure keeps (a generalized address re-emits its state and country
+exactly as they arrived, along with anything riding inside them). The mirror also holds and matters as
+much for reading the number: a position the pass **removed** is not counted, because the inventory
+measures what left the pass untouched. The two edges of the count are stated in
+[Limitations](./limitations.md).
+
 ## The keyed-surrogate residual inventory: a different residual, kept apart
 
 A **keyed surrogate** is not a retained quasi-identifier and never joins that list. A retained
