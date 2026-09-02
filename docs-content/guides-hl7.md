@@ -113,16 +113,22 @@ category each entry lands in and therefore which transform the configured policy
 - Free text is **block-only**: there is no built-in NLP scrub.
 - Dates inside retained segments **are** acted on and recorded, and the classification is fixed at HL7
   **v2.5.1**. A position that only some other version of the standard types as a date is therefore a
-  **residual**: it is not classified, not acted on, and not recorded. The same applies to a segment the
-  retain-list keeps that v2.5.1 does not define, and to the file and batch envelope headers (`FHS`,
-  `BHS`), whose creation timestamps are left untouched because those headers number their fields from a
-  leading delimiter.
+  **residual**: it is not classified and not acted on. The same applies to a segment the retain-list
+  keeps that v2.5.1 does not define, and to the file and batch envelope headers (`FHS`, `BHS`), whose
+  creation timestamps are left untouched because those headers number their fields from a leading
+  delimiter.
 - Within retained segments, the **non-date** positions the maps do not name are still passed through
-  untouched and recorded nowhere. That includes the **provider and other non-patient person names**
-  (PV1-7/8, OBR-16 and their siblings), and the date/time components that live **inside** a person-name
-  or address composite (an effective, expiration or action-performed date carried by a provider name,
-  an authenticator's timestamp, a licence expiry). Retaining a segment is not auditing every field in
-  it. If your threat model includes these, filter them yourself.
+  untouched. That includes the **provider and other non-patient person names** (PV1-7/8, OBR-16 and
+  their siblings), and the date/time components that live **inside** a person-name or address composite
+  (an effective, expiration or action-performed date carried by a provider name, an authenticator's
+  timestamp, a licence expiry). Retaining a segment is not auditing every field in it. If your threat
+  model includes these, filter them yourself.
+- Every one of those positions **is counted and located**: it appears on `result.unexaminedResiduals`
+  with its structural locus (`PV1-8.2`, `OBR-32.1`, one component of one repetition), a count, and the
+  fact that nothing examined it, never a value. Counting is not removal: the value is still there, and a
+  position no rule examined has no established Safe Harbor category, so it joins none of the 18. `OBX-5`
+  kept by the over-scrub guard is **not** one of these: a structured clinical value survives on purpose,
+  which is a decision the engine reached, not a silence.
 - The address generalization keeps only the Safe Harbor 3-digit ZIP (the permitted state is also
   dropped, conservative, never a leak).
 - Under a **date-shift** policy, a date whose encoding that transform does not accept, including a

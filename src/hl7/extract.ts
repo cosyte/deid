@@ -35,7 +35,13 @@ import { SAFE_HARBOR_CATEGORIES } from "../categories.js";
 import { safeLocusToken } from "../derived-token.js";
 import type { GenericLocus } from "../locus.js";
 import { classifyPartyRole } from "../party-role.js";
+import {
+  enumerateOrFail,
+  UnexaminedResidualBuilder,
+  type UnexaminedResidual,
+} from "../residual.js";
 import { isRetainableCategory, retains, type RetainedLocusClass } from "../retention.js";
+import { Hl7ExaminedPositions, recordUnexaminedHl7Positions } from "./positions.js";
 import { DR_DATE_COMPONENTS, HL7_DATE_LOCI, OBX_DATE_VALUE_TYPES } from "./date-loci.js";
 import {
   HL7_LOCUS_MAP,
@@ -95,6 +101,18 @@ export interface Hl7Extraction {
   readonly loci: GenericLocus[];
   /** The write-back coordinates, index-aligned with {@link loci}. */
   readonly coords: Hl7Coord[];
+  /**
+   * Every **value-bearing position the pass hands through that no locus rule named**, counted and
+   * located. Not loci: nothing here is transformed, blocked or retained by a decision, and the list is
+   * the measurement of what the pass never examined (see `./positions.ts`).
+   */
+  readonly unexaminedResiduals: readonly UnexaminedResidual[];
+}
+
+/** The mutable pair the sweep accumulates into, before it is frozen into an {@link Hl7Extraction}. */
+interface Hl7LocusAccumulator {
+  readonly loci: GenericLocus[];
+  readonly coords: Hl7Coord[];
 }
 
 /**
@@ -139,7 +157,7 @@ function componentValue(seg: Segment, field: number, rep: number, component: num
 }
 
 /** Append a locus + its coordinate to the accumulator. */
-function push(out: Hl7Extraction, locus: GenericLocus, coord: Hl7Coord): void {
+function push(out: Hl7LocusAccumulator, locus: GenericLocus, coord: Hl7Coord): void {
   out.loci.push(locus);
   out.coords.push(coord);
 }
@@ -173,14 +191,22 @@ function datePath(
   return `${fieldPath(type, occ, field, rep)}${suffix}`;
 }
 
-/** Extract the loci for one mapped-segment field rule. */
+/**
+ * Extract the loci for one mapped-segment field rule.
+ *
+ * The rule **names the whole field**, so the field is marked examined before any of its own guards run:
+ * a rule that looked at a position and produced nothing (an id repetition whose CX.1 is empty) still
+ * reached it, and a position a rule reached is not an unexamined residual.
+ */
 function extractRule(
-  out: Hl7Extraction,
+  out: Hl7LocusAccumulator,
   seg: Segment,
   type: string,
   occ: number,
   rule: Hl7FieldRule,
+  examined: Hl7ExaminedPositions,
 ): void {
+  examined.field(rule.field);
   if (!hasContent(seg, rule.field)) return;
   const field = seg.field(rule.field);
 
@@ -282,14 +308,18 @@ function extractRule(
  * loci stay in document order.
  */
 function extractOrganisationParties(
-  out: Hl7Extraction,
+  out: Hl7LocusAccumulator,
   seg: Segment,
   type: string,
   occ: number,
+  examined: Hl7ExaminedPositions,
 ): void {
   const rules = HL7_ORGANISATION_PARTY_RULES[type];
   if (rules === undefined) return;
   for (const rule of rules) {
+    // The party-role test names the whole organisation position, name and identifier together, whether
+    // it then leaves the party in place or fails closed on it.
+    examined.field(rule.field);
     if (!hasContent(seg, rule.field)) continue;
     const party = classifyPartyRole(rule.role, HL7_PARTY_ROLE_TABLE);
     if (party.scope === "outside-scope") {
@@ -348,6 +378,7 @@ function collectCarveOutLoci(
   type: string,
   occ: number,
   retainedLoci: readonly RetainedLocusClass[] | undefined,
+  examined: Hl7ExaminedPositions,
 ): void {
   const rules = RETAINED_LOCUS_RULES[type];
   if (rules === undefined) return;
@@ -355,6 +386,8 @@ function collectCarveOutLoci(
     retains(retainedLoci, rule.retention);
 
   for (const rule of rules) {
+    // The carve-out table names the whole field, at whichever outcome the retention keys reach.
+    examined.field(rule.field);
     if (!hasContent(seg, rule.field)) continue;
 
     if (rule.routeByTypeCode === true) {
@@ -460,12 +493,25 @@ function dateLocus(
  * as a date. A field the carve-out table already owns whole is left to it, so no position is acted on
  * twice.
  */
-function collectDateLoci(found: PositionedLocus[], seg: Segment, type: string, occ: number): void {
+function collectDateLoci(
+  found: PositionedLocus[],
+  seg: Segment,
+  type: string,
+  occ: number,
+  examined: Hl7ExaminedPositions,
+): void {
   const table = HL7_DATE_LOCI[type];
   if (table === undefined) return;
   const carved = carvedFields(type);
 
   for (const rule of table.loci) {
+    // The enumeration names a position at ITS OWN unit, and the difference matters to the measurement:
+    // a whole-field date rule reaches the field, while a component-granular one reaches exactly one
+    // component and leaves its siblings untouched. `OBR-32` is the case that makes this concrete: its
+    // start and end date/time components are typed as dates, and the provider name at `OBR-32.1` that
+    // they qualify is not, so it stays an unexamined position rather than riding on their coat-tails.
+    if (rule.component === undefined) examined.field(rule.field);
+    else examined.component(rule.field, rule.component);
     if (rule.component === undefined && carved.has(rule.field)) continue;
     const reps = seg.field(rule.field).repetitions.length;
     for (let rep = 0; rep < reps; rep += 1) {
@@ -477,15 +523,16 @@ function collectDateLoci(found: PositionedLocus[], seg: Segment, type: string, o
 
 /** Emit a retained segment's loci in document order: ascending field, repetition, then component. */
 function extractRetainedSegment(
-  out: Hl7Extraction,
+  out: Hl7LocusAccumulator,
   seg: Segment,
   type: string,
   occ: number,
   retainedLoci: readonly RetainedLocusClass[] | undefined,
+  examined: Hl7ExaminedPositions,
 ): void {
   const found: PositionedLocus[] = [];
-  collectCarveOutLoci(found, seg, type, occ, retainedLoci);
-  collectDateLoci(found, seg, type, occ);
+  collectCarveOutLoci(found, seg, type, occ, retainedLoci, examined);
+  collectDateLoci(found, seg, type, occ, examined);
   found.sort((a, b) => a.field - b.field || a.rep - b.rep || a.component - b.component);
   for (const entry of found) push(out, entry.locus, entry.coord);
 }
@@ -496,7 +543,16 @@ function extractRetainedSegment(
  * and the other date types make it the field, one locus per repetition either way. A positively-typed
  * structured clinical value survives (the over-scrub guard); everything else fails closed.
  */
-function collectObxValueLoci(found: PositionedLocus[], seg: Segment, occ: number): void {
+function collectObxValueLoci(
+  found: PositionedLocus[],
+  seg: Segment,
+  occ: number,
+  examined: Hl7ExaminedPositions,
+): void {
+  // `OBX-2` names `OBX-5`, and it names it on EVERY branch below, the over-scrub guard's included: a
+  // structured clinical value that survives on purpose is a decision the engine reached, not a silence,
+  // so it is examined and is not an unexamined residual.
+  examined.field(5);
   if (!hasContent(seg, 5)) return;
   const valueType = seg.field(2).value.toUpperCase();
   // A date/time value type is the message declaring a date locus: act on it under the policy rather
@@ -538,16 +594,27 @@ function collectObxValueLoci(found: PositionedLocus[], seg: Segment, occ: number
  * the same committed v2.5.1 enumeration every retained segment is swept from. Loci are emitted in
  * document order, so OBX-5 precedes them.
  */
-function extractObx(out: Hl7Extraction, seg: Segment, occ: number): void {
+function extractObx(
+  out: Hl7LocusAccumulator,
+  seg: Segment,
+  occ: number,
+  examined: Hl7ExaminedPositions,
+): void {
   const found: PositionedLocus[] = [];
-  collectObxValueLoci(found, seg, occ);
-  collectDateLoci(found, seg, "OBX", occ);
+  collectObxValueLoci(found, seg, occ, examined);
+  collectDateLoci(found, seg, "OBX", occ, examined);
   found.sort((a, b) => a.field - b.field || a.rep - b.rep || a.component - b.component);
   for (const entry of found) push(out, entry.locus, entry.coord);
 }
 
 /** Extract the free-text locus for an NTE segment (NTE-3, the comment). */
-function extractNte(out: Hl7Extraction, seg: Segment, occ: number): void {
+function extractNte(
+  out: Hl7LocusAccumulator,
+  seg: Segment,
+  occ: number,
+  examined: Hl7ExaminedPositions,
+): void {
+  examined.field(3);
   if (!hasContent(seg, 3)) return;
   push(
     out,
@@ -562,9 +629,17 @@ function extractNte(out: Hl7Extraction, seg: Segment, occ: number): void {
 }
 
 /** Fail closed on an unknown/Z-segment: block every populated field (unrecognized structure). */
-function extractUnknownSegment(out: Hl7Extraction, seg: Segment, type: string, occ: number): void {
+function extractUnknownSegment(
+  out: Hl7LocusAccumulator,
+  seg: Segment,
+  type: string,
+  occ: number,
+  examined: Hl7ExaminedPositions,
+): void {
   // fields[0] is the segment-name placeholder: start at HL7 position 1.
   for (let field = 1; field < seg.fields.length; field += 1) {
+    // Fail-closed sweeps the whole segment, so every field of it is named and none is unexamined.
+    examined.field(field);
     if (!hasContent(seg, field)) continue;
     push(
       out,
@@ -578,9 +653,17 @@ function extractUnknownSegment(out: Hl7Extraction, seg: Segment, type: string, o
  * Walk a parsed HL7 v2 message and extract every PHI-bearing (or fail-closed) locus, structurally, from
  * the `@cosyte/hl7` model. Never mutates the message.
  *
+ * Every segment is also **enumerated**: the value-bearing positions it hands through that no rule above
+ * named are counted and located as unexamined residuals, so such a position is measured rather than
+ * passing through in silence. Nothing is transformed on account of that measurement, and a structure
+ * whose positions cannot be enumerated fails the pass rather than contributing a zero.
+ *
  * @param msg - The parsed HL7 v2 message.
  * @param options - The configured profile's retention classes. Omitted retains nothing (fail closed).
- * @returns The loci (for the engine) and their index-aligned write-back coordinates.
+ * @returns The loci (for the engine), their index-aligned write-back coordinates, and the unexamined
+ *   residual positions the pass hands through.
+ * @throws {@link DeidError} `DEID_POSITIONS_UNENUMERABLE` when a segment's value-bearing positions
+ *   cannot be enumerated: the pass fails rather than emit a zero or a partial count.
  * @example
  * ```ts
  * import { parseHL7 } from "@cosyte/hl7";
@@ -591,7 +674,8 @@ function extractUnknownSegment(out: Hl7Extraction, seg: Segment, type: string, o
  * ```
  */
 export function extractHl7Loci(msg: Hl7Message, options: Hl7ExtractOptions = {}): Hl7Extraction {
-  const out: Hl7Extraction = { loci: [], coords: [] };
+  const out: Hl7LocusAccumulator = { loci: [], coords: [] };
+  const residuals = new UnexaminedResidualBuilder();
   const occurrences = new Map<string, number>();
 
   for (const seg of msg.allSegments()) {
@@ -603,45 +687,65 @@ export function extractHl7Loci(msg: Hl7Message, options: Hl7ExtractOptions = {})
     const type = safeLocusToken(seg.type, "hl7SegmentId");
     const occ = occurrences.get(type) ?? 0;
     occurrences.set(type, occ + 1);
+    const examined = new Hl7ExaminedPositions();
 
-    if (type === "MSH") {
-      // The message envelope carries no patient identity, but it is on the retain-list and it does
-      // carry a date the standard types: sweep its date loci and nothing else.
-      extractRetainedSegment(out, seg, type, occ, options.retainedLoci);
-      continue;
-    }
-
-    const rules = HL7_LOCUS_MAP[type];
-    if (rules !== undefined) {
-      for (const rule of rules) extractRule(out, seg, type, occ, rule);
-      // A position the standard types as a whole ORGANISATION is decided by the party-role test, not
-      // by a category rule. Emitted after the flat rules, and high-numbered, so document order holds.
-      extractOrganisationParties(out, seg, type, occ);
-      continue;
-    }
-    if (type === "OBX") {
-      // NOT on the retain-list, and passed through all the same: OBX-2 decides OBX-5 and the rest of
-      // the segment keeps its bytes. Its enumerated date positions are swept here for that reason.
-      extractObx(out, seg, occ);
-      continue;
-    }
-    if (type === "NTE") {
-      extractNte(out, seg, occ);
-      continue;
-    }
-    // Fail-closed rule: retain a recognized segment ONLY if it is on the explicit clinical/administrative
-    // retain-list. Everything else is blocked: a Z-segment, a segment unknown to the parser, OR a
-    // *known* patient/relative-identity segment absent from the map and the retain-list (MRG / ACC /
-    // FAM / PEO / PDA). A merge message's prior name + MRN can never ride through in the clear.
-    if (RETAIN_SEGMENTS.has(type)) {
-      // Retaining the SEGMENT does not retain every field in it: the identifying dates and the
-      // encounter / order identifiers are carved back out, and every date position the committed
-      // v2.5.1 enumeration names is handed to the engine alongside them.
-      extractRetainedSegment(out, seg, type, occ, options.retainedLoci);
-      continue;
-    }
-    extractUnknownSegment(out, seg, type, occ);
+    extractSegment(out, seg, type, occ, options.retainedLoci, examined);
+    // The enumeration runs for EVERY segment, the fail-closed ones included: there it finds nothing,
+    // because a blocked segment is swept field by field, and that zero is the honest answer rather
+    // than a case the walk skips.
+    enumerateOrFail(`${type}-*`, () =>
+      recordUnexaminedHl7Positions(residuals, seg, type, occ, examined),
+    );
   }
 
-  return out;
+  return { loci: out.loci, coords: out.coords, unexaminedResiduals: residuals.build() };
+}
+
+/** Dispatch one segment through the HL7 v2 PHI rules, recording what each rule names as examined. */
+function extractSegment(
+  out: Hl7LocusAccumulator,
+  seg: Segment,
+  type: string,
+  occ: number,
+  retainedLoci: readonly RetainedLocusClass[] | undefined,
+  examined: Hl7ExaminedPositions,
+): void {
+  if (type === "MSH") {
+    // The message envelope carries no patient identity, but it is on the retain-list and it does
+    // carry a date the standard types: sweep its date loci and nothing else.
+    extractRetainedSegment(out, seg, type, occ, retainedLoci, examined);
+    return;
+  }
+
+  const rules = HL7_LOCUS_MAP[type];
+  if (rules !== undefined) {
+    for (const rule of rules) extractRule(out, seg, type, occ, rule, examined);
+    // A position the standard types as a whole ORGANISATION is decided by the party-role test, not
+    // by a category rule. Emitted after the flat rules, and high-numbered, so document order holds.
+    extractOrganisationParties(out, seg, type, occ, examined);
+    return;
+  }
+  if (type === "OBX") {
+    // NOT on the retain-list, and passed through all the same: OBX-2 decides OBX-5 and the rest of
+    // the segment keeps its bytes. Its enumerated date positions are swept here for that reason.
+    extractObx(out, seg, occ, examined);
+    return;
+  }
+  if (type === "NTE") {
+    extractNte(out, seg, occ, examined);
+    return;
+  }
+  // Fail-closed rule: retain a recognized segment ONLY if it is on the explicit clinical/administrative
+  // retain-list. Everything else is blocked: a Z-segment, a segment unknown to the parser, OR a
+  // *known* patient/relative-identity segment absent from the map and the retain-list (MRG / ACC /
+  // FAM / PEO / PDA). A merge message's prior name + MRN can never ride through in the clear.
+  if (RETAIN_SEGMENTS.has(type)) {
+    // Retaining the SEGMENT does not retain every field in it: the identifying dates and the
+    // encounter / order identifiers are carved back out, and every date position the committed
+    // v2.5.1 enumeration names is handed to the engine alongside them. Retaining a STRUCTURE is not
+    // naming a POSITION, so every field of it the tables miss is enumerated as an unexamined residual.
+    extractRetainedSegment(out, seg, type, occ, retainedLoci, examined);
+    return;
+  }
+  extractUnknownSegment(out, seg, type, occ, examined);
 }

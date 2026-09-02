@@ -34,6 +34,14 @@
  * document `id` / `title` / `code` envelope is retained (like HL7's MSH); the address generalization
  * keeps state + country (permitted) and the safe 3-digit ZIP, dropping every finer component.
  *
+ * **Every one of those positions is enumerated.** A value-bearing position inside the retained body or
+ * the envelope that no locus rule names is **counted and located** as an unexamined residual on
+ * {@link CcdaDeidResult.unexaminedResiduals}, at its own coordinates (an element's attribute, an
+ * element's direct text). The unit is that position and never the element it sits on, so a
+ * `<telecom use="HP" value="...">` whose `@value` is removed still reports its `@use`, which is handed
+ * through untouched. Nothing is transformed on account of it: the measurement exists so an empty
+ * residual inventory can be told apart from an unmeasured one.
+ *
  * @packageDocumentation
  */
 
@@ -42,6 +50,7 @@ import { parseCcda, parseSecureXml, resolveLimits, type CcdaDocument } from "@co
 import { deidentify, type DeidOptions } from "../deidentify.js";
 import { DeidError, FATAL_CODES } from "../codes.js";
 import { type DeidManifestEntry } from "../manifest.js";
+import { type UnexaminedResidual } from "../residual.js";
 import { applyCcda } from "./apply.js";
 import { extractCcdaLoci } from "./extract.js";
 
@@ -66,6 +75,13 @@ export interface CcdaDeidResult {
   readonly document: CcdaDocument;
   /** The value-free audit of every action, in locus order (never a value, never a key). */
   readonly manifest: readonly DeidManifestEntry[];
+  /**
+   * The manifest's **second list**: every value-bearing position this pass handed through that **no
+   * locus rule named**, counted and located. The retained clinical body's entry dates, entry ids,
+   * in-entry performer names and family-history relative demographics are measured here rather than
+   * passing through in silence. An empty list is a **measured zero**, not a silence.
+   */
+  readonly unexaminedResiduals: readonly UnexaminedResidual[];
 }
 
 /**
@@ -110,7 +126,7 @@ export function deidentifyCcda(doc: CcdaDocument, options: DeidOptions = {}): Cc
     );
   }
 
-  const { loci, coords } = extractCcdaLoci(root);
+  const { loci, coords, unexaminedResiduals } = extractCcdaLoci(root);
   const { document, manifest } = deidentify({ loci }, options);
   applyCcda(document.loci, coords);
 
@@ -119,7 +135,7 @@ export function deidentifyCcda(doc: CcdaDocument, options: DeidOptions = {}): Cc
   const serializable: { toString(): string } = root;
   const serialized = serializable.toString();
   const xml = serialized.startsWith("<?xml") ? serialized : `${XML_DECLARATION}\n${serialized}`;
-  return { document: parseCcda(xml), manifest };
+  return { document: parseCcda(xml), manifest, unexaminedResiduals };
 }
 
 export {
@@ -137,4 +153,5 @@ export {
   type CcdaEditKind,
 } from "./extract.js";
 export { applyCcda } from "./apply.js";
+export { type UnexaminedResidual } from "../residual.js";
 export { SAFE_HARBOR_CATEGORIES, type SafeHarborCategory } from "../categories.js";

@@ -2,8 +2,9 @@
  * **Bounding for identifiers read out of a document before they enter a manifest locus.**
  *
  * Five of the six per-format adapters build a `locus` by interpolating an identifier they read from the
- * input: an HL7 v2 segment id, a CDA element local name, a FHIR element name and `resourceType`, an X12
- * segment id and `ST-01`, an NCPDP segment code. Those all *claim* to be identifiers, but nothing
+ * input: an HL7 v2 segment id, a CDA element local name **and attribute name**, a FHIR element name and
+ * `resourceType`, an X12 segment id and `ST-01`, an NCPDP segment code and field id. Those all *claim*
+ * to be identifiers, but nothing
  * upstream is obliged to make them so: when a parser cannot recognize the structure at that position it
  * hands back whatever bytes stood there, and on an unrecognized narrative line that is clinical prose.
  * Interpolating it unbounded writes document content into the value-free manifest, and from there into
@@ -43,7 +44,10 @@
  * Four of the six are genuinely tiny: `hl7SegmentId`, `x12SegmentId`, `x12TransactionSetId` and
  * `ncpdpCode` admit at most three characters with no separator and no whitespace, so the worst case
  * there is a narrative line whose entire content is `JQD`, which is indistinguishable from a segment
- * identifier. The other two, `xmlName` and `fhirElementName`, are materially larger:
+ * identifier. The residue of `xmlName` is the widest of the six for a second reason as well: it is
+ * applied at **two** kinds of position, an element's local name and an attribute's name, and an
+ * attribute name is the one a schema constrains least. The other two, `xmlName` and `fhirElementName`,
+ * are materially larger:
  * they admit up to 64 and 65 characters respectively, and `xmlName` additionally admits `.`, `-` and
  * `_`, so a single unspaced 64-character token is echoed. No whitespace passes either of them, which is
  * what keeps prose out, but "no whitespace" is not "no content" and this package therefore makes no
@@ -93,10 +97,12 @@ const DERIVED_TOKEN_SHAPES = {
    */
   x12TransactionSetId: /^[A-Za-z0-9]{3}$/,
   /**
-   * An XML element local name in an HL7 v3 / CDA document. No colon: the prefix is already stripped by
-   * the time a local name is read. The XML `Name` production is itself unbounded, so the shape carries
-   * an explicit 64-character ceiling as well; the longest element name in the CDA R2 schema is well
-   * inside that, and 64 leaves room for a vendor or `sdtc` extension element.
+   * An XML element local name **or attribute name** in an HL7 v3 / CDA document. No colon: an element's
+   * prefix is already stripped by the time a local name is read, and a **prefixed attribute name is
+   * therefore refused and reads withheld**, which is the accepted cost of one shape covering both
+   * positions. The XML `Name` production is itself unbounded, so the shape carries an explicit
+   * 64-character ceiling as well; the longest element name in the CDA R2 schema is well inside that, and
+   * 64 leaves room for a vendor or `sdtc` extension element or attribute.
    *
    * Deliberately **narrower than XML NCName**, which also admits non-ASCII name characters. Widening it
    * to the real production would be worse than the gap it closes: a narrative line in a script that does

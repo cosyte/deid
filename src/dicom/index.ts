@@ -29,7 +29,12 @@
 
 import { Dataset, deidentify as dicomDeidentify, parseDicom, serializeDicom } from "@cosyte/dicom";
 
-import { BURNED_IN_ANNOTATION_CODE, foldReport, foldWarnings } from "./fold.js";
+import {
+  BURNED_IN_ANNOTATION_CODE,
+  deriveUnexaminedResiduals,
+  foldReport,
+  foldWarnings,
+} from "./fold.js";
 import { resolveDicomOptions } from "./policy-map.js";
 import type { DicomBufferDeidResult, DicomDeidOptions, DicomDeidResult } from "./types.js";
 
@@ -78,6 +83,8 @@ function withoutInputWarnings(dataset: Dataset): Dataset {
  * @param dataset - The parsed dataset (`parseDicom(bytes)`).
  * @param options - The policy and (for cross-file UID consistency) a shared `uidMap` / `uidRoot`.
  * @returns The de-identified dataset, the value-free manifest, the warnings, and the metadata-only stance.
+ * @throws {@link DeidError} `DEID_POSITIONS_UNENUMERABLE` when a dataset, a sequence item or the Part 10
+ *   File Meta group will not yield its positions, so no honest count exists for this study.
  * @example
  * ```ts
  * import { parseDicom } from "@cosyte/dicom";
@@ -100,9 +107,16 @@ export function deidentifyDicom(dataset: Dataset, options: DicomDeidOptions = {}
   });
 
   const warnings = foldWarnings(report.warnings);
+  const result = withoutInputWarnings(deidentified);
   return Object.freeze({
-    dataset: withoutInputWarnings(deidentified),
+    dataset: result,
     manifest: foldReport(report),
+    // The Annex E pass is delegated, so the measurement is DERIVED from what it returned rather than
+    // enumerated from a map this adapter does not hold: an attribute present in the result that the
+    // report does not account for is one no rule reached. Nested sequence items and the Part 10 File
+    // Meta group included, and a structure that will not yield its positions fails the pass rather
+    // than emit a partial count.
+    unexaminedResiduals: deriveUnexaminedResiduals(result, report),
     warnings,
     metadataOnly: true,
     burnedInAnnotationHazard: warnings.some((w) => w.code === BURNED_IN_ANNOTATION_CODE),
@@ -133,13 +147,12 @@ export function deidentifyDicomBuffer(
   bytes: Buffer | Uint8Array | ArrayBuffer,
   options: DicomDeidOptions = {},
 ): DicomBufferDeidResult {
-  const { dataset, manifest, warnings, burnedInAnnotationHazard, retained } = deidentifyDicom(
-    parseDicom(bytes),
-    options,
-  );
+  const { dataset, manifest, unexaminedResiduals, warnings, burnedInAnnotationHazard, retained } =
+    deidentifyDicom(parseDicom(bytes), options);
   return Object.freeze({
     bytes: serializeDicom(dataset),
     manifest,
+    unexaminedResiduals,
     warnings,
     metadataOnly: true,
     burnedInAnnotationHazard,
@@ -148,6 +161,7 @@ export function deidentifyDicomBuffer(
 }
 
 export { BURNED_IN_ANNOTATION_CODE } from "./fold.js";
+export { type UnexaminedResidual } from "../residual.js";
 export type {
   DicomDeidOptions,
   DicomDeidResult,

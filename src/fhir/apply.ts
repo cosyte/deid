@@ -44,14 +44,12 @@ import {
 } from "@cosyte/fhir";
 
 import type { LocusKind, TransformedLocus } from "../locus.js";
+import { FHIR_KEPT_ADDRESS_PARTS } from "./locus-map.js";
 import type { FhirCoord, FhirEditKind } from "./extract.js";
 
 /** Sentinel returned by {@link rebuildNode} when a node is removed (dropped from its parent). @internal */
 const REMOVE = Symbol("deid.fhir.remove");
 type Rebuilt = FhirNode | typeof REMOVE;
-
-/** Address components at or above state level, permitted under Safe Harbor and retained. @internal */
-const KEEP_ADDRESS_PARTS: ReadonlySet<string> = new Set(["state", "country"]);
 
 /** One resolved edit: how to rewrite a node, the locus kind, and the engine's transformed value. */
 interface Edit {
@@ -70,7 +68,7 @@ function stripPrimitive(node: FhirPrimitive): FhirNode {
 function rebuildAddress(node: FhirComplex, zip: string | null): Rebuilt {
   const props: FhirProperty[] = [];
   for (const prop of node.properties) {
-    if (KEEP_ADDRESS_PARTS.has(prop.name)) {
+    if (FHIR_KEPT_ADDRESS_PARTS.has(prop.name)) {
       props.push(prop);
     } else if (prop.name === "postalCode" && zip !== null) {
       props.push({ name: "postalCode", value: primitive(zip) });

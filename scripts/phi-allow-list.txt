@@ -370,3 +370,20 @@ ID ZZGROUP01
 ID ZZPRESCRIBERID
 ID ZZOTHERCARDID
 ID ZZOTHERGROUP
+
+# --- Synthetic HL7 v2 tokens for the unexamined-position suite (test/unexamined-residual.test.ts) ---
+# An inline message whose PV1 carries an attending and a referring provider, so a suite about
+# positions NO locus rule reaches has a position of that kind to point at. Every token is ZZ-tagged
+# and obviously synthetic, and the MRN and message control id are asserted ABSENT from the
+# measurement rather than merely absent from the wire.
+ID ZZMRN900
+ID ZZMSG900
+NAME ZZATTID
+NAME ZZATTFAM
+NAME ZZATTGIV
+NAME ZZREFID
+NAME ZZREFFAM
+NAME ZZREFGIV
+NAME ZZWARD
+NAME ZZROOM
+NAME ZZBED

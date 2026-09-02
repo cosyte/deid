@@ -54,13 +54,19 @@
  * other even though the retain-list does not name the segment. Each outcome is recorded, so a consumer
  * reads the manifest and knows which dates the output still carries.
  *
+ * **Every position the pass hands through is enumerated.** A value-bearing position inside a segment
+ * this adapter hands through that no locus rule names is **counted and located** as an unexamined
+ * residual on {@link Hl7DeidResult.unexaminedResiduals}: the provider names in PV1-7/8 and OBR-16, the
+ * date components carried inside a person-name or address composite, and the coded positions of every
+ * retained segment. Nothing is transformed on account of it: the measurement exists so an empty residual
+ * inventory can be told apart from an unmeasured one.
+ *
  * **Known limitations.** Free text is block-only (no scrub); every **non-date** field of a retained
- * segment that the maps do not name is still passed through untouched and unrecorded, which includes
- * the provider names in PV1-7/8 and OBR-16 and the date components carried inside a person-name or
- * address composite. The date classification is fixed at v2.5.1, so a position only another version
- * types as a date is a stated residual, as are the file and batch envelope headers. The address
- * generalization keeps only the Safe Harbor 3-digit ZIP and conservatively drops the (permitted) state
- * as well.
+ * segment that the maps do not name is still passed through untouched, which includes the provider names
+ * in PV1-7/8 and OBR-16 and the date components carried inside a person-name or address composite. The
+ * date classification is fixed at v2.5.1, so a position only another version types as a date is a stated
+ * residual, as are the file and batch envelope headers. The address generalization keeps only the Safe
+ * Harbor 3-digit ZIP and conservatively drops the (permitted) state as well.
  *
  * @packageDocumentation
  */
@@ -70,6 +76,7 @@ import { parseHL7, type Hl7Message } from "@cosyte/hl7";
 import { DeidError, FATAL_CODES } from "../codes.js";
 import { deidentify, type DeidOptions } from "../deidentify.js";
 import { type DeidManifestEntry } from "../manifest.js";
+import { type UnexaminedResidual } from "../residual.js";
 import { applyHl7 } from "./apply.js";
 import { extractHl7Loci } from "./extract.js";
 
@@ -91,6 +98,14 @@ export interface Hl7DeidResult {
   readonly document: Hl7Message;
   /** The value-free audit of every action, in locus order (never a value, never a key). */
   readonly manifest: readonly DeidManifestEntry[];
+  /**
+   * The manifest's **second list**: every value-bearing position inside a segment this pass handed
+   * through that **no locus rule named**, counted and located. Nothing here was transformed, blocked or
+   * kept by a decision, because nothing reached it; an empty list is therefore a **measured zero**, not
+   * a silence. Hand it to `buildExpertDeterminationSupportReport` alongside the manifest so the support
+   * report can say which of the two it is.
+   */
+  readonly unexaminedResiduals: readonly UnexaminedResidual[];
 }
 
 /**
@@ -121,14 +136,14 @@ export interface Hl7DeidResult {
  * ```
  */
 export function deidentifyHl7(msg: Hl7Message, options: DeidOptions = {}): Hl7DeidResult {
-  const { loci, coords } = extractHl7Loci(
+  const { loci, coords, unexaminedResiduals } = extractHl7Loci(
     msg,
     options.retainedLoci !== undefined ? { retainedLoci: options.retainedLoci } : {},
   );
   const { document, manifest } = deidentify({ loci }, options);
   const deidentified = applyHl7(msg, document.loci, coords);
   assertRoundTrips(deidentified);
-  return { document: deidentified, manifest };
+  return { document: deidentified, manifest, unexaminedResiduals };
 }
 
 /**
@@ -192,4 +207,5 @@ export {
   type Hl7SegmentDateLoci,
 } from "./date-loci.js";
 export { RETAINED_LOCUS_CLASSES, retains, type RetainedLocusClass } from "../retention.js";
+export { type UnexaminedResidual } from "../residual.js";
 export { SAFE_HARBOR_CATEGORIES, type SafeHarborCategory } from "../categories.js";

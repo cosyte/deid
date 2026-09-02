@@ -44,6 +44,7 @@ import { parseResource, serializeResource, type FhirComplex } from "@cosyte/fhir
 
 import { deidentify, type DeidOptions } from "../deidentify.js";
 import { type DeidManifestEntry } from "../manifest.js";
+import { type UnexaminedResidual } from "../residual.js";
 import { applyFhir } from "./apply.js";
 import { extractFhirLoci } from "./extract.js";
 
@@ -69,6 +70,13 @@ export interface FhirDeidResult {
   readonly document: FhirComplex;
   /** The value-free audit of every action, in locus order (never a value, never a key). */
   readonly manifest: readonly DeidManifestEntry[];
+  /**
+   * The manifest's **second list**: every value-bearing position this pass handed through that **no
+   * locus rule named**, counted and located. In FHIR that is largely the clinical resources' codes,
+   * units and statuses, which no rule here examines. An empty list is a **measured zero**, not a
+   * silence.
+   */
+  readonly unexaminedResiduals: readonly UnexaminedResidual[];
 }
 
 /**
@@ -99,10 +107,10 @@ export interface FhirDeidResult {
  * ```
  */
 export function deidentifyFhir(resource: FhirComplex, options: DeidOptions = {}): FhirDeidResult {
-  const { loci, coords } = extractFhirLoci(resource);
+  const { loci, coords, unexaminedResiduals } = extractFhirLoci(resource);
   const { document, manifest } = deidentify({ loci }, options);
   const deidentified = applyFhir(resource, document.loci, coords);
-  return { document: deidentified, manifest };
+  return { document: deidentified, manifest, unexaminedResiduals };
 }
 
 /**
@@ -147,4 +155,5 @@ export {
   type FhirEditKind,
 } from "./extract.js";
 export { applyFhir } from "./apply.js";
+export { type UnexaminedResidual } from "../residual.js";
 export { SAFE_HARBOR_CATEGORIES, type SafeHarborCategory } from "../categories.js";

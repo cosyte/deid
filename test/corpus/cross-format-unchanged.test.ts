@@ -1,7 +1,10 @@
 /**
- * The **fence around the other five adapters**. The HL7 v2 retained-segment date sweep changed one
- * adapter; the C-CDA, FHIR, X12, NCPDP and DICOM passes must be indistinguishable from what they were,
- * and "indistinguishable" here is stronger than "the numbers still add up":
+ * The **fence around what a pass emits**. A change that only means to *measure* something must leave
+ * every transformed document and every manifest entry describing an acted-on position exactly where it
+ * was, so the two are pinned here: each adapter's output is digested, and each adapter's manifest is
+ * snapshotted, from the pass as it stood before the measurement existed.
+ *
+ * "Indistinguishable" here is stronger than "the numbers still add up":
  *
  * - the manifest's **entry ORDER**, not only its contents. The manifest builder is shared by all six
  *   adapters, so a sort imposed there to satisfy one format's ordering requirement would re-order every
@@ -13,12 +16,15 @@
  * Every value is a synthetic sentinel from the committed fixtures.
  */
 
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 import { parseCcda } from "@cosyte/ccda";
-import { parseResource } from "@cosyte/fhir";
+import { parseResource, serializeResource } from "@cosyte/fhir";
+import { parseHL7 } from "@cosyte/hl7";
+import { serializeDicom } from "@cosyte/dicom";
 
 import {
   buildExpertDeterminationSupportReport,
@@ -28,6 +34,7 @@ import {
   SAFE_HARBOR_PROFILE,
   type DeidManifestEntry,
 } from "../../src/index.js";
+import { deidentifyHl7 } from "../../src/hl7/index.js";
 import { deidentifyCcda } from "../../src/ccda/index.js";
 import { deidentifyFhir } from "../../src/fhir/index.js";
 import { deidentifyX12String } from "../../src/x12/index.js";
@@ -38,11 +45,117 @@ import { buildPhiDataset } from "../dicom/helpers/fixtures.js";
 const FIX = (fmt: string, file: string): string =>
   readFileSync(join(import.meta.dirname, "..", "fixtures", fmt, file), "utf8");
 
+const hl7Wire = (name: string): string =>
+  FIX("hl7", `${name}.hl7`).trim().split(/\r?\n/).join("\r");
+
 const ctx = createDeidContext({ key: "cross-format-key", patientId: "p-cross" });
 const options = (): ReturnType<typeof profileOptions> => profileOptions(SAFE_HARBOR_PROFILE, ctx);
 
 /** The ordered locus list of a manifest: the axis a shared re-sort would break. */
 const order = (manifest: readonly DeidManifestEntry[]): string[] => manifest.map((m) => m.locus);
+
+/**
+ * A compact, exact fingerprint of one transformed document. A digest rather than the whole wire: the
+ * assertion is *identity*, and a hash makes a single moved byte as loud as a rewritten document while
+ * keeping the pinned expectation readable. It carries nothing of the document itself.
+ */
+const digest = (wire: string): string =>
+  createHash("sha256").update(wire, "utf8").digest("hex").slice(0, 32);
+
+/**
+ * Every adapter's transformed document, digested. Deterministic: one fixed key context, one profile,
+ * committed fixtures, and content-derived (never random) surrogates in every adapter.
+ */
+function transformedDocumentDigests(): Record<string, string> {
+  const { resource } = parseResource(FIX("fhir", "bundle.json"));
+  return {
+    hl7: digest(deidentifyHl7(parseHL7(hl7Wire("oru-r01")), options()).document.toString()),
+    "hl7-encounter": digest(
+      deidentifyHl7(parseHL7(hl7Wire("adt-a03")), options()).document.toString(),
+    ),
+    ccda: digest(deidentifyCcda(parseCcda(FIX("ccda", "ccd.xml")), options()).document.toString()),
+    fhir: digest(serializeResource(deidentifyFhir(resource, options()).document)),
+    x12: digest(deidentifyX12String(FIX("x12", "837p.edi"), options()).x12),
+    ncpdp: digest(deidentifyTelecomString(FIX("ncpdp", "telecom-b1.ncpdp"), options()).telecom),
+    dicom: digest(serializeDicom(deidentifyDicom(buildPhiDataset()).dataset).toString("latin1")),
+  };
+}
+
+/**
+ * The **fence around the transformed documents themselves**, pinned so that a change which only means
+ * to *measure* something cannot move a single emitted byte. The digests below were captured from the
+ * pass as it stood before the unexamined-residual measurement existed, so a later run that reproduces
+ * them is a run that emits the document a pass without the measurement emits.
+ *
+ * Byte identity is the assertion, deliberately: the mirror hazard of any counting change is that the
+ * enumeration walk perturbs the tree it walks, or that a position enumerated for the count also gets
+ * acted on. Both show up here as a changed digest, whatever the manifest says.
+ */
+describe("every adapter emits the same transformed document, byte for byte", () => {
+  it("the six adapters' transformed documents are unchanged", () => {
+    expect(transformedDocumentDigests()).toMatchInlineSnapshot(`
+      {
+        "ccda": "152ba0fce5feff3fa707d6c25c868ee9",
+        "dicom": "8f9e91a91cc7b3a4461af53838c8843e",
+        "fhir": "a9237473c3c96a54b5ad915ad10afe34",
+        "hl7": "b0e71b72dd6f4078c43d1d7b767ef843",
+        "hl7-encounter": "7aef4fa7fa7ed2ffd1ce4c05158e4773",
+        "ncpdp": "e8a8259ce46ed5764268f2c0a51dbfc5",
+        "x12": "9c207e831fde066fd4ce03e11fdb6b77",
+      }
+    `);
+  });
+});
+
+describe("the HL7 v2 manifest is unchanged, contents and order", () => {
+  it("HL7 v2 (ORU-R01)", () => {
+    const { manifest } = deidentifyHl7(parseHL7(hl7Wire("oru-r01")), options());
+    expect(order(manifest)).toMatchInlineSnapshot(`
+      [
+        "MSH-7[0]",
+        "PID-3[0]",
+        "PID-5",
+        "PID-7",
+        "PID-11[0]",
+        "PID-12",
+        "PID-13",
+        "PID-18[0]",
+        "PID-19",
+        "OBR-2",
+        "OBR-3",
+        "OBR-7",
+        "OBX[3]-5",
+        "OBX[4]-5",
+        "NTE-3",
+      ]
+    `);
+  });
+
+  it("HL7 v2 (ADT-A03, the retained encounter loci)", () => {
+    const { manifest } = deidentifyHl7(parseHL7(hl7Wire("adt-a03")), options());
+    expect(manifest.map((m) => `${m.locus} ${m.category} ${m.disposition} ${m.code}`))
+      .toMatchInlineSnapshot(`
+      [
+        "MSH-7[0] DATES transformed DEID_RESIDUAL_RETAINED",
+        "PID-3[0] MRN removed DEID_CATEGORY_REMOVED",
+        "PID-5 NAMES removed DEID_CATEGORY_REMOVED",
+        "PID-7 DATES transformed DEID_RESIDUAL_RETAINED",
+        "PID-11[0] GEOGRAPHIC transformed DEID_RESIDUAL_RETAINED",
+        "PID-13 PHONE removed DEID_CATEGORY_REMOVED",
+        "PID-18[0] ACCOUNT removed DEID_CATEGORY_REMOVED",
+        "PV1-19[0] OTHER_UNIQUE_ID blocked DEID_LOCUS_BLOCKED",
+        "PV1-44 DATES transformed DEID_RESIDUAL_RETAINED",
+        "PV1-45 DATES transformed DEID_RESIDUAL_RETAINED",
+        "ORC-2 OTHER_UNIQUE_ID blocked DEID_LOCUS_BLOCKED",
+        "ORC-3 OTHER_UNIQUE_ID blocked DEID_LOCUS_BLOCKED",
+        "OBR-2 OTHER_UNIQUE_ID blocked DEID_LOCUS_BLOCKED",
+        "OBR-3 OTHER_UNIQUE_ID blocked DEID_LOCUS_BLOCKED",
+        "OBR-7 DATES transformed DEID_RESIDUAL_RETAINED",
+        "DG1-5 DATES transformed DEID_RESIDUAL_RETAINED",
+      ]
+    `);
+  });
+});
 
 describe("the other five adapters produce the same manifests, in the same order", () => {
   it("C-CDA", () => {
@@ -244,6 +357,8 @@ describe("the Expert-Determination support report keeps its shape, not only its 
         "categoryCoverage",
         "retainedQuasiIdentifiers",
         "keyedSurrogateResiduals",
+        "unexaminedResiduals",
+        "unexaminedResidualsMeasured",
         "quasiIdentifierStatistics",
       ]
     `);
@@ -276,6 +391,7 @@ describe("the Expert-Determination support report keeps its shape, not only its 
         "# Expert-Determination support report",
         "## Safe Harbor category coverage (§164.514(b)(2)(i) A–R)",
         "## Retained quasi-identifiers (identifying residuals recorded as retained)",
+        "## Unexamined residual positions (handed through, no locus rule reached them)",
         "## Keyed surrogate residuals (re-identification codes, a separate kind of residual)",
       ]
     `);

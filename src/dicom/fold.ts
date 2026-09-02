@@ -24,6 +24,11 @@ import { SAFE_HARBOR_CATEGORIES, type SafeHarborCategory } from "../categories.j
 import { DEID_DISPOSITION_CODES, type DeidDispositionCode } from "../codes.js";
 import { ManifestBuilder, type DeidManifestEntry } from "../manifest.js";
 import type { TransformName } from "../policy.js";
+import {
+  enumerateOrFail,
+  UnexaminedResidualBuilder,
+  type UnexaminedResidual,
+} from "../residual.js";
 
 import type { DicomDeidWarning } from "./types.js";
 
@@ -203,6 +208,281 @@ export function foldReport(report: FoldableReport): readonly DeidManifestEntry[]
   }
 
   return builder.build();
+}
+
+/**
+ * One attribute of the de-identified dataset as this module needs to see it. **Structural facts only:
+ * the decoded value is never read**, and the two length facts below are read as numbers, never as
+ * content, exactly as a locus carries a coordinate and never a byte.
+ */
+export interface EnumerableElement {
+  readonly tag: string;
+  /** The Value Representation. `"SQ"` marks a sequence **container**, which carries no value of its own. */
+  readonly vr: string;
+  /** The declared value length. Zero means the attribute was sent empty. */
+  readonly length: number;
+  /** The on-wire value bytes; only their **count** is read, never a byte of their content. */
+  readonly rawBytes: { readonly length: number };
+  readonly items?: readonly EnumerableDataset[] | undefined;
+}
+
+/** One `(0002,xxxx)` element the File Meta group carried that its typed view does not model. */
+export interface EnumerableFileMetaElement {
+  readonly tag: string;
+  /** The on-wire value bytes; only their **count** is read, never a byte of their content. */
+  readonly value: { readonly length: number };
+}
+
+/**
+ * The Part 10 **File Meta Information** group as this module needs to see it: the peer's typed view over
+ * the `(0002,xxxx)` elements, plus whatever the source carried that the view does not model. Structural
+ * facts only, and each field is read for its **length**, never for what it says.
+ *
+ * A **type alias rather than an interface**, deliberately: the enumeration reads this group by asking the
+ * object for its own keys, so it needs the implicit index signature TypeScript grants an object type and
+ * withholds from an interface. That is what lets a field the peer's view gains be enumerated without this
+ * module being changed, which is the difference between an enumeration that is correct and one that stays
+ * correct.
+ */
+export type EnumerableFileMeta = {
+  readonly transferSyntaxUID: string;
+  readonly mediaStorageSOPClassUID?: string | undefined;
+  readonly mediaStorageSOPInstanceUID?: string | undefined;
+  readonly fileMetaInformationVersion?: { readonly length: number } | undefined;
+  readonly implementationClassUID?: string | undefined;
+  readonly implementationVersionName?: string | undefined;
+  readonly sourceApplicationEntityTitle?: string | undefined;
+  readonly extraElements?: readonly EnumerableFileMetaElement[] | undefined;
+};
+
+/** A dataset (or a sequence item) whose elements can be enumerated in parse order. */
+export interface EnumerableDataset {
+  elements(): readonly EnumerableElement[];
+  /** The Part 10 File Meta group, present on a root dataset and never on a nested item. */
+  readonly fileMeta?: EnumerableFileMeta | undefined;
+}
+
+/**
+ * Derive the **unexamined residual positions** of a DICOM pass from the dataset the delegated PS3.15
+ * Annex E pass returned.
+ *
+ * This adapter holds **no position map of its own**: the Annex E pass owns what was done to each
+ * attribute, so the measurement is a derivation rather than an enumeration of a table. An attribute
+ * present in the returned dataset that the folded report does not account for is one **no rule reached**,
+ * and it is counted and located here. The report accounts for an attribute in three ways, and all three
+ * are decisions: it acted on it, it **kept** it (`applied: "kept"` is the profile's `K`, a decision, not
+ * a silence), or it removed it as a private tag.
+ *
+ * **Nested items are enumerated too**, because a sequence is exactly where an unaccounted attribute
+ * hides: the walk descends through `Element.items`, which the peer exposes, and matches a nested
+ * attribute against the report's own sequence-context entries by tag. The match is by **tag**, so an
+ * attribute the report names anywhere is treated as reached everywhere it occurs: the conservative
+ * direction, which under-counts rather than reporting a position the pass did decide about.
+ *
+ * **The Part 10 File Meta group is enumerated with the rest** ({@link recordFileMetaPositions}). It sits
+ * outside `Dataset.elements()`, which is the peer faithfully modelling PS3.10, but it is carried on the
+ * dataset the pass returns and re-emitted into the bytes a serializer writes, so its positions are handed
+ * through exactly as the interchange envelope of an X12 pass or an HL7 `MSH` is.
+ *
+ * **Only value-bearing positions are counted** (see {@link isValueBearing}): an attribute sent empty
+ * carries no value, and a sequence container is a structure rather than a position. Both are read off
+ * the peer's own structural surface as numbers and a VR, never by decoding a value.
+ *
+ * **The derivation is deliberately literal, and one consequence is worth stating rather than quietly
+ * filtering.** The Annex E pass writes its own Patient Identity Removed and De-identification Method
+ * attributes into the result, and the report does not account for those either, so they appear in the
+ * measurement like any other unaccounted attribute. Forgiving them would mean this adapter keeping a
+ * hand-written list of tags to exclude, which is the position map it deliberately does not hold: the
+ * moment such a list exists it is one more thing to keep in step with the peer's profile, and a stale
+ * entry there would hide a real attribute rather than a self-signature.
+ *
+ * @param dataset - The dataset the Annex E pass returned.
+ * @param report - The value-free report it returned alongside.
+ * @returns The unexamined residual positions, aggregated by locus, in dataset order.
+ * @throws {@link DeidError} `DEID_POSITIONS_UNENUMERABLE` when a dataset, a sequence item or the File
+ *   Meta group will not yield its positions: the pass fails rather than emit a zero or a partial count,
+ *   exactly as it does for a segment that will not yield its fields.
+ * @internal
+ */
+export function deriveUnexaminedResiduals(
+  dataset: EnumerableDataset,
+  report: FoldableReport,
+): readonly UnexaminedResidual[] {
+  const accounted = new Set<string>();
+  for (const attribute of report.attributes) accounted.add(normalizeTag(attribute.tag));
+  for (const tag of report.removedPrivateTags) accounted.add(normalizeTag(tag));
+
+  const residuals = new UnexaminedResidualBuilder();
+  // File Meta first: it precedes the Data Set in the Part 10 stream, so the inventory reads in the
+  // order the bytes do.
+  recordFileMetaPositions(dataset, accounted, residuals);
+  walkDataset(dataset, [], accounted, residuals);
+  return residuals.build();
+}
+
+/** The bounded structural token naming the File Meta group in an enumeration failure. */
+const FILE_META_STRUCTURE = "(0002,xxxx)";
+
+/**
+ * The `(0002,xxxx)` tag PS3.10 §7.1 assigns to each field of the peer's typed File Meta view.
+ *
+ * `extraElements` is not here because it is not one position: it is the escape hatch the view keeps for
+ * whatever `(0002,xxxx)` elements the source carried that it does not model, and each of those carries
+ * its own tag.
+ */
+const FILE_META_TAGS: Readonly<Record<string, string>> = {
+  fileMetaInformationVersion: "00020001",
+  mediaStorageSOPClassUID: "00020002",
+  mediaStorageSOPInstanceUID: "00020003",
+  transferSyntaxUID: "00020010",
+  implementationClassUID: "00020012",
+  implementationVersionName: "00020013",
+  sourceApplicationEntityTitle: "00020016",
+};
+
+/**
+ * The positions of a File Meta group, read off **the group's own keys** rather than from a list of
+ * fields written here.
+ *
+ * That is the difference between an enumeration that is correct and one that stays correct. The typed
+ * view is the peer's projection over the `(0002,xxxx)` elements, and a field it gains is a position that
+ * reaches the output the day the peer ships it; a hand-written list would keep counting the old set and
+ * say nothing about the new one, which is exactly the silence this measurement exists to end. So every
+ * key the object carries yields a position, and a key {@link FILE_META_TAGS} does not name **keeps its
+ * count and loses only its "where"** (the first fail-safe): it is recorded under the withheld-locus token
+ * rather than dropped, and rather than failing a pass that is otherwise enumerable.
+ *
+ * An **absent** field contributes no position, which matters here in particular: a serializer substitutes
+ * its own File Meta Information Version and Implementation Class UID when the model carries none, and a
+ * constant this library composes is not a value the document handed through. The length is the only
+ * thing read off any of them, never the content.
+ */
+/** Every value shape a {@link EnumerableFileMeta} field can hold. All of them carry a `length`. */
+type EnumerableFileMetaField = EnumerableFileMeta[keyof EnumerableFileMeta];
+
+function fileMetaPositions(
+  fileMeta: EnumerableFileMeta,
+): { tag: string | undefined; length: number }[] {
+  const positions: { tag: string | undefined; length: number }[] = [];
+  // Read by KEY, off the object itself, so a field the typed view gains is enumerated the day it
+  // appears rather than the day this module is told about it.
+  for (const [key, value] of Object.entries<EnumerableFileMetaField>(fileMeta)) {
+    if (key === "extraElements") continue; // enumerated below, each under its own tag
+    if (value === undefined) continue; // absent: not a value-bearing position
+    // Every remaining shape is read for its LENGTH and for nothing else, which is the one number all
+    // of them have: a decoded text field (`transferSyntaxUID`) and a field the view keeps as bytes
+    // (`fileMetaInformationVersion`). No content is read off either.
+    positions.push({ tag: FILE_META_TAGS[key], length: value.length });
+  }
+  for (const extra of fileMeta.extraElements ?? []) {
+    positions.push({ tag: extra.tag, length: extra.value.length });
+  }
+  return positions;
+}
+
+/**
+ * Record the File Meta positions the folded report does not account for, under the **same** test the
+ * dataset walk applies: a tag the report never mentions is a position no rule reached.
+ *
+ * **One consequence of that literalness is worth stating rather than quietly filtering.** The delegated
+ * pass rebuilds Media Storage SOP Instance UID `(0002,0003)` to match the SOP Instance UID it remapped,
+ * and it writes **no report entry** for that, so the position appears in the measurement. Forgiving it
+ * would mean this adapter keeping its own table of which File Meta position mirrors which Data Set
+ * attribute, which is the position map it deliberately does not hold, and a stale entry there would hide
+ * a real position rather than a mirrored one. What the record claims is exactly what is true of it: the
+ * pass's own audit trail says nothing at this position, so a determiner reading the manifest finds
+ * nothing there either.
+ */
+function recordFileMetaPositions(
+  dataset: EnumerableDataset,
+  accounted: ReadonlySet<string>,
+  residuals: UnexaminedResidualBuilder,
+): void {
+  // The group is read INSIDE the fail-safe: a dataset that will not yield it is a structure whose
+  // positions cannot be enumerated, and that fails the pass rather than leaving a partial count behind.
+  enumerateOrFail(FILE_META_STRUCTURE, () => {
+    const fileMeta = dataset.fileMeta;
+    if (fileMeta === undefined) return;
+    for (const position of fileMetaPositions(fileMeta)) {
+      if (position.length === 0) continue; // absent or empty: not a value-bearing position
+      if (position.tag === undefined) {
+        // A field of the group whose PS3.10 tag this module does not name: its locus cannot be
+        // expressed, so it is recorded WITHHELD and never dropped. Losing the "where" may not also
+        // lose the "how many".
+        residuals.record(undefined);
+        continue;
+      }
+      if (accounted.has(normalizeTag(position.tag))) continue;
+      residuals.record(formatLocus(position.tag, ""));
+    }
+  });
+}
+
+/** Case-fold a tag so a report entry and a dataset element agree on identity. */
+function normalizeTag(tag: string): string {
+  return tag.toUpperCase();
+}
+
+/**
+ * Whether an attribute is a **value-bearing position**: one that carries a non-empty value in the
+ * document being processed. An absent or empty position is not a residual and is not counted, which is
+ * the same test the five structural adapters apply to a field, an element and an attribute.
+ *
+ * Two things are not value-bearing positions, for different reasons:
+ *
+ * - **A sequence is a structure, not a position.** An `SQ` element holds items, and the positions it
+ *   holds are the attributes inside those items, which the walk reaches on their own and counts there.
+ *   Counting the container as well would count one structure as if it were a value. The test is the VR
+ *   rather than the presence of items, because encapsulated Pixel Data also carries items and *is* a
+ *   value-bearing position.
+ * - **A zero-length attribute carries no value.** A Type 2 attribute sent empty is routine in DICOM and
+ *   is exactly the "absent or empty position" the definition excludes.
+ *
+ * Both length facts are read, and either one being non-zero counts the position: a declared length the
+ * bytes do not back is a malformed element, and over-reporting one is the safe direction.
+ */
+function isValueBearing(element: EnumerableElement): boolean {
+  if (element.vr === "SQ") return false;
+  return element.length > 0 || element.rawBytes.length > 0;
+}
+
+/** The bounded structural token naming the root dataset in an enumeration failure. */
+const ROOT_DATASET_STRUCTURE = "dataset";
+
+/**
+ * Walk a dataset and its sequence items, recording every attribute the report does not account for.
+ *
+ * The walk of each structure runs under the second fail-safe, so a dataset or a sequence item that will
+ * not yield its elements fails the pass with the typed `DEID_POSITIONS_UNENUMERABLE` rather than
+ * escaping as the peer's own error or leaving a partial count behind. The structure named is the
+ * innermost one that refused: the nested call raises first, and `enumerateOrFail` passes an existing
+ * `DeidError` outward unchanged. The token is the same structurally-composed context path a locus
+ * carries, so nothing document-derived reaches the message.
+ */
+function walkDataset(
+  dataset: EnumerableDataset,
+  context: readonly string[],
+  accounted: ReadonlySet<string>,
+  residuals: UnexaminedResidualBuilder,
+): void {
+  const structure = context.length > 0 ? context.join("/") : ROOT_DATASET_STRUCTURE;
+  enumerateOrFail(structure, () => {
+    dataset.elements().forEach((element) => {
+      const items = element.items;
+      if (isValueBearing(element) && !accounted.has(normalizeTag(element.tag))) {
+        residuals.record(formatLocus(element.tag, "", context));
+      }
+      if (items === undefined) return;
+      items.forEach((item, index) => {
+        walkDataset(
+          item,
+          [...context, `${formatTag(element.tag)}[${String(index)}]`],
+          accounted,
+          residuals,
+        );
+      });
+    });
+  });
 }
 
 /**

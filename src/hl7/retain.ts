@@ -25,12 +25,17 @@
  * dangerous is surviving the pass, not being named by a list.
  *
  * **Documented limitation, and it is narrower than it was but real.** A **non-date** field inside a
- * retained segment that is on none of those lists is still passed through untouched and is **not**
- * recorded anywhere: the attending / referring *provider* names (PV1-7/8, OBR-16), the date components
- * carried inside a person-name or address composite, and every other unmapped position. Forgetting a
- * clinical segment here fails **safe**: it is blocked, not leaked. Forgetting a *field* of a retained
- * segment does not, which is why the date enumeration is derived over the whole of this list rather
- * than over the segments a limitation happened to name.
+ * retained segment that is on none of those lists is still passed through untouched: the attending /
+ * referring *provider* names (PV1-7/8, OBR-16), the date components carried inside a person-name or
+ * address composite, and every other unmapped position. Forgetting a clinical segment here fails
+ * **safe**: it is blocked, not leaked. Forgetting a *field* of a retained segment does not, which is why
+ * the date enumeration is derived over the whole of this list rather than over the segments a limitation
+ * happened to name.
+ *
+ * **The pass-through is not the silence.** Every one of those positions is **counted and located** as an
+ * unexamined residual (`positions.ts`), because retaining a STRUCTURE names no position inside it. The
+ * value passes through and is recorded all the same: an unrecorded pass-through is what makes an empty
+ * residual inventory unreadable.
  *
  * @packageDocumentation
  */

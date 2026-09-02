@@ -17,12 +17,19 @@
  * never prescriptive**: it says *"here is what was done and what remains,"* and hands that to the
  * expert.
  *
- * **Two residual inventories, deliberately kept apart.** A **retained quasi-identifier** is a piece of
+ * **Three residual inventories, deliberately kept apart.** A **retained quasi-identifier** is a piece of
  * the original value that survived (a kept year, a safe 3-digit ZIP prefix, a whole date a
  * limited-data-set retention set kept). A **keyed surrogate residual** is a replacement *derived* from
  * the value under the caller's key: no plaintext survives, but the linkage does, and anyone holding
- * the key can reverse it. Folding the second into the first would tell a determiner that a
- * re-identification code is the same kind of residual as a kept year, so each has its own section.
+ * the key can reverse it. An **unexamined residual position** is neither: it is a value-bearing position
+ * inside a structure the pass handed through that **no locus rule reached**, so the pass made no
+ * decision there at all. Folding any of the three into another would tell a determiner that a
+ * re-identification code, a kept year and a position nothing looked at are the same kind of fact, so
+ * each has its own section.
+ *
+ * **A measured zero is not silence, and the report says which it is.** The unexamined-residual inventory
+ * is reported as *measured* only when the pass supplied one, so an empty section reads "measured, and
+ * empty" rather than leaving a determiner to guess whether anything was counted.
  *
  * **Value-free, still.** Like the manifest it summarizes, the report carries **loci / categories /
  * dispositions / counts** plus the manifest's boolean re-identification flag, **never a PHI value**,
@@ -39,6 +46,7 @@ import { DEID_DISPOSITION_CODES, type DeidDispositionCode } from "./codes.js";
 import { OUTPUT_LABEL } from "./labels.js";
 import type { DeidManifestEntry } from "./manifest.js";
 import type { DeidPolicy, TransformName } from "./policy.js";
+import type { UnexaminedResidual } from "./residual.js";
 
 /**
  * The prominent non-certification statement. It is the first field a reader sees and is repeated at the
@@ -226,6 +234,19 @@ export interface DispositionSummary {
   readonly freeTextBlocked: number;
   /** Free-text loci redacted by a **consumer-supplied** BYO redactor (`DEID_FREETEXT_CONSUMER_REDACTED`). */
   readonly freeTextConsumerRedacted: number;
+  /**
+   * **Value-bearing positions the pass handed through that no locus rule named**
+   * (`DEID_POSITION_UNEXAMINED`), or `null` when the pass reported **no measurement at all**.
+   *
+   * The `null` is the point: a bare `0` in a roll-up is read as "nothing was handed through
+   * unexamined", which is exactly the claim an unmeasured pass cannot make. A number here is a
+   * measurement; `null` says there is none to report.
+   *
+   * These positions are **not** counted in {@link transformed}, {@link removed}, {@link blocked} or
+   * {@link retained}: no value was acted on, blocked or kept by a decision, so folding them into any of
+   * those four would overstate what the pass did.
+   */
+  readonly unexaminedResidualPositions: number | null;
 }
 
 /**
@@ -293,6 +314,20 @@ export interface ExpertDeterminationReportOptions {
   readonly policy?: DeidPolicy | string;
   /** Consumer-supplied quasi-identifier equivalence-class sizes for the descriptive k-indicator. */
   readonly quasiIdentifiers?: QuasiIdentifierClassInput;
+  /**
+   * The **unexamined residual positions** a pass measured, as returned alongside its manifest by every
+   * format adapter. A single pass's list, or an array of them for a corpus, matching the shape of the
+   * `manifests` argument.
+   *
+   * **Supplying it, even empty, is what makes the inventory _measured_.** Omitting it leaves
+   * {@link ExpertDeterminationSupportReport.unexaminedResidualsMeasured} `false` and the roll-up count
+   * `null`, so the report says plainly that nothing was counted rather than printing a zero a reader
+   * would take for a clearance. An empty array is the opposite claim, and a real one: the pass
+   * enumerated the positions it handed through and none went unexamined.
+   */
+  readonly unexaminedResiduals?:
+    | readonly UnexaminedResidual[]
+    | readonly (readonly UnexaminedResidual[])[];
 }
 
 /**
@@ -348,6 +383,23 @@ export interface ExpertDeterminationSupportReport {
    * A sibling of {@link retainedQuasiIdentifiers}, never folded into it.
    */
   readonly keyedSurrogateResiduals: readonly KeyedSurrogateResidual[];
+  /**
+   * The **unexamined-residual inventory**: every value-bearing position the pass handed through that no
+   * locus rule named, with its structural locus and a count. A **sibling** of
+   * {@link retainedQuasiIdentifiers}, never folded into it: that inventory holds residuals of values the
+   * pass **examined**, and admitting an unexamined position would make a kept year and a position
+   * nothing looked at indistinguishable.
+   *
+   * Empty when the pass measured none **and** when nothing was measured at all: read
+   * {@link unexaminedResidualsMeasured} to tell those apart.
+   */
+  readonly unexaminedResiduals: readonly UnexaminedResidual[];
+  /**
+   * `true` when the pass **reported a measurement** of its unexamined residual positions, whatever the
+   * count. `false` says no measurement was supplied, so an empty {@link unexaminedResiduals} is silence
+   * rather than a measured zero, and the determiner is told which it is instead of inferring it.
+   */
+  readonly unexaminedResidualsMeasured: boolean;
   /** Descriptive quasi-identifier statistics, **only** when the consumer supplied class sizes; else `null`. */
   readonly quasiIdentifierStatistics: QuasiIdentifierStatistics | null;
 }
@@ -376,6 +428,40 @@ function toManifests(
     return [input];
   }
   return input;
+}
+
+/**
+ * Merge the unexamined residual positions of one or more passes, summing counts for identical loci and
+ * keeping locus order stable (sorted, so a corpus does not depend on the order documents were listed
+ * in). Accepts a single pass's list or an array of them, exactly like the manifests argument.
+ *
+ * An **empty top-level array is a single (empty) measurement**, not an empty corpus: a pass that
+ * enumerated its positions and found none unexamined hands back `[]`, and that is the measured zero the
+ * report must be able to state.
+ */
+function aggregateUnexamined(
+  input: readonly UnexaminedResidual[] | readonly (readonly UnexaminedResidual[])[],
+): readonly UnexaminedResidual[] {
+  const first: unknown = input[0];
+  const lists: readonly (readonly UnexaminedResidual[])[] =
+    first === undefined || !Array.isArray(first)
+      ? [input as readonly UnexaminedResidual[]]
+      : (input as readonly (readonly UnexaminedResidual[])[]);
+  const merged = new Map<string, UnexaminedResidual>();
+  for (const list of lists) {
+    for (const r of list) {
+      const existing = merged.get(r.locus);
+      merged.set(
+        r.locus,
+        existing === undefined ? { ...r } : { ...existing, count: existing.count + r.count },
+      );
+    }
+  }
+  return Object.freeze(
+    [...merged.values()]
+      .sort((a, b) => a.locus.localeCompare(b.locus))
+      .map((r) => Object.freeze(r)),
+  );
 }
 
 /**
@@ -451,8 +537,15 @@ function coverageFor(
   });
 }
 
-/** Roll up the disposition counts across all aggregated entries. */
-function summarize(entries: readonly DeidManifestEntry[]): DispositionSummary {
+/**
+ * Roll up the disposition counts across all aggregated entries, plus the count of positions the pass
+ * handed through **unexamined** (`null` when it reported no measurement). The unexamined count is
+ * deliberately outside the four dispositions: no value was acted on, blocked or kept there.
+ */
+function summarize(
+  entries: readonly DeidManifestEntry[],
+  unexamined: readonly UnexaminedResidual[] | null,
+): DispositionSummary {
   const s = {
     transformed: 0,
     removed: 0,
@@ -461,6 +554,8 @@ function summarize(entries: readonly DeidManifestEntry[]): DispositionSummary {
     residualRetained: 0,
     freeTextBlocked: 0,
     freeTextConsumerRedacted: 0,
+    unexaminedResidualPositions:
+      unexamined === null ? null : unexamined.reduce((total, r) => total + r.count, 0),
   };
   for (const e of entries) {
     s[e.disposition] += e.count;
@@ -564,6 +659,13 @@ export function buildExpertDeterminationSupportReport(
       }),
     );
 
+  // The measured/unmeasured discriminant is the PRESENCE of the option, never the length of the list:
+  // an empty measurement and no measurement are different facts and a determiner reads them differently.
+  const unexaminedResiduals =
+    options.unexaminedResiduals === undefined
+      ? null
+      : aggregateUnexamined(options.unexaminedResiduals);
+
   const policyName =
     options.policy === undefined
       ? null
@@ -585,11 +687,13 @@ export function buildExpertDeterminationSupportReport(
       rows: entries.length,
       categoriesActedOn: categoryCoverage.filter((c) => c.actedOn).length,
     }),
-    dispositionSummary: summarize(entries),
+    dispositionSummary: summarize(entries, unexaminedResiduals),
     perLocus: Object.freeze(entries.map((e) => Object.freeze(e))),
     categoryCoverage: Object.freeze(categoryCoverage),
     retainedQuasiIdentifiers: Object.freeze(retainedQuasiIdentifiers),
     keyedSurrogateResiduals: Object.freeze(keyedSurrogateResiduals),
+    unexaminedResiduals: unexaminedResiduals ?? Object.freeze([]),
+    unexaminedResidualsMeasured: unexaminedResiduals !== null,
     quasiIdentifierStatistics: quasiIdentifierStats(options.quasiIdentifiers),
   });
 }
@@ -620,8 +724,12 @@ export function formatExpertDeterminationSupportReport(
   lines.push(`- Output label: ${report.outputLabel}`);
   lines.push(`- Policy: ${report.policy ?? "(unspecified)"}`);
   lines.push(`- Documents summarized: ${String(report.documentCount)}`);
+  const unexaminedCount = report.dispositionSummary.unexaminedResidualPositions;
   lines.push(
-    `- Loci acted on: ${String(report.totals.loci)} · categories acted on: ${String(report.totals.categoriesActedOn)}/18`,
+    `- Loci acted on: ${String(report.totals.loci)} · categories acted on: ${String(report.totals.categoriesActedOn)}/18` +
+      ` · unexamined residual positions: ${
+        unexaminedCount === null ? "NOT MEASURED" : String(unexaminedCount)
+      }`,
   );
   const d = report.dispositionSummary;
   lines.push(
@@ -655,12 +763,14 @@ export function formatExpertDeterminationSupportReport(
       "profile's retention set kept. Clinical values retained untouched by the over-scrub guard",
     );
     lines.push(
-      "are not identifiers and are not enumerated. What is NOT enumerated anywhere is a field",
+      "are not identifiers and are not enumerated. A value-bearing position inside a structure the",
     );
     lines.push(
-      "inside a retained structure that no locus map reaches: those are named, per format, in the",
+      "pass handed through that no locus rule reached is not one of these either: the pass examined",
     );
-    lines.push("published limitations, and they are not visible to this report.");
+    lines.push(
+      "no value there, so it left no residual. Those are counted in their own section below.",
+    );
   } else {
     lines.push(
       "These are residual identifying elements the pass kept for utility. They are an actual-knowledge",
@@ -672,6 +782,52 @@ export function formatExpertDeterminationSupportReport(
       // it is the difference between "a year is present" and "a full timestamp is present".
       const kind = r.transform === "retain" ? "whole value kept" : "coarse residual";
       lines.push(`- ${r.locus}: ${r.category} (×${String(r.count)}, ${kind})`);
+    }
+  }
+  lines.push("");
+  lines.push("## Unexamined residual positions (handed through, no locus rule reached them)");
+  lines.push("");
+  if (!report.unexaminedResidualsMeasured) {
+    lines.push(
+      "**NOT MEASURED.** This pass reported no enumeration of the value-bearing positions it handed",
+    );
+    lines.push(
+      "through, so this section is a gap and not a clearance: an empty list here would say nothing",
+    );
+    lines.push(
+      "about how much of each retained structure went unexamined. Do not read the absence as a zero.",
+    );
+  } else if (report.unexaminedResiduals.length === 0) {
+    lines.push(
+      "_Measured, and empty._ The pass enumerated the value-bearing positions inside every structure",
+    );
+    lines.push(
+      "it handed through and a locus rule reached each one. This is a measured zero, not a section",
+    );
+    lines.push("that was omitted: nothing was passed through without a decision being recorded.");
+  } else {
+    lines.push(
+      "Each of these is a value-bearing position inside a structure the pass handed through that NO",
+    );
+    lines.push(
+      "locus rule reached, so the pass made no decision there: it did not act on the value, did not",
+    );
+    lines.push(
+      "block it, and did not decide to keep it. **This is a measurement, not an allegation:** a",
+    );
+    lines.push(
+      "position nothing examined has no established Safe Harbor category, and a clinical code, a dose",
+    );
+    lines.push(
+      "unit and an order status all sit at positions like these. Nothing was removed on account of",
+    );
+    lines.push(
+      "this count. It is what the determiner reads to know the size of what went unexamined:",
+    );
+    lines.push("");
+    for (const r of report.unexaminedResiduals) {
+      const where = r.locusWithheld ? " (structural locus withheld)" : "";
+      lines.push(`- ${r.locus}: unexamined (×${String(r.count)})${where}`);
     }
   }
   lines.push("");

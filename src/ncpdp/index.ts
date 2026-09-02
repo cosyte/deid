@@ -46,6 +46,7 @@ import { parseTelecom, type TelecomTransaction } from "@cosyte/ncpdp/telecom";
 
 import { deidentify, type DeidOptions } from "../deidentify.js";
 import { type DeidManifestEntry } from "../manifest.js";
+import { type UnexaminedResidual } from "../residual.js";
 import { applyTelecom } from "./apply.js";
 import { extractTelecomLoci } from "./extract.js";
 
@@ -72,6 +73,13 @@ export interface TelecomDeidResult {
   readonly telecom: string;
   /** The value-free audit of every action, in locus order (never a value, never a key). */
   readonly manifest: readonly DeidManifestEntry[];
+  /**
+   * The manifest's **second list**: every value-bearing field this pass handed through that **no locus
+   * rule named**, counted and located. A retained clinical / financial segment contributes all of its
+   * fields, and the fixed header contributes every position but the one Date of Service a rule reaches.
+   * An empty list is a **measured zero**, not a silence.
+   */
+  readonly unexaminedResiduals: readonly UnexaminedResidual[];
 }
 
 /**
@@ -103,10 +111,10 @@ export function deidentifyTelecom(
   tx: TelecomTransaction,
   options: DeidOptions = {},
 ): TelecomDeidResult {
-  const { loci, coords } = extractTelecomLoci(tx);
+  const { loci, coords, unexaminedResiduals } = extractTelecomLoci(tx);
   const { document, manifest } = deidentify({ loci }, options);
   const telecom = applyTelecom(tx, document.loci, coords);
-  return { telecom, manifest };
+  return { telecom, manifest, unexaminedResiduals };
 }
 
 /**
@@ -141,4 +149,5 @@ export {
 } from "./locus-map.js";
 export { extractTelecomLoci, type TelecomCoord, type TelecomExtraction } from "./extract.js";
 export { applyTelecom } from "./apply.js";
+export { type UnexaminedResidual } from "../residual.js";
 export { SAFE_HARBOR_CATEGORIES, type SafeHarborCategory } from "../categories.js";
