@@ -30,6 +30,7 @@ import type { FreeTextRedactor } from "./redactor.js";
 import {
   assertRetentionContract,
   isRetainableCategory,
+  isRetainablePart,
   retains,
   type RetainedLocusClass,
 } from "./retention.js";
@@ -378,12 +379,22 @@ function handleLocus(
   //      elsewhere in the same document.
   // It is also reached only AFTER the three fail-closed guards above, so free text and unrecognized
   // structure can never be retained however an adapter marks them; and a kept locus is always recorded.
-  if (
-    locus.retention !== undefined &&
-    retains(retainedLoci, locus.retention) &&
-    isRetainableCategory(locus.category)
-  ) {
-    return retainedResidual(locus, locus.category);
+  //
+  // Key 3 has exactly ONE narrower form, for the list's only PARTIAL exclusion. §164.514(e)(2)(ii)
+  // removes postal address information "other than town or city, State, and zip code", so a locus an
+  // adapter marked as one of those NAMED PARTS is checked against `isRetainablePart` instead: class,
+  // category and part name must all line up. `GEOGRAPHIC` stays a category `isRetainableCategory`
+  // refuses, so an unmarked geographic locus (a whole address, a county code, a birth place) takes
+  // its policy transform exactly as before. Nothing widens by omission: a part name the allow-list
+  // does not carry falls through to the transform like any other missing key.
+  if (locus.retention !== undefined && retains(retainedLoci, locus.retention)) {
+    const keep =
+      locus.retainedPart === undefined
+        ? isRetainableCategory(locus.category)
+        : isRetainablePart(locus.retention, locus.category, locus.retainedPart);
+    if (keep) {
+      return retainedResidual(locus, locus.category);
+    }
   }
   return applyTransform(policy.transforms[locus.category], locus, locus.category, context);
 }

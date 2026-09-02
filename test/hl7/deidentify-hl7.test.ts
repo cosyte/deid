@@ -534,16 +534,11 @@ describe("deidentifyHl7, the encounter loci inside retained segments (§164.514(
       parseHL7(loadFixture("adt-a03")),
       profileOptions(LIMITED_DATA_SET_PROFILE, ctx),
     ).document.toString();
-    // Names, address detail, phone, and the raw medical record number are all on the limited-data-set
-    // exclusion list, so keeping the encounter loci must not have loosened any of them.
-    for (const s of [
-      "ZZENCFAMILY",
-      "ZZENCGIVEN",
-      "ZZENCSTREET",
-      "ZZENCCITY",
-      "5550000020",
-      "ZZMRN003",
-    ]) {
+    // Names, STREET address detail, phone, and the raw medical record number are all on the
+    // limited-data-set exclusion list, so keeping the encounter loci must not have loosened any of
+    // them. The town or city is deliberately absent from this list: §164.514(e)(2)(ii) is a PARTIAL
+    // exclusion and names it as surviving. `retained-geography.test.ts` owns that half.
+    for (const s of ["ZZENCFAMILY", "ZZENCGIVEN", "ZZENCSTREET", "5550000020", "ZZMRN003"]) {
       expect(wire.includes(s)).toBe(false);
     }
   });

@@ -19,6 +19,12 @@
  *   account, certificate/licence, vehicle, device, URL, IP, biometric, and full-face-image
  *   identifiers, and stops. Admission, discharge and service dates, and an encounter or order number,
  *   are therefore **permitted to remain** in a limited data set.
+ * - **§164.514(e)(2)(ii) is the list's only PARTIAL exclusion.** It removes "Postal address
+ *   information, **other than town or city, State, and zip code**", so those three named parts of an
+ *   address survive a limited data set while the street, the county or parish, the census tract and
+ *   the country do not. That is why the geographic class permits named **parts**
+ *   ({@link isRetainablePart}) and `GEOGRAPHIC` stays a category no profile may retain whole
+ *   ({@link isRetainableCategory}).
  *
  * **Retention is never silent.** A locus retained under a class is still recorded in the value-free
  * manifest as a `DEID_RESIDUAL_RETAINED` residual, so it reaches the retained-quasi-identifier
@@ -67,6 +73,31 @@ export const RETAINED_LOCUS_CLASSES = {
    * catch-all, so a limited data set **may keep them**.
    */
   ENCOUNTER_IDENTIFIERS: "encounter-identifiers",
+  /**
+   * The **named parts of a postal address** §164.514(e)(2)(ii) permits a limited data set to carry.
+   * The clause excludes "Postal address information, **other than town or city, State, and zip
+   * code**", which makes it the **only PARTIAL exclusion** in the list of sixteen: three named parts
+   * survive and everything else in the address does not.
+   *
+   * **What survives**: town or city, State, and the **whole** zip code. The digit limit and the
+   * `000` substitution are §164.514(b)(2)(i)(B), which is **Safe Harbor's** rule; (e)(2) states no
+   * digit limit and no population condition, so the ZIP is kept in full here.
+   *
+   * **What does not**: the street address, any second address line, the county or parish, the
+   * census tract or other geographic designation, the country, and a birth place. None of those is
+   * named by the clause, so none of them is widened by this class.
+   *
+   * **It permits PARTS, never the category.** `GEOGRAPHIC` stays on
+   * {@link LIMITED_DATA_SET_DIRECT_IDENTIFIERS} and {@link isRetainableCategory} still returns
+   * `false` for it, because a partial exclusion is not a whole-category one. The only route past
+   * that guard is {@link isRetainablePart}, which is keyed on this class, that category and one of
+   * the three names above.
+   *
+   * **Scope, stated rather than implied**: only the **HL7 v2** adapter reads this class today, like
+   * every other. Under the C-CDA, FHIR, X12, NCPDP and DICOM adapters an address is reduced exactly
+   * as it is without it (the Safe Harbor generalization), which is the stricter direction.
+   */
+  LIMITED_DATA_SET_GEOGRAPHY: "limited-data-set-geography",
 } as const;
 
 /**
@@ -145,6 +176,169 @@ export const LIMITED_DATA_SET_DIRECT_IDENTIFIERS: ReadonlySet<SafeHarborCategory
  */
 export function isRetainableCategory(category: SafeHarborCategory): boolean {
   return !LIMITED_DATA_SET_DIRECT_IDENTIFIERS.has(category);
+}
+
+/**
+ * The **three parts of a postal address §164.514(e)(2)(ii) names as surviving** a limited data set,
+ * in the regulation's own words: "other than **town or city, State, and zip code**". Nothing else in
+ * an address is named, so nothing else survives: not the street, not a second address line, not the
+ * county or parish, not the census tract, not the country, not a birth place.
+ *
+ * @example
+ * ```ts
+ * import { LIMITED_DATA_SET_ADDRESS_PARTS } from "@cosyte/deid";
+ *
+ * LIMITED_DATA_SET_ADDRESS_PARTS.ZIP_CODE; // => "zip-code"
+ * ```
+ */
+export const LIMITED_DATA_SET_ADDRESS_PARTS = {
+  /** "town or city": the populated place, and nothing finer. */
+  TOWN_OR_CITY: "town-or-city",
+  /** "State": the state or province the address sits in. */
+  STATE: "state",
+  /** "zip code": the WHOLE zip code. The three-digit rule is Safe Harbor's, not (e)(2)'s. */
+  ZIP_CODE: "zip-code",
+} as const;
+
+/**
+ * A value from {@link LIMITED_DATA_SET_ADDRESS_PARTS}: the **named part** of an otherwise-excluded
+ * category that an adapter proposes keeping, and that {@link isRetainablePart} checks.
+ *
+ * @example
+ * ```ts
+ * import { LIMITED_DATA_SET_ADDRESS_PARTS, type RetainedLocusPart } from "@cosyte/deid";
+ *
+ * const part: RetainedLocusPart = LIMITED_DATA_SET_ADDRESS_PARTS.STATE;
+ * ```
+ */
+export type RetainedLocusPart =
+  (typeof LIMITED_DATA_SET_ADDRESS_PARTS)[keyof typeof LIMITED_DATA_SET_ADDRESS_PARTS];
+
+/** The three permitted part names, as a set, so membership is a lookup rather than a chain. */
+const ADDRESS_PART_VALUES: ReadonlySet<string> = new Set<string>(
+  Object.values(LIMITED_DATA_SET_ADDRESS_PARTS),
+);
+
+/**
+ * Whether a **named part** of a locus whose category is otherwise excluded may be retained. This is
+ * the **only** route past {@link isRetainableCategory}, and it is narrow by construction: all three
+ * of the class, the resolved category and the part name must line up, and each is an allow-list
+ * membership rather than a negation.
+ *
+ * It exists because §164.514(e)(2)(ii) is the list's only **partial** exclusion. Making `GEOGRAPHIC`
+ * retainable as a category would keep a county code, a birth place and a street address along with
+ * the three parts the clause names, so the category stays excluded and the parts are named here.
+ *
+ * @param cls - The retention class the adapter proposed for the locus.
+ * @param category - The resolved Safe Harbor category of the locus.
+ * @param part - The named part the adapter proposed keeping.
+ * @returns `true` only for the geographic class, the `GEOGRAPHIC` category, and a named address part.
+ * @example
+ * ```ts
+ * import {
+ *   isRetainablePart,
+ *   LIMITED_DATA_SET_ADDRESS_PARTS,
+ *   RETAINED_LOCUS_CLASSES,
+ *   SAFE_HARBOR_CATEGORIES,
+ * } from "@cosyte/deid";
+ *
+ * const geo = RETAINED_LOCUS_CLASSES.LIMITED_DATA_SET_GEOGRAPHY;
+ * isRetainablePart(geo, SAFE_HARBOR_CATEGORIES.GEOGRAPHIC, LIMITED_DATA_SET_ADDRESS_PARTS.STATE); // => true
+ * isRetainablePart(geo, SAFE_HARBOR_CATEGORIES.NAMES, LIMITED_DATA_SET_ADDRESS_PARTS.STATE); // => false
+ * ```
+ */
+export function isRetainablePart(
+  cls: RetainedLocusClass,
+  category: SafeHarborCategory,
+  part: RetainedLocusPart,
+): boolean {
+  return (
+    cls === RETAINED_LOCUS_CLASSES.LIMITED_DATA_SET_GEOGRAPHY &&
+    category === SAFE_HARBOR_CATEGORIES.GEOGRAPHIC &&
+    ADDRESS_PART_VALUES.has(part)
+  );
+}
+
+/**
+ * Whether a value is a **whole zip code** this library will carry through unreduced under
+ * {@link RETAINED_LOCUS_CLASSES.LIMITED_DATA_SET_GEOGRAPHY}: five digits, optionally followed by the
+ * ZIP+4 add-on with or without its hyphen. Nothing else, and no surrounding whitespace.
+ *
+ * **It is deliberately stricter than the generalization's input rule, and the asymmetry is the
+ * point**: generalization reduces whatever it is given until it is safe, so reading three leading
+ * digits off a malformed value is safe. Retention emits the value **unreduced**, so a value whose
+ * shape this library cannot vouch for is not retained at all: the locus falls back to the Safe
+ * Harbor generalization, which fails closed to dropping the whole address.
+ *
+ * @param zip - The candidate zip code, exactly as it sits at the locus.
+ * @returns `true` only for `12345`, `12345-6789` or `123456789`.
+ * @example
+ * ```ts
+ * import { isRetainableZipCode } from "@cosyte/deid";
+ *
+ * isRetainableZipCode("62704"); // => true
+ * isRetainableZipCode("627"); // => false (a partial ZIP is not a zip code)
+ * ```
+ */
+export function isRetainableZipCode(zip: string): boolean {
+  return /^\d{5}(?:-?\d{4})?$/.test(zip);
+}
+
+/**
+ * The retention classes a profile **declaring** the `limited-data-set` standard may carry: exactly
+ * those §164.514(e)(2) leaves out of its sixteen direct identifiers, plus the parts (e)(2)(ii) names.
+ *
+ * The list has **no date** and **no catch-all**, so encounter dates and encounter / order identifiers
+ * survive it; (e)(2)(ii) is a **partial** exclusion, so the three named address parts survive it. A
+ * class outside this set is a claim the regulation does not support, and
+ * {@link assertLimitedDataSetRetention} refuses it rather than letting the profile wear the name.
+ *
+ * @example
+ * ```ts
+ * import { LIMITED_DATA_SET_RETENTION_CLASSES, RETAINED_LOCUS_CLASSES } from "@cosyte/deid";
+ *
+ * LIMITED_DATA_SET_RETENTION_CLASSES.has(RETAINED_LOCUS_CLASSES.ENCOUNTER_DATES); // => true
+ * ```
+ */
+export const LIMITED_DATA_SET_RETENTION_CLASSES: ReadonlySet<RetainedLocusClass> = new Set([
+  RETAINED_LOCUS_CLASSES.ENCOUNTER_DATES,
+  RETAINED_LOCUS_CLASSES.ENCOUNTER_IDENTIFIERS,
+  RETAINED_LOCUS_CLASSES.LIMITED_DATA_SET_GEOGRAPHY,
+]);
+
+/**
+ * Enforce §164.514(e)(2) on a profile that **declares** the `limited-data-set` standard: every class
+ * it retains must be one {@link LIMITED_DATA_SET_RETENTION_CLASSES} permits. A profile carrying the
+ * regulation's name while keeping something the regulation excludes is refused, naming the class,
+ * before any locus is transformed.
+ *
+ * @param subject - What is being checked, for the diagnostic (a profile, a derivation base).
+ * @param retainedLoci - The retention classes the profile carries, if any.
+ * @throws {@link DeidError} `DEID_PROFILE_INVALID` naming every class outside the permitted set.
+ * @example
+ * ```ts
+ * import { assertLimitedDataSetRetention } from "@cosyte/deid";
+ *
+ * assertLimitedDataSetRetention("a profile", ["encounter-dates"]); // ok
+ * ```
+ */
+export function assertLimitedDataSetRetention(
+  subject: string,
+  retainedLoci: readonly RetainedLocusClass[] | undefined,
+): void {
+  if (retainedLoci === undefined || retainedLoci.length === 0) {
+    return;
+  }
+  const beyond = retainedLoci.filter((cls) => !LIMITED_DATA_SET_RETENTION_CLASSES.has(cls));
+  if (beyond.length === 0) {
+    return;
+  }
+  throw new DeidError(
+    FATAL_CODES.DEID_PROFILE_INVALID,
+    `${subject} declaring the "limited-data-set" standard may not retain the locus class(es) ` +
+      `${beyond.map((c) => `"${c}"`).join(", ")}: §164.514(e)(2) excludes them from a limited ` +
+      "data set. Drop the class, or declare a custom standard.",
+  );
 }
 
 /**

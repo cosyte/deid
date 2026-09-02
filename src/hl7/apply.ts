@@ -6,9 +6,10 @@
  *
  * Removal is clean: a redacted or blocked field's repetitions are dropped to `[]` (it serializes as an
  * empty field), never zero-length-padded into `^^^` residue. A pseudonymized identifier replaces only
- * the id-number component (CX.1); a generalized address keeps only the Safe Harbor 3-digit ZIP. A
- * locus the profile's retention set kept carries the `none` edit and is not written at all, so it
- * survives byte-identical.
+ * the id-number component (CX.1); a generalized address keeps only the Safe Harbor 3-digit ZIP, and an
+ * address under the §164.514(e)(2)(ii) geographic retention class keeps only the town or city, the
+ * State and the whole zip code. A locus the profile's retention set kept carries the `none` edit and is
+ * not written at all, so it survives byte-identical.
  *
  * @packageDocumentation
  */
@@ -129,6 +130,45 @@ function applyDateComponent(
   repetition.components[index] = { subcomponents: [t.value ?? ""] };
 }
 
+/**
+ * The five XAD slots a §164.514(e)(2)(ii) address can occupy after the reduction, all empty. Street
+ * (1), other designation (2), country (6), address type (7), other geographic designation (8), county
+ * or parish (9), census tract (10) and every later component are **gone**: the array is rebuilt at
+ * length five, so a component the clause does not name cannot survive by not being written to.
+ */
+function emptyAddressSlots(): MutComponent[] {
+  return [emptyComponent(), emptyComponent(), emptyComponent(), emptyComponent(), emptyComponent()];
+}
+
+/**
+ * Apply an **address-part** edit: keep one §164.514(e)(2)(ii) part (town or city at XAD.3, State at
+ * XAD.4, the whole zip code at XAD.5) at its own component.
+ *
+ * The repetition is **reduced first**, once, to the five empty slots above, so the reduction is a
+ * property of the repetition rather than of the parts that happened to be emitted for it: an address
+ * with no city still loses its street. `reduced` is what makes it once, keyed on the repetition's own
+ * coordinate, and it holds the repetition so the fail-closed sweep at the end of the pass can find it.
+ */
+function applyAddressPart(
+  field: MutField,
+  coord: Hl7Coord,
+  t: TransformedLocus,
+  reduced: Map<string, MutRepetition>,
+): void {
+  const repetition = field.repetitions[coord.rep];
+  if (repetition === undefined || coord.component === undefined) return;
+  const key = `${String(coord.segIndex)}:${String(coord.field)}:${String(coord.rep)}`;
+  if (!reduced.has(key)) {
+    repetition.components = emptyAddressSlots();
+    reduced.set(key, repetition);
+  }
+  const index = coord.component - 1;
+  if (index < 0 || index >= repetition.components.length) return;
+  // A blocked part writes an empty component rather than its value: the engine refused to keep it,
+  // and the reduction has already removed everything the pass did not positively decide to keep.
+  repetition.components[index] = { subcomponents: [t.value ?? ""] };
+}
+
 /** Apply an address edit: keep only the generalized 3-digit ZIP at XAD.5; drop every finer component. */
 function applyAddressZip(field: MutField, rep: number, t: TransformedLocus): void {
   const repetition = field.repetitions[rep];
@@ -175,6 +215,9 @@ export function applyHl7(
   coords: readonly Hl7Coord[],
 ): Hl7Message {
   const segments = cloneSegments(original.rawSegments);
+  // The address repetitions an `address-part` edit reduced, so the reduction happens once per
+  // repetition and the fail-closed sweep below can revisit them.
+  const reducedAddresses = new Map<string, MutRepetition>();
 
   for (let i = 0; i < coords.length; i += 1) {
     const coord = coords[i];
@@ -198,6 +241,9 @@ export function applyHl7(
       case "address-zip":
         applyAddressZip(field, coord.rep, t);
         break;
+      case "address-part":
+        applyAddressPart(field, coord, t, reducedAddresses);
+        break;
       case "date-field":
         applyDateField(field, coord.rep, t);
         break;
@@ -208,6 +254,15 @@ export function applyHl7(
         // A locus the profile's retention set kept: byte-identical is the whole point, so nothing is
         // written back. A whole-field write would flatten its components/repetitions into one value.
         break;
+    }
+  }
+
+  // Fail closed on a reduced address that kept NOTHING: every part the engine was asked about came
+  // back blocked, so the repetition is dropped outright rather than left as empty component residue.
+  // A partially retained address is never emitted, and nothing here was recorded as retained.
+  for (const repetition of reducedAddresses.values()) {
+    if (repetition.components.every((c) => c.subcomponents.every((s) => s.length === 0))) {
+      repetition.components = [];
     }
   }
 

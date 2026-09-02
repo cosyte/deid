@@ -634,6 +634,8 @@ describe("encounter loci positive control, the limited-data-set profile still ca
 
   it("every surviving encounter locus is RECORDED as a retained residual", () => {
     const retained = manifest.filter((m) => m.disposition === "retained");
+    // The three PID-11 rows are the §164.514(e)(2)(ii) address parts: town or city, State and the
+    // whole zip code, each located to its own COMPONENT so a reader knows which part survived.
     expect(retained.map((m) => m.locus).sort()).toEqual([
       "DG1-5",
       "OBR-2",
@@ -641,6 +643,9 @@ describe("encounter loci positive control, the limited-data-set profile still ca
       "OBR-7",
       "ORC-2",
       "ORC-3",
+      "PID-11[0].3",
+      "PID-11[0].4",
+      "PID-11[0].5",
       "PV1-19[0]",
       "PV1-44",
       "PV1-45",
@@ -666,18 +671,29 @@ describe("encounter loci positive control, the limited-data-set profile still ca
     ]) {
       expect(inventoried.has(locus)).toBe(true);
     }
-    expect(report.dispositionSummary.retained).toBe(9);
+    expect(report.dispositionSummary.retained).toBe(12);
+  });
+
+  it("the address parts §164.514(e)(2)(ii) NAMES survive, and reach the inventory too", () => {
+    // The positive control for the geographic class: (e)(2)(ii) removes postal address information
+    // "other than town or city, State, and zip code", so the town and the whole ZIP are carried, and
+    // the ZIP is NOT reduced to its three-digit prefix, which is Safe Harbor's rule and not this one.
+    expect(wire).toContain("ZZENCCITY");
+    expect(wire).toContain("90210");
+    const report = buildExpertDeterminationSupportReport(manifest, {
+      policy: LIMITED_DATA_SET_PROFILE.policy,
+    });
+    const inventoried = new Set(report.retainedQuasiIdentifiers.map((r) => r.locus));
+    for (const locus of ["PID-11[0].3", "PID-11[0].4", "PID-11[0].5"]) {
+      expect(inventoried.has(locus)).toBe(true);
+    }
   });
 
   it("the patient identifiers §164.514(e)(2) DOES name are still gone", () => {
-    for (const s of [
-      "ZZENCFAMILY",
-      "ZZENCGIVEN",
-      "ZZENCSTREET",
-      "ZZENCCITY",
-      "5550000020",
-      "ZZMRN003",
-    ]) {
+    // ZZENCCITY is deliberately NOT on this list any more: (e)(2)(ii) is the sixteen-item list's only
+    // PARTIAL exclusion, and the town or city is one of the three parts it names as surviving. The
+    // STREET is the half of that clause that is still excluded, and it stays here.
+    for (const s of ["ZZENCFAMILY", "ZZENCGIVEN", "ZZENCSTREET", "5550000020", "ZZMRN003"]) {
       expect(wire.includes(s)).toBe(false);
     }
   });

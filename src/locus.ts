@@ -11,7 +11,7 @@
  */
 
 import type { SafeHarborCategory } from "./categories.js";
-import type { RetainedLocusClass } from "./retention.js";
+import type { RetainedLocusClass, RetainedLocusPart } from "./retention.js";
 
 /**
  * The kind of value at a locus: drives which generalization applies and whether the engine must
@@ -61,6 +61,23 @@ export interface GenericLocus {
    * locus marked here **is** identifying and is always recorded when it is kept.
    */
   readonly retention?: RetainedLocusClass;
+  /**
+   * The **named part** of an otherwise-excluded category this locus carries, present only where the
+   * regulation's exclusion is **partial**. §164.514(e)(2)(ii) is the one such clause: it removes
+   * postal address information "other than town or city, State, and zip code", so a locus addressing
+   * one of those three parts is marked here and the rest of the address is not marked at all.
+   *
+   * Like {@link retention} it is a *proposal*: the engine keeps the value only if the options list
+   * the class **and** {@link isRetainablePart} accepts the class, the resolved category and this
+   * part together. It is the **only** route past the never-retainable category guard, and it does
+   * not widen that guard: `GEOGRAPHIC` remains a category no profile may retain whole.
+   *
+   * **An adapter that sets this must address ONE part**, at its own structural locus (a component,
+   * not the whole address), because the engine keeps exactly what the locus carries. Marking a whole
+   * address with a part name would keep the whole address, which is the failure this field exists to
+   * make impossible to reach by accident rather than one it can detect.
+   */
+  readonly retainedPart?: RetainedLocusPart;
   /**
    * The **role code** an adapter classified a *party* on, present **only** at a locus that records a
    * party whose role places it **outside** §164.514(b)(2)(i)'s scope clause and whose name and

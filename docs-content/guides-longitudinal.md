@@ -97,3 +97,42 @@ import { defineDeidPolicy, SAFE_HARBOR_CATEGORIES } from "@cosyte/deid";
 // permit, so it may not wear the label either.
 defineDeidPolicy({ name: "safe-harbor", transforms: { [SAFE_HARBOR_CATEGORIES.MRN]: "pseudonymize" } });
 ```
+
+## What the limited-data-set preset keeps, and where it is stricter than the regulation
+
+The preset carries the three retention classes §164.514(e)(2) permits: the encounter dates, the
+encounter and order identifiers, and the postal address parts (e)(2)(ii) names. On an address that is
+the **town or city, the State and the WHOLE zip code**; the street address and every other geographic
+component are removed, and every kept part is recorded as a residual at its own component. The
+three-digit / `000` ZIP rule is §164.514(b)(2)(i)(B), Safe Harbor's, so a restricted-prefix ZIP is kept
+in full here and is still suppressed under Safe Harbor. The geographic allowance is honoured by the
+**HL7 v2 pass alone**: the C-CDA, FHIR, X12, NCPDP and DICOM adapters reduce an address exactly as Safe
+Harbor does.
+
+**On dates the preset is deliberately stricter than the regulation it is named for.** §164.514(e)(2)
+enumerates sixteen direct identifiers and **names no date at all**, so a limited data set may lawfully
+carry dates at full precision. This preset date-shifts them anyway: removing more than the regulation
+requires is always lawful, and the alternative would hand every existing consumer real patient dates on
+an upgrade. The preset says so in its own machine-readable description, so the choice is readable
+without reading this page:
+
+```ts runnable
+import { LIMITED_DATA_SET_PROFILE, SAFE_HARBOR_CATEGORIES } from "@cosyte/deid";
+
+// Dates are STILL date-shifted, not carried at full precision.
+LIMITED_DATA_SET_PROFILE.policy.transforms[SAFE_HARBOR_CATEGORIES.DATES]; // => "date-shift"
+LIMITED_DATA_SET_PROFILE.requiresContext; // => true
+
+// And the preset's own description states the choice, and whose the data use agreement is.
+const described = LIMITED_DATA_SET_PROFILE.description;
+described.includes("deliberately STRICTER than"); // => true
+described.includes("which names no date and so permits full precision"); // => true
+described.includes("removing more by choice"); // => true
+described.includes("DATA USE AGREEMENT"); // => true
+described.includes("CONSUMER'S responsibility"); // => true
+described.includes("neither holds nor checks one"); // => true
+
+// The geographic allowance, and its one-adapter scope, are stated there too.
+described.includes("WHOLE zip code"); // => true
+described.includes("HL7 v2 pass ALONE"); // => true
+```
