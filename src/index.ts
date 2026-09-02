@@ -92,10 +92,16 @@ export {
   RETAINED_LOCUS_CLASSES,
   NO_RETAINED_LOCI,
   LIMITED_DATA_SET_DIRECT_IDENTIFIERS,
+  LIMITED_DATA_SET_ADDRESS_PARTS,
+  LIMITED_DATA_SET_RETENTION_CLASSES,
   isRetainableCategory,
+  isRetainablePart,
+  isRetainableZipCode,
   assertRetentionContract,
+  assertLimitedDataSetRetention,
   retains,
   type RetainedLocusClass,
+  type RetainedLocusPart,
 } from "./retention.js";
 
 // ── The party-role test: which side of §164.514(b)(2)(i)'s scope clause a party's role places it on.

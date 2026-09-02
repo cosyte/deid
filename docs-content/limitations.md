@@ -194,13 +194,53 @@ only when a real de-identified document grounds it.
   is the consumer's responsibility. Every keyed surrogate it emits is flagged `reidentificationCode`
   in the manifest and listed in the support report's keyed-surrogate residual inventory.
 
-  It also **keeps unchanged** the two classes §164.514(e)(2) permits and Safe Harbor does not: the
-  **encounter dates** (admission / discharge / service / diagnosis) and the **encounter and order
-  identifiers** (a `VN`-typed or untyped visit number, and the placer and filler order numbers). That
-  list of sixteen direct identifiers names no date and has no catch-all, which is exactly why these
-  survive here and are removed under Safe Harbor. It **does** name medical record, account and social
-  security numbers, so a PV1-19 typed as one of those is transformed here too. Every one is still **recorded** as a `DEID_RESIDUAL_RETAINED` residual and
-  appears in the support report's inventory, so nothing is kept silently.
+  It also **keeps unchanged** the three classes §164.514(e)(2) permits and Safe Harbor does not: the
+  **encounter dates** (admission / discharge / service / diagnosis), the **encounter and order
+  identifiers** (a `VN`-typed or untyped visit number, and the placer and filler order numbers), and
+  the **named parts of a postal address**. That list of sixteen direct identifiers names no date and
+  has no catch-all, which is exactly why the first two survive here and are removed under Safe Harbor.
+  It **does** name medical record, account and social security numbers, so a PV1-19 typed as one of
+  those is transformed here too. Every one is still **recorded** as a `DEID_RESIDUAL_RETAINED` residual
+  and appears in the support report's inventory, so nothing is kept silently.
+
+<a id="limited-data-set-geography"></a>
+
+### What a limited data set keeps of an address, and what it still removes
+
+§164.514(e)(2)(ii) is the **only partial exclusion** in the list of sixteen. It removes "postal address
+information, **other than town or city, State, and zip code**", so under the
+`limited-data-set-geography` retention class those three named parts survive and **everything else in
+the address does not**: the street address, any second address line, the county or parish, the census
+tract or other geographic designation, and the country. A county-code field and a birth place are
+removed under every profile, because the clause names neither.
+
+- **The zip code is kept WHOLE.** The initial-three-digits rule, and the `000` substitution for a
+  prefix whose area has 20,000 people or fewer, are §164.514(b)(2)(i)(B): **Safe Harbor's** rule, with
+  no (e)(2) counterpart. A restricted-prefix ZIP is therefore carried in full under this class, and is
+  still reduced to `000` under Safe Harbor, which this class does not touch.
+- **The allowance follows the party list.** (e)(2) opens on "the individual or of relatives, employers,
+  or household members", so the patient, the next of kin, the guarantor, the guarantor's employer and
+  the insured are all treated alike.
+- **Every kept part is recorded**, as a `DEID_RESIDUAL_RETAINED` residual located to its own field,
+  repetition and component, so it reaches the determiner's residual inventory.
+- **Nothing widens by omission.** A profile or an options bag that does not name the class reduces
+  every address exactly as it always did. Options built by hand from a profile's `policy` alone keep
+  nothing, and a profile derived from the Safe Harbor base may not add the class at all.
+- **It fails closed.** An address whose zip code is not a whole zip code is not partially kept: the
+  locus falls back to the Safe Harbor generalization, which drops the whole address when it cannot read
+  a prefix. No residual is recorded for anything that was not actually retained.
+- **The geographic allowance is honoured by the HL7 v2 pass alone.** The **C-CDA, FHIR, X12, NCPDP and
+  DICOM** adapters do not read retention classes at all, so under those five an address is reduced
+  exactly as Safe Harbor reduces it. They remain stricter, and that is the safe direction, but one
+  profile therefore means something narrower for those five formats than it does for HL7 v2.
+- **A profile that DECLARES the `limited-data-set` standard is checked against the regulation.** A
+  retention class beyond those (e)(2) permits is a fatal `DEID_PROFILE_INVALID` naming the class, both
+  where the profile becomes engine options and where it is used as a derivation base.
+
+**On dates the preset is deliberately STRICTER than the regulation.** §164.514(e)(2) names no date, so
+a limited data set may carry dates at full precision. This preset date-shifts them anyway. Removing
+more than the regulation requires is always lawful; the alternative would hand every existing consumer
+real patient dates on an upgrade, and no re-run undoes a disclosure.
 
 `defineDeidProfile()`'s widen-never-narrow contract covers retention too, and it reads the opposite way
 round from a transform override: a derived profile may **drop** a retained class (keep less, remove

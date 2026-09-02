@@ -9,12 +9,14 @@
  *   generalized to year, medical record / beneficiary / account numbers removed, the catch-all (R)
  *   blocked. It needs no key.
  * - {@link LIMITED_DATA_SET_PROFILE}: a **research / longitudinal** preset that **date-shifts** dates
- *   (interval-preserving) instead of generalizing them and keeps **consistent keyed surrogates** for
- *   the medical record, health plan beneficiary and account numbers, so time-series and
- *   cross-document utility survive. It is deliberately **less** protective than Safe Harbor for both,
- *   so it is **not** labelled `safe-harbor`, it requires a keyed per-patient context, and it is
- *   **not** a certified de-identified output. See {@link LIMITED_DATA_SET_PROFILE} and
- *   `docs-content/limitations.md` for the exact posture.
+ *   (interval-preserving) instead of generalizing them, keeps **consistent keyed surrogates** for
+ *   the medical record, health plan beneficiary and account numbers, and keeps the postal address
+ *   parts §164.514(e)(2)(ii) names (town or city, State, the whole zip code), so time-series,
+ *   cross-document and geographic utility survive. It is deliberately **less** protective than Safe
+ *   Harbor on each count, so it is **not** labelled `safe-harbor`, it requires a keyed per-patient
+ *   context, and it is **not** a certified de-identified output. Disclosing an actual limited data
+ *   set additionally requires a **data use agreement**, which is the consumer's. See
+ *   {@link LIMITED_DATA_SET_PROFILE} and `docs-content/limitations.md` for the exact posture.
  *
  * {@link defineDeidProfile} derives a per-site profile from a base, under a **widen-never-narrow**
  * contract: a site may move a category to an equal-or-**stronger** transform (more removal), but may
@@ -47,7 +49,13 @@ import {
   type TransformName,
 } from "./policy.js";
 import { type FreeTextRedactor } from "./redactor.js";
-import { NO_RETAINED_LOCI, RETAINED_LOCUS_CLASSES, type RetainedLocusClass } from "./retention.js";
+import {
+  assertLimitedDataSetRetention,
+  assertRetentionContract,
+  NO_RETAINED_LOCI,
+  RETAINED_LOCUS_CLASSES,
+  type RetainedLocusClass,
+} from "./retention.js";
 
 /**
  * The **protection rank** of a transform: higher means the residual is *less* identifying, so the
@@ -74,11 +82,21 @@ export type DeidStandard = "safe-harbor" | "limited-data-set" | "custom";
 /** The reserved standard a profile DECLARES when it claims Safe Harbor. Matched by exact equality. */
 const SAFE_HARBOR_STANDARD = "safe-harbor";
 
+/** The reserved standard a profile DECLARES when it claims a §164.514(e) limited data set. */
+const LIMITED_DATA_SET_STANDARD = "limited-data-set";
+
 /**
  * Enforce the label contract on the **second** surface that can claim it: a profile whose declared
  * `standard` is exactly `safe-harbor`, whatever its policy happens to be named. Run at the point the
  * profile is turned into engine options ({@link profileOptions}) and at the point it is used as a
  * derivation base ({@link defineDeidProfile}), both before any locus is transformed.
+ *
+ * **Retention is part of that contract on this surface too.** The engine refuses a retention set under
+ * a policy NAMED `safe-harbor`, which is the route a hand-built options bag takes; a profile that
+ * DECLARES the standard while naming a differently-named policy is the other route, and it is refused
+ * here for the same reason and with the same diagnostic. The reserved label may retain nothing, and no
+ * class becomes the exception: retaining a town, a State and a full zip code is strictly weaker than
+ * the three-digit generalization the label promises.
  */
 function assertProfileLabelContract(profile: DeidProfile): void {
   if (profile.standard === SAFE_HARBOR_STANDARD) {
@@ -86,9 +104,25 @@ function assertProfileLabelContract(profile: DeidProfile): void {
       profile.policy.transforms,
       `a profile declaring the reserved "${SAFE_HARBOR_STANDARD}" standard`,
     );
+    assertRetentionContract(SAFE_HARBOR_STANDARD, profile.retainedLoci);
   }
   // The policy's own name is the other surface, and it is checked whatever the profile declares.
   assertPolicyContract(profile.policy);
+}
+
+/**
+ * Enforce **§164.514(e)(2) itself** on a profile that DECLARES the `limited-data-set` standard: every
+ * retention class it carries must be one the regulation's own list leaves out (no date, no catch-all)
+ * or one (e)(2)(ii) names as a surviving address part. A class beyond that set is a claim the
+ * regulation does not support, so the profile is refused rather than allowed to wear the name.
+ *
+ * Run at the same two points as {@link assertProfileLabelContract}, both before any locus is
+ * transformed: {@link profileOptions}, where a profile becomes engine options, and
+ * {@link defineDeidProfile}, where it is used as a derivation base.
+ */
+function assertProfileStandardRetention(profile: DeidProfile, subject: string): void {
+  if (profile.standard !== LIMITED_DATA_SET_STANDARD) return;
+  assertLimitedDataSetRetention(`${subject} "${profile.name}"`, profile.retainedLoci);
 }
 
 /**
@@ -122,8 +156,10 @@ export interface DeidProfile {
   /**
    * The **retention classes** this profile permits: named groups of *identifying* loci a format
    * adapter passes through unchanged, each one still recorded as a `DEID_RESIDUAL_RETAINED` residual.
-   * Empty on {@link SAFE_HARBOR_PROFILE}; {@link LIMITED_DATA_SET_PROFILE} carries the two classes
-   * §164.514(e)(2) permits a limited data set to keep.
+   * Empty on {@link SAFE_HARBOR_PROFILE}; {@link LIMITED_DATA_SET_PROFILE} carries the three classes
+   * §164.514(e)(2) permits a limited data set to keep. A profile that DECLARES the
+   * `limited-data-set` standard is checked against that regulation's own list, so a class beyond it
+   * is a fatal {@link FATAL_CODES.DEID_PROFILE_INVALID} rather than an unsupported claim.
    */
   readonly retainedLoci: readonly RetainedLocusClass[];
   /** An optional default free-text redactor the profile carries into {@link profileOptions}. */
@@ -171,12 +207,28 @@ export const SAFE_HARBOR_PROFILE: DeidProfile = Object.freeze({
  * §164.514(c)(1) does not permit. Every such locus is flagged `reidentificationCode` in the manifest
  * and listed in the support report's keyed-surrogate residual inventory.
  *
- * It also **keeps**, unchanged, the two classes of identifying locus §164.514(e)(2) permits a limited
+ * It also **keeps**, unchanged, the three classes of identifying locus §164.514(e)(2) permits a limited
  * data set to carry and Safe Harbor does not: **encounter dates** (admission / discharge / service /
- * diagnosis) and **encounter and order identifiers** (visit number, placer and filler order numbers).
- * That list of sixteen direct identifiers names no date and has **no catch-all**, which is precisely
- * why these survive here and are removed under Safe Harbor. Each kept locus is still **recorded** as a
- * `DEID_RESIDUAL_RETAINED` residual, so it reaches the determiner's residual inventory.
+ * diagnosis), **encounter and order identifiers** (visit number, placer and filler order numbers), and
+ * the **postal address parts (e)(2)(ii) names**: town or city, State and the **whole** zip code, with
+ * the street address and every other geographic component removed. That list of sixteen direct
+ * identifiers names no date and has **no catch-all**, which is precisely why the first two survive
+ * here and are removed under Safe Harbor; (e)(2)(ii) is its only **partial** exclusion, which is why
+ * the third does. The three-digit / `000` ZIP rule is §164.514(b)(2)(i)(B), **Safe Harbor's**, and has
+ * no (e)(2) counterpart, so a restricted-prefix ZIP is kept in full here too. Each kept locus is still
+ * **recorded** as a `DEID_RESIDUAL_RETAINED` residual, located to its own component, so it reaches the
+ * determiner's residual inventory.
+ *
+ * **The geographic allowance is honoured by the HL7 v2 pass alone.** The C-CDA, FHIR, X12, NCPDP and
+ * DICOM adapters do not read retention classes, so under those five an address is reduced exactly as
+ * Safe Harbor reduces it. The direction is the safe one and it is stated rather than left to be
+ * discovered.
+ *
+ * **On dates the preset is deliberately STRICTER than §164.514(e)(2).** The list of sixteen names no
+ * date, so a limited data set may carry dates at full precision; this preset date-shifts them anyway,
+ * by choice. Removing more than the regulation requires is always lawful, and the alternative would
+ * hand every existing consumer real patient dates on an upgrade, which is the direction no re-run
+ * undoes.
  *
  * **This is deliberately less protective than Safe Harbor and is NOT Safe Harbor.** A shifted-but-real
  * date is still "an element of a date" (§164.514(b)(2)(i)(C)), so this profile:
@@ -212,14 +264,25 @@ export const LIMITED_DATA_SET_PROFILE: DeidProfile = Object.freeze({
     "Longitudinal research preset: Safe-Harbor identifier handling, EXCEPT that dates are " +
     "DATE-SHIFTED (interval-preserving) rather than generalized, that medical record, health plan " +
     "beneficiary and account numbers become CONSISTENT KEYED SURROGATES rather than being removed, " +
-    "and that the encounter dates and encounter/order identifiers §164.514(e)(2) permits are KEPT " +
-    "UNCHANGED and recorded as residuals. Every keyed surrogate is flagged as a re-identification " +
-    "code in the manifest and inventoried in the support report. Expert-Determination territory, " +
-    "NOT Safe Harbor, NOT a certified de-identification. Requires a keyed per-patient context.",
+    "and that the encounter dates, the encounter/order identifiers and the postal address parts " +
+    "§164.514(e)(2) permits are KEPT UNCHANGED and recorded as residuals. On an address that means " +
+    "the town or city, the State and the WHOLE zip code under §164.514(e)(2)(ii); the street address " +
+    "and every other geographic component are removed, and the three-digit / 000 ZIP rule is Safe " +
+    "Harbor's, not (e)(2)'s, so a restricted-prefix ZIP is kept in full. That geographic allowance is " +
+    "honoured by the HL7 v2 pass ALONE: the C-CDA, FHIR, X12, NCPDP and DICOM adapters reduce an " +
+    "address exactly as Safe Harbor does. On DATES the preset is deliberately STRICTER than " +
+    "§164.514(e)(2), which names no date and so permits full precision: it date-shifts them anyway, " +
+    "removing more by choice. A limited data set may be disclosed only under a DATA USE AGREEMENT " +
+    "between the covered entity and the recipient (§164.514(e)(1)); obtaining and holding that " +
+    "agreement is the CONSUMER'S responsibility, and this library neither holds nor checks one. " +
+    "Every keyed surrogate is flagged as a re-identification code in the manifest and inventoried " +
+    "in the support report. Expert-Determination territory, NOT Safe Harbor, NOT a certified " +
+    "de-identification. Requires a keyed per-patient context.",
   requiresContext: true,
   retainedLoci: Object.freeze([
     RETAINED_LOCUS_CLASSES.ENCOUNTER_DATES,
     RETAINED_LOCUS_CLASSES.ENCOUNTER_IDENTIFIERS,
+    RETAINED_LOCUS_CLASSES.LIMITED_DATA_SET_GEOGRAPHY,
   ]),
 });
 
@@ -304,6 +367,10 @@ export function defineDeidProfile(spec: DeidProfileSpec): DeidProfile {
   // derive time, and a refused profile never mints a policy to label, so DEID_PROFILE_INVALID is the
   // code a caller sees for that input.
   assertProfileLabelContract(base);
+  // And §164.514(e)(2) on a base that DECLARES the limited-data-set standard: a base whose retention
+  // set the regulation does not support may not be derived from either, or every site profile built
+  // on it would inherit the unsupported claim.
+  assertProfileStandardRetention(base, "the derivation base");
 
   const retainedLoci = spec.retainedLoci ?? base.retainedLoci;
   const added = retainedLoci.filter((cls) => !base.retainedLoci.includes(cls));
@@ -387,6 +454,10 @@ export function profileOptions(
   // The label contract fires here, before any locus is transformed: this is the point a profile that
   // DECLARES the safe-harbor standard becomes engine options, and the engine sees only the policy.
   assertProfileLabelContract(profile);
+  // Same point, same reason, for the OTHER reserved standard: a profile declaring `limited-data-set`
+  // hands the engine a retention set the engine cannot check against the regulation, because the
+  // engine sees only the classes and not the standard that was claimed over them.
+  assertProfileStandardRetention(profile, "a profile");
   const ctx = overrides?.context ?? context;
   const redactor = overrides?.redactor ?? profile.redactor;
   return {

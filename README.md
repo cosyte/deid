@@ -146,6 +146,23 @@ them **unchanged and recorded**. PV1-19 is a CX list routed by its CX-5 identifi
 only a `VN`-typed or untyped visit number is the encounter identifier, while an `MR`/`AN`/`SS`-typed one
 is transformed as the medical record / account / social security number it is, under **both** profiles.
 
+**The postal-address allowance of §164.514(e)(2)(ii)** is the one place a profile can ask this adapter
+to keep _more_ geography than the safe 3-digit ZIP. That clause removes "postal address information,
+**other than town or city, State, and zip code**", which makes it the only **partial** exclusion in the
+limited data set's list of sixteen. A profile naming the `limited-data-set-geography` retention class,
+as the limited-data-set preset does, keeps the **town or city** (XAD.3), the **State** (XAD.4) and the
+**whole zip code** (XAD.5) of every mapped address (**PID-11**, **NK1-4**, **NK1-32**, **GT1-5**,
+**GT1-17**, **IN1-19**), each recorded as a `DEID_RESIDUAL_RETAINED` residual at its own component, and
+drops the street address along with every other geographic component: the county or parish, the census
+tract, the country. The county-code field (**PID-12**) and the birth place (**PID-23**) are removed
+under every profile, because the clause names neither. The three-digit / `000` rule is
+§164.514(b)(2)(i)(B), **Safe Harbor's**, so a restricted-prefix ZIP is kept in full under this class and
+is still suppressed under Safe Harbor. **Nothing widens by omission**: without the class an address is
+reduced exactly as it always was, and an address whose zip code is not a whole zip code falls back to
+that generalization, which drops the whole address rather than keeping part of it. This adapter is the
+**only** one that reads retention classes; under C-CDA, FHIR, X12, NCPDP and DICOM an address is reduced
+exactly as Safe Harbor reduces it.
+
 **Every other date inside a segment the pass hands through** is acted on and recorded too: every
 position the HL7 **v2.5.1** segment definitions type as a date or date/time, at its own unit (a field, a
 component of a composite, one repetition at a time), plus an OBX-5 the message types as a date. That
@@ -161,7 +178,8 @@ retained segment that the carve-outs do not name is **not** de-identified, which
 _provider_ names in PV1-7/8 and OBR-16, the guarantor's employer organisation name at GT1-51, and the
 date components carried inside a person-name or address composite; a position only a version other than
 v2.5.1 types as a date is a stated residual; the address generalization keeps only the Safe Harbor
-3-digit ZIP.
+3-digit ZIP, unless the profile names the §164.514(e)(2)(ii) geographic retention class described
+above.
 
 **Those positions are now counted and located, which is a different thing from being cleaned.** Every
 value-bearing position a pass hands through that no locus rule names is recorded as an **unexamined
@@ -498,10 +516,14 @@ import {
 SAFE_HARBOR_PROFILE.standard; // => "safe-harbor"
 
 // A longitudinal research preset: dates are DATE-SHIFTED, not generalized, and MRN / beneficiary /
-// account keep a CONSISTENT KEYED SURROGATE so linkage survives. Deliberately less protective than
-// Safe Harbor → NOT labelled "safe-harbor", requires a keyed per-patient context, and is NOT a
-// certified de-identification (nor, on its own, a §164.514(e) Limited Data Set; that needs a Data Use
-// Agreement, which is yours).
+// account keep a CONSISTENT KEYED SURROGATE so linkage survives. It also keeps the postal address
+// parts §164.514(e)(2)(ii) NAMES (town or city, State, the WHOLE zip code) under the HL7 v2 pass, with
+// the street and every other geographic component removed and each kept part recorded. On DATES it is
+// deliberately STRICTER than §164.514(e)(2), which names no date at all: it shifts them by choice.
+// Deliberately less protective than Safe Harbor → NOT labelled "safe-harbor", requires a keyed
+// per-patient context, and is NOT a certified de-identification (nor, on its own, a §164.514(e)
+// Limited Data Set; that needs a Data Use Agreement, which is yours, and which this library neither
+// holds nor checks).
 LIMITED_DATA_SET_PROFILE.requiresContext; // => true
 
 // A per-site profile may only move a category to an equal-or-STRONGER transform; a weakening override

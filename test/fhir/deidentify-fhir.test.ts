@@ -17,9 +17,12 @@ import { getProperty, isList, parseResource, resourceType, serializeResource } f
 import {
   DEID_DISPOSITION_CODES,
   FATAL_CODES,
+  LIMITED_DATA_SET_PROFILE,
   SAFE_HARBOR_CATEGORIES,
   createDeidContext,
   defineDeidPolicy,
+  profileOptions,
+  type DeidOptions,
 } from "../../src/index.js";
 import { deidentifyFhir, deidentifyFhirJson } from "../../src/fhir/index.js";
 
@@ -34,7 +37,7 @@ function loadFixture(name: string): string {
 const ctx = createDeidContext({ key: "fhir-test-key", patientId: "patient-fhir-1" });
 
 /** Parse + de-identify a fixture, returning the transformed model, serialized wire, and manifest. */
-function deid(name: string, options = { context: ctx }) {
+function deid(name: string, options: DeidOptions = { context: ctx }) {
   const { resource } = parseResource(loadFixture(name));
   const { document, manifest } = deidentifyFhir(resource, options);
   return { document, manifest, wire: serializeResource(document) };
@@ -174,6 +177,47 @@ describe("deidentifyFhir, structured per-category behavior", () => {
   it("fully suppresses a restricted-prefix ZIP (contact 03601) to 000", () => {
     const { wire } = deid("bundle");
     expect(wire).toContain('"postalCode":"000"');
+  });
+
+  it("the limited-data-set preset changes NOTHING here: geography is the HL7 v2 pass's alone", () => {
+    // The §164.514(e)(2)(ii) geographic retention class is read by the HL7 v2 adapter and by no other.
+    // This adapter is handed the same profile, retention set included, and must reduce every address
+    // exactly as it does under Safe Harbor: the safe 3-digit prefix, the `000` substitution for a
+    // restricted prefix, and no town. The direction is the strict one, and it is asserted rather than
+    // assumed, because a class that silently reached five more adapters would release five formats'
+    // worth of geography that nothing in this repo decided to release.
+    const lds = deid("bundle", profileOptions(LIMITED_DATA_SET_PROFILE, ctx));
+    expect(lds.wire).toContain('"postalCode":"902"');
+    expect(lds.wire).toContain('"postalCode":"000"');
+    expect(lds.wire).toContain('"state":"MA"');
+    expect(lds.wire).not.toContain('"city"');
+    expect(lds.wire).not.toContain('"line"');
+    expect(lds.wire).not.toContain('"district"');
+    for (const sentinel of ["ZZPATSTREET", "ZZPATCITY", "ZZPATCOUNTY"]) {
+      expect(lds.wire.includes(sentinel), sentinel).toBe(false);
+    }
+    // And no locus of this pass is recorded as a retained geographic residual, because none was kept.
+    expect(
+      lds.manifest.filter((m) => m.category === C.GEOGRAPHIC && m.disposition === "retained"),
+    ).toEqual([]);
+  });
+
+  it("the published limitations documentation states that HL7 v2 is the only pass that widens", () => {
+    // The other half of the same claim. A limitation a consumer cannot read is not a limitation, and
+    // this is the file `docs-content/` publishes for exactly that purpose.
+    // Read with markdown wrapping and emphasis normalized away, so the claim is asserted on the
+    // published PROSE rather than on where a line happened to break.
+    const limitations = readFileSync(
+      join(import.meta.dirname, "..", "..", "docs-content", "limitations.md"),
+      "utf8",
+    )
+      .replaceAll("*", "")
+      .replace(/\s+/g, " ");
+    expect(limitations).toContain("geographic allowance is honoured by the HL7 v2 pass alone");
+    expect(limitations).toContain(
+      "C-CDA, FHIR, X12, NCPDP and DICOM adapters do not read retention classes at all",
+    );
+    expect(limitations).toContain("They remain stricter");
   });
 
   it("generalizes clinical-resource dates (Observation.effective/issued, Encounter.period) to year", () => {

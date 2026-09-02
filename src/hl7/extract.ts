@@ -40,7 +40,15 @@ import {
   UnexaminedResidualBuilder,
   type UnexaminedResidual,
 } from "../residual.js";
-import { isRetainableCategory, retains, type RetainedLocusClass } from "../retention.js";
+import {
+  isRetainableCategory,
+  isRetainableZipCode,
+  retains,
+  LIMITED_DATA_SET_ADDRESS_PARTS,
+  RETAINED_LOCUS_CLASSES,
+  type RetainedLocusClass,
+  type RetainedLocusPart,
+} from "../retention.js";
 import { Hl7ExaminedPositions, recordUnexaminedHl7Positions } from "./positions.js";
 import { DR_DATE_COMPONENTS, HL7_DATE_LOCI, OBX_DATE_VALUE_TYPES } from "./date-loci.js";
 import {
@@ -60,11 +68,16 @@ import { RETAIN_SEGMENTS, RETAINED_LOCUS_RULES, type Hl7RetainedFieldRule } from
  * `date-field` and `date-component` are the two units a date locus can have: the first rewrites the
  * date component of **one repetition** of a field, the second rewrites **one component** of one
  * repetition and leaves every sibling component at its own ordinal.
+ *
+ * `address-part` is the §164.514(e)(2)(ii) unit: it **reduces the address repetition to the five XAD
+ * slots the named parts occupy, all empty**, before writing its own component, so the street, the
+ * county and every other position of the address are gone whether or not a locus addressed them.
  */
 export type Hl7EditKind =
   | "whole-field"
   | "id-number"
   | "address-zip"
+  | "address-part"
   | "date-field"
   | "date-component"
   | "none";
@@ -82,7 +95,10 @@ export interface Hl7Coord {
   readonly rep: number;
   /** How to write the transformed value back. */
   readonly edit: Hl7EditKind;
-  /** 1-based component number, for a `date-component` edit. Absent for every other edit. */
+  /**
+   * 1-based component number, for a `date-component` or an `address-part` edit. Absent for every
+   * other edit.
+   */
   readonly component?: number;
 }
 
@@ -192,6 +208,61 @@ function datePath(
 }
 
 /**
+ * The XAD components §164.514(e)(2)(ii) NAMES as surviving a limited data set, at their v2.5.1
+ * ordinals: `XAD.3` City, `XAD.4` State or Province, `XAD.5` Zip or Postal Code. In ascending order,
+ * so one address repetition emits its loci in document order.
+ *
+ * Every other XAD component is deliberately absent and none of them is a locus under this class: the
+ * street address (`XAD.1`), any other designation (`XAD.2`), the country (`XAD.6`), the address type
+ * (`XAD.7`), the other geographic designation (`XAD.8`), the county or parish code (`XAD.9`) and the
+ * census tract (`XAD.10`) are all removed by the applier's reduction, unnamed and unrecorded, because
+ * the clause names none of them.
+ */
+const XAD_RETAINED_PARTS: readonly {
+  readonly component: number;
+  readonly part: RetainedLocusPart;
+}[] = [
+  { component: 3, part: LIMITED_DATA_SET_ADDRESS_PARTS.TOWN_OR_CITY },
+  { component: 4, part: LIMITED_DATA_SET_ADDRESS_PARTS.STATE },
+  { component: 5, part: LIMITED_DATA_SET_ADDRESS_PARTS.ZIP_CODE },
+];
+
+/**
+ * Emit one locus per §164.514(e)(2)(ii) part **present** in this address repetition, each at its own
+ * component so the manifest locates the residual to field, repetition and component.
+ *
+ * A part the repetition does not carry emits **nothing**: no locus, no manifest row, and therefore no
+ * `DEID_RESIDUAL_RETAINED` residual for something the pass did not actually retain. The caller has
+ * already established that the ZIP is a whole zip code, so this always emits at least one locus, which
+ * is what guarantees the applier reduces the repetition and drops the street.
+ */
+function pushRetainedAddressParts(
+  out: Hl7LocusAccumulator,
+  seg: Segment,
+  type: string,
+  occ: number,
+  field: number,
+  rep: number,
+): void {
+  for (const { component, part } of XAD_RETAINED_PARTS) {
+    const value = componentValue(seg, field, rep, component);
+    if (value.length === 0) continue;
+    push(
+      out,
+      {
+        path: `${fieldPath(type, occ, field, rep)}.${String(component)}`,
+        kind: "identifier",
+        category: SAFE_HARBOR_CATEGORIES.GEOGRAPHIC,
+        retention: RETAINED_LOCUS_CLASSES.LIMITED_DATA_SET_GEOGRAPHY,
+        retainedPart: part,
+        value,
+      },
+      { segIndex: seg.absoluteIndex, field, rep, edit: "address-part", component },
+    );
+  }
+}
+
+/**
  * Extract the loci for one mapped-segment field rule.
  *
  * The rule **names the whole field**, so the field is marked examined before any of its own guards run:
@@ -204,6 +275,7 @@ function extractRule(
   type: string,
   occ: number,
   rule: Hl7FieldRule,
+  retainedLoci: readonly RetainedLocusClass[] | undefined,
   examined: Hl7ExaminedPositions,
 ): void {
   examined.field(rule.field);
@@ -273,9 +345,24 @@ function extractRule(
     case "address": {
       // One locus per repetition; the engine generalizes the ZIP (XAD.5) and the applier drops every
       // finer geographic component (street / city / county).
+      //
+      // UNLESS the configured profile names the §164.514(e)(2)(ii) geographic class AND the ZIP at
+      // this repetition is a whole zip code, in which case the repetition emits one locus per NAMED
+      // PART instead (town or city, State, zip code) and the applier keeps exactly those. Both keys
+      // are required: an absent class widens nothing, and an address whose ZIP this library cannot
+      // vouch for falls back to the generalization below, which fails closed to dropping the whole
+      // repetition rather than emitting a partially retained address.
+      const geographyRetained = retains(
+        retainedLoci,
+        RETAINED_LOCUS_CLASSES.LIMITED_DATA_SET_GEOGRAPHY,
+      );
       const reps = field.repetitions.length;
       for (let rep = 0; rep < reps; rep += 1) {
         const zip = componentValue(seg, rule.field, rep, 5); // XAD.5 (Zip or Postal Code)
+        if (geographyRetained && isRetainableZipCode(zip)) {
+          pushRetainedAddressParts(out, seg, type, occ, rule.field, rep);
+          continue;
+        }
         push(
           out,
           {
@@ -719,7 +806,7 @@ function extractSegment(
 
   const rules = HL7_LOCUS_MAP[type];
   if (rules !== undefined) {
-    for (const rule of rules) extractRule(out, seg, type, occ, rule, examined);
+    for (const rule of rules) extractRule(out, seg, type, occ, rule, retainedLoci, examined);
     // A position the standard types as a whole ORGANISATION is decided by the party-role test, not
     // by a category rule. Emitted after the flat rules, and high-numbered, so document order holds.
     extractOrganisationParties(out, seg, type, occ, examined);

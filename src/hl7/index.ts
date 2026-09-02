@@ -68,6 +68,18 @@
  * residual, as are the file and batch envelope headers. The address generalization keeps only the Safe
  * Harbor 3-digit ZIP and conservatively drops the (permitted) state as well.
  *
+ * **The postal-address allowance of §164.514(e)(2)(ii)** is the one place a profile can ask this pass to
+ * keep MORE geography than that. A profile naming the `limited-data-set-geography` retention class keeps
+ * the town or city (XAD.3), the State (XAD.4) and the **whole** zip code (XAD.5) of every mapped address
+ * (PID-11, NK1-4, NK1-32, GT1-5, GT1-17, IN1-19), each recorded as a `DEID_RESIDUAL_RETAINED` residual
+ * at its own component, and drops the street and every other component. The three-digit / `000` rule is
+ * Safe Harbor's, so a restricted-prefix ZIP is kept in full under this class. **Nothing widens by
+ * omission**: without the class an address is reduced exactly as it always was. An address whose ZIP is
+ * not a whole zip code **fails closed** to that same generalization, which drops the whole repetition.
+ * The county code (PID-12) and the birth place (PID-23) are blocked under every profile: (e)(2)(ii)
+ * names neither. This adapter is the ONLY one that reads retention classes; the other five stay at Safe
+ * Harbor geography.
+ *
  * @packageDocumentation
  */
 
@@ -206,6 +218,13 @@ export {
   type Hl7DateLocusRule,
   type Hl7SegmentDateLoci,
 } from "./date-loci.js";
-export { RETAINED_LOCUS_CLASSES, retains, type RetainedLocusClass } from "../retention.js";
+export {
+  LIMITED_DATA_SET_ADDRESS_PARTS,
+  RETAINED_LOCUS_CLASSES,
+  isRetainableZipCode,
+  retains,
+  type RetainedLocusClass,
+  type RetainedLocusPart,
+} from "../retention.js";
 export { type UnexaminedResidual } from "../residual.js";
 export { SAFE_HARBOR_CATEGORIES, type SafeHarborCategory } from "../categories.js";
