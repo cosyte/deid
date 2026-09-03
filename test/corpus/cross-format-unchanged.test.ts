@@ -24,7 +24,7 @@ import { describe, expect, it } from "vitest";
 import { parseCcda } from "@cosyte/ccda";
 import { parseResource, serializeResource } from "@cosyte/fhir";
 import { parseHL7 } from "@cosyte/hl7";
-import { serializeDicom } from "@cosyte/dicom";
+import { Dataset, serializeDicom } from "@cosyte/dicom";
 
 import {
   buildExpertDeterminationSupportReport,
@@ -92,11 +92,18 @@ function transformedDocumentDigests(): Record<string, string> {
  * acted on. Both show up here as a changed digest, whatever the manifest says.
  */
 describe("every adapter emits the same transformed document, byte for byte", () => {
+  // THE DICOM DIGEST MOVED ONCE, DELIBERATELY, AND THE CONTROL BELOW IS WHY IT IS SAFE TO MOVE IT.
+  // This fence forbids a change that only means to MEASURE something from moving an emitted byte. The
+  // DICOM adapter now also DECLARES something: it writes the coded De-identification Method Code
+  // Sequence `(0012,0064)` that PS3.15 E.1.1 asks for beside the method text, so its document really is
+  // a byte longer on purpose. What must NOT have changed is anything else, and the next test asserts
+  // exactly that by digesting the same document with the new element taken back out and matching the
+  // pre-existing pin. The other five adapters are untouched and their digests are unmoved.
   it("the six adapters' transformed documents are unchanged", () => {
     expect(transformedDocumentDigests()).toMatchInlineSnapshot(`
       {
         "ccda": "152ba0fce5feff3fa707d6c25c868ee9",
-        "dicom": "8f9e91a91cc7b3a4461af53838c8843e",
+        "dicom": "c5b02868abb92c9221aa105af00ac5cd",
         "fhir": "a9237473c3c96a54b5ad915ad10afe34",
         "hl7": "b0e71b72dd6f4078c43d1d7b767ef843",
         "hl7-encounter": "7aef4fa7fa7ed2ffd1ce4c05158e4773",
@@ -104,6 +111,28 @@ describe("every adapter emits the same transformed document, byte for byte", () 
         "x12": "9c207e831fde066fd4ce03e11fdb6b77",
       }
     `);
+  });
+
+  it("and the DICOM document is unchanged once the added declaration is taken back out", () => {
+    // The pinned value is the ORIGINAL digest, captured before `(0012,0064)` was ever written. Removing
+    // that one element and re-serializing has to reproduce it exactly: that is what makes the digest
+    // above an ADDITION rather than a rewrite, and it holds the coded declaration to the same bar the
+    // measurement was held to. Every other byte of the pass, the `(0012,0063)` method text and the
+    // `(0012,0062) YES` marker included, is inside this assertion.
+    const { dataset } = deidentifyDicom(buildPhiDataset());
+    const withoutDeclaration = new Dataset({
+      warnings: [],
+      elements: new Map(
+        dataset
+          .elements()
+          .filter((el) => el.tag !== "00120064")
+          .map((el) => [el.tag, el]),
+      ),
+      ...(dataset.fileMeta !== undefined ? { fileMeta: dataset.fileMeta } : {}),
+    });
+    expect(digest(serializeDicom(withoutDeclaration).toString("latin1"))).toBe(
+      "8f9e91a91cc7b3a4461af53838c8843e",
+    );
   });
 });
 

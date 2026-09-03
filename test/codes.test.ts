@@ -18,16 +18,19 @@ import {
 import { deidentifyHl7 } from "../src/hl7/index.js";
 
 describe("code surface stability", () => {
-  // `DEID_OUTPUT_INVALID` and `DEID_POSITIONS_UNENUMERABLE` are ADDITIONS, deliberately reviewed here:
-  // nothing was renamed and nothing was removed, so a consumer branching on any existing code is
-  // unaffected. The first carries the fail-closed outcome for a transformed document that no longer
-  // round-trips through its own parser; the second the fail-closed outcome for a structure whose
-  // value-bearing positions cannot be enumerated, where a zero or a partial count would read as a
-  // measurement nobody can qualify.
+  // `DEID_OUTPUT_INVALID`, `DEID_POSITIONS_UNENUMERABLE` and `DEID_DECLARATION_UNNAMEABLE` are
+  // ADDITIONS, deliberately reviewed here: nothing was renamed and nothing was removed, so a consumer
+  // branching on any existing code is unaffected. The first carries the fail-closed outcome for a
+  // transformed document that no longer round-trips through its own parser; the second the fail-closed
+  // outcome for a structure whose value-bearing positions cannot be enumerated, where a zero or a
+  // partial count would read as a measurement nobody can qualify; the third the fail-closed outcome for
+  // a pass whose published coding vocabulary cannot name the profile or option it would apply, where an
+  // approximate code is a claim a downstream system acts on without a human.
   it("fatal codes are stable", () => {
     expect(sortedCodeSet(FATAL_CODES)).toMatchInlineSnapshot(`
       [
         "DEID_CONTEXT_INVALID",
+        "DEID_DECLARATION_UNNAMEABLE",
         "DEID_NO_KEY",
         "DEID_OUTPUT_INVALID",
         "DEID_POLICY_INVALID",

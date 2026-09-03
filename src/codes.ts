@@ -85,6 +85,21 @@ export const FATAL_CODES = {
    * name, a tag) and carries no value, no key and no offset. The fatal set is additions-only.
    */
   DEID_POSITIONS_UNENUMERABLE: "DEID_POSITIONS_UNENUMERABLE",
+  /**
+   * A pass would apply a **profile or option that its published coding vocabulary cannot name**, so the
+   * machine-readable declaration it is required to write could only be an approximation.
+   *
+   * Fail closed on the declaration itself. A coded term is read by a downstream system as a property of
+   * the document and is acted on **without a human**, so an approximate code is worse than no output at
+   * all: it is a claim about what was removed that nobody re-checks, and a document released on a false
+   * coded claim cannot be un-released. A pass that cannot name what it did therefore returns nothing
+   * rather than a document stamped with a declaration that is not true of it.
+   *
+   * The message names the **profile or option** (a bounded structural token from the pass's own closed
+   * option set, never a value read from the document) and carries no value, no key and no offset. The
+   * fatal set is additions-only.
+   */
+  DEID_DECLARATION_UNNAMEABLE: "DEID_DECLARATION_UNNAMEABLE",
 } as const;
 
 /**
