@@ -125,9 +125,12 @@ describe("consistent UID remapping, relationships survive", () => {
       [
         "burnedInAnnotationHazard",
         "dataset",
+        "deidentificationMethodCodes",
         "manifest",
         "metadataOnly",
+        "optionDeclarations",
         "retained",
+        "uidReferentialIntegrity",
         "unexaminedResiduals",
         "warnings",
       ].sort(),

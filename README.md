@@ -396,6 +396,20 @@ Instance UIDs are **consistently remapped** so image/series/study relationships 
 removed** (fail-closed, kept only via a known-safe retain list, empty by default); clinical/technical
 values and pixel bytes are **retained untouched**. The output carries `Patient Identity Removed = YES`.
 
+**The declaration is machine-readable, not only prose.** Beside the De-identification Method text at
+`(0012,0063)`, the pass writes the **CID 7050** coded terms for the profile and for every option it
+applied into **De-identification Method Code Sequence `(0012,0064)`**, so a receiving archive branches on
+a code rather than parsing a sentence. Every option it **withheld** is declared by its coded term on the
+result (`optionDeclarations`) and never in that sequence, because a term there means "used". A profile or
+option the vocabulary cannot name, or a declaration the run cannot read back out of its own serialized
+bytes, aborts the pass rather than publishing an approximate claim. A sequence the **input** carried is
+dropped, with a value-free warning: no de-identification rule inspects its contents, so none of it may
+ride inside output stamped `Patient Identity Removed = YES`.
+
+**Replacement-UID referential integrity is scoped, and the scope is on the result.** With no shared
+`uidMap` it is guaranteed **only within the single call** (`uidReferentialIntegrity.scope` is
+`"single-call"`); supply one and it reaches every call that shares it.
+
 **Pixel PHI is flagged, never cleaned.** This is a **metadata-only** de-identifier (`metadataOnly` is
 always `true`): it cannot inspect pixels, so recognizable text **burned into the image** (Safe Harbor
 category Q) is not removed. When Pixel Data may carry burned-in annotation, the result sets

@@ -17,6 +17,16 @@
  * deviations**: every private tag is removed, every UID is consistently remapped, and no identifying metadata
  * is retained. The output is **"Safe-Harbor-transformed per the configured policy"**, never "de-identified".
  *
+ * **The declaration is machine-readable, not only prose.** Beside the De-identification Method text the
+ * delegated pass writes to `(0012,0063)`, this adapter writes the **CID 7050** coded terms for the profile
+ * and for every option it applied into De-identification Method Code Sequence `(0012,0064)`, so a receiving
+ * archive can branch on a code rather than parse an English sentence. Every option it **withheld** is
+ * declared by its coded term on the returned result and never in that sequence, because that sequence
+ * carries the codes corresponding to the Profile and Options *used*. The scope over which replacement-UID
+ * referential integrity holds is on the result too. The adapter **refuses to declare rather than declare
+ * wrongly**: a profile or an option the vocabulary cannot name aborts the pass, and so does a declaration
+ * this run cannot read back out of its own serialized output.
+ *
  * **The pixel hazard is surfaced, never cleaned.** This is a **metadata-only** de-identifier: it cannot
  * inspect or clean pixels, so recognizable text **burned into the image** (Safe Harbor category Q) is not
  * removed. When Pixel Data is present and not affirmatively marked free of burned-in annotation, the result
@@ -27,7 +37,9 @@
  * @packageDocumentation
  */
 
-import { Dataset, deidentify as dicomDeidentify, parseDicom, serializeDicom } from "@cosyte/dicom";
+import type { Buffer } from "node:buffer";
+
+import { deidentify as dicomDeidentify, parseDicom, type Dataset } from "@cosyte/dicom";
 
 import {
   BURNED_IN_ANNOTATION_CODE,
@@ -35,35 +47,94 @@ import {
   foldReport,
   foldWarnings,
 } from "./fold.js";
+import { BASIC_PROFILE_CODE_VALUE, resolveMethodDeclaration } from "./method-codes.js";
+import {
+  attachMethodCodeSequence,
+  INPUT_METHOD_CODE_SEQUENCE_DROPPED_WARNING,
+  serializeVerified,
+  TAG_DEIDENTIFICATION_METHOD_CODE_SEQUENCE,
+} from "./method-sequence.js";
 import { resolveDicomOptions } from "./policy-map.js";
-import type { DicomBufferDeidResult, DicomDeidOptions, DicomDeidResult } from "./types.js";
+import type {
+  DicomBufferDeidResult,
+  DicomDeidOptions,
+  DicomDeidResult,
+  DicomDeidWarning,
+} from "./types.js";
+import { resolveUidReferentialIntegrity } from "./uid-scope.js";
 
 /**
- * Return the de-identified dataset with the **input file's** parse warnings dropped.
+ * Run the pass once: delegate Annex E, attach the coded declaration, and verify that this run's own
+ * serialized output reads that declaration back unchanged.
  *
- * The delegated Annex E pass carries `Dataset.warnings` across from the source dataset, so without
- * this the artifact this function calls de-identified arrives holding diagnostics *about the original
- * file*, and a parse warning is written about the bytes that were there before anything was removed.
- * That is the same reasoning the C-CDA adapter applies at its own re-parse, where the parser's warnings
- * are deliberately discarded because they are not part of the de-identification contract.
+ * **The order is the contract.** The coded declaration is resolved *first*, before anything is
+ * delegated, so a profile or an option CID 7050 cannot name aborts with neither a de-identified dataset
+ * nor de-identified bytes ever coming into existence. Verification runs *last*, over the bytes actually
+ * returned, so output stamped Patient Identity Removed YES never leaves carrying a coded claim the pass
+ * could not read back.
  *
- * Nothing is lost to the caller: the warnings that describe **this pass** are returned separately on
- * {@link DicomDeidResult.warnings}, and a caller who wants the input's parse warnings still has the
- * input dataset they passed in.
+ * **The returned dataset carries no parse warnings from the input file.** Those describe the bytes as
+ * they were *before* anything was removed, so they are not part of the de-identification contract; the
+ * warnings raised by this pass are returned on the result instead. The rebuild that drops them is the
+ * same rebuild that attaches `(0012,0064)`: only the root needs it, since every nested `Item` is
+ * constructed with an empty warnings array by both the parser and the Annex E pass.
  *
- * Only the root dataset needs rebuilding: every nested `Item` is constructed with an empty warnings
- * array by both the parser and the Annex E pass.
+ * **The unexamined-residual measurement is derived over the dataset that is actually returned**, the
+ * attached sequence included, so it stays a true statement about the artifact the caller holds. That
+ * keeps the derivation literal in the way it already is for the Patient Identity Removed and
+ * De-identification Method attributes the delegated pass writes: this adapter holds no list of tags to
+ * forgive, because a stale entry in one would hide a real attribute rather than a self-signature.
+ *
+ * The bytes are returned alongside the result so {@link deidentifyDicomBuffer} does not serialize a
+ * second time: the buffer entry point hands back exactly the bytes the verification read.
  *
  * @internal
  */
-function withoutInputWarnings(dataset: Dataset): Dataset {
-  if (dataset.warnings.length === 0) return dataset;
-  const elements = new Map(dataset.elements().map((el) => [el.tag, el]));
-  return new Dataset({
-    warnings: [],
-    elements,
-    ...(dataset.fileMeta !== undefined ? { fileMeta: dataset.fileMeta } : {}),
+function runDicomPass(
+  dataset: Dataset,
+  options: DicomDeidOptions,
+): { readonly result: DicomDeidResult; readonly bytes: Buffer } {
+  const resolved = resolveDicomOptions(options);
+  // Resolved before anything is delegated: a profile or option the vocabulary cannot name refuses the
+  // pass here, with no dataset and no bytes produced.
+  const declaration = resolveMethodDeclaration(BASIC_PROFILE_CODE_VALUE, resolved.retain);
+  const inputCarriedMethodCodes = dataset.has(TAG_DEIDENTIFICATION_METHOD_CODE_SEQUENCE);
+
+  const { dataset: deidentified, report } = dicomDeidentify(dataset, {
+    retain: [],
+    deidentificationMethod: resolved.deidentificationMethod,
+    ...(resolved.uidRoot !== undefined ? { uidRoot: resolved.uidRoot } : {}),
+    ...(resolved.uidMap !== undefined ? { uidMap: resolved.uidMap } : {}),
   });
+
+  const result = attachMethodCodeSequence(deidentified, declaration.appliedTerms);
+  const bytes = serializeVerified(result, declaration.appliedTerms);
+
+  const warnings: readonly DicomDeidWarning[] = Object.freeze([
+    ...foldWarnings(report.warnings),
+    ...(inputCarriedMethodCodes ? [INPUT_METHOD_CODE_SEQUENCE_DROPPED_WARNING] : []),
+  ]);
+
+  return {
+    bytes,
+    result: Object.freeze({
+      dataset: result,
+      manifest: foldReport(report),
+      // The Annex E pass is delegated, so the measurement is DERIVED from what it returned rather than
+      // enumerated from a map this adapter does not hold: an attribute present in the result that the
+      // report does not account for is one no rule reached. Nested sequence items and the Part 10 File
+      // Meta group included, and a structure that will not yield its positions fails the pass rather
+      // than emit a partial count.
+      unexaminedResiduals: deriveUnexaminedResiduals(result, report),
+      warnings,
+      metadataOnly: true,
+      burnedInAnnotationHazard: warnings.some((w) => w.code === BURNED_IN_ANNOTATION_CODE),
+      retained: Object.freeze([...report.retained]),
+      deidentificationMethodCodes: declaration.appliedTerms,
+      optionDeclarations: declaration.optionDeclarations,
+      uidReferentialIntegrity: resolveUidReferentialIntegrity(options.uidMap),
+    }),
+  };
 }
 
 /**
@@ -80,11 +151,23 @@ function withoutInputWarnings(dataset: Dataset): Dataset {
  * were *before* anything was removed, so they are not part of the de-identification contract; the warnings
  * raised by **this pass** are returned separately on {@link DicomDeidResult.warnings}.
  *
+ * The output **declares itself in the standard's own vocabulary**. The CID 7050 coded terms for the
+ * profile and for every option the run applied are written to De-identification Method Code Sequence
+ * `(0012,0064)` beside the unchanged `(0012,0063)` text and `(0012,0062) YES`; every option the run
+ * **withheld** is declared on {@link DicomDeidResult.optionDeclarations} and never in that sequence, and
+ * the scope over which replacement-UID referential integrity holds is on
+ * {@link DicomDeidResult.uidReferentialIntegrity}.
+ *
  * @param dataset - The parsed dataset (`parseDicom(bytes)`).
  * @param options - The policy and (for cross-file UID consistency) a shared `uidMap` / `uidRoot`.
- * @returns The de-identified dataset, the value-free manifest, the warnings, and the metadata-only stance.
+ * @returns The de-identified dataset, the value-free manifest, the coded declaration, the warnings, and
+ *   the metadata-only stance.
  * @throws {@link DeidError} `DEID_POSITIONS_UNENUMERABLE` when a dataset, a sequence item or the Part 10
  *   File Meta group will not yield its positions, so no honest count exists for this study.
+ * @throws {@link DeidError} `DEID_DECLARATION_UNNAMEABLE` when a profile or an Annex E option in play has
+ *   no naming term in CID 7050, so the coded declaration could only be an approximation.
+ * @throws {@link DeidError} `DEID_OUTPUT_INVALID` when the coded declaration cannot be read back out of
+ *   this run's own serialized output, so the pass cannot vouch for what a downstream reader will see.
  * @example
  * ```ts
  * import { parseDicom } from "@cosyte/dicom";
@@ -98,30 +181,7 @@ function withoutInputWarnings(dataset: Dataset): Dataset {
  * ```
  */
 export function deidentifyDicom(dataset: Dataset, options: DicomDeidOptions = {}): DicomDeidResult {
-  const resolved = resolveDicomOptions(options);
-  const { dataset: deidentified, report } = dicomDeidentify(dataset, {
-    retain: [],
-    deidentificationMethod: resolved.deidentificationMethod,
-    ...(resolved.uidRoot !== undefined ? { uidRoot: resolved.uidRoot } : {}),
-    ...(resolved.uidMap !== undefined ? { uidMap: resolved.uidMap } : {}),
-  });
-
-  const warnings = foldWarnings(report.warnings);
-  const result = withoutInputWarnings(deidentified);
-  return Object.freeze({
-    dataset: result,
-    manifest: foldReport(report),
-    // The Annex E pass is delegated, so the measurement is DERIVED from what it returned rather than
-    // enumerated from a map this adapter does not hold: an attribute present in the result that the
-    // report does not account for is one no rule reached. Nested sequence items and the Part 10 File
-    // Meta group included, and a structure that will not yield its positions fails the pass rather
-    // than emit a partial count.
-    unexaminedResiduals: deriveUnexaminedResiduals(result, report),
-    warnings,
-    metadataOnly: true,
-    burnedInAnnotationHazard: warnings.some((w) => w.code === BURNED_IN_ANNOTATION_CODE),
-    retained: Object.freeze([...report.retained]),
-  });
+  return runDicomPass(dataset, options).result;
 }
 
 /**
@@ -147,20 +207,34 @@ export function deidentifyDicomBuffer(
   bytes: Buffer | Uint8Array | ArrayBuffer,
   options: DicomDeidOptions = {},
 ): DicomBufferDeidResult {
-  const { dataset, manifest, unexaminedResiduals, warnings, burnedInAnnotationHazard, retained } =
-    deidentifyDicom(parseDicom(bytes), options);
+  const { result, bytes: serialized } = runDicomPass(parseDicom(bytes), options);
   return Object.freeze({
-    bytes: serializeDicom(dataset),
-    manifest,
-    unexaminedResiduals,
-    warnings,
+    // Exactly the bytes the round-trip verification read the coded declaration back out of: the buffer
+    // entry point never re-serializes, so it cannot hand back bytes that were never verified.
+    bytes: serialized,
+    manifest: result.manifest,
+    unexaminedResiduals: result.unexaminedResiduals,
+    warnings: result.warnings,
     metadataOnly: true,
-    burnedInAnnotationHazard,
-    retained,
+    burnedInAnnotationHazard: result.burnedInAnnotationHazard,
+    retained: result.retained,
+    deidentificationMethodCodes: result.deidentificationMethodCodes,
+    optionDeclarations: result.optionDeclarations,
+    uidReferentialIntegrity: result.uidReferentialIntegrity,
   });
 }
 
 export { BURNED_IN_ANNOTATION_CODE } from "./fold.js";
+export { INPUT_METHOD_CODE_SEQUENCE_DROPPED_CODE } from "./method-sequence.js";
+export {
+  CID_7050,
+  CID_7050_CONTEXT_GROUP_UID,
+  CID_7050_VERSION,
+  type DicomCodedTerm,
+  type DicomOptionDeclaration,
+  type DicomOptionStatus,
+} from "./method-codes.js";
+export type { DicomUidReferentialIntegrity, DicomUidScope } from "./uid-scope.js";
 export { type UnexaminedResidual } from "../residual.js";
 export type {
   DicomDeidOptions,

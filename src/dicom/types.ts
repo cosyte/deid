@@ -10,6 +10,9 @@ import type { DeidManifestEntry } from "../manifest.js";
 import type { DeidPolicy } from "../policy.js";
 import type { UnexaminedResidual } from "../residual.js";
 
+import type { DicomCodedTerm, DicomOptionDeclaration } from "./method-codes.js";
+import type { DicomUidReferentialIntegrity } from "./uid-scope.js";
+
 /**
  * Options controlling a DICOM de-identification run. Extends the unified options with the two DICOM-only
  * knobs that make **relationships survive** de-identification: a shared UID cache and a UID root.
@@ -109,6 +112,19 @@ export interface DicomDeidResult {
    * with no deviations); surfaced so a reviewer can confirm nothing was retained.
    */
   readonly retained: readonly string[];
+  /**
+   * The CID 7050 coded terms written to De-identification Method Code Sequence `(0012,0064)` on
+   * {@link dataset}: the profile, then every option the run **applied**, in that order. These are the
+   * terms corresponding to the Profile and Options *used*, so a withheld option is never among them.
+   */
+  readonly deidentificationMethodCodes: readonly DicomCodedTerm[];
+  /**
+   * Every Annex E option this adapter can name, each declared **applied** or **withheld** by its CID
+   * 7050 coded term. The withheld half is readable only here, never in `(0012,0064)`.
+   */
+  readonly optionDeclarations: readonly DicomOptionDeclaration[];
+  /** How far replacement-UID referential integrity reaches for this run. */
+  readonly uidReferentialIntegrity: DicomUidReferentialIntegrity;
 }
 
 /**
@@ -138,4 +154,16 @@ export interface DicomBufferDeidResult {
   readonly burnedInAnnotationHazard: boolean;
   /** The Annex E Retain/Clean options that were active (always empty). */
   readonly retained: readonly string[];
+  /**
+   * The CID 7050 coded terms written to De-identification Method Code Sequence `(0012,0064)` in
+   * {@link bytes}: the profile, then every option the run **applied**. A withheld option is never here.
+   */
+  readonly deidentificationMethodCodes: readonly DicomCodedTerm[];
+  /**
+   * Every Annex E option this adapter can name, each declared **applied** or **withheld** by its CID
+   * 7050 coded term. The withheld half is readable only here, never in `(0012,0064)`.
+   */
+  readonly optionDeclarations: readonly DicomOptionDeclaration[];
+  /** How far replacement-UID referential integrity reaches for this run. */
+  readonly uidReferentialIntegrity: DicomUidReferentialIntegrity;
 }
