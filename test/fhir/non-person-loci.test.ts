@@ -377,6 +377,74 @@ describe("fail closed: a newly reached element the pass cannot handle faithfully
     ]);
   });
 
+  it("blocks a name whose every property is one R4 does not define, at a typed position", () => {
+    // No `family`, no `given`, nothing the pass can key on and nothing that even resembles a name to
+    // it - and R4 says a HumanName is what sits here. A rule that asked "does this look like a name?"
+    // would descend and hand the value out; the rule asks "can the pass read the name it was
+    // promised?", and the answer here is no.
+    const { json, manifest } = run({
+      resourceType: "Organization",
+      contact: [{ name: { nickname: "ZZORGCONTACTFAM", salutation: "Dr" } }],
+    });
+    expect(json).not.toContain("ZZORGCONTACTFAM");
+    expect(manifest.map((m) => `${m.locus} ${m.disposition}`)).toEqual([
+      "Organization.contact[0].name blocked",
+    ]);
+  });
+
+  it("blocks a vendor-shaped address at a typed position, street, town and ZIP together", () => {
+    const { json, manifest } = run({
+      resourceType: "Location",
+      address: { streetAddress: "ZZLOCSTREET", town: "ZZLOCCITY", zip: "01103" },
+    });
+    expect(JSON.parse(json)).toEqual({ resourceType: "Location" });
+    expect(json).not.toContain("011");
+    expect(manifest.map((m) => `${m.locus} ${m.disposition}`)).toEqual([
+      "Location.address blocked",
+    ]);
+  });
+
+  it("an unrecognized sibling never UNBLOCKS an element the pass already could not read", () => {
+    // The boundary is readability, not the presence of a foreign key. `{ text }` at this position is
+    // blocked, so `{ text, streetAddress }` - strictly less readable - must be blocked too. A rule
+    // keyed on the property set draws the line the other way round, which is a rule about the key.
+    const alone = run({
+      resourceType: "Location",
+      address: { text: "ZZLOCSTREET, ZZLOCCITY MA 01103" },
+    });
+    const withSibling = run({
+      resourceType: "Location",
+      address: { text: "ZZLOCSTREET, ZZLOCCITY MA 01103", streetAddress: "ZZLOCSTREET" },
+    });
+    for (const result of [alone, withSibling]) {
+      expect(JSON.parse(result.json)).toEqual({ resourceType: "Location" });
+      expect(result.json).not.toContain("ZZLOCSTREET");
+      expect(result.manifest.map((m) => `${m.locus} ${m.disposition}`)).toEqual([
+        "Location.address blocked",
+      ]);
+    }
+  });
+
+  it("reaches that same shape inside a Bundle entry", () => {
+    const { json, manifest } = run({
+      resourceType: "Bundle",
+      type: "collection",
+      entry: [
+        {
+          resource: {
+            resourceType: "Organization",
+            contact: [{ name: { fullName: "ZZORGCONTACTFAM ZZORGCONTACTGIV", salutation: "Dr" } }],
+          },
+        },
+      ],
+    });
+    expect(json).not.toContain("ZZORGCONTACTFAM");
+    expect(json).not.toContain("ZZORGCONTACTGIV");
+    expect(manifest.map((m) => `${m.locus} ${m.disposition}`)).toEqual([
+      "Bundle.entry[0].resource.contact[0].name blocked",
+    ]);
+  });
+
   it("leaves an EMPTY object at a typed position alone: there is nothing there to leak", () => {
     const { json, manifest } = run({ resourceType: "Location", id: "loc1", address: {} });
     expect(JSON.parse(json)).toEqual({ resourceType: "Location", id: "loc1", address: {} });
@@ -384,12 +452,14 @@ describe("fail closed: a newly reached element the pass cannot handle faithfully
   });
 
   it("walks the unclaimed items of a list that mixes a swept element with something else", () => {
+    // At an element name R4 does NOT type as one of the two datatypes only a positively classified
+    // item is claimed, so the item beside it is walked exactly as it always was. The sweep must not
+    // take a neighbour with it in either direction.
     const { json, manifest, unexaminedResiduals } = run({
       resourceType: "Organization",
-      address: [
+      vendorLocations: [
         { line: ["ZZORGSTREET"], city: "ZZORGCITY", state: "MA", postalCode: "02138" },
-        // Not a personal datatype: no marker, and `description` is on neither property set. The item
-        // beside it being swept must not take this one with it, in either direction.
+        // Not a personal datatype: no marker, and `description` is on neither property set.
         { description: "ZZLOCNAME", effectiveDateTime: "2019-03-14" },
       ],
     });
@@ -398,11 +468,32 @@ describe("fail closed: a newly reached element the pass cannot handle faithfully
     expect(json).toContain("ZZLOCNAME"); // walked, not swept
     expect(json).toContain('"effectiveDateTime":"2019"'); // and its universal date rule still ran
     expect(manifest.map((m) => `${m.locus} ${m.category}`)).toEqual([
-      "Organization.address[0] GEOGRAPHIC",
-      "Organization.address[1].effectiveDateTime DATES",
+      "Organization.vendorLocations[0] GEOGRAPHIC",
+      "Organization.vendorLocations[1].effectiveDateTime DATES",
     ]);
     expect(unexaminedResiduals.map((r) => r.locus)).toEqual([
-      "Organization.address[1].description",
+      "Organization.vendorLocations[1].description",
+    ]);
+  });
+
+  it("claims EVERY item of a list at a TYPED element name, the unreadable ones included", () => {
+    // The same two items at `address`, where R4 has said an Address belongs. The second is not a
+    // neighbour the pass may leave alone there: the standard promised an address and handed the pass
+    // a shape it cannot read, so the whole item goes, the sibling that made it unreadable with it.
+    const { json, manifest } = run({
+      resourceType: "Organization",
+      address: [
+        { line: ["ZZORGSTREET"], city: "ZZORGCITY", state: "MA", postalCode: "02138" },
+        { description: "ZZLOCNAME", effectiveDateTime: "2019-03-14" },
+      ],
+    });
+    expect(json).not.toContain("ZZORGSTREET");
+    expect(json).not.toContain("ZZORGCITY");
+    expect(json).not.toContain("ZZLOCNAME");
+    expect(json).not.toContain("2019");
+    expect(manifest.map((m) => `${m.locus} ${m.disposition}`)).toEqual([
+      "Organization.address[0] transformed",
+      "Organization.address[1] blocked",
     ]);
   });
 
@@ -465,9 +556,10 @@ describe("the residual inventory after the sweep widened", () => {
     id: "loc1",
     status: "active",
     name: "ZZLOCNAME",
-    // Not a personal datatype at all: no marker, and `description` is on neither property set, so the
-    // sweep declines it and the walk descends exactly as it always did.
-    address: { description: "ZZLOCSTREET" },
+    // Not a personal datatype at all: no marker, `description` is on neither property set, and the
+    // element name is one R4 types as neither datatype, so the sweep declines it and the walk
+    // descends exactly as it always did.
+    vendorAddress: { description: "ZZLOCSTREET" },
   });
 
   it("a position the sweep now examines is no longer reported as unexamined", () => {
@@ -488,7 +580,7 @@ describe("the residual inventory after the sweep widened", () => {
     // NON-VACUITY: an element at the same position that the sweep does NOT reach still contributes
     // its positions, so the equality above is a measurement rather than an enumeration that stopped.
     expect(residuals(withUnsweptShape).total).toBe(residuals(withoutAddress).total + 1);
-    expect(residuals(withUnsweptShape).loci).toContain("Location.address.description");
+    expect(residuals(withUnsweptShape).loci).toContain("Location.vendorAddress.description");
     expect(withUnsweptShape.manifest).toEqual([]);
   });
 

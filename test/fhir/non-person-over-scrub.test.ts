@@ -276,6 +276,63 @@ describe("a conformant R4 element that merely shares a property NAME with an Add
     expect(run.after).toBe(run.before);
     expect(run.manifest).toEqual([]);
   });
+
+  it("leaves a SubstanceSpecification.name backbone alone, at that same element name", () => {
+    // The other of exactly two conformant R4 backbones that sit at `name`. At a typed element name
+    // the fail-closed rule blocks whatever the classifier cannot pin down, so these two are excluded
+    // POSITIVELY, by the property R4 makes 1..1 on each plus the backbone's own closed property set.
+    const run = pass({
+      resourceType: "SubstanceSpecification",
+      name: [
+        {
+          name: "ZZORGOWNNAME",
+          type: { text: "Systematic" },
+          preferred: true,
+          official: [{ authority: { text: "USP" }, status: { text: "current" } }],
+        },
+      ],
+    });
+    expect(run.after).toBe(run.before);
+    expect(run.manifest).toEqual([]);
+  });
+
+  it("blocks a product name carrying a property R4 does not define on that backbone", () => {
+    // The exclusion is closed for the same reason the classification is: an unrecognized sibling
+    // means the pass is not looking at the backbone it thinks it is. Fail closed there, and pay the
+    // cost on NON-conformant input rather than on a released person name.
+    const run = pass({
+      resourceType: "MedicinalProduct",
+      name: [{ productName: "ZZORGOWNNAME", vendorLabel: "ZZORGALIAS" }],
+    });
+    expect(run.after).not.toBe(run.before);
+    expect(run.after).not.toContain("ZZORGOWNNAME");
+    expect(run.manifest.map((m) => m.locus)).toEqual(["MedicinalProduct.name"]);
+  });
+
+  it("blocks a person's name hidden behind a product name's required property", () => {
+    // The mirror half: carrying `productName` is not on its own a licence to descend, or a producer
+    // could park a HumanName beside it and walk the family name out one primitive at a time.
+    const run = pass({
+      resourceType: "MedicinalProduct",
+      name: [
+        { productName: "ZZORGOWNNAME", family: "ZZORGCONTACTFAM", given: ["ZZORGCONTACTGIV"] },
+      ],
+    });
+    expect(run.after).not.toContain("ZZORGCONTACTFAM");
+    expect(run.after).not.toContain("ZZORGCONTACTGIV");
+    expect(run.manifest.map((m) => m.locus)).toEqual(["MedicinalProduct.name"]);
+  });
+
+  it("does not extend the product-name exclusion to an element name R4 types as an Address", () => {
+    // Both backbones sit at `name` and the exclusion is read at the position: the same bytes at
+    // `address` are a shape the pass cannot read where R4 promised an Address, and are blocked.
+    const run = pass({
+      resourceType: "Location",
+      address: { productName: "ZZORGOWNNAME" },
+    });
+    expect(run.after).not.toContain("ZZORGOWNNAME");
+    expect(run.manifest.map((m) => m.locus)).toEqual(["Location.address"]);
+  });
 });
 
 describe("the sweep is keyed on the datatype, never on the category name", () => {

@@ -18,7 +18,8 @@
  * person sweep, and the datatype sweep with it: a value-bearing top-level person-resource property that
  * is neither mapped PHI nor on the recognized allow-list is blocked, a swept `Address` the pass cannot
  * read faithfully is removed whole rather than partly retained, and at an element name R4 types as one
- * of the two datatypes a complex the classifier cannot pin down is blocked whole. Everything else: the codes,
+ * of the two datatypes any complex the classifier cannot pin down is blocked whole, bar the two
+ * conformant R4 backbones `./datatype.js` excludes by name. Everything else: the codes,
  * values, units, and statuses of the clinical resources: is left untouched (the over-scrub guard).
  * Contained resources and Bundle entries are walked by re-deriving the resource role at every
  * `resourceType` boundary.
@@ -374,16 +375,25 @@ type PersonalAction = "human-name" | "address" | "block";
 
 /**
  * Decide what the sweep does with one candidate node. A positively classified `HumanName` or `Address`
- * is acted on wherever it sits. A complex the classifier could not pin down but which still carries
- * personal-datatype evidence is **blocked**, and only at a position R4 types as one of those datatypes
- * (see {@link carriesFhirPersonalEvidence} for why the position carries the whole weight of that
- * decision). Everything else is left to the ordinary descent, which is what keeps an organisation's own
+ * is acted on wherever it sits. A complex the classifier could not pin down is **blocked**, but only at
+ * an element name R4 types as one of those datatypes (see {@link carriesFhirPersonalEvidence} for why
+ * the position carries the whole weight of that decision, and for the two conformant backbones it
+ * excludes). Everything else is left to the ordinary descent, which is what keeps an organisation's own
  * `name` string, a `Coding.display` and a clinical code, value, unit or status byte-identical.
+ *
+ * @param typedElementName - The element name when R4 types it as one of the two datatypes, and
+ *   `undefined` at every other position: the fail-closed arm exists only where the standard already
+ *   promised a name or an address.
  */
-function personalAction(node: FhirNode, typedPosition: boolean): PersonalAction | undefined {
+function personalAction(
+  node: FhirNode,
+  typedElementName: string | undefined,
+): PersonalAction | undefined {
   const datatype = classifyFhirPersonalDatatype(node);
   if (datatype !== undefined) return datatype;
-  if (typedPosition && carriesFhirPersonalEvidence(node)) return "block";
+  if (typedElementName !== undefined && carriesFhirPersonalEvidence(node, typedElementName)) {
+    return "block";
+  }
   return undefined;
 }
 
@@ -450,9 +460,9 @@ function sweepPersonalDatatypes(
   value: FhirNode,
   path: string,
 ): boolean {
-  const typedPosition = TYPED_PERSONAL_ELEMENT_NAMES.has(name);
+  const typedElementName = TYPED_PERSONAL_ELEMENT_NAMES.has(name) ? name : undefined;
   const items = isList(value) ? value.items : [value];
-  const actions = items.map((item) => personalAction(item, typedPosition));
+  const actions = items.map((item) => personalAction(item, typedElementName));
   if (actions.every((action) => action === undefined)) return false;
   const multi = items.length > 1;
   items.forEach((item, i) => {

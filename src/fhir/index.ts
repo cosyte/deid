@@ -19,10 +19,13 @@
  *   `system` (a US-SSN system removed); PHI-bearing **dates** → year; the narrative **`text.div`** blocked
  *   at any depth; **extension** values blocked (the fail-closed frontier, an unknown extension can carry
  *   any PHI, incl. an MRN in a local extension); a `Reference.display` (a person label) blocked.
- * - **Every resource, by DATATYPE:** a `HumanName` is removed and an `Address` is reduced to the safe
- *   3-digit ZIP **wherever the graph puts them**, so `Organization.contact.name` and `Location.address`
- *   are treated exactly as `Patient.name` and `Patient.address` are. Which resource carries a person's
- *   name is the producer's shaping choice; coverage does not depend on it.
+ * - **Every resource, by DATATYPE:** outside a person resource a `HumanName` is removed and an
+ *   `Address` is reduced to the safe 3-digit ZIP **wherever the graph puts it**, so
+ *   `Organization.contact.name` and `Location.address` are treated exactly as `Patient.name` and
+ *   `Patient.address` are. Which resource carries a person's name is the producer's shaping choice;
+ *   coverage does not depend on it. **Inside** a person resource the demographic map above decides, so
+ *   the sweep adds nothing there and a name or an address at a person-resource property the map does
+ *   not list is a residual, stated below.
  * - **Contained resources and `Bundle` entries** are walked, re-deriving each resource's role at its own
  *   `resourceType`; **clinical resources** (`Observation`, `Condition`, …) are otherwise **retained
  *   untouched** (the over-scrub guard): their codes, values, units, and statuses survive byte-identical.
@@ -34,10 +37,15 @@
  * `Address` the pass cannot read faithfully (a `postalCode` that is not a whole zip code, an
  * unexpected JSON shape at a part Safe Harbor would let it keep) is removed **whole** rather than
  * partly retained. At an element name R4 **types** as one of the two datatypes (`name`, `address`, a
- * choice-type `locationAddress`, an open `valueAddress` / `valueHumanName`) a complex the classifier
- * cannot pin down is blocked whole: a text-only representation with no part to key on, and equally one
- * carrying a property R4 does not define beside a `family` or a `line`. The honesty line is unchanged:
- * the output is **"Safe-Harbor-transformed per the configured policy"**, never "de-identified".
+ * choice-type `locationAddress`, an open `valueAddress` / `valueHumanName`) **any** complex the
+ * classifier cannot pin down is blocked whole - a text-only representation with no part to key on, one
+ * carrying a property R4 does not define beside a `family` or a `line`, and equally one whose every
+ * property is foreign to both datatypes - because the standard promised a name or an address there and
+ * the pass could not read the one it was given. Exactly two conformant R4 backbones share one of those
+ * element names (`MedicinalProduct.name`, `SubstanceSpecification.name`) and both are excluded
+ * positively, by the property R4 makes `1..1` on each plus that backbone's own closed property set. The
+ * honesty line is unchanged: the output is **"Safe-Harbor-transformed per the configured policy"**,
+ * never "de-identified".
  *
  * **Known limitations.** Extension values are block-only (no profile-aware retention, a
  * `us-core-*` demographic extension is dropped, not kept).
@@ -46,7 +54,7 @@
  * Structured free-text elements inside clinical resources (`Observation.valueString`, `Annotation.text`)
  * are retained (the over-scrub guard): narrative free-text de-id is separately scoped (the BYO
  * redaction interface); only the rendered narrative `text.div` is blocked here.
- * Four surfaces the datatype sweep deliberately does **not** reach. Three because no datatype types a
+ * Five surfaces the datatype sweep deliberately does **not** reach. Three because no datatype types a
  * person at the position: a **`ContactPoint` outside a person resource** (widening to telecom would put
  * a payer's own switchboard number in scope, which the sibling adapters keep); an **organisation's own
  * `name`**, a plain string and not a `HumanName`; and the **individual's employer carried as a separate
@@ -55,7 +63,10 @@
  * classification: a name or an address carrying a property R4 does not define, at an element name R4
  * does not type as one of the two datatypes, because there that same evidence is routinely a conformant
  * structural element (`Questionnaire.item` carries `prefix`) and blocking it would destroy content no
- * re-run restores.
+ * re-run restores. The fifth is the scope of the sweep itself: **inside** a person resource it does not
+ * run, because the demographic map has already decided `name` / `telecom` / `photo` / `address` there,
+ * so a `HumanName` or an `Address` at a person-resource property that map does not list is passed
+ * through and counted as unexamined - the same bytes an `Organization` would have had removed.
  *
  * @packageDocumentation
  */

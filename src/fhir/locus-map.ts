@@ -107,12 +107,15 @@ export const FHIR_DEMOGRAPHIC_ELEMENTS: Readonly<Record<string, FhirDemographicM
  * This is **not** how the sweep FINDS a name or an address, which is the point of keying on the
  * datatype: a conformant `Address` under any element name at all is classified and reduced without
  * consulting this set. The set does one narrower, fail-closed job. At one of these positions the
- * standard has already said what is supposed to be there, so a complex the classifier cannot pin down
- * but which still carries personal-datatype evidence - a `{ text }` or `{ use, text }` representation
- * with no part to key on, or a `{ family, given, nickname }` whose unrecognized sibling means the pass
- * cannot read the structure it was promised - is **blocked whole** rather than descended into.
+ * standard has already said what is supposed to be there, so **any** complex the classifier cannot pin
+ * down is **blocked whole** rather than descended into - a `{ text }` or `{ use, text }`
+ * representation with no part to key on, a `{ family, given, nickname }` whose unrecognized sibling
+ * means the pass cannot read the structure it was promised, and equally a
+ * `{ streetAddress, town, zip }` whose every property is foreign to both datatypes. The two
+ * conformant R4 backbones that share the element name `name` are excluded positively rather than by a
+ * property-set test; see `./datatype.js`.
  *
- * At any other position that same evidence is left exactly as it arrived, and deliberately: `{ text }`
+ * At any other position that same shape is left exactly as it arrived, and deliberately: `{ text }`
  * is far more often a `CodeableConcept` carrying only its text, and `{ prefix, linkId, text, type }` is
  * a conformant `Questionnaire.item`. Blocking there would destroy clinical and structural content,
  * which is the mirror defect and the one no re-run undoes. That residual is stated in

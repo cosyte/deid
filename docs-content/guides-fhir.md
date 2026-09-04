@@ -56,10 +56,12 @@ never falls back to an unkeyed surrogate.
 
 FHIR is a **graph of typed resources**, so the locus map splits by resource role for the elements a
 resource's type really does decide, and by the **element's own datatype** for the two it does not. A
-person's name and a postal address are acted on wherever the graph puts them, because which resource
-carries one is a choice the producing system made: the same home address arrives at `Patient.address`
-from one sender and at `Location.address` from a home-health sender, and coverage that depended on
-that choice would not be coverage at all.
+person's name and a postal address are acted on wherever the graph puts them outside a person
+resource, because which resource carries one is a choice the producing system made: the same home
+address arrives at `Patient.address` from one sender and at `Location.address` from a home-health
+sender, and coverage that depended on that choice would not be coverage at all. Inside a person
+resource the map decides instead, which reaches the elements it lists and no others; that is the last
+of the residuals below.
 
 | Scope | Loci | Transform |
 |---|---|---|
@@ -113,12 +115,18 @@ not mistaken for a date, so it survives.
   where R4 types a string at a part the reduction would re-emit verbatim. The street, the city, the
   state, the country and the ZIP all go, and the disposition is recorded.
 - At an element name R4 **types** as one of the two datatypes (`name`, `address`, the choice-type
-  `locationAddress`, an open `valueAddress` / `valueHumanName`), a complex the classifier cannot pin
-  down is **blocked whole** rather than descended into: a `{ text }` or `{ use, text }` representation
-  with no part it can key on, and equally a `{ family, given, … }` or `{ line, city, … }` carrying some
-  property R4 does not define, because the standard promised a name or an address there and the pass
-  could not read the one it was handed. The disposition is recorded either way. That block is scoped to
-  those element names deliberately, and the residual it leaves is stated below.
+  `locationAddress`, an open `valueAddress` / `valueHumanName`), **any** complex the classifier cannot
+  pin down is **blocked whole** rather than descended into: a `{ text }` or `{ use, text }`
+  representation with no part it can key on, a `{ family, given, … }` or `{ line, city, … }` carrying
+  some property R4 does not define, and equally a `{ streetAddress, town, zip }` whose every property
+  is foreign to both datatypes. The standard promised a name or an address there and the pass could not
+  read the one it was handed, so the question is readability and not which keys arrived: adding an
+  unrecognized sibling to an already unreadable element never unblocks it. Exactly two conformant R4
+  backbones share one of those element names, `MedicinalProduct.name` and
+  `SubstanceSpecification.name`, and each is excluded positively by the property R4 makes `1..1` on it
+  plus its own closed property set; a plain string there (`Organization.name`, `Endpoint.address`) is
+  never a candidate. The disposition is recorded either way. That block is scoped to those element
+  names deliberately, and the residual it leaves is stated below.
 - **Free-text prose** is blocked by default: the `note` element (`Annotation.text` + author), a
   `Communication`/message `contentString`, and an **uncoded `valueString`** (the FHIR analogue of an
   HL7 OBX-5 typed `ST`, which the sibling HL7 adapter also fails closed on; a structured `valueQuantity`
@@ -156,6 +164,11 @@ not mistaken for a date, so it survives.
   `{ prefix, linkId, text, type }` is a conformant `Questionnaire.item` and not a person. Blocking it
   there would destroy conformant clinical and structural content, the mirror defect and the one no
   re-run restores.
+- A fifth is the scope of the datatype sweep: **a name or an address inside a person resource, at a
+  property the demographic map does not list.** The map has already decided `name`, `telecom`, `photo`
+  and `address` there, so the sweep does not run inside a person resource, and a vendor
+  `Patient.alias` carrying `{ family, given }` is passed through where the same bytes on an
+  `Organization` are removed.
 
 The honesty line is unchanged: the output is **"Safe-Harbor-transformed per the configured policy,"**
 never "de-identified" and never "HIPAA-compliant."

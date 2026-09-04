@@ -285,8 +285,8 @@ serializeResource(document); // spec-clean, de-identified FHIR JSON
 // under a preset that does not claim the label).
 // Narrative text.div, extension values, and Reference.display fail closed; contained resources and
 // Bundle entries are walked. Clinical resources (Observation values, codes, units, statuses) survive.
-// A HumanName or an Address is acted on wherever it sits, Organization.contact.name and
-// Location.address included: the element's datatype decides, never the resource carrying it.
+// Outside a person resource a HumanName or an Address is acted on wherever it sits,
+// Organization.contact.name and Location.address included: the element's datatype decides.
 ```
 
 FHIR is a **graph of typed resources**, so the map splits by role:
@@ -329,12 +329,19 @@ four-digit `0110` still has three leading digits, and generalizing it would keep
 something that was never a ZIP), or an unexpected JSON shape at a part Safe Harbor would let it keep,
 takes the street, the city, the state, the country and the ZIP with it, and the disposition is
 recorded. At an element name R4 **types** as one of the two datatypes - `name`, `address`, the
-choice-type `locationAddress`, an open `valueAddress` / `valueHumanName` - a complex the classifier
-cannot pin down is blocked whole rather than descended into: a `{ text }` or `{ use, text }`
-representation with no part to key on, and equally a `{ family, given, … }` carrying some property R4
-does not define, because the standard promised a name or an address there and the pass could not read
-the one it was given. The disposition is recorded either way. That block is scoped to those positions
-on purpose; the residual it leaves is stated below.
+choice-type `locationAddress`, an open `valueAddress` / `valueHumanName` - **any** complex the
+classifier cannot pin down is blocked whole rather than descended into: a `{ text }` or
+`{ use, text }` representation with no part to key on, a `{ family, given, … }` carrying some property
+R4 does not define, and equally a `{ streetAddress, town, zip }` whose every property is foreign to
+both datatypes. The standard promised a name or an address there and the pass could not read the one
+it was given, so the boundary is readability rather than which keys happen to be present: adding an
+unrecognized sibling to an element that was already unreadable never unblocks it. Exactly two
+conformant R4 backbones share one of those element names - `MedicinalProduct.name` and
+`SubstanceSpecification.name` - and both are excluded positively, by the property R4 makes `1..1` on
+each together with that backbone's own closed property set. A plain string at one of those names is
+not a complex and is never a candidate, which is what leaves `Organization.name` and
+`Endpoint.address` untouched. The disposition is recorded either way. That block is scoped to those
+positions on purpose; the residual it leaves is stated below.
 
 **Known limitations (this release).** Extension values are block-only (no profile-aware retention, a
 `us-core-*` demographic extension is dropped). Reference
@@ -344,7 +351,7 @@ pseudonymization of resource ids across a corpus is **not** performed. Free-text
 redactor (see [Free text](#free-text-block-by-default--byo-redaction)); a **built-in** semantic (NLP)
 narrative scrub and `contentAttachment` binary content remain out of scope for this release.
 
-Four residual surfaces, the first three because FHIR types no person at the position:
+Five residual surfaces, the first three because FHIR types no person at the position:
 
 - **A `ContactPoint` outside a person resource.** A phone or an email on an `Organization`, a
   `Location` or an `Endpoint` is passed through. Widening to telecom here would put a payer's or a
@@ -362,6 +369,11 @@ Four residual surfaces, the first three because FHIR types no person at the posi
   `Questionnaire.item`, not a person - and blocking it would destroy conformant clinical and
   structural content that no re-run restores. Such a value is passed through and counted as an
   unexamined residual position, like anything else no rule names.
+- **A name or an address INSIDE a person resource, at a property the demographic map does not list.**
+  The datatype sweep runs outside a person resource only, because inside one the map above has already
+  decided `name`, `telecom`, `photo` and `address`. A vendor `Patient.alias` carrying
+  `{ family, given }` is therefore passed through, where the same bytes on an `Organization` are
+  removed. Counted as unexamined like the rest.
 
 ## De-identify an X12 EDI interchange
 
