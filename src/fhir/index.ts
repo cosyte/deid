@@ -33,8 +33,11 @@
  * dropped by the applier (the side-channel the structural walk cannot otherwise reach), and a swept
  * `Address` the pass cannot read faithfully (a `postalCode` that is not a whole zip code, an
  * unexpected JSON shape at a part Safe Harbor would let it keep) is removed **whole** rather than
- * partly retained. The honesty line is unchanged: the output is **"Safe-Harbor-transformed per the
- * configured policy"**, never "de-identified".
+ * partly retained. At an element name R4 **types** as one of the two datatypes (`name`, `address`, a
+ * choice-type `locationAddress`, an open `valueAddress` / `valueHumanName`) a complex the classifier
+ * cannot pin down is blocked whole: a text-only representation with no part to key on, and equally one
+ * carrying a property R4 does not define beside a `family` or a `line`. The honesty line is unchanged:
+ * the output is **"Safe-Harbor-transformed per the configured policy"**, never "de-identified".
  *
  * **Known limitations.** Extension values are block-only (no profile-aware retention, a
  * `us-core-*` demographic extension is dropped, not kept).
@@ -43,12 +46,16 @@
  * Structured free-text elements inside clinical resources (`Observation.valueString`, `Annotation.text`)
  * are retained (the over-scrub guard): narrative free-text de-id is separately scoped (the BYO
  * redaction interface); only the rendered narrative `text.div` is blocked here.
- * Three surfaces the datatype sweep deliberately does **not** reach, each because no datatype types a
+ * Four surfaces the datatype sweep deliberately does **not** reach. Three because no datatype types a
  * person at the position: a **`ContactPoint` outside a person resource** (widening to telecom would put
  * a payer's own switchboard number in scope, which the sibling adapters keep); an **organisation's own
  * `name`**, a plain string and not a `HumanName`; and the **individual's employer carried as a separate
  * `Organization` resource**, which would need a cross-resource role derivation R4 types nowhere (the
- * `Reference.display` naming it is blocked either way).
+ * `Reference.display` naming it is blocked either way). The fourth is the stated cost of the closed
+ * classification: a name or an address carrying a property R4 does not define, at an element name R4
+ * does not type as one of the two datatypes, because there that same evidence is routinely a conformant
+ * structural element (`Questionnaire.item` carries `prefix`) and blocking it would destroy content no
+ * re-run restores.
  *
  * @packageDocumentation
  */

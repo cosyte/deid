@@ -177,22 +177,33 @@ Two things follow, and the second is the one that surprises people:
   at `Patient.address` from one sender and at `Location.address` from a home-health sender. So a
   `HumanName` is removed and an `Address` is reduced to the Safe Harbor granularity **wherever the
   graph puts them**, `Organization.contact.name` and `Location.address` included, in contained
-  resources and `Bundle` entries as well. Neither is stated as out of scope any longer. The
+  resources and `Bundle` entries as well. Neither is stated as out of scope any longer. Positive
   classification is closed and marker-bound, which is what keeps the wider sweep off a clinical value:
   an element is a `HumanName` only when every property it carries is one FHIR R4 defines on
-  `HumanName` and at least one of them belongs to nothing else, and an `Address` the same way.
-  A newly reached element the pass cannot read faithfully, an `Address` whose `postalCode` is not a
-  whole zip code or an unexpected shape at a part the reduction would keep, is **removed whole** and
-  recorded, never partly retained.
+  `HumanName`, at least one of them belongs to nothing else, and that one holds the string or
+  list-of-strings value R4 gives it; an `Address` the same way. A newly reached element the pass cannot
+  read faithfully, an `Address` whose `postalCode` is not a whole zip code or an unexpected shape at a
+  part the reduction would keep, is **removed whole** and recorded, never partly retained. So is a
+  complex the classifier cannot pin down at an element name R4 **types** as one of the two datatypes
+  (`name`, `address`, a choice-type `locationAddress`, an open `valueAddress` / `valueHumanName`),
+  whether the reason is that nothing is left to key on or that a property R4 does not define sits
+  beside a `family` or a `line`.
 
-- **Three FHIR surfaces this release still does not reach, each because no person is typed at the
-  position.** A **`ContactPoint` outside a person resource**: a phone or an email on an `Organization`,
+- **Four FHIR surfaces this release still does not reach.** Three because no person is typed at the
+  position. A **`ContactPoint` outside a person resource**: a phone or an email on an `Organization`,
   a `Location` or an `Endpoint` is passed through, because widening to telecom would put a payer's or a
   facility's own switchboard number in scope, which the HL7 v2 pass deliberately keeps (`IN1-7`, the
   insurer's own phone, is untouched there). An **organisation's own `name`**: a plain string, never a
   `HumanName`, and administrative content rather than a person's identity. And the **individual's
-  employer carried as a separate `Organization` resource**, per the bullet above. All three are passed
-  through, and all three are counted as unexamined residual positions like anything else no rule names.
+  employer carried as a separate `Organization` resource**, per the bullet above. The fourth is the
+  stated cost of the closed classification: **a name or an address carrying a property R4 does not
+  define, at an element name R4 does not type as one of the two datatypes.** The unrecognized sibling
+  stops the classifier, and the fail-closed block is scoped to the typed element names, because at any
+  other name that same evidence is routinely something else entirely: `{ prefix, linkId, text, type }`
+  is a conformant `Questionnaire.item` and not a person, and blocking it would destroy conformant
+  clinical and structural content, which is the mirror defect and the one no re-run restores. All four
+  are passed through, and all four are counted as unexamined residual positions like anything else no
+  rule names.
 
 Vendor-proprietary loci absent from public specs are deferred, **not invented**: a quirk is encoded
 only when a real de-identified document grounds it.

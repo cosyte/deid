@@ -224,6 +224,60 @@ describe("NON-VACUITY: the same graph with one name added does change, and only 
   });
 });
 
+describe("a conformant R4 element that merely shares a property NAME with an Address", () => {
+  // R4 gives several resources an element called `country`, and every one of them is a
+  // `CodeableConcept` while `Address.country` is a `string`. The backbones carrying them make every
+  // child optional, so a conformant instance can arrive with `country` and nothing else: closed for
+  // `Address`, marked for `Address`, and not remotely an address. The classifier reads the marker's
+  // VALUE SHAPE, which is what tells the two apart at the position instead of by luck.
+  it("leaves MedicinalProductAuthorization.jurisdictionalAuthorization exactly as it arrived", () => {
+    const run = pass({
+      resourceType: "MedicinalProductAuthorization",
+      jurisdictionalAuthorization: [{ country: { text: "US" } }],
+    });
+    expect(run.after).toBe(run.before);
+    expect(run.manifest).toEqual([]);
+  });
+
+  it("leaves the same element alone when its other optional children are present", () => {
+    const run = pass({
+      resourceType: "MedicinalProductAuthorization",
+      jurisdictionalAuthorization: [
+        { country: { text: "US" }, legalStatusOfSupply: { text: "Rx" } },
+      ],
+    });
+    expect(run.after).toBe(run.before);
+    expect(run.manifest).toEqual([]);
+  });
+
+  it("leaves a Questionnaire.item alone: `prefix` is a HumanName marker and this is not a name", () => {
+    // The mirror of the case above on the name side, and the reason the fail-closed block on a
+    // marker-bearing complex is scoped to a position R4 TYPES as one of the two datatypes: at an
+    // arbitrary element name the same evidence is a conformant structural backbone.
+    const run = pass({
+      resourceType: "Questionnaire",
+      status: "active",
+      item: [{ linkId: "q1", prefix: "A.", text: "ZZORGOWNNAME", type: "string" }],
+    });
+    expect(run.after).toBe(run.before);
+    expect(run.manifest).toEqual([]);
+  });
+
+  it("leaves a MedicinalProduct.name backbone alone, at the typed element name `name` itself", () => {
+    const run = pass({
+      resourceType: "MedicinalProduct",
+      name: [
+        {
+          productName: "ZZORGOWNNAME",
+          namePart: [{ part: "ZZORGALIAS", type: { text: "invented" } }],
+        },
+      ],
+    });
+    expect(run.after).toBe(run.before);
+    expect(run.manifest).toEqual([]);
+  });
+});
+
 describe("the sweep is keyed on the datatype, never on the category name", () => {
   it("a GEOGRAPHIC category still reaches only elements the classifier typed as an Address", () => {
     const run = pass({

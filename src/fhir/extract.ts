@@ -16,8 +16,9 @@
  * derivation (see `./datatype.js` for the closed, marker-bound classification that keeps the sweep off
  * an organisation's own `name` string and off a clinical code). The **fail-closed** rule governs the
  * person sweep, and the datatype sweep with it: a value-bearing top-level person-resource property that
- * is neither mapped PHI nor on the recognized allow-list is blocked, and a swept `Address` the pass
- * cannot read faithfully is removed whole rather than partly retained. Everything else: the codes,
+ * is neither mapped PHI nor on the recognized allow-list is blocked, a swept `Address` the pass cannot
+ * read faithfully is removed whole rather than partly retained, and at an element name R4 types as one
+ * of the two datatypes a complex the classifier cannot pin down is blocked whole. Everything else: the codes,
  * values, units, and statuses of the clinical resources: is left untouched (the over-scrub guard).
  * Contained resources and Bundle entries are walked by re-deriving the resource role at every
  * `resourceType` boundary.
@@ -48,7 +49,7 @@ import {
   type UnexaminedResidual,
 } from "../residual.js";
 import { isRetainableZipCode } from "../retention.js";
-import { classifyFhirPersonalDatatype, isFhirPersonalShape } from "./datatype.js";
+import { carriesFhirPersonalEvidence, classifyFhirPersonalDatatype } from "./datatype.js";
 import {
   FHIR_DATE_CATEGORY,
   FHIR_DEMOGRAPHIC_ELEMENTS,
@@ -373,15 +374,16 @@ type PersonalAction = "human-name" | "address" | "block";
 
 /**
  * Decide what the sweep does with one candidate node. A positively classified `HumanName` or `Address`
- * is acted on wherever it sits; an ambiguous personal-shaped complex is blocked **only** at a position
- * R4 types as one of those datatypes (see {@link isFhirPersonalShape} for why the position matters).
- * Everything else is left to the ordinary descent, which is what keeps an organisation's own `name`
- * string, a `Coding.display` and a clinical code, value, unit or status byte-identical.
+ * is acted on wherever it sits. A complex the classifier could not pin down but which still carries
+ * personal-datatype evidence is **blocked**, and only at a position R4 types as one of those datatypes
+ * (see {@link carriesFhirPersonalEvidence} for why the position carries the whole weight of that
+ * decision). Everything else is left to the ordinary descent, which is what keeps an organisation's own
+ * `name` string, a `Coding.display` and a clinical code, value, unit or status byte-identical.
  */
 function personalAction(node: FhirNode, typedPosition: boolean): PersonalAction | undefined {
   const datatype = classifyFhirPersonalDatatype(node);
   if (datatype !== undefined) return datatype;
-  if (typedPosition && isFhirPersonalShape(node)) return "block";
+  if (typedPosition && carriesFhirPersonalEvidence(node)) return "block";
   return undefined;
 }
 

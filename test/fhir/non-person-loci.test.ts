@@ -16,7 +16,12 @@
  *   carrying the structural locus and no value is recorded for each.
  * - **Fail closed.** A swept `Address` the pass cannot read faithfully is removed **whole**: a
  *   four-digit `postalCode` yields no three-digit fragment, and an unexpected JSON shape at a part
- *   Safe Harbor would let it keep takes the element with it.
+ *   Safe Harbor would let it keep takes the element with it. At an element name R4 **types** as one of
+ *   the two datatypes, so does a complex the classifier cannot pin down at all: a text-only
+ *   representation, and equally a name or an address carrying a property R4 does not define, which the
+ *   closed classification declines and which would otherwise ride out one primitive at a time. The
+ *   residual that scoping leaves is asserted here too, so the limitation the package states is pinned
+ *   by a test and not only by prose.
  * - **Measurement.** A position the widened sweep now examines leaves `unexaminedResiduals`, every
  *   position it still does not examine stays there, and the per-document totals still add up.
  *
@@ -269,6 +274,89 @@ describe("fail closed: a newly reached element the pass cannot handle faithfully
     expect(manifest[0]?.disposition).toBe("blocked");
   });
 
+  it("blocks a HumanName carrying a property R4 does not define, at a typed position", () => {
+    // The marker says a person's name is in here; the unrecognized sibling says the pass cannot read
+    // the structure it was promised. Descending would hand `family` and `given` to the output one
+    // primitive at a time, which is the shape of leak this rule exists to stop.
+    const { json, manifest } = run({
+      resourceType: "Organization",
+      name: "ZZORGOWNNAME",
+      contact: [
+        { name: { family: "ZZORGCONTACTFAM", given: ["ZZORGCONTACTGIV"], nickname: "ZZLOCNAME" } },
+      ],
+    });
+    expect(json).not.toContain("ZZORGCONTACTFAM");
+    expect(json).not.toContain("ZZORGCONTACTGIV");
+    expect(json).not.toContain("ZZLOCNAME"); // the unrecognized sibling goes with the element
+    expect(json).toContain("ZZORGOWNNAME"); // the organisation's own name is a string, untouched
+    expect(manifest.map((m) => `${m.locus} ${m.disposition}`)).toEqual([
+      "Organization.contact[0].name blocked",
+    ]);
+  });
+
+  it("blocks an Address carrying a property R4 does not define, and keeps no ZIP fragment", () => {
+    const { json, manifest } = run({
+      resourceType: "Location",
+      address: {
+        line: ["ZZLOCSTREET"],
+        city: "ZZLOCCITY",
+        state: "MA",
+        postalCode: "01103",
+        county: "ZZLOCCOUNTY",
+      },
+    });
+    expect(JSON.parse(json)).toEqual({ resourceType: "Location" });
+    expect(json).not.toContain("011");
+    expect(manifest.map((m) => `${m.locus} ${m.disposition}`)).toEqual([
+      "Location.address blocked",
+    ]);
+  });
+
+  it("reaches the same unreadable name inside a Bundle entry", () => {
+    const { json, manifest } = run({
+      resourceType: "Bundle",
+      type: "collection",
+      entry: [
+        {
+          resource: {
+            resourceType: "Organization",
+            contact: [{ name: { family: "ZZORGCONTACTFAM", nickname: "ZZLOCNAME" } }],
+          },
+        },
+      ],
+    });
+    expect(json).not.toContain("ZZORGCONTACTFAM");
+    expect(manifest.map((m) => m.locus)).toEqual(["Bundle.entry[0].resource.contact[0].name"]);
+  });
+
+  it("blocks a text-only Address at a choice-type locationAddress, the R4 name for that arm", () => {
+    // F4's position: R4 types `Claim.accident.location[x]` as an Address, so a text-only form there is
+    // an address the pass cannot key on, and the enumeration of typed element names carries the name.
+    const { json, manifest } = run({
+      resourceType: "Claim",
+      status: "active",
+      accident: { locationAddress: { text: "ZZLOCSTREET, ZZLOCCITY MA 01103" } },
+    });
+    expect(json).not.toContain("ZZLOCSTREET");
+    expect(json).not.toContain("ZZLOCCITY");
+    expect(manifest.map((m) => `${m.locus} ${m.disposition}`)).toEqual([
+      "Claim.accident.locationAddress blocked",
+    ]);
+  });
+
+  it("blocks a HumanName at an open value[x] arm R4 types as one", () => {
+    const { json, manifest } = run({
+      resourceType: "Task",
+      status: "requested",
+      intent: "order",
+      input: [{ type: { text: "requester" }, valueHumanName: { text: "ZZORGCONTACTFAM" } }],
+    });
+    expect(json).not.toContain("ZZORGCONTACTFAM");
+    expect(manifest.map((m) => `${m.locus} ${m.disposition}`)).toEqual([
+      "Task.input[0].valueHumanName blocked",
+    ]);
+  });
+
   it("blocks a personal-datatype shape the classifier cannot pin down at a typed position", () => {
     const { json, manifest } = run({
       resourceType: "Organization",
@@ -315,6 +403,30 @@ describe("fail closed: a newly reached element the pass cannot handle faithfully
     ]);
     expect(unexaminedResiduals.map((r) => r.locus)).toEqual([
       "Organization.address[1].description",
+    ]);
+  });
+
+  it("STATED RESIDUAL: an unreadable name shape at a position R4 does NOT type is left alone", () => {
+    // The limit the package states rather than hides. `Questionnaire.item` carries `prefix` (a
+    // HumanName marker) beside `linkId` (a property no personal datatype defines), and blocking that
+    // shape wherever it appears would destroy conformant structural and clinical content. So outside
+    // the enumerated typed element names the pass declines, counts the positions as unexamined, and
+    // says so in `docs-content/limitations.md`.
+    const { json, manifest, unexaminedResiduals } = run({
+      resourceType: "Claim",
+      status: "active",
+      accident: {
+        vendorLocation: { line: ["ZZLOCSTREET"], city: "ZZLOCCITY", county: "ZZLOCCOUNTY" },
+      },
+    });
+    expect(json).toContain("ZZLOCSTREET");
+    expect(manifest).toEqual([]);
+    // Honest about it: every position it declined is on the unexamined inventory.
+    expect(unexaminedResiduals.map((r) => r.locus)).toEqual([
+      "Claim.status",
+      "Claim.accident.vendorLocation.line[0]",
+      "Claim.accident.vendorLocation.city",
+      "Claim.accident.vendorLocation.county",
     ]);
   });
 

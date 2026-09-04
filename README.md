@@ -305,12 +305,15 @@ each resource's role re-derived at its own `resourceType`.
 **Why the datatype and not the resource type.** Which resource carries a person's name is a choice the
 producing system made: the same home address arrives at `Patient.address` from one sender and at
 `Location.address` from a home-health sender. A rule keyed on the enclosing resource therefore hands you
-coverage that depends on that choice. The classification is **closed**: an element is a `HumanName` only
-when every property it carries is one R4 defines on `HumanName` **and** at least one of them
-(`family` / `given` / `prefix` / `suffix`) belongs to nothing else, and an `Address` the same way
-(`line` / `city` / `district` / `state` / `postalCode` / `country`). That is what keeps the wider sweep
-off an **organisation's own `name`** (a plain string, never a `HumanName`), off a `CodeableConcept`
-carrying only its `text`, and off every clinical code, value, unit and status.
+coverage that depends on that choice. Positive classification is **closed**: an element is a `HumanName`
+only when every property it carries is one R4 defines on `HumanName`, **and** at least one of them
+(`family` / `given` / `prefix` / `suffix`) belongs to nothing else, **and** that one holds the value
+shape R4 gives it (a string, or a list of strings). An `Address` the same way
+(`line` / `city` / `district` / `state` / `postalCode` / `country`). All three halves earn their place:
+they keep the wider sweep off an **organisation's own `name`** (a plain string, never a `HumanName`),
+off a `CodeableConcept` carrying only its `text`, off a conformant `Questionnaire.item` (whose `prefix`
+is a `HumanName` marker name), off the several R4 elements called `country` that are coded concepts
+rather than the string `Address.country` is, and off every clinical code, value, unit and status.
 
 **Fail closed** governs the person sweep and the frontier: a bare unrecognized string at a person
 resource's top level is blocked (an allow-list can never satisfy Safe Harbor category (R)); a `display`
@@ -325,8 +328,13 @@ removed **whole** rather than partly retained: a `postalCode` that is not a whol
 four-digit `0110` still has three leading digits, and generalizing it would keep a fragment of
 something that was never a ZIP), or an unexpected JSON shape at a part Safe Harbor would let it keep,
 takes the street, the city, the state, the country and the ZIP with it, and the disposition is
-recorded. A `HumanName` or an `Address` that R4 types at a position but whose structure this pass
-cannot locate is blocked the same way.
+recorded. At an element name R4 **types** as one of the two datatypes - `name`, `address`, the
+choice-type `locationAddress`, an open `valueAddress` / `valueHumanName` - a complex the classifier
+cannot pin down is blocked whole rather than descended into: a `{ text }` or `{ use, text }`
+representation with no part to key on, and equally a `{ family, given, … }` carrying some property R4
+does not define, because the standard promised a name or an address there and the pass could not read
+the one it was given. The disposition is recorded either way. That block is scoped to those positions
+on purpose; the residual it leaves is stated below.
 
 **Known limitations (this release).** Extension values are block-only (no profile-aware retention, a
 `us-core-*` demographic extension is dropped). Reference
@@ -336,7 +344,7 @@ pseudonymization of resource ids across a corpus is **not** performed. Free-text
 redactor (see [Free text](#free-text-block-by-default--byo-redaction)); a **built-in** semantic (NLP)
 narrative scrub and `contentAttachment` binary content remain out of scope for this release.
 
-Three residual surfaces, each because FHIR types no person at the position:
+Four residual surfaces, the first three because FHIR types no person at the position:
 
 - **A `ContactPoint` outside a person resource.** A phone or an email on an `Organization`, a
   `Location` or an `Endpoint` is passed through. Widening to telecom here would put a payer's or a
@@ -347,6 +355,13 @@ Three residual surfaces, each because FHIR types no person at the position:
 - **The individual's employer carried as a separate `Organization` resource.** Unlike X12 and HL7 v2,
   FHIR types no employer role at the position, so reaching it would be a cross-resource role
   derivation rather than a typed read. The `Reference.display` that names it is blocked either way.
+- **A name or an address carrying a property R4 does not define, at an element name R4 does not type
+  as one of the two datatypes.** Positive classification is closed, so an unrecognized sibling stops
+  it, and the fail-closed block above is scoped to the typed element names. At any other name the same
+  evidence is routinely something else - `{ prefix, linkId, text, type }` is a conformant
+  `Questionnaire.item`, not a person - and blocking it would destroy conformant clinical and
+  structural content that no re-run restores. Such a value is passed through and counted as an
+  unexamined residual position, like anything else no rule names.
 
 ## De-identify an X12 EDI interchange
 

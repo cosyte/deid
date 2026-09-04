@@ -69,13 +69,17 @@ that choice would not be coverage at all.
 | **Contained resources & `Bundle` entries** | each nested resource | **walked**: the resource role is re-derived at every `resourceType`, so a contained `RelatedPerson` or a Bundled `Patient` is de-identified too |
 | **Clinical resources**: `Observation`, `Condition`, `Encounter`, … | codes, values, units, statuses, reference ranges, reference wiring | **retained untouched** (the over-scrub guard) |
 
-The datatype test is **closed**, and that is the over-scrub guard: an element is a `HumanName` only when
-every property it carries is one FHIR R4 defines on `HumanName` **and** at least one of them
-(`family` / `given` / `prefix` / `suffix`) belongs to nothing else, and an `Address` the same way
+Positive classification is **closed**, and that is the over-scrub guard: an element is a `HumanName`
+only when every property it carries is one FHIR R4 defines on `HumanName`, **and** at least one of them
+(`family` / `given` / `prefix` / `suffix`) belongs to nothing else, **and** that one holds the value
+shape R4 gives it (a string, or a list of strings). An `Address` the same way
 (`line` / `city` / `district` / `state` / `postalCode` / `country`). So an **organisation's own `name`**
 is untouched (it is a plain string, never a `HumanName`), a `CodeableConcept` carrying only its `text`
 is untouched (that shape is an `Observation` code, a dose unit or an order status far more often than
-it is a name), and every clinical code, value, unit and status survives byte-identical.
+it is a name), a conformant `Questionnaire.item` is untouched (its `prefix` is a `HumanName` marker
+name and nothing more), the several R4 elements called `country` that are coded concepts rather than
+the string `Address.country` is are untouched, and every clinical code, value, unit and status survives
+byte-identical.
 
 An identifier's Safe Harbor category is read from its `system` URI: the US-SSN system
 (`http://hl7.org/fhir/sid/us-ssn` or its OID form) routes to the SSN category, every other identifier
@@ -107,9 +111,14 @@ not mistaken for a date, so it survives.
   `postalCode` that is not a whole zip code (a four-digit `0110` still has three leading digits, and
   keeping them would retain a fragment of something that was never a ZIP), or an unexpected JSON shape
   where R4 types a string at a part the reduction would re-emit verbatim. The street, the city, the
-  state, the country and the ZIP all go, and the disposition is recorded. A name or an address element
-  R4 types at a position but whose structure the pass cannot locate (a `{ text }` representation with
-  no part it can key on) is blocked the same way.
+  state, the country and the ZIP all go, and the disposition is recorded.
+- At an element name R4 **types** as one of the two datatypes (`name`, `address`, the choice-type
+  `locationAddress`, an open `valueAddress` / `valueHumanName`), a complex the classifier cannot pin
+  down is **blocked whole** rather than descended into: a `{ text }` or `{ use, text }` representation
+  with no part it can key on, and equally a `{ family, given, … }` or `{ line, city, … }` carrying some
+  property R4 does not define, because the standard promised a name or an address there and the pass
+  could not read the one it was handed. The disposition is recorded either way. That block is scoped to
+  those element names deliberately, and the residual it leaves is stated below.
 - **Free-text prose** is blocked by default: the `note` element (`Annotation.text` + author), a
   `Communication`/message `contentString`, and an **uncoded `valueString`** (the FHIR analogue of an
   HL7 OBX-5 typed `ST`, which the sibling HL7 adapter also fails closed on; a structured `valueQuantity`
@@ -135,11 +144,18 @@ not mistaken for a date, so it survives.
   **not** performed.
 - Free-text **prose** loci (`note`, `contentString`, uncoded `valueString`) fail closed by default; a
   semantic (NLP) narrative scrub and `contentAttachment` binary content remain out of scope.
-- Three surfaces are still not reached, each because FHIR types no person at the position: a
+- Three surfaces are still not reached because FHIR types no person at the position: a
   **`ContactPoint` outside a person resource** (a phone or an email on an `Organization`, a `Location`
   or an `Endpoint`), an **organisation's own `name`** (a plain string, never a `HumanName`), and the
   **individual's employer carried as a separate `Organization` resource**, which would need a
   cross-resource role derivation rather than a typed read.
+- A fourth is the stated cost of the closed classification: **a name or an address carrying a property
+  R4 does not define, at an element name R4 does not type as one of the two datatypes.** The
+  unrecognized sibling stops the classifier, and the fail-closed block above is scoped to the typed
+  element names, because at any other name the same evidence is routinely something else:
+  `{ prefix, linkId, text, type }` is a conformant `Questionnaire.item` and not a person. Blocking it
+  there would destroy conformant clinical and structural content, the mirror defect and the one no
+  re-run restores.
 
 The honesty line is unchanged: the output is **"Safe-Harbor-transformed per the configured policy,"**
 never "de-identified" and never "HIPAA-compliant."

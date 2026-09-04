@@ -92,17 +92,31 @@ export const FHIR_DEMOGRAPHIC_ELEMENTS: Readonly<Record<string, FhirDemographicM
   });
 
 /**
- * The element names FHIR R4 **types** as a `HumanName` or an `Address` wherever they appear outside a
- * person resource: `Organization.contact.name`, `InsurancePlan.contact.name`, `Location.address`,
- * `Organization.address`.
+ * The element names FHIR R4 **types** as a `HumanName` or an `Address`, as an **explicit enumeration**
+ * and never a suffix or shape heuristic:
  *
- * This is not how the sweep FINDS a name or an address, which is the point of keying on the datatype:
- * `Claim.accident.locationAddress` is an `Address` under a name this set does not carry, and it is
- * swept all the same. The set does one narrower job: at one of these positions a personal-datatype
- * shape the classifier cannot pin down (a `{ text }` representation, a `{ use, text }` pair) is
- * **blocked** rather than descended into, because R4 promised a name or an address there and the pass
- * could not locate one. At any other position the same shape is far more likely a `CodeableConcept`
- * carrying only its text, so it is left exactly as it arrived.
+ * - `name` - `Organization.contact.name`, `InsurancePlan.contact.name`.
+ * - `address` - `Location.address`, `Organization.address`, `Organization.contact.address`,
+ *   `InsurancePlan.contact.address`.
+ * - `locationAddress` - the `Address` arm of `Claim.accident.location[x]` and
+ *   `ExplanationOfBenefit.accident.location[x]`.
+ * - `valueAddress` / `valueHumanName` - the two arms of an open `value[x]` (`Task.input.value[x]`,
+ *   `Parameters.parameter.value[x]`). An `Extension.value[x]` never reaches here: every extension value
+ *   is already blocked earlier, at the frontier rule.
+ *
+ * This is **not** how the sweep FINDS a name or an address, which is the point of keying on the
+ * datatype: a conformant `Address` under any element name at all is classified and reduced without
+ * consulting this set. The set does one narrower, fail-closed job. At one of these positions the
+ * standard has already said what is supposed to be there, so a complex the classifier cannot pin down
+ * but which still carries personal-datatype evidence - a `{ text }` or `{ use, text }` representation
+ * with no part to key on, or a `{ family, given, nickname }` whose unrecognized sibling means the pass
+ * cannot read the structure it was promised - is **blocked whole** rather than descended into.
+ *
+ * At any other position that same evidence is left exactly as it arrived, and deliberately: `{ text }`
+ * is far more often a `CodeableConcept` carrying only its text, and `{ prefix, linkId, text, type }` is
+ * a conformant `Questionnaire.item`. Blocking there would destroy clinical and structural content,
+ * which is the mirror defect and the one no re-run undoes. That residual is stated in
+ * `docs-content/limitations.md` rather than left implicit.
  *
  * A plain string at one of these names is untouched either way, and deliberately: `Organization.name`
  * and `Endpoint.address` are both R4 string elements, and neither is a person's name or a postal
@@ -113,6 +127,9 @@ export const FHIR_DEMOGRAPHIC_ELEMENTS: Readonly<Record<string, FhirDemographicM
 export const TYPED_PERSONAL_ELEMENT_NAMES: ReadonlySet<string> = new Set<string>([
   "name",
   "address",
+  "locationAddress",
+  "valueAddress",
+  "valueHumanName",
 ]);
 
 /**
