@@ -30,7 +30,8 @@ but **inverts the reflex**: where a parser is liberal on input, a de-identifier 
 > (`@cosyte/deid/dicom`), plus the **longitudinal layer**, the corpus registry (`createDeidRegistry`)
 > for cross-document consistency and the formalized key contract, and the **Expert-Determination support
 > report** (`buildExpertDeterminationSupportReport`) that structures the manifest for a statistician
-> **without ever rendering a determination**. NCPDP SCRIPT is **not** supported.
+> **without ever rendering a determination**. NCPDP SCRIPT is **not** supported, and an entry point
+> handed one refuses it outright rather than returning a partial pass.
 
 ## Install
 
@@ -284,19 +285,43 @@ serializeResource(document); // spec-clean, de-identified FHIR JSON
 // under a preset that does not claim the label).
 // Narrative text.div, extension values, and Reference.display fail closed; contained resources and
 // Bundle entries are walked. Clinical resources (Observation values, codes, units, statuses) survive.
+// Outside a person resource a HumanName or an Address is acted on wherever it sits,
+// Organization.contact.name and Location.address included: the element's datatype decides.
 ```
 
 FHIR is a **graph of typed resources**, so the map splits by role:
 
-| Scope                                                                                                     | Loci                                                                               | Transform                                                                                                                                                                                           |
-| --------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Person resources** (`Patient` / `RelatedPerson` / `Practitioner` / `Person` + nested `Patient.contact`) | `name`, `telecom`, `photo`, `address`, `birthDate`, dates                          | name/telecom/photo **removed**; `address` → safe **3-digit ZIP** (or `000`); dates → **year**                                                                                                       |
-| **Every resource (universal PHI vectors)**                                                                | `identifier`, dates, narrative `text.div`, `extension` values, `Reference.display` | identifier **removed** under Safe Harbor (a surrogate by `system` only under a preset that does not claim the label); dates → **year**; narrative / extension values / reference labels **blocked** |
-| **Clinical resources** (`Observation`, `Condition`, …)                                                    | codes, values, units, statuses, reference wiring                                   | **retained untouched** (the over-scrub guard)                                                                                                                                                       |
+| Scope                                                                                                     | Loci                                                                                                                                      | Transform                                                                                                                                                                                           |
+| --------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Person resources** (`Patient` / `RelatedPerson` / `Practitioner` / `Person` + nested `Patient.contact`) | `name`, `telecom`, `photo`, `address`, `birthDate`, dates                                                                                 | name/telecom/photo **removed**; `address` → safe **3-digit ZIP** (or `000`); dates → **year**                                                                                                       |
+| **Every resource, by DATATYPE**                                                                           | any `HumanName`, any `Address` (`Organization.contact.name`, `Location.address`, `Organization.address`, a choice-type `locationAddress`) | name **removed**; address → the same safe **3-digit ZIP** (or `000`) a person resource's address gets                                                                                               |
+| **Every resource (universal PHI vectors)**                                                                | `identifier`, dates, narrative `text.div`, `extension` values, `Reference.display`                                                        | identifier **removed** under Safe Harbor (a surrogate by `system` only under a preset that does not claim the label); dates → **year**; narrative / extension values / reference labels **blocked** |
+| **Clinical resources** (`Observation`, `Condition`, …)                                                    | codes, values, units, statuses, reference wiring                                                                                          | **retained untouched** (the over-scrub guard)                                                                                                                                                       |
 
 A `Reference.display` (a person label) is blocked; a `Coding.display` (a coded term like `Sodium`) is
 retained: the two are told apart structurally. Contained resources and `Bundle` entries are walked, with
 each resource's role re-derived at its own `resourceType`.
+
+**Why the datatype and not the resource type.** Which resource carries a person's name is a choice the
+producing system made: the same home address arrives at `Patient.address` from one sender and at
+`Location.address` from a home-health sender. A rule keyed on the enclosing resource therefore hands you
+coverage that depends on that choice. Positive classification is **closed**: an element is a `HumanName`
+only when every property it carries is one R4 defines on `HumanName`, **and** at least one of them is a
+marker property (`family` / `given` / `prefix` / `suffix`), **and** that marker holds **the exact value
+shape R4 gives it** - `family` a single string, the other three repeating. An `Address` the same way,
+with `line` repeating and `city` / `district` / `state` / `postalCode` / `country` single. All three
+halves earn their place: they keep the wider sweep off an **organisation's own `name`** (a plain
+string, never a `HumanName`), off a `CodeableConcept` carrying only its `text`, and off every clinical
+code, value, unit and status.
+
+Reading the shape **per marker** is what separates a marker from an R4 element that merely shares its
+name, and R4 supplies two such collisions. The several elements called `country` are coded concepts
+where `Address.country` is a string. And `Questionnaire.item`, `PlanDefinition.action` and
+`RequestGroup.action` each carry a `prefix` that is a single string, where a name's `prefix` repeats;
+the latter two backbones make **every** child optional, so `{ "prefix": "1." }` alone is a conformant
+numbered workflow step, and the shape is the only thing that tells it from a person. The rule leans on
+no sibling those other elements happen to require: that would be an assumption about the document, and
+this pass validates no conformance.
 
 **Fail closed** governs the person sweep and the frontier: a bare unrecognized string at a person
 resource's top level is blocked (an allow-list can never satisfy Safe Harbor category (R)); a `display`
@@ -306,17 +331,60 @@ that is not on a `Coding` is treated as a Reference person-label and blocked, in
 `_`-sibling extension) is dropped; and free-text loci (`note` Annotations, `contentString`, an uncoded
 `valueString`) are blocked (the FHIR analogue of the HL7 adapter's OBX-5-`ST` / NTE fail-closed default).
 
+**Fail closed on a newly reached element too.** A swept `Address` this pass cannot read faithfully is
+removed **whole** rather than partly retained: a `postalCode` that is not a whole zip code (a
+four-digit `0110` still has three leading digits, and generalizing it would keep a fragment of
+something that was never a ZIP), or an unexpected JSON shape at a part Safe Harbor would let it keep,
+takes the street, the city, the state, the country and the ZIP with it, and the disposition is
+recorded. At an element name R4 **types** as one of the two datatypes - `name`, `address`, the
+choice-type `locationAddress`, an open `valueAddress` / `valueHumanName` - **any** complex the
+classifier cannot pin down is blocked whole rather than descended into: a `{ text }` or
+`{ use, text }` representation with no part to key on, a `{ family, given, … }` carrying some property
+R4 does not define, and equally a `{ streetAddress, town, zip }` whose every property is foreign to
+both datatypes. The standard promised a name or an address there and the pass could not read the one
+it was given, so the boundary is readability rather than which keys happen to be present: adding an
+unrecognized sibling to an element that was already unreadable never unblocks it. Exactly two
+conformant R4 backbones share one of those element names - `MedicinalProduct.name` and
+`SubstanceSpecification.name` - and both are excluded positively, by the property R4 makes `1..1` on
+each together with that backbone's own closed property set. A plain string at one of those names is
+not a complex and is never a candidate, which is what leaves `Organization.name` and
+`Endpoint.address` untouched. The disposition is recorded either way. That block is scoped to those
+positions on purpose; the residual it leaves is stated below.
+
 **Known limitations (this release).** Extension values are block-only (no profile-aware retention, a
 `us-core-*` demographic extension is dropped). Reference
 _wiring_ (`Reference.reference` pointers, resource logical `id`s) is preserved structurally; coordinated
 pseudonymization of resource ids across a corpus is **not** performed. Free-text **prose** loci
 (`note`, `contentString`, uncoded `valueString`) fail closed by default, or run through an opt-in BYO
 redactor (see [Free text](#free-text-block-by-default--byo-redaction)); a **built-in** semantic (NLP)
-narrative scrub, `contentAttachment` binary content, and person names embedded in non-person resources
-(`Organization.contact.name`, `Location.address`) remain out of scope for this release. So does **the
-individual's employer carried as a separate `Organization` resource**: unlike X12 and HL7 v2, FHIR types
-no employer role at the position, so reaching it would be a cross-resource role derivation. The
-`Reference.display` that names it is blocked either way.
+narrative scrub and `contentAttachment` binary content remain out of scope for this release.
+
+Five residual surfaces, the first three because FHIR types no person at the position:
+
+- **A `ContactPoint` outside a person resource.** A phone or an email on an `Organization`, a
+  `Location` or an `Endpoint` is passed through. Widening to telecom here would put a payer's or a
+  facility's own switchboard number in scope, which the HL7 v2 adapter deliberately keeps (`IN1-7`,
+  the insurer's own phone, is untouched there).
+- **An organisation's own `name`.** It is a plain string, not a `HumanName`, so no datatype rule
+  reaches it, and it is administrative content rather than a person's identity.
+- **The individual's employer carried as a separate `Organization` resource.** Unlike X12 and HL7 v2,
+  FHIR types no employer role at the position, so reaching it would be a cross-resource role
+  derivation rather than a typed read. The `Reference.display` that names it is blocked either way.
+- **A name or an address carrying a property R4 does not define, or carrying its only marker at a
+  value shape R4 does not give that marker, at an element name R4 does not type as one of the two
+  datatypes.** Positive classification is closed and shape-read, so an unrecognized sibling or the
+  wrong shape stops it, and the fail-closed block above is scoped to the typed element names. At any
+  other name the same evidence is routinely something else - `{ "prefix": "1." }` is a conformant
+  `RequestGroup.action`, not a person - and blocking it would destroy conformant clinical and
+  structural content that no re-run restores. Such a value is passed through and counted as an
+  unexamined residual position, like anything else no rule names. At a **typed** element name neither
+  half is a residual: the standard promised a name or an address there, so whatever the classifier
+  declines is blocked whole.
+- **A name or an address INSIDE a person resource, at a property the demographic map does not list.**
+  The datatype sweep runs outside a person resource only, because inside one the map above has already
+  decided `name`, `telecom`, `photo` and `address`. A vendor `Patient.alias` carrying
+  `{ family, given }` is therefore passed through, where the same bytes on an `Organization` are
+  removed. Counted as unexamined like the rest.
 
 ## De-identify an X12 EDI interchange
 
@@ -370,10 +438,14 @@ dates → year, patient / cardholder / group ids **removed** under Safe Harbor. 
 (`544-FY` DUR, `504-F4` message) and any unmapped / unknown segment **fail closed**; the clinical /
 financial segments (NDC drug codes, quantities, days-supply, pricing, DUR codes) are retained untouched.
 
-**NCPDP SCRIPT (ePrescribing XML) is deferred**: its parser's `serializeScript` emits only modeled
-fields (a round-trip drops unmodeled XML) and its `Patient` model has no address / phone / patient-id
-field, so a faithful structural de-id is not achievable through the current public surface. Shipping a
-partial pass would be a false-safety hazard, which the fail-closed posture forbids.
+**NCPDP SCRIPT (ePrescribing XML) is REFUSED, not half-handled**: its parser's `serializeScript` emits
+only modeled fields (a round-trip drops unmodeled XML) and its `Patient` model has no address / phone /
+patient-id field, so a faithful structural de-id is not achievable through the current public surface,
+and shipping a partial pass would be a false-safety hazard the fail-closed posture forbids. Hand a
+SCRIPT document to either NCPDP entry point and you get a typed `DEID_FORMAT_UNSUPPORTED` error naming
+the format and the parser-surface reason, and **no** transformed document, manifest or partial output
+of any kind, rather than whatever the Telecom parser would have made of those bytes. Telecom callers
+are unaffected.
 
 ## De-identify a DICOM study
 
@@ -556,7 +628,7 @@ const opts = profileOptions(strict, ctx); // pass straight to any adapter
 `@cosyte/deid` **transforms per a policy and evidences what it did: it never certifies**. Read
 [`docs-content/limitations.md`](docs-content/limitations.md) before relying on it for anything that
 leaves your control: the fail-closed posture, structured-core-only (free text is block-by-default),
-**DICOM metadata-only** (burned-in pixels flagged, not cleaned), **NCPDP SCRIPT deferred**, the BYO
+**DICOM metadata-only** (burned-in pixels flagged, not cleaned), **NCPDP SCRIPT refused**, the BYO
 free-text redactor is the consumer's responsibility, and the Expert-Determination report **makes no
 determination**.
 

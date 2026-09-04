@@ -34,7 +34,7 @@ Read this page before you rely on the library for anything that leaves your cont
 | De-identify **free text / narrative**                             | Free-text loci (HL7 OBX-5/NTE, C-CDA narrative `<text>`, FHIR notes/`div`, X12 MSG/NTE, NCPDP free text) are **blocked by default**. A [BYO redactor](#free-text) is **consumer-asserted**, never the library's guarantee; a naive built-in regex scrub is deliberately **refused** as a false-safety hazard. |
 | Clean **DICOM burned-in pixels** or full-face images (category Q) | v1 is **metadata-only** (delegated PS3.15 Annex E). Burned-in annotation raises `DICOM_BURNED_IN_ANNOTATION_NOT_REMOVED` and `burnedInAnnotationHazard`; pixel decode is a future `@cosyte/dicom-pixel`. The two pixel options of CID 7050 are declared **withheld** on the result and never written to `(0012,0064)`. **Do not release an image on metadata alone.**                                                       |
 | Guarantee **DICOM replacement-UID consistency across calls** by default | Referential integrity of replacement UIDs is guaranteed **only within a single call** unless the caller supplies a shared `uidMap`, which then extends it to every call sharing that cache. The declared scope is on the result (`uidReferentialIntegrity.scope`), so it is read rather than inferred.                                                       |
-| Handle **NCPDP SCRIPT** ePrescribing                              | **Deferred.** The current parser surface (lossy serialize + an address-less `Patient` model) cannot support a faithful structural de-id, so SCRIPT is **not** silently half-handled. NCPDP **Telecom** is supported.                                                                                          |
+| Handle **NCPDP SCRIPT** ePrescribing                              | **Refused, not deferred in prose.** The current parser surface (lossy serialize + an address-less `Patient` model) cannot support a faithful structural de-id, so an NCPDP entry point handed a SCRIPT document raises a typed `DEID_FORMAT_UNSUPPORTED` naming the format and the parser-surface reason and returns **no** document, manifest or partial output at all. NCPDP **Telecom** is supported and is unaffected.                                                                                          |
 | Guarantee against a determined re-identification attack           | De-identification reduces risk to the regulatory bar; it is not a cryptographic guarantee. **Key custody is the consumer's**: a leaked HMAC key or date-shift offset re-identifies.                                                                                                                           |
 | Do anything the manifest does not record                          | If it is not in the manifest, the library did not do it. The manifest is the complete, value-free audit.                                                                                                                                                                                                      |
 
@@ -169,6 +169,63 @@ Two things follow, and the second is the one that surprises people:
   position and the reference `display` that names it is blocked rather than classified. The guarantor's
   employer organisation name at **GT1-51** is likewise unreached: it is not among the positions this
   pass names.
+
+<a id="fhir-non-person-loci"></a>
+
+- **In FHIR, the element's DATATYPE decides, not the resource carrying it.** Which resource a person's
+  name or address ends up on is a choice the producing system made, and the same home address arrives
+  at `Patient.address` from one sender and at `Location.address` from a home-health sender. So a
+  `HumanName` is removed and an `Address` is reduced to the Safe Harbor granularity **wherever the
+  graph puts them outside a person resource**, `Organization.contact.name` and `Location.address`
+  included, in contained resources and `Bundle` entries as well. Neither is stated as out of scope any
+  longer. Inside a person resource the demographic map decides instead, which is a narrower reach and
+  the last residual below. Positive classification is closed and marker-bound, which is what keeps the
+  wider sweep off a clinical value: an element is a `HumanName` only when every property it carries is
+  one FHIR R4 defines on `HumanName`, at least one of them is a marker property (`family`, `given`,
+  `prefix`, `suffix`), and that marker holds **the exact value shape R4 gives it**: `family` a single
+  string, the other three repeating. An `Address` the same way, with `line` repeating and `city`,
+  `district`, `state`, `postalCode` and `country` single. Reading the shape per marker is what
+  separates a marker from an R4 element that merely shares its name, and R4 supplies two such
+  collisions: `country`, which every colliding element types as a `CodeableConcept` where an address
+  types a string, and `prefix`, which `Questionnaire.item`, `PlanDefinition.action` and
+  `RequestGroup.action` each type as a single string where a name types it repeating. Both of the
+  latter two backbones make **every** child optional, so a conformant instance can carry nothing but
+  `prefix`, and the shape is the only thing that tells it from a person's name. A newly reached element
+  the pass cannot read faithfully, an `Address` whose `postalCode` is not a whole zip code or an
+  unexpected shape at a part the reduction would keep, is **removed whole** and recorded, never partly
+  retained. So is **any** complex the classifier cannot pin down at an element name R4 **types** as one
+  of the two datatypes (`name`, `address`, a choice-type `locationAddress`, an open `valueAddress` /
+  `valueHumanName`) - whether nothing is left to key on, a property R4 does not define sits beside a
+  `family` or a `line`, or every property it carries is foreign to both datatypes. The test is whether
+  the pass can read what the standard promised at that position, not which keys are present, so an
+  unrecognized sibling never unblocks an element that was already unreadable. Two conformant R4
+  backbones share one of those element names, `MedicinalProduct.name` and `SubstanceSpecification.name`,
+  and both are excluded positively: the property R4 makes `1..1` on each, plus that backbone's own
+  closed property set. A plain string at one of those names is never a candidate at all, which is what
+  leaves `Organization.name` and `Endpoint.address` alone.
+
+- **Five FHIR surfaces this release still does not reach.** Three because no person is typed at the
+  position. A **`ContactPoint` outside a person resource**: a phone or an email on an `Organization`,
+  a `Location` or an `Endpoint` is passed through, because widening to telecom would put a payer's or a
+  facility's own switchboard number in scope, which the HL7 v2 pass deliberately keeps (`IN1-7`, the
+  insurer's own phone, is untouched there). An **organisation's own `name`**: a plain string, never a
+  `HumanName`, and administrative content rather than a person's identity. And the **individual's
+  employer carried as a separate `Organization` resource**, per the bullet above. The fourth is the
+  stated cost of the closed, shape-read classification: **a name or an address carrying a property R4
+  does not define, or carrying its only marker at a value shape R4 does not give that marker, at an
+  element name R4 does not type as one of the two datatypes.** The unrecognized sibling or the wrong
+  shape stops the classifier, and the fail-closed block is scoped to the typed element names, because
+  at any other name that same evidence is routinely something else entirely: `{ prefix }` alone is a
+  conformant `RequestGroup.action` and not a person, and blocking it would destroy conformant clinical
+  and structural content, which is the mirror defect and the one no re-run restores. At a typed
+  element name neither half is a residual: the standard promised a name or an address there, so
+  whatever the classifier declines is blocked whole. The
+  fifth is the scope of the sweep itself: **a name or an address inside a person resource, at a
+  property the demographic map does not list.** The map already decides `name`, `telecom`, `photo` and
+  `address` there, so the datatype sweep does not run, and a vendor `Patient.alias` carrying
+  `{ family, given }` is passed through where the same bytes on an `Organization` are removed. All
+  five are passed through, and all five are counted as unexamined residual positions like anything
+  else no rule names.
 
 Vendor-proprietary loci absent from public specs are deferred, **not invented**: a quirk is encoded
 only when a real de-identified document grounds it.

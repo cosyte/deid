@@ -113,6 +113,75 @@ describe("every adapter emits the same transformed document, byte for byte", () 
     `);
   });
 
+  /**
+   * THE SECOND CONTROL OF THE SAME SHAPE, FOR THE SAME REASON. The FHIR sweep now decides on an
+   * element's DATATYPE rather than on the type of the resource carrying it, so it visits every
+   * resource in a graph instead of the four person types. The fixture above carries no name- or
+   * address-typed element outside a person resource, so its digest is unmoved and that is asserted by
+   * the pin above. What that pin cannot say is whether the widened walk PERTURBED anything on its way
+   * past, which is the mirror hazard of any reach change: this adds the newly-swept shapes to the same
+   * graph, proves they really are acted on, then takes them back out and requires the pinned digest,
+   * the pinned manifest ORDER and the pre-existing residual inventory back, exactly.
+   */
+  const fhirWithNonPersonLoci = (): unknown => {
+    const graph: unknown = JSON.parse(FIX("fhir", "bundle.json"));
+    const entries = (graph as { entry: unknown[] }).entry;
+    entries.push({
+      fullUrl: "urn:uuid:organization-cross",
+      resource: {
+        resourceType: "Organization",
+        id: "orgCross",
+        name: "ZZORGOWNNAME",
+        contact: [{ name: { family: "ZZORGCONTACTFAM" } }],
+      },
+    });
+    entries.push({
+      fullUrl: "urn:uuid:location-cross",
+      resource: {
+        resourceType: "Location",
+        id: "locCross",
+        address: { line: ["ZZLOCSTREET"], state: "MA", postalCode: "01103" },
+      },
+    });
+    return graph;
+  };
+
+  it("the FHIR sweep really does act on the newly-reached shapes (non-vacuity)", () => {
+    const { resource } = parseResource(JSON.stringify(fhirWithNonPersonLoci()));
+    const { document, manifest } = deidentifyFhir(resource, options());
+    const wire = serializeResource(document);
+    expect(wire).not.toContain("ZZORGCONTACTFAM");
+    expect(wire).not.toContain("ZZLOCSTREET");
+    expect(manifest.map((m) => m.locus)).toContain("Bundle.entry[6].resource.contact[0].name");
+    expect(manifest.map((m) => m.locus)).toContain("Bundle.entry[7].resource.address");
+    expect(digest(wire)).not.toBe("a9237473c3c96a54b5ad915ad10afe34");
+  });
+
+  it("and the FHIR document, manifest and residual inventory are unchanged with them taken back out", () => {
+    const graph = fhirWithNonPersonLoci() as { entry: unknown[] };
+    graph.entry = graph.entry.slice(0, -2); // the two added resources, removed again
+    const { resource } = parseResource(JSON.stringify(graph));
+    const { document, manifest, unexaminedResiduals } = deidentifyFhir(resource, options());
+
+    // The pinned digest above, reached from a graph the widened walk has just been through.
+    expect(digest(serializeResource(document))).toBe("a9237473c3c96a54b5ad915ad10afe34");
+    // The manifest, contents and order both: the same list the `FHIR` case below pins.
+    expect(order(manifest)).toEqual(
+      order(deidentifyFhir(parseResource(FIX("fhir", "bundle.json")).resource, options()).manifest),
+    );
+    // And the THIRD artifact, which no pin covered before: an empty result has to be readable as
+    // measured-and-empty rather than as a pass that measured nothing, so the inventory is pinned by
+    // its total and by a digest of its (locus, count) pairs, both captured from the pass as it stood
+    // before the sweep widened.
+    expect(unexaminedResiduals.reduce((sum, r) => sum + r.count, 0)).toBe(51);
+    expect(
+      createHash("sha256")
+        .update(JSON.stringify(unexaminedResiduals.map((r) => [r.locus, r.count])), "utf8")
+        .digest("hex")
+        .slice(0, 32),
+    ).toBe("7d75d422c369f12b3c5875996c705564");
+  });
+
   it("and the DICOM document is unchanged once the added declaration is taken back out", () => {
     // The pinned value is the ORIGINAL digest, captured before `(0012,0064)` was ever written. Removing
     // that one element and re-serializing has to reproduce it exactly: that is what makes the digest

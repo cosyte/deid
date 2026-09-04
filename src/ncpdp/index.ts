@@ -30,14 +30,16 @@
  * **retained untouched** (the over-scrub guard). The output is **"Safe-Harbor-transformed per the
  * configured policy"**, never "de-identified".
  *
- * **NCPDP SCRIPT is deferred (a documented non-goal).** `@cosyte/ncpdp`'s SCRIPT
- * (ePrescribing XML) surface cannot be structurally de-identified faithfully through its public API:
- * `serializeScript` emits **only the modeled fields** (a parse → serialize round-trip drops every
- * unmodeled XML element), and the SCRIPT `Patient` model carries **no address, phone, or patient-id**
- * field. Performing a partial de-id through that surface would silently drop unmodeled content and leave
- * unmodeled patient identifiers unhandled: a false-safety hazard, which the fail-closed posture
- * forbids. SCRIPT de-identification therefore waits for a parser surface that preserves the full
- * document, rather than shipping an unfaithful pass here.
+ * **NCPDP SCRIPT is REFUSED, and the refusal is a behaviour rather than a paragraph.**
+ * `@cosyte/ncpdp`'s SCRIPT (ePrescribing XML) surface cannot be structurally de-identified faithfully
+ * through its public API: `serializeScript` emits **only the modeled fields** (a parse → serialize
+ * round-trip drops every unmodeled XML element), and the SCRIPT `Patient` model carries **no address,
+ * phone, or patient-id** field. Performing a partial de-id through that surface would silently drop
+ * unmodeled content and leave unmodeled patient identifiers unhandled: a false-safety hazard, which
+ * the fail-closed posture forbids. So an entry point here that is handed SCRIPT **refuses it**, with a
+ * typed, value-free `DEID_FORMAT_UNSUPPORTED` diagnostic naming the format and the parser-surface
+ * reason, and returns no document, no manifest and no partial output at all (see
+ * `./script-refusal.js`). Telecom callers are untouched by the guard.
  *
  * @packageDocumentation
  */
@@ -49,6 +51,7 @@ import { type DeidManifestEntry } from "../manifest.js";
 import { type UnexaminedResidual } from "../residual.js";
 import { applyTelecom } from "./apply.js";
 import { extractTelecomLoci } from "./extract.js";
+import { assertNotScriptModel, assertNotScriptText } from "./script-refusal.js";
 
 /**
  * The result of de-identifying an NCPDP Telecom transaction: the de-identified Telecom byte stream plus
@@ -96,7 +99,9 @@ export interface TelecomDeidResult {
  *   A keyed transform with no context is a fatal `DEID_NO_KEY`, never an unkeyed fallback.
  * @returns The de-identified Telecom stream and the value-free manifest.
  * @throws {@link "@cosyte/deid".DeidError} `DEID_NO_KEY` when a keyed transform is required for a
- *   category present in the transaction but no key context was supplied.
+ *   category present in the transaction but no key context was supplied;
+ *   `DEID_FORMAT_UNSUPPORTED` when the model handed in is an ePrescribing SCRIPT message rather than
+ *   a Telecom transaction, which this adapter refuses outright rather than half-handle.
  * @example
  * ```ts
  * import { parseTelecom } from "@cosyte/ncpdp/telecom";
@@ -111,6 +116,8 @@ export function deidentifyTelecom(
   tx: TelecomTransaction,
   options: DeidOptions = {},
 ): TelecomDeidResult {
+  // Refuse before anything is extracted, so a refused format can never leave a partial artifact.
+  assertNotScriptModel(tx);
   const { loci, coords, unexaminedResiduals } = extractTelecomLoci(tx);
   const { document, manifest } = deidentify({ loci }, options);
   const telecom = applyTelecom(tx, document.loci, coords);
@@ -125,6 +132,9 @@ export function deidentifyTelecom(
  * @param raw - Raw NCPDP Telecom transaction text.
  * @param options - The policy and key context (see {@link deidentifyTelecom}).
  * @returns The de-identified Telecom string and the value-free manifest.
+ * @throws {@link "@cosyte/deid".DeidError} `DEID_FORMAT_UNSUPPORTED` when the text is an XML
+ *   document, which on an NCPDP surface is ePrescribing SCRIPT: it is refused before it is parsed,
+ *   so no partial output exists to return.
  * @example
  * ```ts
  * import { deidentifyTelecomString } from "@cosyte/deid/ncpdp";
@@ -136,6 +146,9 @@ export function deidentifyTelecom(
  * ```
  */
 export function deidentifyTelecomString(raw: string, options: DeidOptions = {}): TelecomDeidResult {
+  // Refuse before `parseTelecom` sees the bytes: a refusal that ran after a parse would already have
+  // read the document it declines to handle.
+  assertNotScriptText(raw);
   return deidentifyTelecom(parseTelecom(raw), options);
 }
 
@@ -147,6 +160,7 @@ export {
   type TelecomFieldMode,
   type TelecomFieldRule,
 } from "./locus-map.js";
+export { NCPDP_SCRIPT_REFUSAL_MESSAGE } from "./script-refusal.js";
 export { extractTelecomLoci, type TelecomCoord, type TelecomExtraction } from "./extract.js";
 export { applyTelecom } from "./apply.js";
 export { type UnexaminedResidual } from "../residual.js";

@@ -17,6 +17,16 @@
  *   `identifier` (MRN pseudonymized by system, SSN removed), PHI-bearing **dates**, the narrative
  *   `text.div`, **extensions** (the fail-closed frontier, an unknown extension can carry any PHI), and
  *   a `Reference.display` (a human label that is usually a person's name).
+ * - **Every resource OUTSIDE a person resource, by DATATYPE**: a `HumanName` and an `Address` are
+ *   acted on wherever the graph puts them there, so `Organization.contact.name` and
+ *   `Location.address` get the treatment `Patient.name` and `Patient.address` get. Which resource
+ *   carries a person's name is a producer's shaping choice, and coverage that depends on it is
+ *   coverage a consumer cannot rely on. The classification is closed, marker-bound and read at the
+ *   value shape R4 gives each marker (`./datatype.js`), which is what keeps the widened sweep off an
+ *   organisation's own `name` string, off a clinical code and off a workflow backbone that merely
+ *   shares a marker's name. **Inside** a person resource the demographic map above decides instead,
+ *   and the surfaces neither reaches are stated residuals, enumerated in `docs-content/limitations.md`
+ *   rather than implied by this sentence.
  * - **Clinical resources**, `Observation` / `Condition` / …, are otherwise **retained untouched** (the
  *   over-scrub guard): their codes, values, units, and statuses are not identifiers and must survive.
  *
@@ -32,10 +42,11 @@ const C = SAFE_HARBOR_CATEGORIES;
 
 /**
  * The **identifying (person) resource types** whose demographic elements carry direct Safe Harbor PHI.
- * Scoped to those four; a demographic `name` / `address` in any other
- * resource (`Location.address`, `Organization.name`) is facility/administrative data, not the
- * individual's PHI, and is left to the clinical-retain path: the FHIR analogue of C-CDA sweeping only
- * the header participations, never the clinical body.
+ * Scoped to those four, and that scope now governs the `telecom` / `photo` sweep and the
+ * bare-unrecognized-string frontier **only**: a `HumanName` or an `Address` is acted on by its own
+ * datatype wherever it sits, including on a `Location` or an `Organization` (see `./datatype.js`).
+ * What stays outside every rule here is an organisation's own `name`, which is a plain string R4
+ * types at no personal datatype at all.
  *
  * @example
  * ```ts
@@ -62,10 +73,11 @@ export const PERSON_RESOURCE_TYPES: ReadonlySet<string> = new Set<string>([
 export type FhirDemographicMode = "redact" | "address";
 
 /**
- * The person-resource demographic element map: element name → how the applier handles it. Applied only
- * within a {@link PERSON_RESOURCE_TYPES} resource subtree (so a body `Coding.display` or a
- * `Location.address` is never swept). A mapped element is handled as a **unit**: the extractor does not
- * descend into it, so a redacted `name` never has an inner primitive ride through.
+ * The person-resource demographic element map: element name → how the applier handles it. Applied
+ * within a {@link PERSON_RESOURCE_TYPES} resource subtree; outside one, the datatype-keyed sweep
+ * reaches a `HumanName` and an `Address` on its own terms while a body `Coding.display` is still
+ * never swept. A mapped element is handled as a **unit**: the extractor does not descend into it, so
+ * a redacted `name` never has an inner primitive ride through.
  *
  * @example
  * ```ts
@@ -82,6 +94,50 @@ export const FHIR_DEMOGRAPHIC_ELEMENTS: Readonly<Record<string, FhirDemographicM
     photo: "redact",
     address: "address",
   });
+
+/**
+ * The element names FHIR R4 **types** as a `HumanName` or an `Address`, as an **explicit enumeration**
+ * and never a suffix or shape heuristic:
+ *
+ * - `name` - `Organization.contact.name`, `InsurancePlan.contact.name`.
+ * - `address` - `Location.address`, `Organization.address`, `Organization.contact.address`,
+ *   `InsurancePlan.contact.address`.
+ * - `locationAddress` - the `Address` arm of `Claim.accident.location[x]` and
+ *   `ExplanationOfBenefit.accident.location[x]`.
+ * - `valueAddress` / `valueHumanName` - the two arms of an open `value[x]` (`Task.input.value[x]`,
+ *   `Parameters.parameter.value[x]`). An `Extension.value[x]` never reaches here: every extension value
+ *   is already blocked earlier, at the frontier rule.
+ *
+ * This is **not** how the sweep FINDS a name or an address, which is the point of keying on the
+ * datatype: a conformant `Address` under any element name at all is classified and reduced without
+ * consulting this set. The set does one narrower, fail-closed job. At one of these positions the
+ * standard has already said what is supposed to be there, so **any** complex the classifier cannot pin
+ * down is **blocked whole** rather than descended into - a `{ text }` or `{ use, text }`
+ * representation with no part to key on, a `{ family, given, nickname }` whose unrecognized sibling
+ * means the pass cannot read the structure it was promised, and equally a
+ * `{ streetAddress, town, zip }` whose every property is foreign to both datatypes. The two
+ * conformant R4 backbones that share the element name `name` are excluded positively rather than by a
+ * property-set test; see `./datatype.js`.
+ *
+ * At any other position that same shape is left exactly as it arrived, and deliberately: `{ text }`
+ * is far more often a `CodeableConcept` carrying only its text, and `{ prefix, linkId, text, type }` is
+ * a conformant `Questionnaire.item`. Blocking there would destroy clinical and structural content,
+ * which is the mirror defect and the one no re-run undoes. That residual is stated in
+ * `docs-content/limitations.md` rather than left implicit.
+ *
+ * A plain string at one of these names is untouched either way, and deliberately: `Organization.name`
+ * and `Endpoint.address` are both R4 string elements, and neither is a person's name or a postal
+ * address.
+ *
+ * @internal
+ */
+export const TYPED_PERSONAL_ELEMENT_NAMES: ReadonlySet<string> = new Set<string>([
+  "name",
+  "address",
+  "locationAddress",
+  "valueAddress",
+  "valueHumanName",
+]);
 
 /**
  * The `Address` properties at or above state level, which Safe Harbor permits and the address edit
