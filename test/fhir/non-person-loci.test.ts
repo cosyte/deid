@@ -105,6 +105,19 @@ describe("a person name on a resource whose type is not a person type", () => {
     expect(JSON.stringify(manifest)).not.toContain("ZZORGCONTACTFAM");
   });
 
+  it("removes a name whose ONLY marker is a `prefix`, at the shape R4 gives that marker", () => {
+    // `HumanName.prefix` is `0..*`, so a conformant name's prefix arrives as an array. A name that
+    // carries nothing else is still a name, and the marker is enough on its own.
+    const { json, manifest } = run({
+      resourceType: "Organization",
+      contact: [{ name: { prefix: ["ZZORGCONTACTPRE"] } }],
+    });
+    expect(json).not.toContain("ZZORGCONTACTPRE");
+    expect(manifest.map((m) => `${m.locus} ${m.category}`)).toEqual([
+      "Organization.contact[0].name NAMES",
+    ]);
+  });
+
   it("reaches the same name inside a Bundle entry and inside a contained resource", () => {
     const contact = [{ name: { family: "ZZORGCONTACTFAM" } }];
     const bundle = run({
@@ -309,6 +322,33 @@ describe("fail closed: a newly reached element the pass cannot handle faithfully
     expect(json).not.toContain("011");
     expect(manifest.map((m) => `${m.locus} ${m.disposition}`)).toEqual([
       "Location.address blocked",
+    ]);
+  });
+
+  it("blocks a marker delivered at a shape R4 does not give it, at a typed position", () => {
+    // The mirror of the classifier's shape test, and the reason tightening it costs no coverage
+    // where R4 actually puts these datatypes. `Address.line` is `0..*` and `HumanName.given` is
+    // `0..*`, so a bare string at either is not the marker R4 defines and the classifier declines.
+    // At an element name the standard TYPED as one of the two, declining is not releasing: the pass
+    // was promised an address and a name, could read neither, and blocks both whole.
+    const address = run({
+      resourceType: "Location",
+      address: { line: "ZZLOCSTREET", city: "ZZLOCCITY" },
+    });
+    expect(JSON.parse(address.json)).toEqual({ resourceType: "Location" });
+    expect(address.json).not.toContain("ZZLOCSTREET");
+    expect(address.json).not.toContain("ZZLOCCITY");
+    expect(address.manifest.map((m) => `${m.locus} ${m.disposition}`)).toEqual([
+      "Location.address blocked",
+    ]);
+
+    const name = run({
+      resourceType: "Organization",
+      contact: [{ name: { given: "ZZORGCONTACTGIV" } }],
+    });
+    expect(name.json).not.toContain("ZZORGCONTACTGIV");
+    expect(name.manifest.map((m) => `${m.locus} ${m.disposition}`)).toEqual([
+      "Organization.contact[0].name blocked",
     ]);
   });
 

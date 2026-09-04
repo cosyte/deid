@@ -73,15 +73,21 @@ of the residuals below.
 
 Positive classification is **closed**, and that is the over-scrub guard: an element is a `HumanName`
 only when every property it carries is one FHIR R4 defines on `HumanName`, **and** at least one of them
-(`family` / `given` / `prefix` / `suffix`) belongs to nothing else, **and** that one holds the value
-shape R4 gives it (a string, or a list of strings). An `Address` the same way
-(`line` / `city` / `district` / `state` / `postalCode` / `country`). So an **organisation's own `name`**
-is untouched (it is a plain string, never a `HumanName`), a `CodeableConcept` carrying only its `text`
-is untouched (that shape is an `Observation` code, a dose unit or an order status far more often than
-it is a name), a conformant `Questionnaire.item` is untouched (its `prefix` is a `HumanName` marker
-name and nothing more), the several R4 elements called `country` that are coded concepts rather than
-the string `Address.country` is are untouched, and every clinical code, value, unit and status survives
-byte-identical.
+is a marker property (`family` / `given` / `prefix` / `suffix`), **and** that marker holds **the exact
+value shape R4 gives it** - `family` a single string, the other three repeating. An `Address` the same
+way, with `line` repeating and `city` / `district` / `state` / `postalCode` / `country` single. So an
+**organisation's own `name`** is untouched (it is a plain string, never a `HumanName`), a
+`CodeableConcept` carrying only its `text` is untouched (that shape is an `Observation` code, a dose
+unit or an order status far more often than it is a name), and every clinical code, value, unit and
+status survives byte-identical.
+
+Reading the shape **per marker** is what separates a marker from an R4 element that merely shares its
+name. The several elements called `country` are coded concepts where `Address.country` is a string, and
+`Questionnaire.item`, `PlanDefinition.action` and `RequestGroup.action` each carry a `prefix` that is a
+single string where a name's `prefix` repeats. The latter two backbones make **every** child optional,
+so `{ "prefix": "1." }` alone is a conformant numbered workflow step, and the shape is the only thing
+that tells it from a person's name. The rule leans on no sibling those other elements happen to
+require: that would be an assumption about the document, and this pass validates no conformance.
 
 An identifier's Safe Harbor category is read from its `system` URI: the US-SSN system
 (`http://hl7.org/fhir/sid/us-ssn` or its OID form) routes to the SSN category, every other identifier
@@ -157,13 +163,15 @@ not mistaken for a date, so it survives.
   or an `Endpoint`), an **organisation's own `name`** (a plain string, never a `HumanName`), and the
   **individual's employer carried as a separate `Organization` resource**, which would need a
   cross-resource role derivation rather than a typed read.
-- A fourth is the stated cost of the closed classification: **a name or an address carrying a property
-  R4 does not define, at an element name R4 does not type as one of the two datatypes.** The
-  unrecognized sibling stops the classifier, and the fail-closed block above is scoped to the typed
+- A fourth is the stated cost of the closed, shape-read classification: **a name or an address carrying
+  a property R4 does not define, or carrying its only marker at a value shape R4 does not give that
+  marker, at an element name R4 does not type as one of the two datatypes.** The unrecognized sibling
+  or the wrong shape stops the classifier, and the fail-closed block above is scoped to the typed
   element names, because at any other name the same evidence is routinely something else:
-  `{ prefix, linkId, text, type }` is a conformant `Questionnaire.item` and not a person. Blocking it
-  there would destroy conformant clinical and structural content, the mirror defect and the one no
-  re-run restores.
+  `{ "prefix": "1." }` is a conformant `RequestGroup.action` and not a person. Blocking it there would
+  destroy conformant clinical and structural content, the mirror defect and the one no re-run restores.
+  At a **typed** element name neither half is a residual: whatever the classifier declines is blocked
+  whole.
 - A fifth is the scope of the datatype sweep: **a name or an address inside a person resource, at a
   property the demographic map does not list.** The map has already decided `name`, `telecom`, `photo`
   and `address` there, so the sweep does not run inside a person resource, and a vendor

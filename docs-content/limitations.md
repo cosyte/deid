@@ -181,8 +181,16 @@ Two things follow, and the second is the one that surprises people:
   longer. Inside a person resource the demographic map decides instead, which is a narrower reach and
   the last residual below. Positive classification is closed and marker-bound, which is what keeps the
   wider sweep off a clinical value: an element is a `HumanName` only when every property it carries is
-  one FHIR R4 defines on `HumanName`, at least one of them belongs to nothing else, and that one holds
-  the string or list-of-strings value R4 gives it; an `Address` the same way. A newly reached element
+  one FHIR R4 defines on `HumanName`, at least one of them is a marker property (`family`, `given`,
+  `prefix`, `suffix`), and that marker holds **the exact value shape R4 gives it**: `family` a single
+  string, the other three repeating. An `Address` the same way, with `line` repeating and `city`,
+  `district`, `state`, `postalCode` and `country` single. Reading the shape per marker is what
+  separates a marker from an R4 element that merely shares its name, and R4 supplies two such
+  collisions: `country`, which every colliding element types as a `CodeableConcept` where an address
+  types a string, and `prefix`, which `Questionnaire.item`, `PlanDefinition.action` and
+  `RequestGroup.action` each type as a single string where a name types it repeating. Both of the
+  latter two backbones make **every** child optional, so a conformant instance can carry nothing but
+  `prefix`, and the shape is the only thing that tells it from a person's name. A newly reached element
   the pass cannot read faithfully, an `Address` whose `postalCode` is not a whole zip code or an
   unexpected shape at a part the reduction would keep, is **removed whole** and recorded, never partly
   retained. So is **any** complex the classifier cannot pin down at an element name R4 **types** as one
@@ -203,12 +211,15 @@ Two things follow, and the second is the one that surprises people:
   insurer's own phone, is untouched there). An **organisation's own `name`**: a plain string, never a
   `HumanName`, and administrative content rather than a person's identity. And the **individual's
   employer carried as a separate `Organization` resource**, per the bullet above. The fourth is the
-  stated cost of the closed classification: **a name or an address carrying a property R4 does not
-  define, at an element name R4 does not type as one of the two datatypes.** The unrecognized sibling
-  stops the classifier, and the fail-closed block is scoped to the typed element names, because at any
-  other name that same evidence is routinely something else entirely: `{ prefix, linkId, text, type }`
-  is a conformant `Questionnaire.item` and not a person, and blocking it would destroy conformant
-  clinical and structural content, which is the mirror defect and the one no re-run restores. The
+  stated cost of the closed, shape-read classification: **a name or an address carrying a property R4
+  does not define, or carrying its only marker at a value shape R4 does not give that marker, at an
+  element name R4 does not type as one of the two datatypes.** The unrecognized sibling or the wrong
+  shape stops the classifier, and the fail-closed block is scoped to the typed element names, because
+  at any other name that same evidence is routinely something else entirely: `{ prefix }` alone is a
+  conformant `RequestGroup.action` and not a person, and blocking it would destroy conformant clinical
+  and structural content, which is the mirror defect and the one no re-run restores. At a typed
+  element name neither half is a residual: the standard promised a name or an address there, so
+  whatever the classifier declines is blocked whole. The
   fifth is the scope of the sweep itself: **a name or an address inside a person resource, at a
   property the demographic map does not list.** The map already decides `name`, `telecom`, `photo` and
   `address` there, so the datatype sweep does not run, and a vendor `Patient.alias` carrying

@@ -335,6 +335,143 @@ describe("a conformant R4 element that merely shares a property NAME with an Add
   });
 });
 
+/**
+ * Every marker property of both datatypes, with the value shape R4 gives it on that datatype and one
+ * instance of the other shape. This is the whole discriminating rule in a table: `family`, `city`,
+ * `district`, `state`, `postalCode` and `country` are `0..1` in R4 and so arrive as a bare value;
+ * `given`, `prefix`, `suffix` and `line` are `0..*` and so arrive as an array, even for one item.
+ */
+const MARKER_SHAPES: readonly {
+  readonly marker: string;
+  readonly r4Shape: unknown;
+  readonly otherShape: unknown;
+}[] = [
+  { marker: "family", r4Shape: "ZZORGCONTACTFAM", otherShape: ["ZZORGCONTACTFAM"] },
+  { marker: "given", r4Shape: ["ZZORGCONTACTGIV"], otherShape: "ZZORGCONTACTGIV" },
+  { marker: "prefix", r4Shape: ["ZZORGCONTACTPRE"], otherShape: "ZZORGCONTACTPRE" },
+  { marker: "suffix", r4Shape: ["ZZORGCONTACTSUF"], otherShape: "ZZORGCONTACTSUF" },
+  { marker: "line", r4Shape: ["ZZLOCSTREET"], otherShape: "ZZLOCSTREET" },
+  { marker: "city", r4Shape: "ZZLOCCITY", otherShape: ["ZZLOCCITY"] },
+  { marker: "district", r4Shape: "ZZLOCCOUNTY", otherShape: ["ZZLOCCOUNTY"] },
+  { marker: "state", r4Shape: "MA", otherShape: ["MA"] },
+  { marker: "postalCode", r4Shape: "01103", otherShape: ["01103"] },
+  { marker: "country", r4Shape: "US", otherShape: ["US"] },
+];
+
+/** One marker at one shape, at an element name R4 types as NEITHER datatype: the classifier alone. */
+function atUntypedName(marker: string, value: unknown): ReturnType<typeof pass> {
+  return pass({ resourceType: "Location", vendorValue: { [marker]: value } });
+}
+
+describe("a marker property is evidence only at the value shape R4 gives that marker", () => {
+  // The class this holds, and it is a class rather than a case. A marker name is not the datatype's
+  // private property: R4 hands the same name to elements elsewhere, and the backbones carrying them
+  // make every child optional, so a conformant instance can arrive carrying the marker and nothing
+  // else. It is then closed for the datatype and marked for it. Nothing about the instance separates
+  // the two - which is why the separation is read off the marker's own value SHAPE at the position,
+  // and never off a sibling the other element's definition happens to require. A required sibling is
+  // an assumption about a document; this pass validates no conformance, so it is not one to make.
+
+  it("leaves RequestGroup.action alone: a single-string `prefix` is a numbered step, not a name", () => {
+    // R4 types `RequestGroup.action.prefix` as `0..1 string` and gives the backbone NO required
+    // child, so `{ prefix }` alone is conformant. `HumanName.prefix` is `0..*`, so a name's prefix
+    // arrives as an array and this one does not.
+    const run = pass({
+      resourceType: "RequestGroup",
+      status: "active",
+      intent: "proposal",
+      action: [{ prefix: "1." }],
+    });
+    expect(run.after).toBe(run.before);
+    expect(run.manifest).toEqual([]);
+  });
+
+  it("leaves PlanDefinition.action alone, the definitional twin of that same backbone", () => {
+    const run = pass({
+      resourceType: "PlanDefinition",
+      status: "active",
+      action: [{ prefix: "A." }],
+    });
+    expect(run.after).toBe(run.before);
+    expect(run.manifest).toEqual([]);
+  });
+
+  it("leaves a nested action alone, and one inside a Bundle entry", () => {
+    const nested = pass({
+      resourceType: "RequestGroup",
+      status: "active",
+      intent: "proposal",
+      action: [{ prefix: "1.", title: "Step one", action: [{ prefix: "1.1." }] }],
+    });
+    expect(nested.after).toBe(nested.before);
+    expect(nested.manifest).toEqual([]);
+
+    const bundled = pass({
+      resourceType: "Bundle",
+      type: "collection",
+      entry: [
+        {
+          resource: {
+            resourceType: "PlanDefinition",
+            status: "active",
+            action: [{ prefix: "A." }],
+          },
+        },
+      ],
+    });
+    expect(bundled.after).toBe(bundled.before);
+    expect(bundled.manifest).toEqual([]);
+  });
+
+  it("does not lean on a required sibling: a Questionnaire.item with no linkId survives too", () => {
+    // `Questionnaire.item.linkId` is `1..1`, so an earlier form of this rule survived that backbone
+    // by accident: the required child opened the closed half. That is an assumption about the
+    // document, and this pass does no conformance validation, so a producer that omits `linkId` gets
+    // its structural backbone destroyed. The shape test does not care either way.
+    const run = pass({
+      resourceType: "Questionnaire",
+      status: "active",
+      item: [{ prefix: "A." }],
+    });
+    expect(run.after).toBe(run.before);
+    expect(run.manifest).toEqual([]);
+  });
+
+  it.each(MARKER_SHAPES)(
+    "`$marker` at the other shape is not evidence, at a name R4 types as neither datatype",
+    ({ marker, otherShape }) => {
+      const run = atUntypedName(marker, otherShape);
+      expect(run.after).toBe(run.before);
+      expect(run.manifest).toEqual([]);
+    },
+  );
+
+  it.each(MARKER_SHAPES)(
+    "NON-VACUITY: `$marker` at the shape R4 gives it IS acted on at that same position",
+    ({ marker, r4Shape }) => {
+      // The other half of every row above. Without this the table would pass on a classifier that
+      // stopped classifying anything, which is the mirror defect and the one that leaks.
+      const run = atUntypedName(marker, r4Shape);
+      expect(run.manifest.map((m) => m.locus)).toEqual(["Location.vendorValue"]);
+    },
+  );
+
+  it("STATED COST: the same workflow backbone with a repeating `prefix` IS destroyed", () => {
+    // The direction this rule fails in, asserted rather than left to be discovered. A `RequestGroup`
+    // that emits its step prefix as an array is not conformant R4, and at that point the pass cannot
+    // tell it from a person's name carrying only a prefix. It fails closed, which is the survivable
+    // direction, and the cost lands on non-conformant input rather than on a released name.
+    const run = pass({
+      resourceType: "RequestGroup",
+      status: "active",
+      intent: "proposal",
+      action: [{ prefix: ["ZZORGCONTACTPRE"] }],
+    });
+    expect(run.after).not.toContain("ZZORGCONTACTPRE");
+    expect(run.manifest.map((m) => m.locus)).toEqual(["RequestGroup.action"]);
+  });
+});
+
 describe("the sweep is keyed on the datatype, never on the category name", () => {
   it("a GEOGRAPHIC category still reaches only elements the classifier typed as an Address", () => {
     const run = pass({

@@ -17,12 +17,16 @@
  *   `identifier` (MRN pseudonymized by system, SSN removed), PHI-bearing **dates**, the narrative
  *   `text.div`, **extensions** (the fail-closed frontier, an unknown extension can carry any PHI), and
  *   a `Reference.display` (a human label that is usually a person's name).
- * - **Every resource, by DATATYPE**: a `HumanName` and an `Address` are acted on wherever the graph
- *   puts them, so `Organization.contact.name` and `Location.address` get the treatment
- *   `Patient.name` and `Patient.address` get. Which resource carries a person's name is a producer's
- *   shaping choice, and coverage that depends on it is coverage a consumer cannot rely on. The
- *   classification is closed and marker-bound (`./datatype.js`), which is what keeps the widened
- *   sweep off an organisation's own `name` string and off a clinical code.
+ * - **Every resource OUTSIDE a person resource, by DATATYPE**: a `HumanName` and an `Address` are
+ *   acted on wherever the graph puts them there, so `Organization.contact.name` and
+ *   `Location.address` get the treatment `Patient.name` and `Patient.address` get. Which resource
+ *   carries a person's name is a producer's shaping choice, and coverage that depends on it is
+ *   coverage a consumer cannot rely on. The classification is closed, marker-bound and read at the
+ *   value shape R4 gives each marker (`./datatype.js`), which is what keeps the widened sweep off an
+ *   organisation's own `name` string, off a clinical code and off a workflow backbone that merely
+ *   shares a marker's name. **Inside** a person resource the demographic map above decides instead,
+ *   and the surfaces neither reaches are stated residuals, enumerated in `docs-content/limitations.md`
+ *   rather than implied by this sentence.
  * - **Clinical resources**, `Observation` / `Condition` / …, are otherwise **retained untouched** (the
  *   over-scrub guard): their codes, values, units, and statuses are not identifiers and must survive.
  *

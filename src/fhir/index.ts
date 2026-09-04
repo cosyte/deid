@@ -59,11 +59,14 @@
  * a payer's own switchboard number in scope, which the sibling adapters keep); an **organisation's own
  * `name`**, a plain string and not a `HumanName`; and the **individual's employer carried as a separate
  * `Organization` resource**, which would need a cross-resource role derivation R4 types nowhere (the
- * `Reference.display` naming it is blocked either way). The fourth is the stated cost of the closed
- * classification: a name or an address carrying a property R4 does not define, at an element name R4
- * does not type as one of the two datatypes, because there that same evidence is routinely a conformant
- * structural element (`Questionnaire.item` carries `prefix`) and blocking it would destroy content no
- * re-run restores. The fifth is the scope of the sweep itself: **inside** a person resource it does not
+ * `Reference.display` naming it is blocked either way). The fourth is the stated cost of the closed,
+ * shape-read classification: a name or an address carrying a property R4 does not define, **or**
+ * carrying its only marker at a value shape R4 does not give that marker, at an element name R4 does
+ * not type as one of the two datatypes, because there that same evidence is routinely a conformant
+ * structural element (`{ prefix: "1." }` is a `RequestGroup.action`) and blocking it would destroy
+ * content no re-run restores. At a **typed** element name neither half is a residual, because the
+ * fail-closed rule above blocks whatever the classifier declined. The fifth is the scope of the sweep
+ * itself: **inside** a person resource it does not
  * run, because the demographic map has already decided `name` / `telecom` / `photo` / `address` there,
  * so a `HumanName` or an `Address` at a person-resource property that map does not list is passed
  * through and counted as unexamined - the same bytes an `Organization` would have had removed.
@@ -113,9 +116,11 @@ export interface FhirDeidResult {
 /**
  * De-identify a parsed FHIR resource (or `Bundle`) under a policy (Safe Harbor by default). PHI is
  * located structurally from the `@cosyte/fhir` model: the person-resource demographics, every
- * `HumanName` and `Address` by its datatype wherever the graph carries it, and the universal
- * identifier / date / narrative / extension / reference vectors; the input resource is never
- * mutated (the immutable model is rebuilt into a fresh tree).
+ * `HumanName` and `Address` by its datatype wherever the graph carries it **outside** a person
+ * resource, and the universal identifier / date / narrative / extension / reference vectors; the
+ * input resource is never mutated (the immutable model is rebuilt into a fresh tree). The surfaces
+ * this does not reach are stated rather than implied: see this module's own **Known limitations**
+ * above, and `docs-content/limitations.md` for the shipped enumeration.
  *
  * The output is **"Safe-Harbor-transformed per the configured policy"**: it is not certified
  * de-identified, and Expert Determination is not rendered.

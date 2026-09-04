@@ -16,10 +16,11 @@
  *
  * {@link classifyFhirPersonalDatatype} answers the first, and it is deliberately hard to satisfy. A
  * complex is a `HumanName` only when **every** property it carries is one R4 defines on `HumanName`,
- * **and** at least one of them is a marker property nothing else carries
- * (`family` / `given` / `prefix` / `suffix`), **and** that marker holds the value shape R4 gives it: a
- * string, or a list of strings. An `Address` the same way (`line` / `city` / `district` / `state` /
- * `postalCode` / `country`). All three halves are load-bearing:
+ * **and** at least one of them is a marker property (`family` / `given` / `prefix` / `suffix`),
+ * **and** that marker holds **the exact value shape R4 gives it on that datatype**: `family` a single
+ * string, `given` / `prefix` / `suffix` a repeating one. An `Address` the same way, with `line`
+ * repeating and `city` / `district` / `state` / `postalCode` / `country` single. All three halves are
+ * load-bearing:
  *
  * - Without the **closed** half, a node carrying an `Address` marker plus an unrelated sibling would be
  *   generalized away as an address.
@@ -27,14 +28,20 @@
  *   with only its text: an `Observation` code, a dose unit and an order status all take that shape.
  *   Scrubbing one is the mirror defect of leaking a name, and it destroys clinical meaning that no
  *   re-run restores.
- * - Without the **value-shape** half, a marker **name** alone decides, and R4 gives several resources a
- *   `country` element of their own (`MedicinalProductAuthorization.country`,
- *   `MedicinalProductAuthorization.jurisdictionalAuthorization.country`,
- *   `MedicinalProduct.name.countryLanguage.country`, `MarketingStatus.country`). Every one of those is
- *   a `CodeableConcept`, and every child of those backbones is optional, so a conformant instance
- *   carrying nothing but `country` is closed for `Address` and marked - and would be destroyed whole.
- *   `Address.country` is a **string**, so requiring the shape tells the two apart at the position
- *   rather than by luck.
+ * - Without the **value-shape** half, a marker **name** alone decides. R4 hands two of the ten marker
+ *   names to elements outside these datatypes, and both collisions sit on backbones whose every child
+ *   is `0..1` or `0..*`, so a conformant instance can arrive carrying nothing but the marker: closed
+ *   for the datatype, marked for it, and not remotely personal data. Reading the marker's shape at the
+ *   position is what tells them apart; see {@link HUMAN_NAME_MARKERS} for the enumeration and for what
+ *   this test does **not** claim.
+ *
+ * **The shape test is read per marker, not per datatype, and that is the whole of the discrimination.**
+ * A closed complex carrying a marker at the wrong shape is not a positive classification anywhere, and
+ * nothing about the *other* element's instance is assumed: not that it carries a required sibling, not
+ * that a producer filled its optional children in. An earlier form of this rule leant on a required
+ * sibling (`Questionnaire.item` carries `linkId`) and was wrong twice over: that is an assumption about
+ * a document rather than a property of the code, and this pass does no conformance validation, so a
+ * `Questionnaire.item` arriving without its `linkId` would have been destroyed.
  *
  * {@link carriesFhirPersonalEvidence} answers the second, and it is deliberately easy to satisfy,
  * because it is only ever asked **at an element name R4 types as a `HumanName` or an `Address`**. At
@@ -59,11 +66,14 @@
  * and `{ text }` is far more often a `CodeableConcept` carrying its text; blocking those would destroy
  * clinical and structural content.
  *
- * The residual is stated rather than hidden: a `HumanName` or an `Address` carrying a property R4 does
- * not define, at a position R4 does **not** type as one of these two datatypes, is neither classified
- * nor blocked. It is left exactly as it arrived, because at such a position the same evidence is
- * indistinguishable from a conformant backbone that merely shares a property name, and that is the
- * direction that cannot destroy a clinical value.
+ * The residual is stated rather than hidden, and it has two halves, both of them at a position R4 does
+ * **not** type as one of these two datatypes. A `HumanName` or an `Address` carrying a property R4 does
+ * not define is neither classified nor blocked there; so is one whose only marker holds a shape R4 does
+ * not give that marker (a single `line`, a repeating `family`). Both are left exactly as they arrived,
+ * because at such a position that same evidence is indistinguishable from a conformant backbone that
+ * merely shares a property name, and that is the direction that cannot destroy a clinical value. **At**
+ * a typed element name neither residual applies: the standard promised a name or an address there, so
+ * {@link carriesFhirPersonalEvidence} blocks whatever the classifier declined.
  *
  * @packageDocumentation
  */
@@ -92,21 +102,58 @@ export const HUMAN_NAME_PROPERTIES: ReadonlySet<string> = new Set<string>([
 ]);
 
 /**
- * The `HumanName` properties **no other R4 datatype carries**: one of these present, holding the
- * string or list-of-strings value R4 gives it, is what turns "nothing here contradicts a name" into
- * "this is a name". Deliberately excludes `text`, `use` and `period`, each of which several datatypes
- * share. R4 gives one **resource** element the name `prefix` (`Questionnaire.item.prefix`), which is
- * why a marker is never read on its own: it is read closed, and a `Questionnaire.item` carries
- * `linkId`.
+ * The value shape FHIR R4 gives a marker property **on the personal datatype that defines it**, and the
+ * only shape at which that marker is evidence of the datatype:
+ *
+ * - `single`: R4 types it `0..1`, so conformant FHIR JSON carries a bare value there, never an array.
+ * - `repeating`: R4 types it `0..*`, so conformant FHIR JSON carries an array there, even for one item.
  *
  * @internal
  */
-export const HUMAN_NAME_MARKER_PROPERTIES: ReadonlySet<string> = new Set<string>([
-  "family",
-  "given",
-  "prefix",
-  "suffix",
+export type MarkerValueShape = "single" | "repeating";
+
+/**
+ * The `HumanName` marker properties, each with the value shape R4 gives it: `family` is `0..1 string`,
+ * while `given`, `prefix` and `suffix` are `0..* string`. One of these present **at its own shape** is
+ * what turns "nothing here contradicts a name" into "this is a name". Deliberately excludes `text`,
+ * `use` and `period`, each of which several datatypes share.
+ *
+ * **What the shape buys, and the one R4 collision it resolves.** R4 also gives the name `prefix` to
+ * three elements outside `HumanName`: `Questionnaire.item.prefix`, `PlanDefinition.action.prefix` and
+ * `RequestGroup.action.prefix`. Every one of them is `0..1 string`, and the last two sit on backbones
+ * with **no** required child, so `{ "prefix": "1." }` alone is a conformant instance of either: closed
+ * for `HumanName`, marked for it, and a numbered workflow step rather than a person. `HumanName.prefix`
+ * is `0..*`, so its conformant JSON is `["Dr."]` and theirs is `"1."`, and the shape separates them at
+ * the position. `family`, `given` and `suffix` are R4 names no element outside `HumanName` carries.
+ *
+ * **What this does not claim.** It is a discriminator, not a proof that the marker names are disjoint
+ * from the rest of R4. An element sharing a marker name **at the same shape** would still classify, and
+ * this pass does no conformance validation, so nothing here may be read as "the instance must also
+ * carry X". The enumeration above is what was checked; where it is short, the sweep acts and the cost
+ * is the over-removal this module exists to bound, which is why the check is written down rather than
+ * assumed. See {@link ADDRESS_MARKERS} for the mirror case on the address side.
+ *
+ * @internal
+ */
+export const HUMAN_NAME_MARKERS: ReadonlyMap<string, MarkerValueShape> = new Map<
+  string,
+  MarkerValueShape
+>([
+  ["family", "single"],
+  ["given", "repeating"],
+  ["prefix", "repeating"],
+  ["suffix", "repeating"],
 ]);
+
+/**
+ * The `HumanName` marker property **names**, without their shapes: the closed-property half of the test
+ * reads names only.
+ *
+ * @internal
+ */
+export const HUMAN_NAME_MARKER_PROPERTIES: ReadonlySet<string> = new Set<string>(
+  HUMAN_NAME_MARKERS.keys(),
+);
 
 /**
  * Every property FHIR R4 defines on `Address`, plus the element-level three. Same contract as
@@ -131,26 +178,43 @@ export const ADDRESS_PROPERTIES: ReadonlySet<string> = new Set<string>([
 ]);
 
 /**
- * The `Address` properties no other R4 **datatype** carries. Disjoint from
- * {@link HUMAN_NAME_MARKER_PROPERTIES}, so a complex can never classify as both.
+ * The `Address` marker properties, each with the value shape R4 gives it: `line` is `0..* string`,
+ * every other one is `0..1 string`. Disjoint by name from {@link HUMAN_NAME_MARKERS}, so a complex can
+ * never classify as both.
  *
- * `country` is the one that collides with resource elements rather than with datatypes:
- * `MedicinalProductAuthorization.country`, its `jurisdictionalAuthorization.country`,
- * `MedicinalProduct.name.countryLanguage.country` and `MarketingStatus.country` all exist, and every
- * child of those backbones is optional, so a conformant instance can carry `country` and nothing else.
- * Every one of them is a `CodeableConcept` while `Address.country` is a `string`, which is why the
- * classifier reads a marker's **value shape** and not only its name.
+ * **The one R4 collision the shape resolves.** `country` is the address marker R4 also gives to
+ * elements outside the datatype: `MedicinalProductAuthorization.country`, its
+ * `jurisdictionalAuthorization.country`, `MedicinalProduct.name.countryLanguage.country` and
+ * `MarketingStatus.country`. Every child of those backbones is optional, so a conformant instance can
+ * carry `country` and nothing else; every one of those elements is a `CodeableConcept` while
+ * `Address.country` is a `string`, so the shape separates them. `line`, `city`, `district`, `state` and
+ * `postalCode` are R4 names no element outside `Address` carries.
+ *
+ * The same limit stated on {@link HUMAN_NAME_MARKERS} applies here without change.
  *
  * @internal
  */
-export const ADDRESS_MARKER_PROPERTIES: ReadonlySet<string> = new Set<string>([
-  "line",
-  "city",
-  "district",
-  "state",
-  "postalCode",
-  "country",
+export const ADDRESS_MARKERS: ReadonlyMap<string, MarkerValueShape> = new Map<
+  string,
+  MarkerValueShape
+>([
+  ["line", "repeating"],
+  ["city", "single"],
+  ["district", "single"],
+  ["state", "single"],
+  ["postalCode", "single"],
+  ["country", "single"],
 ]);
+
+/**
+ * The `Address` marker property **names**, without their shapes. Same contract as
+ * {@link HUMAN_NAME_MARKER_PROPERTIES}.
+ *
+ * @internal
+ */
+export const ADDRESS_MARKER_PROPERTIES: ReadonlySet<string> = new Set<string>(
+  ADDRESS_MARKERS.keys(),
+);
 
 /**
  * The properties every element can carry, whatever its type. Present on each set below because a node
@@ -239,13 +303,18 @@ export const NON_PERSONAL_TYPED_BACKBONES: readonly NonPersonalTypedBackbone[] =
 export type FhirPersonalDatatype = "human-name" | "address";
 
 /**
- * `true` when a value carries the shape R4 gives **every** marker property of both datatypes: a
- * string, or a repeating string (`HumanName.given` / `.prefix` / `.suffix`, `Address.line`). A complex
- * at a marker name is R4 telling you this is not that datatype: `Address.country` is a `string`, while
- * every other R4 element named `country` is a `CodeableConcept`.
+ * `true` when a value carries the shape R4 gives **this** marker property on its own datatype.
+ *
+ * A `single` marker is `0..1` in R4, so its conformant JSON is a bare value and an array there is not
+ * the datatype's element. A `repeating` marker is `0..*`, so its conformant JSON is an array even for
+ * one item and a bare value there is not the datatype's element either. Reading the shape per marker,
+ * rather than accepting either shape for all of them, is what separates a marker from an R4 element
+ * that merely shares its name: `Address.country` is a string where every colliding `country` is a
+ * `CodeableConcept`, and `HumanName.prefix` is repeating where every colliding `prefix` is a single
+ * string.
  */
-function isMarkerShaped(node: FhirNode): boolean {
-  if (isPrimitive(node)) return true;
+function isMarkerShaped(node: FhirNode, shape: MarkerValueShape): boolean {
+  if (shape === "single") return isPrimitive(node);
   return isList(node) && node.items.every((item) => isPrimitive(item));
 }
 
@@ -254,21 +323,27 @@ function isClosedFor(node: FhirComplex, allowed: ReadonlySet<string>): boolean {
   return node.properties.every((prop) => allowed.has(prop.name));
 }
 
-/** `true` when a marker property is present **by name**, whatever value shape it holds. */
-function carriesMarkerName(node: FhirComplex, markers: ReadonlySet<string>): boolean {
-  return node.properties.some((prop) => markers.has(prop.name));
+/** `true` when a property of that name is present, whatever value it holds. */
+function carriesProperty(node: FhirComplex, name: string): boolean {
+  return node.properties.some((prop) => prop.name === name);
 }
 
-/** `true` when a marker property is present **and** holds the value shape R4 gives it. */
-function carriesShapedMarker(node: FhirComplex, markers: ReadonlySet<string>): boolean {
-  return node.properties.some((prop) => markers.has(prop.name) && isMarkerShaped(prop.value));
+/** `true` when a marker property is present **and** holds the value shape R4 gives that marker. */
+function carriesShapedMarker(
+  node: FhirComplex,
+  markers: ReadonlyMap<string, MarkerValueShape>,
+): boolean {
+  return node.properties.some((prop) => {
+    const shape = markers.get(prop.name);
+    return shape !== undefined && isMarkerShaped(prop.value, shape);
+  });
 }
 
 /**
  * Classify a node as a FHIR R4 `HumanName` or `Address` from its own structure, or `undefined` when
- * it is neither. Structural, closed, and marker-bound by value shape as well as by name: see this
- * module's own documentation for why all three halves of the test are required and what the test
- * deliberately does not reach.
+ * it is neither. Structural, closed, and marker-bound by the value shape R4 gives **that** marker as
+ * well as by its name: see this module's own documentation for why all three halves of the test are
+ * required and what the test deliberately does not reach.
  *
  * A node this returns `undefined` for is **not** thereby safe. It is only "not positively one of the
  * two", which is a different statement; at a position R4 types as one of these datatypes the caller
@@ -294,22 +369,21 @@ function carriesShapedMarker(node: FhirComplex, markers: ReadonlySet<string>): b
  * const coded = complex([{ name: "country", value: complex([{ name: "text", value: primitive("US") }]) }]);
  * classifyFhirPersonalDatatype(coded); // => undefined
  *
+ * // R4 types HumanName.prefix as repeating, so a name's prefix arrives as a list ...
+ * classifyFhirPersonalDatatype(complex([{ name: "prefix", value: list([primitive("Dr.")]) }])); // => "human-name"
+ * // ... while a single string at `prefix` is a numbered workflow step, not a person.
+ * classifyFhirPersonalDatatype(complex([{ name: "prefix", value: primitive("1.") }])); // => undefined
+ *
  * // An organisation's own name is a plain string, so no datatype rule reaches it.
  * classifyFhirPersonalDatatype(primitive("Springfield Clinic")); // => undefined
  * ```
  */
 export function classifyFhirPersonalDatatype(node: FhirNode): FhirPersonalDatatype | undefined {
   if (!isComplex(node)) return undefined;
-  if (
-    isClosedFor(node, HUMAN_NAME_PROPERTIES) &&
-    carriesShapedMarker(node, HUMAN_NAME_MARKER_PROPERTIES)
-  ) {
+  if (isClosedFor(node, HUMAN_NAME_PROPERTIES) && carriesShapedMarker(node, HUMAN_NAME_MARKERS)) {
     return "human-name";
   }
-  if (
-    isClosedFor(node, ADDRESS_PROPERTIES) &&
-    carriesShapedMarker(node, ADDRESS_MARKER_PROPERTIES)
-  ) {
+  if (isClosedFor(node, ADDRESS_PROPERTIES) && carriesShapedMarker(node, ADDRESS_MARKERS)) {
     return "address";
   }
   return undefined;
@@ -326,7 +400,7 @@ function isNonPersonalTypedBackbone(node: FhirComplex, elementName: string): boo
   return NON_PERSONAL_TYPED_BACKBONES.some(
     (backbone) =>
       backbone.element === elementName &&
-      carriesMarkerName(node, new Set<string>([backbone.required])) &&
+      carriesProperty(node, backbone.required) &&
       isClosedFor(node, backbone.properties),
   );
 }

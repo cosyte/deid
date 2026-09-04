@@ -195,6 +195,12 @@ NAME ZZVENDORMAIDEN
 # the earlier map treated as facility data, and asserted ABSENT after the pass.
 NAME ZZORGCONTACTFAM
 NAME ZZORGCONTACTGIV
+# The other two `HumanName` marker parts, seeded by the suite that walks every marker of both
+# datatypes at the value shape R4 gives it and at the other shape. R4 types `prefix` and `suffix` as
+# repeating, so each is asserted ABSENT when it arrives as a list and PRESENT when it arrives as a
+# bare string at an element name R4 types as neither datatype.
+NAME ZZORGCONTACTPRE
+NAME ZZORGCONTACTSUF
 NAME ZZORGCONTACTSTREET
 NAME ZZORGCONTACTCITY
 NAME ZZORGSTREET

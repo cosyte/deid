@@ -306,14 +306,22 @@ each resource's role re-derived at its own `resourceType`.
 producing system made: the same home address arrives at `Patient.address` from one sender and at
 `Location.address` from a home-health sender. A rule keyed on the enclosing resource therefore hands you
 coverage that depends on that choice. Positive classification is **closed**: an element is a `HumanName`
-only when every property it carries is one R4 defines on `HumanName`, **and** at least one of them
-(`family` / `given` / `prefix` / `suffix`) belongs to nothing else, **and** that one holds the value
-shape R4 gives it (a string, or a list of strings). An `Address` the same way
-(`line` / `city` / `district` / `state` / `postalCode` / `country`). All three halves earn their place:
-they keep the wider sweep off an **organisation's own `name`** (a plain string, never a `HumanName`),
-off a `CodeableConcept` carrying only its `text`, off a conformant `Questionnaire.item` (whose `prefix`
-is a `HumanName` marker name), off the several R4 elements called `country` that are coded concepts
-rather than the string `Address.country` is, and off every clinical code, value, unit and status.
+only when every property it carries is one R4 defines on `HumanName`, **and** at least one of them is a
+marker property (`family` / `given` / `prefix` / `suffix`), **and** that marker holds **the exact value
+shape R4 gives it** - `family` a single string, the other three repeating. An `Address` the same way,
+with `line` repeating and `city` / `district` / `state` / `postalCode` / `country` single. All three
+halves earn their place: they keep the wider sweep off an **organisation's own `name`** (a plain
+string, never a `HumanName`), off a `CodeableConcept` carrying only its `text`, and off every clinical
+code, value, unit and status.
+
+Reading the shape **per marker** is what separates a marker from an R4 element that merely shares its
+name, and R4 supplies two such collisions. The several elements called `country` are coded concepts
+where `Address.country` is a string. And `Questionnaire.item`, `PlanDefinition.action` and
+`RequestGroup.action` each carry a `prefix` that is a single string, where a name's `prefix` repeats;
+the latter two backbones make **every** child optional, so `{ "prefix": "1." }` alone is a conformant
+numbered workflow step, and the shape is the only thing that tells it from a person. The rule leans on
+no sibling those other elements happen to require: that would be an assumption about the document, and
+this pass validates no conformance.
 
 **Fail closed** governs the person sweep and the frontier: a bare unrecognized string at a person
 resource's top level is blocked (an allow-list can never satisfy Safe Harbor category (R)); a `display`
@@ -362,13 +370,16 @@ Five residual surfaces, the first three because FHIR types no person at the posi
 - **The individual's employer carried as a separate `Organization` resource.** Unlike X12 and HL7 v2,
   FHIR types no employer role at the position, so reaching it would be a cross-resource role
   derivation rather than a typed read. The `Reference.display` that names it is blocked either way.
-- **A name or an address carrying a property R4 does not define, at an element name R4 does not type
-  as one of the two datatypes.** Positive classification is closed, so an unrecognized sibling stops
-  it, and the fail-closed block above is scoped to the typed element names. At any other name the same
-  evidence is routinely something else - `{ prefix, linkId, text, type }` is a conformant
-  `Questionnaire.item`, not a person - and blocking it would destroy conformant clinical and
+- **A name or an address carrying a property R4 does not define, or carrying its only marker at a
+  value shape R4 does not give that marker, at an element name R4 does not type as one of the two
+  datatypes.** Positive classification is closed and shape-read, so an unrecognized sibling or the
+  wrong shape stops it, and the fail-closed block above is scoped to the typed element names. At any
+  other name the same evidence is routinely something else - `{ "prefix": "1." }` is a conformant
+  `RequestGroup.action`, not a person - and blocking it would destroy conformant clinical and
   structural content that no re-run restores. Such a value is passed through and counted as an
-  unexamined residual position, like anything else no rule names.
+  unexamined residual position, like anything else no rule names. At a **typed** element name neither
+  half is a residual: the standard promised a name or an address there, so whatever the classifier
+  declines is blocked whole.
 - **A name or an address INSIDE a person resource, at a property the demographic map does not list.**
   The datatype sweep runs outside a person resource only, because inside one the map above has already
   decided `name`, `telecom`, `photo` and `address`. A vendor `Patient.alias` carrying
