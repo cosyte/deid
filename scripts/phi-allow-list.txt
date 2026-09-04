@@ -189,6 +189,35 @@ NAME ZZCONTENTPHI
 NAME ZZPATNARRATIVE
 NAME ZZVENDORMAIDEN
 
+# --- Synthetic FHIR R4 NON-PERSON-resource tokens (test/fixtures/fhir/non-person-loci.json and the
+# suites that work the same shapes inline). A person's name and a postal address are acted on by the
+# element's own R4 datatype now, so they are seeded on an Organization and a Location, the two places
+# the earlier map treated as facility data, and asserted ABSENT after the pass.
+NAME ZZORGCONTACTFAM
+NAME ZZORGCONTACTGIV
+NAME ZZORGCONTACTSTREET
+NAME ZZORGCONTACTCITY
+NAME ZZORGSTREET
+NAME ZZORGCITY
+NAME ZZLOCSTREET
+NAME ZZLOCCITY
+NAME ZZLOCCOUNTY
+# The OVER-SCRUB controls of the same fixtures, seeded to be asserted PRESENT afterwards: an
+# organisation's own name and alias are plain strings and not a HumanName, a location's name likewise,
+# and a Coding.display is a coded term the pass positively types as one.
+NAME ZZORGOWNNAME
+NAME ZZORGALIAS
+NAME ZZORGTYPEDISPLAY
+NAME ZZLOCNAME
+# The ePrescribing SCRIPT sample of test/ncpdp/script-refusal.test.ts. The document is REFUSED rather
+# than de-identified, so these are seeded to prove the refusal's diagnostic carries none of them.
+NAME ZZSCRIPTFAM
+NAME ZZSCRIPTGIV
+NAME ZZPHARMACY
+NAME ZZPRESCRIBER
+ID ZZMSGID
+ID 900000042
+
 # --- Synthetic X12 005010 person/member tokens (test/fixtures/x12) ---
 # Subscriber + patient NM1 person names, member ids, and REF-qualified identifiers, all
 # obviously-synthetic ZZ-tagged tokens (or the never-issued 9xx SSN block). Checked structurally by the

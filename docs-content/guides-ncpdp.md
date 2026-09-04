@@ -61,7 +61,7 @@ standard, so the map keys off the field id directly.
 The X12 adapter **retains** provider identity, while this adapter **removes** the prescriber id: a
 deliberate asymmetry.
 
-## NCPDP SCRIPT is deferred
+## NCPDP SCRIPT is refused
 
 NCPDP **SCRIPT** (ePrescribing XML) de-identification is **not** shipped in this release. The
 `@cosyte/ncpdp` SCRIPT surface cannot be de-identified faithfully through its public API:
@@ -70,6 +70,28 @@ XML element), and the SCRIPT `Patient` model has **no address, phone, or patient
 pass would silently drop content and leave unmodeled patient identifiers unhandled: a false-safety
 hazard the fail-closed posture forbids. SCRIPT support waits for a parser surface that preserves the full
 document.
+
+**That is a behaviour, not a note.** Hand a SCRIPT document to either entry point and it is **refused**,
+before anything is parsed:
+
+```ts
+import { deidentifyTelecomString } from "@cosyte/deid/ncpdp";
+import { DeidError, FATAL_CODES } from "@cosyte/deid";
+
+try {
+  // An XML document on an NCPDP surface is SCRIPT, and it is declined outright.
+  deidentifyTelecomString('<?xml version="1.0"?><Message><Body><NewRx/></Body></Message>');
+} catch (err) {
+  if (err instanceof DeidError && err.code === FATAL_CODES.DEID_FORMAT_UNSUPPORTED) {
+    // err.message names SCRIPT and the parser-surface reason, and carries no document content.
+  }
+}
+```
+
+The error is a typed `DeidError` carrying `DEID_FORMAT_UNSUPPORTED`, and its message names the format
+and states the parser-surface reason. It carries no byte of the document, and the call returns **no**
+transformed document, **no** manifest and no partial output of any kind. A **Telecom** caller sees no
+change: a parsed Telecom transaction is never a candidate for the refusal.
 
 ## Known limitation
 

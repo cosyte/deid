@@ -320,6 +320,55 @@ function fhirCase(): CorpusCase {
   };
 }
 
+/**
+ * The FHIR **non-person** case: a name and an address on resources whose type is not a person type,
+ * which no other fixture in this corpus carries. Without it the headline gate is structurally blind to
+ * a whole class, because the leak sweep can only report on sentinels a fixture actually seeds: an
+ * adapter that hands `Organization.contact.name` or `Location.address` straight through produces
+ * exactly the same green as one that acts on them.
+ *
+ * The mirror direction is in `survivors` and it is the load-bearing half here, because the fix for
+ * this class is a WIDER sweep and the failure mode of a wider sweep is over-removal. The
+ * organisation's own name, its switchboard number, the location's name, the coded display and the
+ * clinical code, unit, status and reference wiring are all asserted PRESENT afterwards, so the case
+ * cannot be passed by a blanket scrub either.
+ */
+function fhirNonPersonCase(): CorpusCase {
+  const ctx = createDeidContext({ key: "fhir-non-person-corpus", patientId: "p-fhir-np" });
+  const raw = FIX("fhir", "non-person-loci.json");
+  const { resource } = parseResource(raw);
+  const { document, manifest, unexaminedResiduals } = deidentifyFhir(resource, { context: ctx });
+  return {
+    name: "fhir-non-person",
+    deidWire: serializeResource(document),
+    manifest,
+    unexaminedResiduals,
+    originalWire: raw,
+    sentinels: [
+      "ZZORGCONTACTFAM",
+      "ZZORGCONTACTGIV",
+      "ZZORGCONTACTSTREET",
+      "ZZORGCONTACTCITY",
+      "ZZORGSTREET",
+      "ZZORGCITY",
+      "ZZLOCSTREET",
+      "ZZLOCCITY",
+      "ZZLOCCOUNTY",
+    ],
+    survivors: [
+      "ZZORGOWNNAME",
+      "ZZORGTYPEDISPLAY",
+      "ZZLOCNAME",
+      "555-000-8881",
+      "555-000-8882",
+      "2951-2",
+      "mmol/L",
+      "final",
+      "Organization/org1",
+    ],
+  };
+}
+
 // ── X12 EDI ───────────────────────────────────────────────────────────────────────────────────────
 function x12Case(): CorpusCase {
   const ctx = createDeidContext({ key: "x12-corpus", patientId: "p-x12" });
@@ -407,6 +456,7 @@ const CASES: readonly CorpusCase[] = [
   hl7EncounterCase(),
   ccdaCase(),
   fhirCase(),
+  fhirNonPersonCase(),
   x12Case(),
   ncpdpCase(),
   dicomCase(),

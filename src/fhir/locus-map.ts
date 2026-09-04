@@ -17,6 +17,12 @@
  *   `identifier` (MRN pseudonymized by system, SSN removed), PHI-bearing **dates**, the narrative
  *   `text.div`, **extensions** (the fail-closed frontier, an unknown extension can carry any PHI), and
  *   a `Reference.display` (a human label that is usually a person's name).
+ * - **Every resource, by DATATYPE**: a `HumanName` and an `Address` are acted on wherever the graph
+ *   puts them, so `Organization.contact.name` and `Location.address` get the treatment
+ *   `Patient.name` and `Patient.address` get. Which resource carries a person's name is a producer's
+ *   shaping choice, and coverage that depends on it is coverage a consumer cannot rely on. The
+ *   classification is closed and marker-bound (`./datatype.js`), which is what keeps the widened
+ *   sweep off an organisation's own `name` string and off a clinical code.
  * - **Clinical resources**, `Observation` / `Condition` / …, are otherwise **retained untouched** (the
  *   over-scrub guard): their codes, values, units, and statuses are not identifiers and must survive.
  *
@@ -32,10 +38,11 @@ const C = SAFE_HARBOR_CATEGORIES;
 
 /**
  * The **identifying (person) resource types** whose demographic elements carry direct Safe Harbor PHI.
- * Scoped to those four; a demographic `name` / `address` in any other
- * resource (`Location.address`, `Organization.name`) is facility/administrative data, not the
- * individual's PHI, and is left to the clinical-retain path: the FHIR analogue of C-CDA sweeping only
- * the header participations, never the clinical body.
+ * Scoped to those four, and that scope now governs the `telecom` / `photo` sweep and the
+ * bare-unrecognized-string frontier **only**: a `HumanName` or an `Address` is acted on by its own
+ * datatype wherever it sits, including on a `Location` or an `Organization` (see `./datatype.js`).
+ * What stays outside every rule here is an organisation's own `name`, which is a plain string R4
+ * types at no personal datatype at all.
  *
  * @example
  * ```ts
@@ -62,10 +69,11 @@ export const PERSON_RESOURCE_TYPES: ReadonlySet<string> = new Set<string>([
 export type FhirDemographicMode = "redact" | "address";
 
 /**
- * The person-resource demographic element map: element name → how the applier handles it. Applied only
- * within a {@link PERSON_RESOURCE_TYPES} resource subtree (so a body `Coding.display` or a
- * `Location.address` is never swept). A mapped element is handled as a **unit**: the extractor does not
- * descend into it, so a redacted `name` never has an inner primitive ride through.
+ * The person-resource demographic element map: element name → how the applier handles it. Applied
+ * within a {@link PERSON_RESOURCE_TYPES} resource subtree; outside one, the datatype-keyed sweep
+ * reaches a `HumanName` and an `Address` on its own terms while a body `Coding.display` is still
+ * never swept. A mapped element is handled as a **unit**: the extractor does not descend into it, so
+ * a redacted `name` never has an inner primitive ride through.
  *
  * @example
  * ```ts
@@ -82,6 +90,30 @@ export const FHIR_DEMOGRAPHIC_ELEMENTS: Readonly<Record<string, FhirDemographicM
     photo: "redact",
     address: "address",
   });
+
+/**
+ * The element names FHIR R4 **types** as a `HumanName` or an `Address` wherever they appear outside a
+ * person resource: `Organization.contact.name`, `InsurancePlan.contact.name`, `Location.address`,
+ * `Organization.address`.
+ *
+ * This is not how the sweep FINDS a name or an address, which is the point of keying on the datatype:
+ * `Claim.accident.locationAddress` is an `Address` under a name this set does not carry, and it is
+ * swept all the same. The set does one narrower job: at one of these positions a personal-datatype
+ * shape the classifier cannot pin down (a `{ text }` representation, a `{ use, text }` pair) is
+ * **blocked** rather than descended into, because R4 promised a name or an address there and the pass
+ * could not locate one. At any other position the same shape is far more likely a `CodeableConcept`
+ * carrying only its text, so it is left exactly as it arrived.
+ *
+ * A plain string at one of these names is untouched either way, and deliberately: `Organization.name`
+ * and `Endpoint.address` are both R4 string elements, and neither is a person's name or a postal
+ * address.
+ *
+ * @internal
+ */
+export const TYPED_PERSONAL_ELEMENT_NAMES: ReadonlySet<string> = new Set<string>([
+  "name",
+  "address",
+]);
 
 /**
  * The `Address` properties at or above state level, which Safe Harbor permits and the address edit

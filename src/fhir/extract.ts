@@ -9,11 +9,18 @@
  * (`name` / `telecom` / `address` / `photo` / dates) of the **person resources**
  * (`Patient` / `RelatedPerson` / `Practitioner` / `Person`, plus the nested `Patient.contact`
  * relative), and the **universal** vectors that leak from any resource: `identifier`, PHI-bearing dates,
- * the narrative `text.div`, extension values, and a `Reference.display`. The **fail-closed** rule
- * governs the person sweep: a value-bearing top-level person-resource property that is neither mapped
- * PHI nor on the recognized allow-list is blocked. Everything else: the codes, values, units, and
- * statuses of the clinical resources: is left untouched (the over-scrub guard). Contained resources and
- * Bundle entries are walked by re-deriving the resource role at every `resourceType` boundary.
+ * the narrative `text.div`, extension values, and a `Reference.display`. Outside a person resource a
+ * **datatype-keyed sweep** adds the two datatypes whose position in the graph is the producer's choice
+ * rather than the standard's: a `HumanName` is removed and an `Address` is reduced wherever they sit,
+ * so `Organization.contact.name` and `Location.address` are reached without any cross-resource role
+ * derivation (see `./datatype.js` for the closed, marker-bound classification that keeps the sweep off
+ * an organisation's own `name` string and off a clinical code). The **fail-closed** rule governs the
+ * person sweep, and the datatype sweep with it: a value-bearing top-level person-resource property that
+ * is neither mapped PHI nor on the recognized allow-list is blocked, and a swept `Address` the pass
+ * cannot read faithfully is removed whole rather than partly retained. Everything else: the codes,
+ * values, units, and statuses of the clinical resources: is left untouched (the over-scrub guard).
+ * Contained resources and Bundle entries are walked by re-deriving the resource role at every
+ * `resourceType` boundary.
  *
  * The `@cosyte/fhir` model is **immutable**, so the extractor never edits the tree; the applier rebuilds
  * a fresh tree from these coordinates (see `./apply.js`).
@@ -40,12 +47,15 @@ import {
   UnexaminedResidualBuilder,
   type UnexaminedResidual,
 } from "../residual.js";
+import { isRetainableZipCode } from "../retention.js";
+import { classifyFhirPersonalDatatype, isFhirPersonalShape } from "./datatype.js";
 import {
   FHIR_DATE_CATEGORY,
   FHIR_DEMOGRAPHIC_ELEMENTS,
   FHIR_KEPT_ADDRESS_PARTS,
   PERSON_RESOURCE_TYPES,
   RECOGNIZED_PERSON_ELEMENTS,
+  TYPED_PERSONAL_ELEMENT_NAMES,
   categoryForIdentifierSystem,
   isFhirDateValue,
 } from "./locus-map.js";
@@ -354,6 +364,124 @@ function walkValue(
   dateEmit(out, node, path);
 }
 
+/**
+ * What the datatype-keyed sweep does with one element it reached: act on the datatype it recognized,
+ * or **block** the element whole because a position R4 types as one of those datatypes carries a shape
+ * the pass cannot locate.
+ */
+type PersonalAction = "human-name" | "address" | "block";
+
+/**
+ * Decide what the sweep does with one candidate node. A positively classified `HumanName` or `Address`
+ * is acted on wherever it sits; an ambiguous personal-shaped complex is blocked **only** at a position
+ * R4 types as one of those datatypes (see {@link isFhirPersonalShape} for why the position matters).
+ * Everything else is left to the ordinary descent, which is what keeps an organisation's own `name`
+ * string, a `Coding.display` and a clinical code, value, unit or status byte-identical.
+ */
+function personalAction(node: FhirNode, typedPosition: boolean): PersonalAction | undefined {
+  const datatype = classifyFhirPersonalDatatype(node);
+  if (datatype !== undefined) return datatype;
+  if (typedPosition && isFhirPersonalShape(node)) return "block";
+  return undefined;
+}
+
+/**
+ * The ZIP value to hand the engine for a swept `Address`, or `null` to **fail closed on the whole
+ * element**. Two conditions produce the `null`, and both are the same rule: a part the applier would
+ * re-emit must be one the pass can actually read.
+ *
+ * - **The ZIP is present but is not a whole zip code** of a shape this library recognizes
+ *   ({@link isRetainableZipCode}, the same five-or-nine-digit gate the HL7 retention path uses). A
+ *   four-digit `postalCode` still yields three leading digits, so generalizing it would retain a
+ *   fragment of something that was never a zip code. An **absent or empty** `postalCode` is not that
+ *   case: there is no zip code to misread, and the element is reduced exactly as a person resource's
+ *   address carrying none is.
+ * - **A part Safe Harbor lets the applier keep is not a plain primitive.** `state` and `country` are
+ *   re-emitted verbatim, metadata included, so an unexpected JSON shape at one of them would carry
+ *   content out of the pass unread.
+ */
+function sweptAddressZip(node: FhirComplex): string | null {
+  const postal = getProperty(node, "postalCode");
+  let zip = "";
+  if (postal !== undefined) {
+    if (!isPrimitive(postal)) return null;
+    zip = primitiveString(postal);
+    if (zip.length > 0 && !isRetainableZipCode(zip)) return null;
+  }
+  for (const prop of node.properties) {
+    if (FHIR_KEPT_ADDRESS_PARTS.has(prop.name) && !isPrimitive(prop.value)) return null;
+  }
+  return zip;
+}
+
+/** Emit the swept `Address` locus: the Safe Harbor reduction, or the fail-closed removal of it all. */
+function emitSweptAddress(out: FhirLocusAccumulator, node: FhirComplex, path: string): void {
+  const zip = sweptAddressZip(node);
+  const category = SAFE_HARBOR_CATEGORIES.GEOGRAPHIC;
+  if (zip === null) {
+    // Fail closed as a UNIT. The empty value is what the engine cannot generalize, so it blocks and
+    // returns nothing to write, and the `drop` edit takes the whole `Address` with it: no street, no
+    // city, no state, no country and no ZIP fragment survives an element the pass could not read.
+    push(out, { path, kind: "zip", category, value: "" }, { node, edit: "drop" });
+    return;
+  }
+  push(out, { path, kind: "zip", category, value: zip }, { node, edit: "address" });
+}
+
+/**
+ * The **datatype-keyed sweep**: act on a `HumanName` or an `Address` because of what it *is*, not
+ * because of the resource it sits in.
+ *
+ * Applied outside the person resource types only, because inside one the person demographic map has
+ * already decided every `name` / `telecom` / `photo` / `address` and the fail-closed person sweep has
+ * decided the rest, so nothing here would change what a person resource emits.
+ *
+ * A list is unwrapped and each item decided on its own, so a list mixing a swept element with an
+ * unrelated one still walks the unrelated one exactly as before. When no item is claimed the sweep
+ * reports so without walking anything, and the caller's ordinary dispatch continues untouched.
+ *
+ * @returns `true` when the sweep took ownership of this property value.
+ */
+function sweepPersonalDatatypes(
+  out: FhirLocusAccumulator,
+  name: string,
+  value: FhirNode,
+  path: string,
+): boolean {
+  const typedPosition = TYPED_PERSONAL_ELEMENT_NAMES.has(name);
+  const items = isList(value) ? value.items : [value];
+  const actions = items.map((item) => personalAction(item, typedPosition));
+  if (actions.every((action) => action === undefined)) return false;
+  const multi = items.length > 1;
+  items.forEach((item, i) => {
+    const itemPath = multi ? idx(path, i) : path;
+    const action = actions[i];
+    if (action === undefined) {
+      walkValue(out, item, itemPath, false);
+      return;
+    }
+    if (action === "human-name") {
+      push(
+        out,
+        {
+          path: itemPath,
+          kind: "identifier",
+          category: SAFE_HARBOR_CATEGORIES.NAMES,
+          value: collectText(item),
+        },
+        { node: item, edit: "drop" },
+      );
+      return;
+    }
+    if (action === "address" && isComplex(item)) {
+      emitSweptAddress(out, item, itemPath);
+      return;
+    }
+    blockNode(out, item, itemPath);
+  });
+  return true;
+}
+
 /** Dispatch one property of a complex through the FHIR PHI rules. */
 function handleProperty(
   out: FhirLocusAccumulator,
@@ -406,6 +534,10 @@ function handleProperty(
     handleDemographic(out, name, value, path);
     return;
   }
+  // Outside a person resource the DATATYPE decides: a `HumanName` or an `Address` is acted on wherever
+  // the graph put it, so coverage stops depending on whether a producer shaped the document the way
+  // the person map expected.
+  if (!personCtx && sweepPersonalDatatypes(out, name, value, path)) return;
   // A date-shaped primitive anywhere is a PHI date → generalized (fail closed on dates).
   if (isPrimitive(value) && dateEmit(out, value, path)) return;
   // Fail-closed person sweep: a bare unrecognized string at a person resource's top level is blocked.

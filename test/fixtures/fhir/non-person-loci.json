@@ -1,0 +1,97 @@
+{
+  "resourceType": "Bundle",
+  "type": "collection",
+  "entry": [
+    {
+      "fullUrl": "urn:uuid:organization-1",
+      "resource": {
+        "resourceType": "Organization",
+        "id": "org1",
+        "active": true,
+        "name": "ZZORGOWNNAME",
+        "type": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/organization-type",
+                "code": "prov",
+                "display": "ZZORGTYPEDISPLAY"
+              }
+            ]
+          }
+        ],
+        "telecom": [{ "system": "phone", "value": "555-000-8881", "use": "work" }],
+        "address": [
+          {
+            "line": ["ZZORGSTREET"],
+            "city": "ZZORGCITY",
+            "state": "MA",
+            "postalCode": "02138",
+            "country": "US"
+          }
+        ],
+        "contact": [
+          {
+            "purpose": {
+              "coding": [
+                {
+                  "system": "http://terminology.hl7.org/CodeSystem/contactentity-type",
+                  "code": "ADMIN"
+                }
+              ]
+            },
+            "name": { "family": "ZZORGCONTACTFAM", "given": ["ZZORGCONTACTGIV"] },
+            "telecom": [{ "system": "phone", "value": "555-000-8882" }],
+            "address": {
+              "line": ["ZZORGCONTACTSTREET"],
+              "city": "ZZORGCONTACTCITY",
+              "state": "NH",
+              "postalCode": "03601"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:location-1",
+      "resource": {
+        "resourceType": "Location",
+        "id": "loc1",
+        "status": "active",
+        "name": "ZZLOCNAME",
+        "address": {
+          "line": ["ZZLOCSTREET"],
+          "city": "ZZLOCCITY",
+          "district": "ZZLOCCOUNTY",
+          "state": "MA",
+          "postalCode": "01103"
+        },
+        "managingOrganization": { "reference": "Organization/org1" }
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:observation-2",
+      "resource": {
+        "resourceType": "Observation",
+        "id": "obs2",
+        "status": "final",
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "2951-2",
+              "display": "Sodium [Moles/volume] in Serum or Plasma"
+            }
+          ]
+        },
+        "valueQuantity": {
+          "value": 140,
+          "unit": "mmol/L",
+          "system": "http://unitsofmeasure.org",
+          "code": "mmol/L"
+        },
+        "subject": { "reference": "Patient/pat9" }
+      }
+    }
+  ]
+}

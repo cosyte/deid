@@ -100,6 +100,23 @@ export const FATAL_CODES = {
    * fatal set is additions-only.
    */
   DEID_DECLARATION_UNNAMEABLE: "DEID_DECLARATION_UNNAMEABLE",
+  /**
+   * A caller handed an adapter a **document in a format that adapter refuses outright**, rather than
+   * the format its entry point de-identifies.
+   *
+   * Refusal, not best effort. An adapter reaches a document only through the parser surface its peer
+   * package publishes, and where that surface cannot express a faithful structural pass, a partial
+   * pass is a **false-safety hazard**: it would return a document a consumer reads as
+   * Safe-Harbor-transformed while positions the surface never modelled rode straight through it.
+   * Refusing is the fail-closed answer and it is the one a test can pin; a documented non-goal in
+   * prose is not, because prose is not a behaviour.
+   *
+   * The message names the **format** and the parser-surface reason, both fixed text this library
+   * owns. It carries no value read from the document, no key and no offset, and the pass returns no
+   * transformed document, no manifest and no partial output of any kind. The fatal set is
+   * additions-only.
+   */
+  DEID_FORMAT_UNSUPPORTED: "DEID_FORMAT_UNSUPPORTED",
 } as const;
 
 /**

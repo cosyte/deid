@@ -54,17 +54,28 @@ never falls back to an unkeyed surrogate.
 
 ## What is located, and how it is transformed
 
-FHIR is a **graph of typed resources**, so the locus map splits by resource role. A `name` / `address` /
-`telecom` is PHI inside a person resource; the same datatype in `Location` or `Organization` is
-facility/administrative data and is left to the clinical-retain path: the FHIR analogue of the C-CDA
-adapter sweeping only the header participations, never the clinical body.
+FHIR is a **graph of typed resources**, so the locus map splits by resource role for the elements a
+resource's type really does decide, and by the **element's own datatype** for the two it does not. A
+person's name and a postal address are acted on wherever the graph puts them, because which resource
+carries one is a choice the producing system made: the same home address arrives at `Patient.address`
+from one sender and at `Location.address` from a home-health sender, and coverage that depended on
+that choice would not be coverage at all.
 
 | Scope | Loci | Transform |
 |---|---|---|
 | **Person resources**: `Patient` / `RelatedPerson` / `Practitioner` / `Person` (+ nested `Patient.contact`, a relative) | `name`, `telecom`, `photo`, `address`, `birthDate`, `deceasedDateTime` | name/telecom/photo **removed**; `address` → safe **3-digit ZIP** (or `000` for a restricted prefix), finer geography dropped; dates → **year** |
+| **Every resource, by datatype** | any `HumanName`, any `Address`: `Organization.contact.name`, `Location.address`, `Organization.address`, a choice-type `locationAddress` | name **removed**; address → the same safe **3-digit ZIP** (or `000`), finer geography dropped, that a person resource's address gets |
 | **Every resource (the universal PHI vectors)** | `identifier`, PHI-bearing dates, narrative `text.div`, `extension` / `modifierExtension` values, `Reference.display` | identifier **removed** under Safe Harbor, `system` retained (a consistent keyed surrogate by `system` only under a preset that does not claim the label); dates → **year**; narrative div / extension values / reference labels **blocked** |
 | **Contained resources & `Bundle` entries** | each nested resource | **walked**: the resource role is re-derived at every `resourceType`, so a contained `RelatedPerson` or a Bundled `Patient` is de-identified too |
 | **Clinical resources**: `Observation`, `Condition`, `Encounter`, … | codes, values, units, statuses, reference ranges, reference wiring | **retained untouched** (the over-scrub guard) |
+
+The datatype test is **closed**, and that is the over-scrub guard: an element is a `HumanName` only when
+every property it carries is one FHIR R4 defines on `HumanName` **and** at least one of them
+(`family` / `given` / `prefix` / `suffix`) belongs to nothing else, and an `Address` the same way
+(`line` / `city` / `district` / `state` / `postalCode` / `country`). So an **organisation's own `name`**
+is untouched (it is a plain string, never a `HumanName`), a `CodeableConcept` carrying only its `text`
+is untouched (that shape is an `Observation` code, a dose unit or an order status far more often than
+it is a name), and every clinical code, value, unit and status survives byte-identical.
 
 An identifier's Safe Harbor category is read from its `system` URI: the US-SSN system
 (`http://hl7.org/fhir/sid/us-ssn` or its OID form) routes to the SSN category, every other identifier
@@ -92,6 +103,13 @@ not mistaken for a date, so it survives.
 - Every **extension value** is dropped: a complex `valueAddress` / `valueHumanName` / `valueIdentifier`,
   a `modifierExtension`, a deeply nested extension, and a primitive-level `_`-sibling extension alike.
   Extensions are the FHIR leak frontier; the `url` skeleton is kept, the payload is not.
+- A **swept `Address` the pass cannot read faithfully** is removed **whole**, never partly retained: a
+  `postalCode` that is not a whole zip code (a four-digit `0110` still has three leading digits, and
+  keeping them would retain a fragment of something that was never a ZIP), or an unexpected JSON shape
+  where R4 types a string at a part the reduction would re-emit verbatim. The street, the city, the
+  state, the country and the ZIP all go, and the disposition is recorded. A name or an address element
+  R4 types at a position but whose structure the pass cannot locate (a `{ text }` representation with
+  no part it can key on) is blocked the same way.
 - **Free-text prose** is blocked by default: the `note` element (`Annotation.text` + author), a
   `Communication`/message `contentString`, and an **uncoded `valueString`** (the FHIR analogue of an
   HL7 OBX-5 typed `ST`, which the sibling HL7 adapter also fails closed on; a structured `valueQuantity`
@@ -116,8 +134,12 @@ not mistaken for a date, so it survives.
   pseudonymization of resource ids across a corpus (so the same patient links across documents) is
   **not** performed.
 - Free-text **prose** loci (`note`, `contentString`, uncoded `valueString`) fail closed by default; a
-  semantic (NLP) narrative scrub, `contentAttachment` binary content, and person names embedded in
-  non-person resources (`Organization.contact.name`, `Location.address`) remain out of scope.
+  semantic (NLP) narrative scrub and `contentAttachment` binary content remain out of scope.
+- Three surfaces are still not reached, each because FHIR types no person at the position: a
+  **`ContactPoint` outside a person resource** (a phone or an email on an `Organization`, a `Location`
+  or an `Endpoint`), an **organisation's own `name`** (a plain string, never a `HumanName`), and the
+  **individual's employer carried as a separate `Organization` resource**, which would need a
+  cross-resource role derivation rather than a typed read.
 
 The honesty line is unchanged: the output is **"Safe-Harbor-transformed per the configured policy,"**
 never "de-identified" and never "HIPAA-compliant."

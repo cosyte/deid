@@ -26,7 +26,8 @@ through as safe.
 > core** (policy engine, five transforms, 18-category Safe Harbor model, fail-closed rule, value-free
 > manifest) **plus six format bindings**: HL7 v2 (`@cosyte/deid/hl7`), C-CDA (`@cosyte/deid/ccda`),
 > FHIR R4 (`@cosyte/deid/fhir`), X12 EDI (`@cosyte/deid/x12`), NCPDP Telecom (`@cosyte/deid/ncpdp`) and
-> DICOM (`@cosyte/deid/dicom`). NCPDP SCRIPT is **not** supported.
+> DICOM (`@cosyte/deid/dicom`). NCPDP SCRIPT is **not** supported, and an entry point handed one
+> refuses it outright rather than returning a partial pass.
 
 ## Install
 
