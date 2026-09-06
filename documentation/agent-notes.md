@@ -651,12 +651,44 @@ R100` and this route printed its clean line (measured on git 2.39.5; the all-mod
 
 ### Exactly one file is bypassed
 
-  **▶ EXACTLY ONE FILE IS BYPASSED, AND IT NEEDS BOTH HALVES.** `test/scripts/phi-scan.test.ts` -- the
-  scanner's own suite, whose positive cases are necessarily real-looking violator literals. It works
-  because `package.json`'s `phi-scan` script passes `--allow-fixture` **and** `phi-scan-overrides.md`
-  logs it; drop either half and CI reddens or the scan refuses. Pinned. A logged path must be an
-  existing regular file inside a scan root or the scan refuses, and every applied bypass prints a
-  `BYPASSED` line. **Real PHI pasted into that one file is not caught -- that is the stated cost.**
+  **▶ NO FILE IS BYPASSED ANY MORE, AND THE COST BELOW IS PAID OFF RATHER THAN CARRIED.** The
+  history is kept because the remedy only makes sense against it.
+
+  **The state that was.** Exactly one file was bypassed, and it needed both halves:
+  `test/scripts/phi-scan.test.ts`, the scanner's own suite, whose positive cases are necessarily
+  real-looking violator literals. It worked because `package.json`'s `phi-scan` script passed
+  `--allow-fixture` **and** `phi-scan-overrides.md` logged it; dropping either half reddened CI or
+  refused the scan. Real PHI pasted into that one file was not caught -- the stated cost.
+
+  **What closed it.** A completeness rule: **a target the run ENUMERATED AND NEVER READ refuses the
+  scan (exit 2)**, in every mode and on both all-mode routes. A withdrawn target is exactly that, so
+  a bypass can no longer reach the clean code. The flag, the log and the rejection gate are all
+  KEPT, so an attempt is **recorded and refused** rather than silently honoured, and the subtraction
+  is kept as well: a refusal is not permission to report the values in the file it refuses over. A
+  logged path must still be an existing, non-`.md` regular file inside a scan root, and every
+  applied bypass still prints its `BYPASSED` line -- immediately before the refusal names the same
+  path again.
+
+  **What the suite does instead.** Its fixture documents carry a `${…}` substitution site at every
+  PHI position, which the scanner already reads as a hole rather than a value
+  (`SUBSTITUTION_SITE`), and the two FLOOR shapes -- a dashed SSN and an email at a non-test domain
+  -- are assembled at run time from pieces joined on separators named by code point. The floor reads
+  raw text and consults no allow-list, so any spelling of either shape anywhere in that module
+  (a comment, a regex literal, an assertion) would be a hit; the structured detectors only read a
+  PHI POSITION of a document they recognise, so the assertions still name `RIVERA` and `19780314` in
+  the clear. Every case still hands the scanner byte-identical, real-looking content.
+
+  **▶ AND NOTHING WAS WEAKENED TO ACHIEVE IT. THE FLOOR SPECIFICALLY WAS NOT.** The alternative
+  route -- teaching the dashed-SSN floor to consult declared `ID` tokens -- was available and was
+  REFUSED: an allow-list entry there is global and route-blind, so declaring the suite's SSN shape
+  would stop that shape being a hit in every file, on every route, in the package whose whole job is
+  removing PHI. An SSN shape declared nowhere in the allow-list is still a hard hit, and the suite
+  asserts both halves: that the shape reds, and that no such declaration was added.
+
+  **The residual, stated rather than implied.** A bypass the run never ENUMERATED withdraws nothing
+  and therefore refuses nothing -- a logged file that is not staged is not a target on the
+  `--staged` route. That is the honest answer rather than a hole; `validateAllowFixtures` already
+  rejects a flag that could never subtract anything.
 
 ### Unmerged entries are refused
 
@@ -708,12 +740,14 @@ R100` and this route printed its clean line (measured on git 2.39.5; the all-mod
   nothing after. The exit code is still **2** -- an incomplete sweep is not a verdict whatever it
   found on the way -- but the hits are printed first. Two cases pin it.
 
-  **▶ `--allow-fixture` IS SUBTRACTED ON THE INDEX ROUTE TOO, AND HERE THAT IS LOAD-BEARING RATHER
-  THAN DEAD CODE.** `parseArgs` does **not** seed the positional path set from the flag, so
-  `pnpm phi-scan` runs in **all** mode with the one logged bypass in force; without the subtraction
-  the route reads the bypassed suite straight out of the index and **red-locks the repo.** (A
-  sibling whose `parseArgs` *does* seed it has the same line as unreachable defence. Do not carry
-  that reading over.) **The case proving it needs the committed and working-tree bytes to DIFFER:**
+  **▶ `--allow-fixture` IS SUBTRACTED ON THE INDEX ROUTE TOO, AND IT STAYS LOAD-BEARING NOW THAT A
+  WITHDRAWN TARGET REFUSES THE RUN.** `parseArgs` does **not** seed the positional path set from the
+  flag, so a bypass is in force in **all** mode across both routes. The run refuses either way; what
+  the subtraction decides is whether the refusal ALSO prints the bypassed file's values, read
+  straight out of the index. A refusal that leaks what it refused over is worse than the silence it
+  replaces. (A sibling whose `parseArgs` *does* seed it has the same line as unreachable defence. Do
+  not carry that reading over.) **The case proving it needs the committed and working-tree bytes to
+  DIFFER:**
   with both copies identical the byte-comparison skip fires first, the subtraction is never reached,
   and deleting it leaves the case green. Verified by deleting it.
 

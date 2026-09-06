@@ -187,9 +187,14 @@ Every line here is clinical-safety content. Full cases: `documentation/agent-not
   → `documentation/agent-notes.md#a-comment-in-the-scanner-is-inside-a-scan-root`
 - **`19800101` MUST STAY OUT OF THE ALLOW-LIST**: the undeclared DOB four positive tests use; declare
   it and all four assert nothing. → `documentation/agent-notes.md#the-undeclared-dob-must-stay-out-of-the-allow-list`
-- **EXACTLY ONE FILE IS BYPASSED AND IT NEEDS BOTH HALVES** (`--allow-fixture` **and** a
-  `phi-scan-overrides.md` entry): `test/scripts/phi-scan.test.ts`. **Real PHI pasted there is not
-  caught: the stated cost.** → `documentation/agent-notes.md#exactly-one-file-is-bypassed`
+- **NO FILE IS BYPASSED, AND `--allow-fixture` CANNOT REACH A CLEAN RUN.** A target the run
+  ENUMERATED AND NEVER READ refuses it (exit 2), in every mode and on both all-mode routes. The
+  flag, the log and the rejection gate are all KEPT, so an attempt is **recorded and refused**, not
+  honoured. **There is no whole-file escape left**: declare tokens in `scripts/phi-allow-list.txt`,
+  or assemble the shape at run time as `test/scripts/phi-scan.test.ts` now does (a `${…}`
+  substitution site at every PHI position; the floor's two shapes built from pieces). **The floor
+  was NOT weakened to buy that** and an undeclared SSN shape is still a hard hit.
+  → `documentation/agent-notes.md#exactly-one-file-is-bypassed`
 - **`U` is in the `--diff-filter` and is REFUSED, not read.** → `documentation/agent-notes.md#unmerged-entries-are-refused`
 - **EXIT 1 MEANS HITS AND NOTHING ELSE MAY SPEND IT.** Failure is the default path; do not go back to
   catching by type. → `documentation/agent-notes.md#exit-1-means-hits`
@@ -197,7 +202,8 @@ Every line here is clinical-safety content. Full cases: `documentation/agent-not
 hits` at exit 0 on base; the decoy at a tracked path is why it exists. **The mechanism is written
   ONCE, at `buildTargetsForIndex`.** **Refusals run AFTER the walk is scanned -- a refusal must not
   swallow a real hit -- `makeRepo()` commits its baseline, and `--allow-fixture` is subtracted here
-  too: live, not dead code.** → `documentation/agent-notes.md#all-mode-reads-the-bytes-git-carries`
+  too: live, not dead code, because a refusal may not report what it refused over.**
+  → `documentation/agent-notes.md#all-mode-reads-the-bytes-git-carries`
 - **`vendor/` IS EXCLUDED FROM THAT ROUTE, AS A LITERAL PATH** (45 mojibake hits without it). **A
   "binary blob" PREDICATE was measured and REJECTED: two hand-written `src/*.ts` embed NUL bytes.**
   **The byte skip MAY NOT normalize line endings**; `.md`/`vendor/` apply LAST, after the mode
