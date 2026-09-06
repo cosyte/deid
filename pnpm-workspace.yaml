@@ -3,8 +3,9 @@
 # THIS REPOSITORY IS NOT A WORKSPACE AND THIS FILE DOES NOT MAKE IT ONE. pnpm reads
 # `pnpm-workspace.yaml` for BOTH the package list and the settings below, and there is no
 # other documented home for either setting (`.npmrc` is not among the routes pnpm names for
-# configuring them). No `packages:` key is declared, so the only package pnpm resolves here
-# is still the single root package.
+# configuring them). The `packages:` key below is forced by the pinned pnpm and names `.` and
+# nothing else, so the only package pnpm resolves here is still the single root package. The
+# paragraph at the bottom of this banner is the one to read before touching it.
 #
 # WHAT THE TWO SETTINGS DEFEND. They are the only things standing between a compromised
 # release and this tree during the window between a bad version being published and its
