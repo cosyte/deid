@@ -1,0 +1,36 @@
+# Install hardening for this package.
+#
+# THIS REPOSITORY IS NOT A WORKSPACE AND THIS FILE DOES NOT MAKE IT ONE. pnpm reads
+# `pnpm-workspace.yaml` for BOTH the package list and the settings below, and there is no
+# other documented home for either setting (`.npmrc` is not among the routes pnpm names for
+# configuring them). The `packages:` key below is forced by the pinned pnpm and names `.` and
+# nothing else, so the only package pnpm resolves here is still the single root package. The
+# paragraph at the bottom of this banner is the one to read before touching it.
+#
+# WHAT THE TWO SETTINGS DEFEND. They are the only things standing between a compromised
+# release and this tree during the window between a bad version being published and its
+# removal from the registry:
+#
+#   minimumReleaseAge  a publication cooldown, in minutes. 1440 is pnpm's own figure and its
+#                      own rationale: malware is usually detected quickly, so delaying
+#                      updates by 24 hours most likely avoids installing a bad version.
+#   trustPolicy        `no-downgrade` refuses a resolution that moves a dependency BACKWARDS,
+#                      which is how a yanked-and-republished package re-enters a tree.
+#
+# ▶ AT THIS REPOSITORY'S PINNED pnpm THIS FILE DECORATES RATHER THAN DEFENDS, AND THAT IS
+# STATED HERE RATHER THAN LEFT TO BE DISCOVERED. `packageManager` pins pnpm@10.0.0;
+# `minimumReleaseAge` was added in pnpm 10.16.0 and `trustPolicy` in 10.21.0, so the pinned
+# pnpm IGNORES BOTH KEYS ENTIRELY. Neither control is in force until the pin moves, which is
+# its own change on a PHI-handling repository and is deliberately not this one. Do not read
+# the presence of this file as evidence that a cooldown is running.
+#
+# ▶ `packages:` IS NOT OPTIONAL HERE AND IT IS NOT A WIDENING. The pinned pnpm@10.0.0 REFUSES
+# a `pnpm-workspace.yaml` that carries no package list, by name: `ERROR packages field missing
+# or empty`. So the list names `.` and nothing else, which resolves to exactly the one package
+# this repository already was. Adding a second entry, or a glob, would make this a real
+# workspace and is a different change from adding the two settings above.
+packages:
+  - "."
+
+minimumReleaseAge: 1440
+trustPolicy: no-downgrade
