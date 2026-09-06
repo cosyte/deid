@@ -153,7 +153,7 @@
     "build": "tsup",
     "changeset": "changeset",
     "typecheck": "tsc --noEmit",
-    "phi-scan": "tsx scripts/phi-scan.ts --allow-fixture test/scripts/phi-scan.test.ts",
+    "phi-scan": "tsx scripts/phi-scan.ts",
     "check": "pnpm run check:test-selection && pnpm run check:agent-notes",
     "check:test-selection": "tsx scripts/check-test-selection.ts",
     "check:agent-notes": "tsx scripts/check-agent-notes.ts",

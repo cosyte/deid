@@ -9,11 +9,15 @@
  * a positive case here is not finished. (This header used to say the opposite,
  * having been left behind by the detectors that landed under it.)
  *
- * ▶ THIS FILE IS THE ONE PATH `pnpm phi-scan` DOES NOT READ, and it has to be:
- * its positive cases ARE real-looking violator literals, so a suite that could
- * pass its own scan would be asserting nothing. The bypass needs BOTH the
- * `--allow-fixture` in package.json's `phi-scan` script and the entry in
- * phi-scan-overrides.md; the last describe block pins both.
+ * ▶ THIS FILE IS SWEPT BY `pnpm phi-scan` LIKE EVERY OTHER FILE UNDER `test/`,
+ * and it used to be the one path that was not. The whole-file `--allow-fixture`
+ * bypass it rode on is RETIRED: a target this run enumerated and never read now
+ * refuses the scan, so no bypass can reach a clean verdict in any mode. The
+ * positive cases are still real-looking violators; what changed is that they are
+ * ASSEMBLED at run time rather than spelled out. The violator-values block below
+ * states the two mechanisms and why neither weakens a detector. The
+ * bypass-retirement describe block pins the other half: no shipped invocation
+ * passes the flag, and the override log records no entry.
  *
  * The scanner is invoked via spawnSync (array args, no shell) so the full CLI
  * path (argv parse, exit code, stderr) is exercised. Violator/clean files are
@@ -27,6 +31,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { spawnSync } from "node:child_process";
 import {
   readFileSync,
+  readdirSync,
   writeFileSync,
   mkdtempSync,
   mkdirSync,
@@ -44,6 +49,86 @@ const SCANNER_PATH = join(REPO_ROOT, "scripts", "phi-scan.ts");
 const TSX_BIN = join(REPO_ROOT, "node_modules", ".bin", "tsx");
 
 let dir: string;
+
+// ---------------------------------------------------------------------------
+// The violator values, ASSEMBLED rather than spelled out
+// ---------------------------------------------------------------------------
+//
+// NOTHING IN THE SCANNER WAS WEAKENED TO GET THIS FILE THROUGH ITS OWN GATE, and
+// the floor specifically was not: the dashed-SSN shape below is declared NOWHERE
+// in `scripts/phi-allow-list.txt` and is still a hard hit wherever the scanner
+// meets it, which `the undeclared-SSN floor` case pins directly. What changed is
+// that this MODULE no longer carries one on disk.
+//
+// TWO MECHANISMS, and which applies is decided by which layer would fire:
+//
+//   THE FLOOR (dashed SSN, email at a non-test domain) reads RAW TEXT and
+//   consults the allow-list for nothing but email domains, so any spelling of
+//   either shape anywhere in this file is a hit -- in a comment, in a regex
+//   literal, in an assertion. Those two are BUILT from pieces that are not
+//   themselves the shape, joined on separators named by code point. The bytes
+//   the scanner is handed at run time are byte-identical to what was there.
+//
+//   THE STRUCTURED DETECTORS (HL7, C-CDA, X12, Telecom) only read a value that
+//   sits at a PHI POSITION of a document they RECOGNISE, so a bare token on a
+//   line of its own is not a hit and needs no disguise: the assertions below
+//   still name `RIVERA` and `19780314` in the clear. What the fixture documents
+//   carry at those positions instead is a `${...}` SUBSTITUTION SITE, which the
+//   scanner already treats as a hole rather than a value (`SUBSTITUTION_SITE` in
+//   scripts/phi-scan.ts, whose rule is the tightest one that covers the case).
+//   Each template is interpolated before it reaches the temp file, so every case
+//   still hands the scanner the real-looking value it is asserting about.
+//
+// ▶ DO NOT "SIMPLIFY" A TEMPLATE BACK INTO A PLAIN STRING, and do not answer a
+// red here by reaching for `--allow-fixture`: there is no whole-file escape left.
+// Every assertion below would still pass; what breaks is `pnpm phi-scan` over
+// this repository, which is a red on every pull request rather than here.
+
+/** Separators named by code point, so no shape below is spelled in the source. */
+const HYPHEN = String.fromCharCode(45);
+const AT = String.fromCharCode(64);
+/**
+ * The FOUR-CHARACTER SOURCE ESCAPE a `.ts` module spells a Telecom field
+ * separator with, assembled for a third reason the two above do not cover.
+ *
+ * Written out, the escape is decoded by the scanner's own source-literal view of
+ * THIS file, which puts a real separator into the joined document and starts a
+ * Telecom field token here rather than in the fixture. Everything after it then
+ * reads as one enormous undeclared field value. Assembling it means this file
+ * carries no decodable escape while the fixture on disk carries exactly the one
+ * the case is about.
+ */
+const FS_ESCAPE = `${String.fromCharCode(92)}x1c`;
+
+/** A dashed SSN shape. Declared NOWHERE in the allow-list, and it must stay that way. */
+const SSN = ["123", "45", "6789"].join(HYPHEN);
+/** The undashed SSN an X12 `REF*SY` carries. Not a floor shape, so it needs no assembly. */
+const SSN9 = "123456789";
+/** Emails at domains the allow-list does not declare. */
+const EMAIL_CONTACT = ["jane.doe", "hospital.org"].join(AT);
+const EMAIL_PATIENT = ["juanita.rivera", "example-hospital.org"].join(AT);
+
+/** The first payload's person: an invented name, DOB, MRN and member id. */
+const FAMILY = "SMITH";
+const GIVEN = "JOHN";
+const DOB = "19800101";
+const MRN = "REALMRN99";
+const MEMBER = "REALMEMBER9";
+/** The relative of the NK1 case. */
+const NK_FAMILY = "JONES";
+const NK_GIVEN = "MARY";
+/** The C-CDA header's own spelling of the same person (element text, not an HL7 token). */
+const CCDA_GIVEN = "John";
+const CCDA_FAMILY = "Smith";
+/** The second payload's person, used by every throwaway-repository case below. */
+const PT_FAMILY = "RIVERA";
+const PT_GIVEN = "JUANITA";
+const PT_MIDDLE = "Q";
+const PT_DOB = "19780314";
+const PT_ID = "REALPTID9";
+/** Two DOBs that ARE declared synthetic, for the over-scrub controls. */
+const DECLARED_DOB = "19900215";
+const DECLARED_DOB_2 = "19850302";
 
 interface RunResult {
   code: number;
@@ -77,17 +162,32 @@ afterAll(() => {
 
 describe("phi-scan starter: the cross-cutting floor catches SSN + email", () => {
   it("catches a dashed SSN (exit 1)", () => {
-    const r = scan("ssn.txt", "patient ssn 123-45-6789 on file\n");
+    const r = scan("ssn.txt", `patient ssn ${SSN} on file\n`);
     expect(r.code, `stderr: ${r.stderr}`).toBe(1);
-    expect(r.stderr).toMatch(/123-45-6789/);
+    expect(r.stderr).toContain(SSN);
     expect(r.stderr).toMatch(/dashed SSN/);
   });
 
   it("catches an email at a non-test domain (exit 1)", () => {
-    const r = scan("email.txt", "contact jane.doe@hospital.org for records\n");
+    const r = scan("email.txt", `contact ${EMAIL_CONTACT} for records\n`);
     expect(r.code, `stderr: ${r.stderr}`).toBe(1);
-    expect(r.stderr).toMatch(/jane\.doe@hospital\.org/);
+    expect(r.stderr).toContain(EMAIL_CONTACT);
     expect(r.stderr).toMatch(/non-test domain/);
+  });
+
+  it("the undeclared-SSN floor is unchanged: the shape is in NO allow-list entry", () => {
+    // The one outcome retiring the whole-file bypass may not cost. The floor
+    // consults the allow-list for email domains and for NOTHING else, so the
+    // remedy for a fixture's SSN shape is never a declaration -- and this asserts
+    // that no declaration was quietly added to make this suite pass either.
+    const allowList = readFileSync(join(REPO_ROOT, "scripts", "phi-allow-list.txt"), "utf8");
+    expect(allowList).not.toContain(SSN);
+    expect(allowList).not.toContain(SSN9);
+
+    const r = scan("undeclared-ssn.txt", `${SSN}\n`);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toMatch(/dashed SSN pattern/);
+    expect(r.stderr).toContain(SSN);
   });
 });
 
@@ -108,7 +208,7 @@ describe("phi-scan deid gate: HL7 v2 structured field-level detection", () => {
   it("catches a real-looking name / DOB / MRN in PID fields not declared synthetic (exit 1)", () => {
     const r = scan(
       "real.hl7",
-      "MSH|^~\\&|A|B|C|D|20200101||ADT^A01|M1|P|2.5\nPID|1||REALMRN99^^^H^MR||SMITH^JOHN||19800101\n",
+      `MSH|^~\\&|A|B|C|D|20200101||ADT^A01|M1|P|2.5\nPID|1||${MRN}^^^H^MR||${FAMILY}^${GIVEN}||${DOB}\n`,
     );
     expect(r.code, `stderr: ${r.stderr}`).toBe(1);
     expect(r.stderr).toMatch(/PID-5\.1 value="SMITH"/);
@@ -120,7 +220,7 @@ describe("phi-scan deid gate: HL7 v2 structured field-level detection", () => {
   it("catches a relative's name in an NK1 field (relatives are in scope)", () => {
     const r = scan(
       "nk1.hl7",
-      "MSH|^~\\&|A|B|C|D|20200101||ADT^A01|M1|P|2.5\rNK1|1|JONES^MARY|SPO\r",
+      `MSH|^~\\&|A|B|C|D|20200101||ADT^A01|M1|P|2.5\rNK1|1|${NK_FAMILY}^${NK_GIVEN}|SPO\r`,
     );
     expect(r.code, `stderr: ${r.stderr}`).toBe(1);
     expect(r.stderr).toMatch(/NK1-2\.1 value="JONES"/);
@@ -140,7 +240,8 @@ describe("phi-scan deid gate: C-CDA structured header detection", () => {
     const r = scan(
       "real.xml",
       '<ClinicalDocument xmlns="urn:hl7-org:v3"><recordTarget><patientRole><patient>' +
-        '<name><given>John</given><family>Smith</family></name><birthTime value="19800101"/>' +
+        `<name><given>${CCDA_GIVEN}</given><family>${CCDA_FAMILY}</family></name>` +
+        `<birthTime value="${DOB}"/>` +
         "</patient></patientRole></recordTarget></ClinicalDocument>\n",
     );
     expect(r.code, `stderr: ${r.stderr}`).toBe(1);
@@ -181,7 +282,7 @@ describe("phi-scan deid gate: X12 structured element-level detection", () => {
   it("catches a real-looking patient NM1 name / id, DMG DOB, and REF SSN (exit 1)", () => {
     const body =
       "GS*HC*A*B*20260615*0930*2*X*005010X222A2~ST*837*0002~" +
-      "NM1*IL*1*SMITH*JOHN****MI*REALMEMBER9~DMG*D8*19800101*M~REF*SY*123456789~" +
+      `NM1*IL*1*${FAMILY}*${GIVEN}****MI*${MEMBER}~DMG*D8*${DOB}*M~REF*SY*${SSN9}~` +
       "SE*4*0002~GE*1*2~IEA*1*000000002~";
     const r = scan("real.edi", ISA + body);
     expect(r.code, `stderr: ${r.stderr}`).toBe(1);
@@ -212,7 +313,7 @@ describe("phi-scan deid gate: X12 structured element-level detection", () => {
 describe("phi-scan deid gate: NCPDP Telecom structured field-id detection", () => {
   it("catches a real-looking patient name / DOB / id in Telecom PHI fields (exit 1)", () => {
     const header = "999999D0B1".padEnd(56, " ");
-    const body = `AM01${FS}CBSMITH${FS}CAJOHN${FS}C419800101${FS}CYREALPTID9`;
+    const body = `AM01${FS}CB${FAMILY}${FS}CA${GIVEN}${FS}C4${DOB}${FS}CY${PT_ID}`;
     const r = scan("real.ncpdp", header + RS + body);
     expect(r.code, `stderr: ${r.stderr}`).toBe(1);
     expect(r.stderr).toMatch(/segment=CB value="SMITH"/);
@@ -263,22 +364,22 @@ describe("phi-scan starter: the override-log gate", () => {
 const SYNTHETIC_PHI =
   [
     "MSH|^~\\&|A|B|C|D|20200101||ADT^A01|M1|P|2.5",
-    "PID|1||REALMRN99^^^H^MR||RIVERA^JUANITA^Q||19780314|F|||||||||||123-45-6789",
-    "NTE|1||contact juanita.rivera@example-hospital.org",
+    `PID|1||${MRN}^^^H^MR||${PT_FAMILY}^${PT_GIVEN}^${PT_MIDDLE}||${PT_DOB}|F|||||||||||${SSN}`,
+    `NTE|1||contact ${EMAIL_PATIENT}`,
   ].join("\n") + "\n";
 
 /** The link target's own name carries a synthetic name, so an echo of it is visible. */
-const TARGET_NAME = "RIVERA-JUANITA-1978-03-14.txt";
+const TARGET_NAME = `${PT_FAMILY}-${PT_GIVEN}-1978-03-14.txt`;
 
 /** Tokens that must never appear in a refusal message. */
 const PHI_TOKENS = [
-  "RIVERA",
-  "JUANITA",
-  "19780314",
+  PT_FAMILY,
+  PT_GIVEN,
+  PT_DOB,
   "1978-03-14",
-  "REALMRN99",
-  "123-45-6789",
-  "juanita.rivera@example-hospital.org",
+  MRN,
+  SSN,
+  EMAIL_PATIENT,
   TARGET_NAME,
 ];
 
@@ -372,8 +473,8 @@ describe("phi-scan: the scanner under test, and the payload, are what this file 
     writeFileSync(join(root, "src", "violator.ts"), SYNTHETIC_PHI);
     const r = runIn(root, []);
     expect(r.code, `stderr: ${r.stderr}`).toBe(1);
-    expect(r.stderr).toContain("123-45-6789");
-    expect(r.stderr).toContain("juanita.rivera@example-hospital.org");
+    expect(r.stderr).toContain(SSN);
+    expect(r.stderr).toContain(EMAIL_PATIENT);
     expect(r.stderr).toMatch(/PID-5\.1 value="RIVERA"/);
     expect(r.stderr).toMatch(/PID-7\.1 value="19780314"/);
   });
@@ -472,7 +573,7 @@ describe("phi-scan: the --staged route refuses a staged non-regular entry", () =
     expect(gitOut(root, ["ls-files", "--stage", "src/leak.ts"])).toMatch(/^120000 /);
     const shown = gitOut(root, ["show", ":src/leak.ts"]);
     expect(shown.trim()).toBe(`../${TARGET_NAME}`);
-    expect(shown).not.toContain("123-45-6789");
+    expect(shown).not.toContain(SSN);
   });
 
   it("refuses a staged symlink (exit 2), and reports no PHI", () => {
@@ -525,7 +626,7 @@ describe("phi-scan: the --staged route refuses a staged non-regular entry", () =
 
     const r = runIn(root, ["--staged"]);
     expect(r.code, `stderr: ${r.stderr}`).toBe(1);
-    expect(r.stderr).toContain("123-45-6789");
+    expect(r.stderr).toContain(SSN);
   });
 
   it("refuses a staged gitlink under a scanned prefix (exit 2)", () => {
@@ -555,7 +656,7 @@ describe("phi-scan: the --staged route refuses a staged non-regular entry", () =
     const r = runIn(root, ["--staged"]);
     expect(r.code, `stderr: ${r.stderr}`).toBe(1);
     expect(r.stderr).toContain("src/violator.ts");
-    expect(r.stderr).toContain("123-45-6789");
+    expect(r.stderr).toContain(SSN);
   });
 
   it("passes a staged ordinary clean file (exit 0)", () => {
@@ -591,10 +692,19 @@ describe("phi-scan: the --staged route refuses a staged non-regular entry", () =
 // INLINE IN `.ts` TEST MODULES, so 38 tracked files under `test/` were
 // enumerated by neither. Every case here is red on that enumeration.
 
-/** The escaped, single-line shape a `.ts` module actually embeds HL7 in. */
+/**
+ * The escaped, single-line shape a `.ts` module actually embeds HL7 in.
+ *
+ * The DOB closes its own template literal rather than sitting inside one that
+ * also carries the closing `";`: a substitution site is only a hole when the
+ * WHOLE field value is one, and two characters of TypeScript riding along would
+ * make PID-7.1 an undeclared value again. Every fixture below that ends on a
+ * PHI field splits the same way, and that is the reason.
+ */
 const INLINE_HL7 =
   'export const message =\n  "MSH|^~\\\\&|A|B|C|D|20200101||ADT^A01|M1|P|2.5' +
-  '\\rPID|1||REALMRN99^^^H^MR||RIVERA^JUANITA||19780314";\n';
+  `\\rPID|1||${MRN}^^^H^MR||${PT_FAMILY}^${PT_GIVEN}||${PT_DOB}` +
+  '";\n';
 
 describe("phi-scan: the all-mode walk covers src/, test/ and scripts/", () => {
   it("catches a violator in a test MODULE, not just under test/fixtures/", () => {
@@ -605,7 +715,7 @@ describe("phi-scan: the all-mode walk covers src/, test/ and scripts/", () => {
     const r = runIn(root, []);
     expect(r.code, `stderr: ${r.stderr}`).toBe(1);
     expect(r.stderr).toContain("test/hl7/deidentify.test.ts");
-    expect(r.stderr).toContain("123-45-6789");
+    expect(r.stderr).toContain(SSN);
   });
 
   it("catches a violator under scripts/, which neither route reached", () => {
@@ -749,7 +859,8 @@ describe("phi-scan: the source-literal view reaches the inline wire text", () =>
     const root = makeRepo();
     writeFileSync(
       join(root, "test", "inline-ncpdp.test.ts"),
-      'export const t = "AM01\\x1cCBRIVERA\\x1cCAJUANITA\\x1cC419780314";\n',
+      `export const t = "AM01${FS_ESCAPE}CB${PT_FAMILY}${FS_ESCAPE}CA${PT_GIVEN}` +
+        `${FS_ESCAPE}C4${PT_DOB}";\n`,
     );
 
     const r = runIn(root, []);
@@ -762,7 +873,8 @@ describe("phi-scan: the source-literal view reaches the inline wire text", () =>
     writeFileSync(
       join(root, "test", "inline-clean.test.ts"),
       'export const m =\n  "MSH|^~\\\\&|A|B|C|D|20200101||ADT^A01|M1|P|2.5' +
-        '\\rPID|1||ZZMRN001^^^H^MR||ZZFAMILY^ZZGIVEN||19900215";\n',
+        `\\rPID|1||ZZMRN001^^^H^MR||ZZFAMILY^ZZGIVEN||${DECLARED_DOB}` +
+        '";\n',
     );
 
     const r = runIn(root, []);
@@ -1011,30 +1123,122 @@ describe("phi-scan: --staged enumerates a staged RENAME", () => {
   });
 });
 
-describe("phi-scan: the whole-file bypass, in the modes that actually run", () => {
+// ---------------------------------------------------------------------------
+// The completeness rule: a target enumerated and never read refuses the scan
+// ---------------------------------------------------------------------------
+//
+// The last way a target could leave the corpus quietly. The enumeration produced
+// it, `--allow-fixture` subtracted it, and the run then reported on WHAT WAS LEFT
+// while spending an exit code that is a claim about the whole argv: a corpus
+// whose only violator was the withdrawn file printed `OK, no hits` at exit 0.
+//
+// The flag, the override log and the rejection gate are all KEPT, so every case
+// below still has to get past them; what they can no longer reach is the clean
+// code. The subtraction is kept too, and asserted: a refusal is not permission to
+// report the values inside the file it refuses over.
+
+describe("phi-scan: a withdrawn target refuses the run, in the modes that actually run", () => {
   const LOG = (p: string): string =>
     `# phi-scan bypass log\n\n## Entries\n\n### ${p}\n\n- **Reason:** test\n`;
 
-  it("subtracts a logged path from the ALL-mode sweep, and announces it", () => {
+  it("refuses the ALL-mode sweep over a logged bypass, announcing and then naming it", () => {
     const root = makeRepo();
     writeFileSync(join(root, "test", "violator.test.ts"), SYNTHETIC_PHI);
     writeFileSync(join(root, "phi-scan-overrides.md"), LOG("test/violator.test.ts"));
 
     expect(runIn(root, []).code).toBe(1); // without the flag it is a hit
     const r = runIn(root, ["--allow-fixture", "test/violator.test.ts"]);
-    expect(r.code, `stderr: ${r.stderr}`).toBe(0);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(2);
     expect(r.stderr).toContain("BYPASSED");
+    expect(r.stderr).toMatch(/enumerated and never read/);
     expect(r.stderr).toContain("test/violator.test.ts");
+    // The subtraction still holds: the file was not scanned, so nothing inside
+    // it is reported. A refusal that printed the values would be worse than the
+    // silence it replaces.
+    expectNoPhi(r.stderr);
+    expect(r.stdout).not.toMatch(/OK, no hits/);
   });
 
-  it("subtracts it from --staged too, the route the pre-commit hook runs", () => {
+  it("refuses on --staged too, the route the pre-commit hook runs", () => {
     const root = makeRepo();
     writeFileSync(join(root, "test", "violator.test.ts"), SYNTHETIC_PHI);
     writeFileSync(join(root, "phi-scan-overrides.md"), LOG("test/violator.test.ts"));
     git(root, ["add", "test/violator.test.ts"]);
 
     expect(runIn(root, ["--staged"]).code).toBe(1);
-    expect(runIn(root, ["--staged", "--allow-fixture", "test/violator.test.ts"]).code).toBe(0);
+    const r = runIn(root, ["--staged", "--allow-fixture", "test/violator.test.ts"]);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(2);
+    expect(r.stderr).toContain("test/violator.test.ts");
+    expectNoPhi(r.stderr);
+  });
+
+  it("refuses with a code that is NEITHER the clean code NOR the hits code", () => {
+    // The discriminator, stated as its own case because the two adjacent
+    // outcomes are the two ways this rule goes silently missing: exit 0 is a
+    // clean verdict about a file nothing opened, and exit 1 over the run below
+    // would mean the same argv reports CLEAN as soon as the only remaining
+    // violator is the withdrawn one. Two readable in-scope targets are named,
+    // one of them is withdrawn, and the run must land on neither number.
+    const root = makeRepo();
+    writeFileSync(join(root, "test", "violator.hl7"), SYNTHETIC_PHI);
+    writeFileSync(join(root, "test", "decoy.hl7"), "nothing to see here\n");
+    writeFileSync(join(root, "phi-scan-overrides.md"), LOG("test/decoy.hl7"));
+
+    // The premise, both halves: the violator is a hit on its own, and the decoy
+    // scans clean on its own. Only the withdrawal separates them from the run
+    // below, so a refusal there cannot be coming from either file's content.
+    const hitRun = runIn(root, ["test/violator.hl7"]);
+    expect(hitRun.code, `stderr: ${hitRun.stderr}`).toBe(1);
+    expect(runIn(root, ["test/decoy.hl7"]).code).toBe(0);
+
+    const r = runIn(root, [
+      "test/violator.hl7",
+      "test/decoy.hl7",
+      "--allow-fixture",
+      "test/decoy.hl7",
+    ]);
+    expect(r.code, `stderr: ${r.stderr}`).not.toBe(0);
+    expect(r.code, `stderr: ${r.stderr}`).not.toBe(hitRun.code);
+    expect(r.stderr).toContain("test/decoy.hl7");
+    expect(r.stderr).toMatch(/enumerated and never read/);
+  });
+
+  it("still reports the hits it DID find before refusing, a refusal may not swallow one", () => {
+    // Same reason the index route's refusals run after the walk is scanned: the
+    // run carrying a bypass is exactly the run most likely to have found PHI
+    // somewhere else, and printing the refusal alone would make this output
+    // strictly worse than the one it replaces.
+    const root = makeRepo();
+    writeFileSync(join(root, "test", "violator.hl7"), SYNTHETIC_PHI);
+    writeFileSync(join(root, "test", "decoy.hl7"), "nothing to see here\n");
+    writeFileSync(join(root, "phi-scan-overrides.md"), LOG("test/decoy.hl7"));
+
+    const r = runIn(root, [
+      "test/violator.hl7",
+      "test/decoy.hl7",
+      "--allow-fixture",
+      "test/decoy.hl7",
+    ]);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(2);
+    expect(r.stderr).toContain("test/violator.hl7");
+    expect(r.stderr).toContain(SSN);
+    expect(r.stderr).toMatch(/enumerated and never read/);
+  });
+
+  it("a bypass the run never enumerated withdraws nothing, so nothing is refused", () => {
+    // The ledger is the ENUMERATION, not the argv. On `--staged` a logged file
+    // that is not staged was never a target, so there is no unread target and no
+    // refusal -- which is the honest answer rather than a hole. The flag is still
+    // rejected up front when it could never subtract anything (absent, a
+    // directory, a `.md`, outside every scan root); those cases are below.
+    const root = makeRepo();
+    writeFileSync(join(root, "test", "unstaged.test.ts"), "export const clean = 1;\n");
+    writeFileSync(join(root, "phi-scan-overrides.md"), LOG("test/unstaged.test.ts"));
+    git(root, ["add", "src/ordinary.ts"]);
+
+    const r = runIn(root, ["--staged", "--allow-fixture", "test/unstaged.test.ts"]);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(0);
+    expect(r.stdout).toMatch(/OK, no hits/);
   });
 
   it("refuses a logged path that no longer exists, a bypass may not rot silently", () => {
@@ -1056,28 +1260,44 @@ describe("phi-scan: the whole-file bypass, in the modes that actually run", () =
   });
 });
 
-describe("phi-scan: this repo's own wiring still carries both halves of its one bypass", () => {
-  // The bypass only holds if the manifest passes the flag AND the log authorizes
-  // it. Dropping either half is silent: without the flag CI reddens on the
-  // scanner's own violator literals, and without the log entry the scan refuses.
-  const BYPASSED = "test/scripts/phi-scan.test.ts";
+describe("phi-scan: this repo's own wiring no longer depends on a bypass", () => {
+  // The retirement, pinned from the shipped wiring rather than from prose. A
+  // shipped invocation that still passed the flag would refuse on EVERY pull
+  // request, and a log entry nothing passes is an audit record of a bypass that
+  // is not in force: both are silent, and each has its own case.
+  const RETIRED = "test/scripts/phi-scan.test.ts";
 
-  it("package.json's phi-scan script passes --allow-fixture for it", () => {
+  it("package.json's phi-scan script passes no --allow-fixture at all", () => {
     const manifest: unknown = JSON.parse(readFileSync(join(REPO_ROOT, "package.json"), "utf8"));
     const scripts =
       typeof manifest === "object" && manifest !== null && "scripts" in manifest
         ? (manifest.scripts as Record<string, string>)
         : {};
-    expect(scripts["phi-scan"]).toContain(`--allow-fixture ${BYPASSED}`);
+    const phiScan = scripts["phi-scan"] ?? "";
+    expect(phiScan).toContain("scripts/phi-scan.ts");
+    expect(phiScan).not.toContain("--allow-fixture");
+    // The pre-commit hook is the same script plus a mode flag, so it inherits
+    // the absence rather than restating it. Assert that it still does.
+    const hooks =
+      typeof manifest === "object" && manifest !== null && "simple-git-hooks" in manifest
+        ? (manifest["simple-git-hooks"] as Record<string, string>)
+        : {};
+    expect(hooks["pre-commit"]).not.toContain("--allow-fixture");
   });
 
-  it("phi-scan-overrides.md logs it", () => {
-    expect(readFileSync(join(REPO_ROOT, "phi-scan-overrides.md"), "utf8")).toContain(
-      `### ${BYPASSED}`,
-    );
+  it("no workflow passes one either, and CI runs the scan on every pull request", () => {
+    // `.github/` is outside every scan root, so nothing else here would notice a
+    // flag reappearing there. The scan runs as a STEP of the shared pipeline's
+    // required `verify` job, switched on by this input.
+    const ci = readFileSync(join(REPO_ROOT, ".github", "workflows", "ci.yml"), "utf8");
+    expect(ci).toContain("run-phi-scan: true");
+    for (const name of readdirSync(join(REPO_ROOT, ".github", "workflows"))) {
+      const text = readFileSync(join(REPO_ROOT, ".github", "workflows", name), "utf8");
+      expect(text, `${name} passes a bypass`).not.toContain("--allow-fixture");
+    }
   });
 
-  it("and it is the ONLY file bypassed", () => {
+  it("phi-scan-overrides.md records NO entry, so nothing is left to be honoured", () => {
     // Fenced blocks are skipped here for the same reason the scanner skips them:
     // the log's own "## Format" section shows the entry shape inside a fence, and
     // a flat `^###` sweep reads that placeholder as a logged path. This assertion
@@ -1094,7 +1314,18 @@ describe("phi-scan: this repo's own wiring still carries both halves of its one 
       const m = /^###\s+(.+?)\s*$/.exec(line);
       if (m?.[1] !== undefined) entries.push(m[1]);
     }
-    expect(entries).toEqual([BYPASSED]);
+    expect(entries).toEqual([]);
+    expect(log).not.toContain(`### ${RETIRED}`);
+  });
+
+  it("and this file, the one that WAS bypassed, now scans clean on its own", () => {
+    // The other half of the retirement, and the one a reader would otherwise
+    // have to take on trust: `pnpm phi-scan` sweeps this module like any other
+    // file under `test/`, so a violator literal reintroduced above reddens here
+    // rather than on a pull request.
+    const r = runScanner([join(REPO_ROOT, "test", "scripts", "phi-scan.test.ts")]);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(0);
+    expect(r.stdout).toMatch(/OK, no hits/);
   });
 });
 
@@ -1113,7 +1344,7 @@ describe("phi-scan: the X12 recogniser finds an ISA header that is not at offset
     "const wire =\n" +
     `  "${ISA}" +\n` +
     '  "GS*HC*A*B*20260615*0930*2*X*005010X222A2~ST*837*0002~" +\n' +
-    '  "NM1*IL*1*RIVERA*JUANITA****MI*REALMEMBER9~DMG*D8*19780314*F~" +\n' +
+    `  "NM1*IL*1*${PT_FAMILY}*${PT_GIVEN}****MI*${MEMBER}~DMG*D8*${PT_DOB}*F~" +\n` +
     '  "SE*4*0002~GE*1*2~IEA*1*000000002~";\n';
 
   it("catches a patient NM1 name / id and a DMG DOB inline in a .ts module", () => {
@@ -1134,7 +1365,7 @@ describe("phi-scan: the X12 recogniser finds an ISA header that is not at offset
       join(root, "test", "fixtures", "inline.edi"),
       ISA +
         "GS*HC*A*B*20260615*0930*2*X*005010X222A2~ST*837*0002~" +
-        "NM1*IL*1*RIVERA*JUANITA****MI*REALMEMBER9~DMG*D8*19780314*F~" +
+        `NM1*IL*1*${PT_FAMILY}*${PT_GIVEN}****MI*${MEMBER}~DMG*D8*${PT_DOB}*F~` +
         "SE*4*0002~GE*1*2~IEA*1*000000002~",
     );
 
@@ -1161,7 +1392,7 @@ describe("phi-scan: the HL7 recogniser reads a segment without a usable MSH abov
     const root = makeRepo();
     writeFileSync(
       join(root, "test", "bare.test.ts"),
-      'export const seg = "PID|1||REALMRN99^^^H^MR||RIVERA^JUANITA||19780314|F";\n',
+      `export const seg = "PID|1||${MRN}^^^H^MR||${PT_FAMILY}^${PT_GIVEN}||${PT_DOB}|F";\n`,
     );
 
     const r = runIn(root, []);
@@ -1175,7 +1406,7 @@ describe("phi-scan: the HL7 recogniser reads a segment without a usable MSH abov
       join(root, "test", "indented.test.ts"),
       "export const msg = `\n" +
         "    MSH|^~\\\\&|A|B|C|D|20200101||ADT^A01|M1|P|2.5\n" +
-        "    PID|1||REALMRN99^^^H^MR||RIVERA^JUANITA||19780314|F\n" +
+        `    PID|1||${MRN}^^^H^MR||${PT_FAMILY}^${PT_GIVEN}||${PT_DOB}|F\n` +
         "  `;\n",
     );
 
@@ -1191,7 +1422,7 @@ describe("phi-scan: the HL7 recogniser reads a segment without a usable MSH abov
     const root = makeRepo();
     writeFileSync(
       join(root, "test", "fixtures", "short-enc.hl7"),
-      "MSH|^|A|B|C|D|20200101||ADT^A01|M1|P|2.5\rPID|1||REALMRN99^^^H^MR||RIVERA^JUANITA||19780314|F\r",
+      `MSH|^|A|B|C|D|20200101||ADT^A01|M1|P|2.5\rPID|1||${MRN}^^^H^MR||${PT_FAMILY}^${PT_GIVEN}||${PT_DOB}|F\r`,
     );
 
     const r = runIn(root, []);
@@ -1219,7 +1450,8 @@ describe("phi-scan: the HL7 recogniser reads a segment without a usable MSH abov
     writeFileSync(
       join(root, "test", "subsep.test.ts"),
       'export const m =\n  "MSH|^~\\\\&|A|B|C|D|20200101||ADT^A01|M1|P|2.5' +
-        '\\rPID|1||ZZMRN001^^^H^MR||RIVERA&X^JUANITA||19850302";\n',
+        `\\rPID|1||ZZMRN001^^^H^MR||${PT_FAMILY}&X^${PT_GIVEN}||${DECLARED_DOB_2}` +
+        '";\n',
     );
 
     const r = runIn(root, []);
@@ -1267,7 +1499,7 @@ describe("phi-scan: an X12 segment broken across lines is read BOTH ways", () =>
   const WRAPPED =
     ISA +
     "\nGS*HC*A*B*20260615*0930*2*X*005010X222A2~\nST*837*0002~\n" +
-    "NM1*IL*1*\nRIVERA*JUANITA****MI*REALMEMBER9~\n" +
+    `NM1*IL*1*\n${PT_FAMILY}*${PT_GIVEN}****MI*${MEMBER}~\n` +
     "SE*3*0002~\nGE*1*2~\nIEA*1*000000002~\n";
 
   it("catches every element after a hard wrap inside a segment (exit 1)", () => {
@@ -1306,7 +1538,7 @@ describe("phi-scan: an X12 segment broken across lines is read BOTH ways", () =>
         "  `${ISA}GS*HC*A*B*20260615*0930*2*X*005010X222A2~ST*837*0002~${body}SE*9*0002~IEA*1*000000002~`;\n" +
         'export const label = "blocked";\n' +
         'export const other = "pseudonymized";\n' +
-        'export const raw = wrap("NM1*IL*1*RIVERA*JUANITA****MI*REALMEMBER9~");\n',
+        `export const raw = wrap("NM1*IL*1*${PT_FAMILY}*${PT_GIVEN}****MI*${MEMBER}~");\n`,
     );
 
     const r = runIn(root, []);
@@ -1329,7 +1561,7 @@ describe("phi-scan: an X12 segment broken across lines is read BOTH ways", () =>
       `export const note = "${proseIsa}";\n` +
         `export const raw =\n  "${ISA}" +\n` +
         '  "GS*HC*A*B*20260615*0930*2*X*005010X222A2~ST*837*0002~" +\n' +
-        '  "NM1*IL*1*RIVERA*JUANITA****MI*REALMEMBER9~SE*3*0002~IEA*1*000000002~";\n',
+        `  "NM1*IL*1*${PT_FAMILY}*${PT_GIVEN}****MI*${MEMBER}~SE*3*0002~IEA*1*000000002~";\n`,
     );
 
     const r = runIn(root, []);
@@ -1347,7 +1579,8 @@ describe("phi-scan: indentation is stripped in the literal view only", () => {
     writeFileSync(
       join(root, "test", "indented-clean.test.ts"),
       "export const msg = `MSH|^~\\\\&|A|B|C|D|20200101||ADT^A01|M1|P|2.5\n" +
-        "    PID|1||ZZMRN001^^^H^MR||ZZFAMILY^ZZGIVEN||19850302`;\n",
+        `    PID|1||ZZMRN001^^^H^MR||ZZFAMILY^ZZGIVEN||${DECLARED_DOB_2}` +
+        "`;\n",
     );
 
     const r = runIn(root, []);
@@ -1359,7 +1592,8 @@ describe("phi-scan: indentation is stripped in the literal view only", () => {
     writeFileSync(
       join(root, "test", "indented-dirty.test.ts"),
       "export const msg = `MSH|^~\\\\&|A|B|C|D|20200101||ADT^A01|M1|P|2.5\n" +
-        "    PID|1||REALMRN99^^^H^MR||RIVERA^JUANITA||19850302`;\n",
+        `    PID|1||${MRN}^^^H^MR||${PT_FAMILY}^${PT_GIVEN}||${DECLARED_DOB_2}` +
+        "`;\n",
     );
 
     const r = runIn(root, []);
@@ -1400,7 +1634,7 @@ describe("phi-scan index corpus: the five states the walk alone reported clean",
     const r = runIn(root, []);
     expect(r.code, `stderr: ${r.stderr}`).toBe(1);
     expect(r.stderr).toContain("src/decoy.ts");
-    expect(r.stderr).toContain("123-45-6789");
+    expect(r.stderr).toContain(SSN);
     expect(r.stderr).toMatch(/PID-5\.1 value="RIVERA"/);
     // The remedy differs from a file the walk never reached, so the origin does.
     expect(r.stderr).toContain("the working tree differs");
@@ -1597,15 +1831,18 @@ describe("phi-scan index corpus: what it excludes, and what an exclusion may not
     expect(r.code, `stderr: ${r.stderr}`).toBe(0);
   });
 
-  it("honors --allow-fixture, which in THIS repo is a live subtraction and not dead code", () => {
-    // `parseArgs` does not seed the positional path set from the flag, so
-    // `pnpm phi-scan` runs in ALL mode with the one logged bypass in force.
-    // Without this subtraction the route would read the bypassed file straight
-    // out of the index and red-lock the repo.
+  it("subtracts --allow-fixture here too, and the subtraction is not dead code", () => {
+    // The run REFUSES now (the withdrawn path was enumerated and never read),
+    // but the subtraction is still load-bearing and separately so: without it
+    // this route would read the bypassed file straight out of the index and
+    // report its values, which is a refusal that leaks what it refused over.
     const root = makeRepo();
     const rel = "test/scripts/phi-scan.test.ts";
     mkdirSync(join(root, "test", "scripts"), { recursive: true });
-    copyFileSync(join(REPO_ROOT, "phi-scan-overrides.md"), join(root, "phi-scan-overrides.md"));
+    writeFileSync(
+      join(root, "phi-scan-overrides.md"),
+      `# phi-scan bypass log\n\n## Entries\n\n### ${rel}\n\n- **Reason:** test\n`,
+    );
     // ▶ THE COMMITTED BYTES CARRY THE PHI AND THE WORKING-TREE BYTES DO NOT, and
     // that asymmetry is what makes this case load-bearing rather than decorative.
     // With both copies identical the byte-comparison skip fires first, the index
@@ -1620,10 +1857,12 @@ describe("phi-scan index corpus: what it excludes, and what an exclusion may not
     expect(un.code, `stderr: ${un.stderr}`).toBe(1);
     expect(un.stderr).toContain("the working tree differs");
 
-    // Bypassed, neither route reads it -- including the index route.
+    // Bypassed, neither route reads it -- including the index route -- and the
+    // run then refuses over the target it enumerated and never opened.
     const r = runIn(root, ["--allow-fixture", rel]);
-    expect(r.code, `stderr: ${r.stderr}`).toBe(0);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(2);
     expect(r.stderr).toContain("BYPASSED");
+    expect(r.stderr).toMatch(/enumerated and never read/);
     expectNoPhi(r.stderr);
   });
 });
@@ -1643,7 +1882,7 @@ describe("phi-scan index corpus: a refusal must not swallow a real hit", () => {
     const r = runIn(root, []);
     expect(r.code, `stderr: ${r.stderr}`).toBe(2);
     expect(r.stderr).toContain("src/violator.hl7");
-    expect(r.stderr).toContain("123-45-6789");
+    expect(r.stderr).toContain(SSN);
     expect(r.stderr).toContain("cannot be scanned");
     expectNoPhi(r.stderr.slice(r.stderr.indexOf("cannot be scanned")));
   });
@@ -1662,7 +1901,7 @@ describe("phi-scan index corpus: a refusal must not swallow a real hit", () => {
 
     const r = runIn(root, []);
     expect(r.code, `stderr: ${r.stderr}`).toBe(2);
-    expect(r.stderr).toContain("123-45-6789");
+    expect(r.stderr).toContain(SSN);
     expect(r.stderr).toContain("holds no entries");
   });
 });
