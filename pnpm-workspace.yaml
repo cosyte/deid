@@ -14,6 +14,7 @@
 #   minimumReleaseAge  a publication cooldown, in minutes. 1440 is pnpm's own figure and its
 #                      own rationale: malware is usually detected quickly, so delaying
 #                      updates by 24 hours most likely avoids installing a bad version.
+#                      @cosyte is exempt by operator decision; every third-party package keeps the floor.
 #   trustPolicy        `no-downgrade` refuses a resolution that moves a dependency BACKWARDS,
 #                      which is how a yanked-and-republished package re-enters a tree.
 #
@@ -33,4 +34,31 @@ packages:
   - "."
 
 minimumReleaseAge: 1440
+minimumReleaseAgeExclude:
+  # reason: first-party @cosyte package, exempt from the floor by operator decision
+  - "@cosyte/ccda"
+  # reason: first-party @cosyte package, exempt from the floor by operator decision
+  - "@cosyte/deid"
+  # reason: first-party @cosyte package, exempt from the floor by operator decision
+  - "@cosyte/dicom"
+  # reason: first-party @cosyte package, exempt from the floor by operator decision
+  - "@cosyte/eslint-config"
+  # reason: first-party @cosyte package, exempt from the floor by operator decision
+  - "@cosyte/fhir"
+  # reason: first-party @cosyte package, exempt from the floor by operator decision
+  - "@cosyte/hl7"
+  # reason: first-party @cosyte package, exempt from the floor by operator decision
+  - "@cosyte/ncpdp"
+  # reason: first-party @cosyte package, exempt from the floor by operator decision
+  - "@cosyte/prettier-config"
+  # reason: first-party @cosyte package, exempt from the floor by operator decision
+  - "@cosyte/test-utils"
+  # reason: first-party @cosyte package, exempt from the floor by operator decision
+  - "@cosyte/tsconfig"
+  # reason: first-party @cosyte package, exempt from the floor by operator decision
+  - "@cosyte/tsup-config"
+  # reason: first-party @cosyte package, exempt from the floor by operator decision
+  - "@cosyte/vitest-config"
+  # reason: first-party @cosyte package, exempt from the floor by operator decision
+  - "@cosyte/x12"
 trustPolicy: no-downgrade
