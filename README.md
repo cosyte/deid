@@ -23,15 +23,17 @@ but **inverts the reflex**: where a parser is liberal on input, a de-identifier 
 > (§164.514(b)(1)) is supported, never rendered or certified.** The certification is
 > always the consumer's.
 
-> **Status:** pre-alpha (`0.0.x`), published on npm. This release ships the **format-agnostic
-> core** plus six format bindings: the **HL7 v2 adapter** (`@cosyte/deid/hl7`), the **C-CDA adapter**
+> **Status:** `0.1`, published on npm. Below 1.0, a breaking change raises the minor version and the
+> changelog says what broke. This release ships the **format-agnostic core** plus six format
+> bindings: the **HL7 v2 adapter** (`@cosyte/deid/hl7`), the **C-CDA adapter**
 > (`@cosyte/deid/ccda`), the **FHIR R4 adapter** (`@cosyte/deid/fhir`), the **X12 EDI adapter**
-> (`@cosyte/deid/x12`), the **NCPDP Telecom adapter** (`@cosyte/deid/ncpdp`), and the **DICOM adapter**
-> (`@cosyte/deid/dicom`), plus the **longitudinal layer**, the corpus registry (`createDeidRegistry`)
-> for cross-document consistency and the formalized key contract, and the **Expert-Determination support
-> report** (`buildExpertDeterminationSupportReport`) that structures the manifest for a statistician
-> **without ever rendering a determination**. NCPDP SCRIPT is **not** supported, and an entry point
-> handed one refuses it outright rather than returning a partial pass.
+> (`@cosyte/deid/x12`), the **NCPDP Telecom adapter** (`@cosyte/deid/ncpdp`), and the **DICOM
+> adapter** (`@cosyte/deid/dicom`), plus the **longitudinal layer**, the corpus registry
+> (`createDeidRegistry`) for cross-document consistency and the formalized key contract, and the
+> **Expert-Determination support report** (`buildExpertDeterminationSupportReport`) that structures
+> the manifest for a statistician **without ever rendering a determination**. NCPDP SCRIPT is
+> **not** supported, and an entry point handed one refuses it outright rather than returning a
+> partial pass.
 
 ## Install
 
@@ -44,6 +46,10 @@ npm install @cosyte/deid
 ```ts
 import { deidentify, SAFE_HARBOR_CATEGORIES } from "@cosyte/deid";
 
+// Synthetic inputs: placeholders in the shape of an HL7 v2 name and date of birth, not a person.
+const name = "ZZFAMILY^ZZGIVEN";
+const dob = "19900215";
+
 const { document, manifest } = deidentify(
   {
     loci: [
@@ -55,11 +61,19 @@ const { document, manifest } = deidentify(
   {},
 );
 
-// document.loci[0].value === null   (name removed)
-// document.loci[1].value === "<year>" (date generalized)
-// document.loci[2].value === "5.4 mmol/L" (clinical value retained, the over-scrub guard)
-// manifest records each category + locus + disposition, never a value.
+console.log(document.loci.map((locus) => locus.value));
+console.log(manifest.map((entry) => `${entry.locus} ${entry.category} ${entry.disposition}`));
 ```
+
+```text
+[ null, '1990', '5.4 mmol/L' ]
+[ 'PID-5 NAMES removed', 'PID-7 DATES transformed' ]
+```
+
+The name is removed, the date keeps only its year, and the clinical value is retained untouched (the
+over-scrub guard). The manifest records the category, locus and disposition of each decision, never
+the value. [`examples/`](https://github.com/cosyte/deid/tree/main/examples) has runnable programs for
+the HL7 v2 adapter, the fail-closed cases and the Expert Determination support report.
 
 ## Keyed transforms
 
