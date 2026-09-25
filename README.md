@@ -419,7 +419,7 @@ const { x12, manifest } = deidentifyX12(parseX12(raw), { context });
 
 | Locus                                                        | Handling                                                                                                                                                     |
 | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **`NM1`** (subscriber / patient / dependent)                 | name (`03` to `07`) **removed**; id (`09`) routed by the `08` qualifier: SSN **removed**, member **removed** under Safe Harbor                                    |
+| **`NM1`** (subscriber / patient / dependent)                 | name (`03` to `07`) **removed**; id (`09`) routed by the `08` qualifier: SSN **removed**, member **removed** under Safe Harbor                               |
 | **`NM1` / `N1`** (employer, entity code `36`)                | name + id **removed** on the same footing as a patient-side party: §164.514(b)(2)(i) names the individual's **employers**                                    |
 | **`NM1`** (recognized provider / organization)               | **retained** (provider identity is not the individual's PHI, mirroring the HL7 adapter), and the **role code** it was classified on is recorded at its locus |
 | **`NM1`** (unknown entity code)                              | **fails closed**: name + id blocked                                                                                                                          |
