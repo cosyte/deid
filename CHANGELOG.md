@@ -1,5 +1,433 @@
 # Changelog
 
+## 0.1.0
+
+### Minor Changes
+
+- 6cb30d9: `0.1.0` is the first release of `@cosyte/deid` whose public API we ask you to build on.
+
+  **What is covered, and what you can depend on.** Applying a de-identification policy to a structurally located model of a healthcare document and getting back the transformed model plus a value-free manifest. That means the built-in HIPAA Safe Harbor policy across all 18 identifier categories, `defineDeidPolicy`, the two named profiles and `defineDeidProfile` (which can only tighten a profile), the five transforms (redact, generalize, keyed date-shift, keyed pseudonymize, keyed hash), the adapters for HL7 v2, C-CDA, FHIR R4, X12, NCPDP Telecom and DICOM metadata at their own subpaths, the corpus registry for consistent keyed surrogates and date shifts across documents, the free-text redactor interface, and the Expert Determination support report. Failing closed is part of the contract: an uncertain value is blocked, free text is blocked unless your redactor handles it, and a keyed transform with no key is a fatal `DEID_NO_KEY`. The stable `DEID_*` codes are public API, so renaming or removing one is a breaking change. Node.js 22 and 24, ESM and CommonJS, with type declarations for both, and no third-party runtime dependency.
+
+  **What the version promises.** Until 1.0, a breaking change raises the minor version (0.1 to 0.2), and the changelog entry says what broke and what to change. A patch release (0.1.x) does not break you, so a `^0.1.0` range takes the patches and stops before 0.2.0.
+
+  **What it is not, and what is not covered yet.** A result is "Safe-Harbor-transformed per the configured policy". It is not a certification that data is de-identified and not a compliance claim: the actual-knowledge condition of Safe Harbor stays with you, and an Expert Determination is supported, never rendered. Not covered yet: NCPDP SCRIPT, which is refused with `DEID_FORMAT_UNSUPPORTED`; DICOM pixel data, where burned-in text is flagged and never cleaned; a built-in free-text scrubber; and value-bearing positions no rule names, which are counted as unexamined residuals rather than cleaned. The documentation at https://docs.cosyte.com/deid lists the known limitations in full.
+
+  The repository now carries runnable examples under `examples/`, including the fail-closed cases, run against the built package on every change.
+
+### Patch Changes
+
+- f8b7f56: The guidance pair is now gated: every anchor link from the project guide into its narrative companion
+  is checked, and a broken one fails the build.
+
+  This repository's guidance was split in two, a cursor file of rules and traps and a narrative file
+  holding the case behind each one, with the first citing the second by anchor throughout. That split
+  made the links load-bearing and nothing checked them. Three failures were silent: the narrative file
+  ceasing to be tracked, a section emptied down to its heading so a link resolves to nothing, and an
+  anchor edited on one side of the pair and not the other. The new check covers those three, on this
+  tree, and states in its own header that it covers nothing else.
+
+  It is named for what it checks and asserts no universal. The two-file split was applied widely, so
+  the tempting framing is that every repository owes this contract, and that framing is false: several
+  carry no narrative file at all, and for those the honest outcome is a written exemption rather than
+  an invented file. An overclaiming guard is worse than a narrow one, because it invites a reader to
+  trust a promise the tree does not keep. A claim about another repository is not checkable from inside
+  this one, and the check does not make one.
+
+  The matcher, the anchor space and the corpus partition were each derived by measuring this tree, and
+  none of the three was carried over from a sibling. Two link spellings are live across these packages,
+  a path-qualified one and a bare inline-code one, and which dominates is a property of the tree rather
+  than of the convention: elsewhere a qualified-only matcher would have reported everything resolving
+  while covering three links of thirty-eight, and in another it would have matched nothing at all and
+  still exited zero. Measured here with two independent tools before the matcher was written: the
+  qualified spelling is the only live one, the anchor space is heading slugs with no explicit anchor
+  tags and no headings inside comments, and every link resolved. None of those figures is written into
+  a comment, because a figure in prose goes stale unread. The check prints every count on every run.
+
+  Deciding to match one spelling only is safe exactly as long as the other stays absent, so the absence
+  is observed rather than assumed. Every file the check opens is censused for the bare shape on every
+  run, not just the pair, because a bare link in a third file would otherwise be seen by neither the
+  matcher nor the census. A span whose anchor is all decimal digits is a pull-request reference and is
+  counted and reported; anything else refuses the run outright and says to re-derive the matcher. The
+  same reasoning covers the anchor space: an explicit anchor tag in the narrative file refuses rather
+  than being ignored, because a package whose anchors are tags would have every link reported as
+  broken by a slug-only reading. Both convert a scoping decision into a measurement that can invalidate
+  itself.
+
+  The partition of readable files is UTF-8 decodability, not the presence of a NUL byte, and that is
+  the part a copied implementation gets wrong in silence. Three hand-written TypeScript sources here
+  embed NUL bytes as domain separators, so a NUL rule drops authored source out of both the matcher and
+  the census with nothing to notice; this package had already measured and rejected a binary-content
+  predicate elsewhere for the same reason. Git's own classification is a third, different set, calling
+  two of those three binary because its heuristic reads only the head of a file, so neither it nor an
+  end-of-line listing may be substituted in as a simplification. The count of files read despite
+  carrying a NUL byte is printed on the OK line, so a regression to the narrower rule appears as a
+  number rather than as silence.
+
+  Failure to observe is separated from failure to comply. Exit 1 means a finding a person acts on: a
+  missing file, an emptied section, a broken link. Exit 2 means the check could not honestly report,
+  and it is spent on an unreadable or non-regular path, a symlink, an unmerged path, an empty corpus,
+  an ambiguous narrative filename, a suspected bare link, an explicit anchor tag, an unterminated
+  comment, and on finding no qualified links at all, which on this tree cannot be a clean result. Every
+  tracked path is opened or skipped for a named reason and the two sets are reconciled before anything
+  is reported, because the likeliest failure of a checker is not a wrong answer but a right-looking one
+  over a corpus it never read.
+
+  Twelve cases pin it, each red preceded by an asserted green so that no failure proves merely that a
+  fixture was broken. Beyond those, it was run against a file copy of this tree with one real anchor
+  mutated: clean, then a failure naming the file, the line and the anchor, then clean again once the
+  file was restored. The heading record carries its anchor and its body range together, because a
+  control that binds those separately can print OK over an emptied section, having judged the anchor
+  unreferenced and the heading empty in two passes that each skipped it. The check reads every tracked
+  file with no exemption for its own source or its own tests, since an exemption there is exactly where
+  a broken link would hide, so every sample link and sample span in both files is assembled at runtime
+  rather than written out.
+
+  A heading inside an HTML comment renders no anchor, so it is suppressed rather than counted, the
+  suppressions are reported, and an unterminated comment refuses instead of swallowing the rest of the
+  file. Links are matched when spelled in ASCII bytes, which includes a UTF-7 document, since that
+  encoding permits a bare hash unescaped.
+
+  It runs from its own script, is reached by the aggregate check and by the test suite, and therefore
+  rides the existing required build context and the pre-publish ladder. No new workflow and no new
+  required status were added, because requiring a status before its workflow has run on the default
+  branch leaves pull requests pending rather than failing, which has cost this repository twice. The
+  project guide gained its entry within its existing byte budget, by relocating a duplicated toolchain
+  summary into the narrative file where the full version already lived.
+
+  Four things came out under adversarial review, two of them shapes carried over rather than newly
+  written. A rejoining step that retried a failed anchor against the following line was deleted: its
+  comment claimed it could not manufacture a pass, which is true only of links that already resolved,
+  and it was reproduced reporting everything as resolving over a truncated anchor whose continuation
+  supplied the missing character. It rescued none of this tree's real links, so it bought nothing while
+  opening the one direction the check must never fail in; a link an editor wrapped now fails, and the
+  fix is to unwrap it. A sentence generalising about other packages was removed from three places,
+  because such a claim is not checkable from inside this one and the convention it asserted is recorded
+  as a per-package decision. The closing rule for a fenced block was wrong: any run of the same
+  character ended it, so a nested sample closed the outer block on the inner opener and every heading
+  after that minted an anchor no renderer produces; the rule is now same marker, at least as long, no
+  info string, and no backtick inside a backtick fence's info string, which is the opposite half of the
+  same defect. And the missing-cursor-file finding was unreachable behind the no-links refusal, which
+  answered a modelled break with a misdiagnosis; both are fail-closed, one is legible.
+
+  A second review pass then caught the remedy's own vacuous control: the nested-sample case aimed at a
+  heading that sits inside the sample under the broken rule and the correct one alike, so every one of
+  its assertions passed against the unfixed code. It aims at the heading after the inner opener now,
+  which is the only one that changes side. A third pass then found that claim overstated in turn: the
+  fence rule has four conditions in all, three on the closer and one on the opener, one of those could
+  still be deleted with everything green, and three
+  documents said each had been checked by exactly the method that disproved it. All four now have a
+  case, verified by deleting that condition alone, and each new case was checked by reverting its fix
+  and watching the case fail. A control that does not change answer when the fix is reverted is a
+  control of nothing, and removing conditions in pairs proves nothing about either one.
+
+  Scope, stated rather than discovered: only the narrative file's basename is compared, so relocating
+  it to another directory while the links keep their old prefix passes while every rendered link
+  breaks; a file that is not valid UTF-8 is skipped whole and the skip is counted; a link at any other
+  file's anchor is out of scope; and a section with a body is not a section with the right body, which
+  stays a human judgement.
+
+- 8c0a01f: Count and locate every value-bearing position a pass hands through without examining it, so an empty residual inventory can be told apart from an unmeasured one.
+
+  The library fails closed on _structures_: an unrecognized segment, resource, loop or extension is blocked. It has never failed closed on _positions inside a structure it hands through_, and until now such a position was passed through untouched and recorded nowhere at all. The pass-through is a stated limitation a consumer can filter for; the silence was not, because an Expert-Determination support report whose residual inventories are empty reads the same whether the pass found nothing or measured nothing, and a determiner acts on that emptiness.
+
+  Every de-identification result now carries a second value-free list, `unexaminedResiduals`, beside its manifest. Each record names the position's structural locus, how many values sat there, and the fact that no rule examined it: never a value, never a key, never a date-shift offset. All six format bindings produce it, from the unmapped fields of a retained HL7 v2 segment and the entry dates inside a retained C-CDA clinical body to every value-bearing DICOM attribute the delegated Annex E report does not account for, nested sequence items included. Only positions that carry a value are counted: an attribute or field sent empty is not a residual, and a sequence container is a structure rather than a position.
+
+  The unit is the **position**, never the structure it sits in and never the element it sits on. Retaining a structure names nothing inside it, so a document's envelope is enumerated like everything else it hands through: an HL7 v2 `MSH`, a CDA document envelope, the X12 interchange and functional-group envelope (`ISA` / `TA1` / `GS` / `GE` / `IEA`) and the DICOM Part 10 File Meta group `(0002,xxxx)`. And a rule that reaches one position says nothing about the ones beside it, so a C-CDA `<telecom use="HP" value="...">` whose `@value` is removed still reports its `@use`, which is handed through untouched.
+
+  **What counts as a position is derived from what each parser's model can carry**, not from the places a value usually sits, so the enumeration reaches the carriers that are easy to overlook: XML character data delivered as a CDATA section rather than as text, the comments and processing instructions a document is re-serialized with, a FHIR primitive's `_`-sibling element id travelling beside the value it annotates, a whitespace-only element in a variable-length X12 segment, and whatever a partly rewritten structure keeps, such as the state and country of a generalized address, which are re-emitted exactly as they arrived along with anything riding inside them. A fixed transmission header and the Part 10 File Meta group are read off the parsed object's own fields rather than from a list, so a field a parser's view gains is enumerated the day it appears; one whose standard tag cannot be placed keeps its count under the withheld locus token instead of going unrecorded. The mirror also holds, and matters as much for reading the number: a position the pass **removes** is not counted, because the inventory measures what left the pass untouched.
+
+  The support report gains the matching inventory as a sibling of the retained quasi-identifiers, the count in its disposition roll-up, and a rendering that states in terms whether an empty inventory was **measured and empty** or **not measured at all**.
+
+  **Counting is not removal.** Nothing is scrubbed, generalized, blocked or otherwise transformed on account of the measurement, and every transformed document is byte-identical to what the same input and policy produced before it. A position no rule examined also has no established Safe Harbor category, so it is attributed to none of the 18 and moves no category total: a clinical code, a dose unit and an order status all sit at positions like these.
+
+  Two fail-safes ride with it. A position whose structural locus cannot be expressed is still counted, under a withheld locus token, so losing the "where" never also loses the "how many". And a structure whose value-bearing positions cannot be enumerated fails the pass with a new typed `DEID_POSITIONS_UNENUMERABLE` fatal naming the structure, rather than emitting a zero or a partial count a reader would take for a clearance.
+
+  Both code registries are additions-only: `DEID_POSITION_UNEXAMINED` and `DEID_POSITIONS_UNENUMERABLE` are new, and `DEID_RESIDUAL_RETAINED` still means exactly what it did, the residual of a value the pass examined.
+
+- 210a19f: Declare the DICOM de-identification method in the standard's own machine-readable vocabulary, so a receiving archive can branch on a code instead of parsing an English sentence.
+
+  PS3.15 E.1.1 asks that Patient Identity Removed `(0012,0062)` be set to `YES` and that, additionally, "one or more codes from CID 7050 'De-identification Method' corresponding to the Profile and Options used" be added to De-identification Method Code Sequence `(0012,0064)`, "and/or a text string describing the method used" be added to De-identification Method `(0012,0063)`. The DICOM pass wrote the sentence and nothing else. The `and/or` made that conformant, so this buys machine-readability rather than fixing a defect: a downstream archive cannot branch on prose, and the one thing it could read was the one thing that was not there.
+
+  The pass now writes both. The coded terms for the profile it applied go into `(0012,0064)` on the de-identified dataset and in the re-serialized bytes, beside a `(0012,0063)` text and a `(0012,0062) YES` marker that are unchanged byte for byte. Nothing about what is removed, kept or remapped changes: this is a declaration, and every transformed document is identical to what the same input and policy produced before it once the added element is taken back out.
+
+  **Only published terms are ever emitted.** Every Code Value, Code Meaning and Coding Scheme Designator comes from the thirteen rows of CID 7050 (context group `1.2.840.10008.6.1.925`, version `20170914`), transcribed verbatim, including the two longitudinal-temporal meanings that read oddly and are published that way regardless. Nothing is composed, abbreviated or paraphrased, and no term outside that table reaches the dataset or the result.
+
+  **A withheld option is declared on the result and never in the sequence.** The standard's words are "corresponding to the Profile and Options **used**", so a term inside `(0012,0064)` asserts that the option was applied, and writing a withheld one there would tell an archive the opposite of the truth. Every Annex E option this adapter can name now carries exactly one of applied or withheld on the result's `optionDeclarations`, none left undeclared. Under the default policy all twelve are withheld, the two pixel options included: this is a metadata-only pass, and saying so in coded form is the machine-readable half of a burned-in-pixel hazard it already flagged in prose.
+
+  **The scope of replacement-UID referential integrity is a value now, not a docstring.** With no shared cache it is guaranteed only within the single call, and `uidReferentialIntegrity.scope` says `"single-call"`; supply a shared `uidMap` and it says `"caller-supplied-cache"` and reaches every call that shares it. The two cases are told apart by reading a field rather than by remembering which arguments were passed, and the same fact is carried as one PHI-free sentence for a disclosure record.
+
+  **It refuses to declare rather than declare wrongly.** A coded term is acted on by downstream systems without a human, and a study released on a false coded claim cannot be un-released, so both failure modes return nothing at all. A profile or option the vocabulary cannot name, or that no single row names, aborts the pass with a new typed `DEID_DECLARATION_UNNAMEABLE` fatal naming it, before any dataset or bytes exist. And the run re-parses what it serialized and compares the terms read back against the terms it declared, aborting with `DEID_OUTPUT_INVALID` rather than handing back output stamped `Patient Identity Removed = YES` carrying a declaration it cannot verify. That verification earned its keep immediately: under Implicit VR LE the sequence has to be written in its undefined-length form, because the defined-length form parses back carrying no items at all.
+
+  **A De-identification Method Code Sequence the input carried is dropped, not merged with.** Its items are unaudited bytes from an untrusted file, Code Meaning is free text, and no de-identification rule inspects that sequence's contents, so keeping any of it would put unexamined input text inside output stamped `Patient Identity Removed = YES`. The loss is disclosed rather than made silently, by a value-free `DICOM_INPUT_DEIDENTIFICATION_METHOD_CODES_DROPPED` warning whose message is a constant and therefore carries no Code Value, no Code Meaning and no other text read from the input.
+
+  The fatal registry is additions-only: `DEID_DECLARATION_UNNAMEABLE` is new, and every existing code means exactly what it did.
+
+- bfacbb5: The em dash is now gated: no tracked file, pull-request title, body or commit message here may carry
+  U+2014, and the text that already did has been rewritten.
+
+  The rule is a standing brand directive and it names commit messages explicitly, so a one-time sweep
+  would have regressed the first time somebody pasted a paragraph from somewhere else. Every sibling
+  package in this suite already carried the gate; this one did not, and its prose had accumulated
+  ninety-four occurrences across its guidance files, its narrative companion, its pointer checker and
+  two source doc comments. All ninety-four are gone, rewritten as plain hyphens. No exported symbol, no
+  signature, no policy decision and no de-identification behaviour changes: the diff is a checker, a
+  workflow, a test suite and prose.
+
+  TWO SCANS, KEPT SEPARATELY ADDRESSABLE ON PURPOSE. The tracked-file scan and the message scan run as
+  two jobs producing two check-run contexts, because they guard text with different trust profiles.
+  Nothing outside this repository can put a character into a tracked file, so a finding there is always
+  something an author here wrote and clearing it is always an edit inside this tree. A pull-request body
+  is different: a bot composes one by pasting upstream release notes, and no edit here prevents it. A
+  sibling shipped both halves as one job, found the message half noisy and exempted the whole job, which
+  un-protected the half that guards what a consumer reads. Splitting them at the start is what keeps any
+  future decision about the message half from reaching the other one.
+
+  WHAT IS OUT OF SCOPE IS OUT BY A RULE WITH ITS REASON, NEVER BY A PER-OCCURRENCE EXCEPTION. There is
+  no allow-list in this checker and no way to spend an exception on a single finding. Three rules, each
+  of which fails the run when the thing it names stops existing, so a stated scope cannot drift into a
+  hole: the vendored sibling tarballs, which are compressed bytes rather than text authored here and one
+  of which carries the banned sequence inside its compressed data by coincidence; byte-exact test
+  fixtures, whose contents are the subject the de-identification suites assert against, so that rewriting
+  one would change what a test claims to prove; and the frozen changelog archive below its divider, which
+  is pinned byte for byte by a digest in the test suite and has already been published inside shipped
+  tarballs. The narrowing there is the frozen archive and nothing else. Everything above the divider is
+  scanned, and so is every changeset, which is the source from which the generator writes that region, so
+  the character cannot enter it without this gate seeing it first in the file an author actually edits.
+
+  THE CHECKER PROVES IT CAN SEE BEFORE IT REPORTS. It self-tests on every run: that the pattern matches
+  the banned character as a single character, which is an encoding test as much as a pattern test, since
+  under a non-UTF-8 locale the same escape means something else and every tree reports clean; that it
+  matches no other member of the dash family, so widening the rule stays a decision somebody takes rather
+  than a side effect of editing a regular expression; and that the real scan path locates a seeded
+  occurrence at a known line of a known file and reports nothing on a clean one. A green from a detector
+  that was never shown able to fail is worth nothing.
+
+  The message half refuses rather than reporting clean when it cannot read the whole commit range, in
+  four shapes: no range given, a shallow clone, a commit absent from the clone, and a range resolving to
+  zero commits. That is the failure this half is most exposed to, because a shallow checkout is the
+  default and a shallow clone does not contain the base commit, so the enumeration returns nothing, which
+  is byte-for-byte what a clean pull request looks like. Pull-request text reaches the checker through the
+  environment and is written to a file before it is read, never interpolated into a command, so a title
+  full of shell metacharacters is scanned as the data it is.
+
+  Sixteen cases pin all of it, every failure preceded by an asserted pass so no red proves merely that a
+  fixture was broken: both directions of each exclusion rule, a missing archive divider, a stale
+  exclusion, the occurrence count against a line holding two, a genuinely shallow clone rather than a
+  simulated one, and a hostile title that is reported verbatim and executes nothing.
+
+  Two known limits, stated rather than discovered later. The corpus is the index, so a file is invisible
+  until it is staged and a clean local run over unstaged work proves nothing about what the build sees.
+  And no status is required by this change: adding one is a repository settings act with a precondition,
+  and requiring a context before its workflow has completed on the default branch leaves pull requests
+  pending rather than failing, which has cost this repository twice already.
+
+  One assertion elsewhere moved rather than disappearing. The narrative file's own top heading held one
+  of the occurrences, and the anchor-slug case built on it proved that a deleted glyph between two spaces
+  leaves both spaces behind as a double hyphen. Rewriting the heading would have retired that proof
+  silently, so the case was re-derived against the new heading, where a kept hyphen pair between two
+  spaces yields a run of four and pins the keep class as well, and the deleted-glyph shape was given a
+  case of its own using a marker glyph this repository actually leads its rules with.
+
+- 5e02223: The individual's employer is now de-identified as the individual's, in both formats that type one. 45 CFR 164.514(b)(2)(i) removes "the following identifiers of the individual or of relatives, **employers**, or household members of the individual", and the tree held both readings at once: the X12 map filed entity-identifier code `36` under provider/organization retention ("an organization, not the individual") while the same file removed `SBR-04` because "Safe Harbor removes the individual's employer", and the HL7 v2 map named two of the thirteen employer-bearing GT1 / IN1 / IN2 positions the v2.5.1 financial segments define. An employer name, address or phone inside a retained guarantor or insurance segment therefore rode through untouched and recorded nowhere.
+
+  **X12.** An `NM1` or `N1` party whose entity-identifier code is `36` is now a Safe Harbor subject on exactly the same footing as a patient-side party: its name components are removed as category (A), and its identifier is routed by the sibling identification-code qualifier, failing closed to the (R) catch-all when that qualifier is not a member-number one. `PROVIDER_ENTITY_CODES` no longer contains `36`; the new `EMPLOYER_ENTITY_CODES` does. Every other entity code's disposition is unchanged, pinned by a negative control over the provider, facility, payer, payee, submitter, receiver and clearinghouse codes that asserts the serialized segment is byte-identical. `SBR-04` is still removed: the contradiction is resolved by bringing the employer inside Safe Harbor, never by relaxing a removal that was already correct.
+
+  **HL7 v2.** Nine positions the map did not name are now acted on under the category their v2.5.1 data type carries and recorded with their structural locus: the guarantor's employer name (GT1-16), address (GT1-17, reduced to the safe 3-digit ZIP) and phone (GT1-18), the guarantor employer identification number (GT1-29), the insured's group employer id and name (IN1-10, IN1-11), the employer contact person's name and phone (IN2-49, IN2-50), and the insured's employer phone (IN2-64). `IN2-70` types an organisation rather than a value, so it goes through the same party-role test the X12 adapter applies to a party and fails closed, taking the organisation's name and its identifier together. The mirror control is pinned too: the coded employment status (GT1-20) and the insurer's own company id, name, address and phone (IN1-3/4/5/7) are unchanged, because none of them is the individual's, a relative's or an employer's identity.
+
+  **A retained party now says why it was retained.** Leaving a party in place used to produce no record at all, so nothing could name the role that placed it outside the regulation's scope clause. A retained party now emits a value-free manifest entry at its own structural locus, carrying the new stable disposition code `DEID_PARTY_ROLE_RETAINED` and the new additive `partyRole` field: the role code the pass classified on, taken from a table this library ships, never from the document. The entry carries no name, no identifier and no other value, and the marker fails closed both ways: a locus that carries a value is blocked rather than retained, and free text or unrecognized structure can never be re-labelled into it. It is deliberately not the `DEID_RESIDUAL_RETAINED` code, so a party outside the scope clause never joins the determiner's retained-quasi-identifier inventory, which is about residuals of the individual's own identity.
+
+  **The role test is one shared rule.** `classifyPartyRole()` answers, for a party's role code and a format's own role table, which side of the scope clause the party sits on, and treats an absent, empty or unrecognized role as unknown, which is handled exactly like a subject. Both adapters run it, so "an employer is inside the clause" is a single fact rather than a coincidence between two maps.
+
+  **Boundaries, stated rather than left silent.** Two employer surfaces remain out of reach after this change and the shipped documentation names both: an employer named only in free text, which an opt-in consumer redactor reaches and this library never does, and an employer carried as a separate `Organization` resource in a FHIR graph, where no role is typed at the position. The guarantor's employer organisation name at GT1-51 is likewise not among the positions this pass names.
+
+- 0c8570b: Act on a FHIR person name and postal address by the element's own datatype rather than by the type of the resource carrying it, and refuse an NCPDP SCRIPT document outright instead of documenting it as deferred.
+
+  Which resource a person's name or address ends up on is a choice the producing system made, not a fact about the document: the same home address arrives at `Patient.address` from one sender and at `Location.address` from a home-health sender. The FHIR pass decided by enclosing resource type, so a `HumanName` on an `Organization.contact` and an `Address` on a `Location` were treated as administrative content and handed through in the clear, and a consumer's coverage depended on how their producer shaped the document. It does not any more: outside a person resource a `HumanName` is removed and an `Address` is reduced to the same safe three-digit ZIP (or `000` for a restricted prefix, street and city and every other sub-state part dropped) that a person resource's address already got, wherever the graph puts it, inside contained resources and `Bundle` entries too. `Organization.contact.name` and `Location.address` are no longer stated as out of scope. Inside a person resource the demographic map decides as it always has, which is a narrower reach and is stated below.
+
+  **Positive classification is closed, because the mirror defect destroys clinical meaning.** An element is a `HumanName` only when every property it carries is one FHIR R4 defines on `HumanName`, at least one of them is a marker property (`family` / `given` / `prefix` / `suffix`), and that marker holds the exact value shape the standard gives it: `family` a single string, the other three repeating. An `Address` the same way, with `line` repeating and `city` / `district` / `state` / `postalCode` / `country` single. All three halves earn their place. Without the closed half a marker beside an unrelated sibling would decide. Without the marker half a `CodeableConcept` carrying only its `text` would classify, and that shape is an observation code, a dose unit or an order status far more often than it is a name. Without the value-shape half a marker's bare name would decide, and the standard hands two of those ten names to elements outside the two datatypes, on backbones whose every child is optional, so a conformant instance carrying nothing but the marker would be closed, marked and destroyed whole.
+
+  **The shape is read per marker, and that is the whole of the discrimination.** The several elements called `country` are coded concepts where an address's `country` is a string. A numbered workflow step and a questionnaire item each carry a `prefix` that is a single string, where a name's `prefix` repeats; two of those backbones have no mandatory child at all, so a step carrying nothing but its prefix is conformant, and the shape is the only thing that tells it from a person's name. The rule leans on no sibling those other elements happen to require: that would be an assumption about the document, and this pass validates no conformance, so an instance that omits an optional-in-practice child is not thereby a person. An organisation's own `name` stays a plain string and is untouched, a conformant questionnaire item and a conformant workflow step stay untouched, and a document carrying none of the newly reached elements comes back byte for byte as it went in, with the same manifest and the same residual inventory.
+
+  **A newly reached element the pass cannot read faithfully is removed whole, never partly retained.** A `postalCode` that is not a whole zip code fails closed rather than yielding its first three digits, because a four-digit value still has three of them and keeping them would retain a fragment of something that was never a ZIP. An unexpected shape where R4 types a string at a part the reduction re-emits verbatim does the same, and takes the street, city, state, country and ZIP with it. At an element name the standard itself types as one of the two datatypes - `name`, `address`, the choice-type `locationAddress`, an open `valueAddress` or `valueHumanName` - any complex the classifier cannot pin down is blocked whole rather than descended into: a text-only representation with no part to key on, a name or an address carrying some property R4 does not define, and equally one whose every property is foreign to both datatypes. The standard promised a name or an address at that position and the pass could not read the one it was given, so the boundary is readability rather than which keys happen to be present, and adding an unrecognized sibling to an element that was already unreadable does not unblock it. Exactly two conformant backbones share one of those element names, a medicinal product's name and a substance specification's name, and each is excluded positively by the property the standard makes mandatory on it together with that backbone's own closed property set; a plain string at one of those names is never a candidate, which is what leaves an organisation's own name and an endpoint's address untouched. Every one of those dispositions is recorded.
+
+  **The measurement stays honest.** A position the widened sweep now examines leaves the unexamined-residual inventory, and every position it still does not examine stays in it, so an empty result is still readable as measured-and-empty rather than as a pass that measured nothing. The unexamined count is expected to fall where the sweep newly reaches: a swept element is examined and recorded as a unit, so one manifest row can replace several inventory positions, and the two published counts are not meant to add up to a constant.
+
+  **NCPDP SCRIPT is refused rather than described as deferred.** The parser surface re-serializes only the modeled fields, so a round-trip drops every unmodeled element, and its patient model carries no address, phone or patient identifier: a partial pass would hand back a document a consumer reads as transformed while unmodeled identifiers rode through it. That has always been documented, but a caller who handed SCRIPT XML to a Telecom entry point got whatever the Telecom parser made of the bytes, not a stated no. Both entry points now refuse, before anything is parsed, with a typed `DEID_FORMAT_UNSUPPORTED` naming the format and the parser-surface reason, carrying no byte of the document, and returning no transformed document, no manifest and no partial output of any kind. Telecom callers are unaffected, and nothing here reaches into the SCRIPT parser surface it declines.
+
+  Five surfaces are stated as residuals rather than left implicit. Three because the standard types no person at the position: a `ContactPoint` outside a person resource, an organisation's own `name`, and the individual's employer carried as a separate `Organization` resource. The fourth is the stated cost of the closed, shape-read classification: a name or an address carrying a property R4 does not define, or carrying its only marker at a value shape the standard does not give that marker, at an element name the standard does not type as one of the two datatypes, is passed through and counted as unexamined, because at any other name that same evidence is routinely a conformant structural element rather than a person. At an element name the standard does type as one of the two, neither half is a residual: whatever the classifier declines is blocked whole. The fifth is the scope of the sweep itself: inside a person resource the demographic map decides, so a name or an address at a person-resource property that map does not list is passed through where the same bytes on an organisation are removed. The fatal registry is additions-only: `DEID_FORMAT_UNSUPPORTED` is new, and every existing code means exactly what it did.
+
+- d856197: The `limited-data-set` preset now gives a research consumer the geographic granularity 45 CFR 164.514(e)(2)(ii) actually permits, instead of carrying the regulation's name while applying Safe Harbor's stricter geography. Until now every address a limited-data-set pass touched was reduced to a three-digit ZIP prefix, or to `000`, losing the town, the State and the full zip code the regulation explicitly allows a limited data set to keep. A consumer either accepted unusable geography or hand-built an options bag that nothing checked.
+
+  **164.514(e)(2)(ii) is the only PARTIAL exclusion in the list of sixteen.** It removes "postal address information, other than town or city, State, and zip code", so those three named parts survive and everything else in the address does not. A new retention class, `limited-data-set-geography`, expresses exactly that, and the shipped preset carries it alongside `encounter-dates` and `encounter-identifiers`. Under the HL7 v2 pass a mapped address (PID-11, NK1-4, NK1-32, GT1-5, GT1-17, IN1-19) now emits its town or city, its State and its **whole** zip code, and drops the street address, any second address line, the county or parish, the census tract, the other geographic designation and the country. The county-code field (PID-12) and the birth place (PID-23) are removed under every profile, because the clause names neither. The allowance follows the party list the clause opens on, so the patient, the next of kin, the guarantor, the guarantor's employer and the insured are treated alike.
+
+  **The zip code is kept WHOLE, and that is deliberate.** The initial-three-digits rule and the `000` substitution for a sparsely populated prefix are 164.514(b)(2)(i)(B), Safe Harbor's rule, with no (e)(2) counterpart: (e)(2) states no digit limit and no population condition. A restricted-prefix ZIP is therefore carried in full under this class, and is still reduced to `000` under Safe Harbor, which is untouched everywhere it applies.
+
+  **The class permits named PARTS, never the category.** `GEOGRAPHIC` stays on `LIMITED_DATA_SET_DIRECT_IDENTIFIERS` and `isRetainableCategory()` still refuses it, because a partial exclusion is not a whole-category one. The only route past that guard is the new `isRetainablePart()`, an allow-list on all three of the class, the resolved category and the part name (`LIMITED_DATA_SET_ADDRESS_PARTS`), so a marker naming a county or a precinct is transformed exactly as if it were absent. `GenericLocus` gains an optional `retainedPart` for adapters that address one such part at its own structural locus.
+
+  **Nothing widens by omission.** The class is reachable only by naming it. A profile or an options bag that does not list it reduces every address exactly as before, including the `000` substitution; options built by hand from a profile's `policy` alone keep nothing; and a profile derived from the Safe Harbor base still may not add the class, while one derived from the limited-data-set preset may drop it and fall back to Safe Harbor geography. The widen-never-narrow contract is unchanged.
+
+  **It fails closed, and it never reports a retention it did not make.** An address whose zip code is not a whole zip code (`isRetainableZipCode()`: five digits, optionally with the ZIP+4 add-on) is not partially kept: the locus falls back to the Safe Harbor generalization, which drops the whole address repetition when it cannot read a prefix. Every part that IS kept is recorded as a `DEID_RESIDUAL_RETAINED` residual located to its own field, repetition and component, so it reaches the Expert-Determination support report's inventory; nothing that was dropped or blocked is recorded as retained.
+
+  **A profile that DECLARES the `limited-data-set` standard is now checked against the regulation's own list.** A retention class beyond `LIMITED_DATA_SET_RETENTION_CLASSES` is a fatal `DEID_PROFILE_INVALID` naming the offending class, raised both where a profile becomes engine options and where it is used as a derivation base, before any locus is transformed. The reserved `safe-harbor` label refuses this class on both of its surfaces too: a policy so named, and a profile declaring that standard.
+
+  **Two limits, stated rather than discovered.** The geographic allowance is honoured by the HL7 v2 pass **alone**; the C-CDA, FHIR, X12, NCPDP and DICOM adapters do not read retention classes and reduce an address exactly as Safe Harbor does, which is the stricter direction. And on **dates** the preset stays deliberately stricter than 164.514(e)(2), which names no date and so permits full precision: it date-shifts them anyway, because moving an existing consumer from shifted dates to real ones is the direction no re-run undoes. Both are now stated in the preset's own machine-readable description and on the published limitations page.
+
+- 467b83f: The PHI scan now refuses a run that enumerated a target and never read it, which retires the one whole-file bypass this package shipped.
+
+  It was the last way a target could leave the corpus quietly. The enumeration produced it, the
+  whole-file bypass flag subtracted it, and the run then reported on what was left while spending an
+  exit code that is a claim about the whole invocation. A corpus whose only violator was the withdrawn
+  file printed `OK, no hits` and exited 0, which is a clean verdict about a file nothing had opened.
+
+  The rule keeps two ledgers: the enumeration, taken before the subtraction, and the set of paths the
+  scan actually opened. What is in the first and not the second refuses the run with the code that
+  means the scan could not be performed, in every mode and on both routes of the all-mode sweep. It
+  runs after the hits are reported, for the same reason every other refusal here does: a refusal must
+  not swallow a real hit, and the run carrying a withdrawal is exactly the run most likely to have
+  found something elsewhere. Exit codes 0, 1 and 2 keep their existing meanings.
+
+  The flag, the audit log and the rejection gate are all kept, so an attempt is recorded and refused
+  rather than silently honoured. The subtraction is kept as well, and is separately asserted: the
+  withdrawn file must still not be scanned, because a refusal is not permission to report the values
+  inside the file it refuses over. A withdrawal the run never enumerated withdraws nothing and so
+  refuses nothing, which is the honest answer rather than a hole, and a flag that could never subtract
+  anything is still rejected up front.
+
+  The consequence is that there is no whole-file escape left. The scanner's own test suite was the one
+  file exempted, because its positive cases are necessarily real-looking violators, and it is now swept
+  like every other module. Its fixture documents carry a substitution site at every identifying
+  position, which the scanner already reads as a hole rather than a value, and the two cross-cutting
+  floor shapes are assembled at run time from pieces that are not themselves the shape. Every case
+  still hands the scanner byte-identical content; only the module on disk changed.
+
+  Nothing was weakened to achieve that, and the cross-cutting floor specifically was not. Teaching that
+  floor to consult declared identifier tokens was available and was refused: such a declaration is
+  global and route-blind, so it would stop the shape being reported in every file and on every route,
+  in the package whose whole job is removing identifiers. A shape declared nowhere in the allow-list is
+  still a hard hit, and the suite asserts both that it reds and that no declaration was added to make
+  the suite pass.
+
+  Also in this release: the advisory override for the YAML parser moves to the extended range the
+  advisory now carries, with the lockfile regenerated to agree, and a `pnpm-workspace.yaml` declares a
+  publication cooldown and a no-downgrade trust policy. Both settings postdate the package manager
+  version this repository pins, so that file decorates rather than defends until the pin moves, and it
+  says so in its own words. It declares the repository root as its only package because the pinned
+  package manager refuses a settings-only file, so the set of packages resolved is unchanged.
+
+  Nine cases added, five of them red against the previous scanner and the rest controls on the
+  retirement: that no shipped invocation passes the flag, that the audit log records no entry, and that
+  the formerly exempted suite now scans clean on its own.
+
+- ab50754: The PHI scan now reads the bytes git carries, as a union with its working-tree walk.
+
+  The all-mode sweep walked three declared roots off the working tree, which is a claim that depends on
+  the working tree being honest and on the corpus sitting where the roots point. Five states were
+  reproduced on the previous commit, each printing `[phi-scan] OK, no hits` at exit 0 over a synthetic
+  HL7 message carrying a patient name, a birthdate, an MRN and a dashed SSN: decoy content at a tracked
+  path, whose committed bytes carry the payload and whose working-tree bytes are clean; a tracked path
+  outside every root, of which 25 non-markdown ones exist here and no route had ever opened one, 19 of
+  which this adds; a root
+  emptied or deleted from the working tree with its files still tracked, which for this package meant
+  deleting all three left the sweep reporting clean over the entire corpus; a tracked symlink or
+  gitlink outside every root; and an empty index, against which the route has nothing to read. All five
+  now report or refuse.
+
+  It is a union, never a replacement. No root was narrowed, no clause dropped, and a file the walk
+  reads is still read off disk with exactly the two views it had, so this route only ever adds bytes. A
+  blob whose bytes the walk provably already scanned is skipped by byte comparison, so nothing is
+  reported twice. The skip is deliberately not a stat, an mtime or a hash, because those are what a
+  decoy defeats, and line endings are deliberately not normalized before it: that compares a derived
+  form, and a decoy differing only in what the normalizer erases would then be skipped.
+
+  The mechanism is written down in exactly one place, at `buildTargetsForIndex`; every other surface
+  states only the consumer-facing property. Every refusal runs after the walk has been scanned, because
+  a refusal must not swallow a real hit: refused first, the run would be strictly worse than before for
+  one input, exit 1 naming every locus becoming exit 2 naming nothing. The exit code is still 2, since
+  an incomplete sweep is not a verdict whatever it found on the way. Exit codes 0, 1 and 2 are
+  otherwise unchanged, and `--staged` is deliberately untouched: it is this package's pre-commit hook,
+  so its scope decides what a commit is blocked on, which is a hook decision and not a rider on this.
+
+  `vendor/` is excluded from the new route as a literal path rather than a predicate, honouring a scope
+  declaration this scanner already carried. Those six entries are third-party packed tarballs; they are
+  gzip, so their text is compressed and no detector here can read it without decompressing an archive.
+  With the exclusion removed the sweep reports 45 hits across all six and exits 1, being 44 spurious
+  pharmacy-claim field tokens and one spurious email address, because the detector that splits on the
+  0x1C/0x1D/0x1E control bytes finds them throughout compressed data. A binary-content predicate was
+  measured and rejected instead: two hand-written TypeScript sources here embed NUL bytes as HMAC
+  domain separators, so git's own heuristic calls them binary and a predicate would have dropped them
+  out of the very decoy defence this adds. The `.md` and `vendor/` rules are both applied last, after
+  the mode refusals, so naming a symlink `vendor/x.tgz` or `x.md` cannot buy it a pass: git carries a
+  link's target path, which is itself an identifier surface.
+
+  What this does not widen, stated because it would be easy to read the other way: markdown is exempt
+  on both enumerating routes and on this one, as it already was, so the documentation set remains a
+  published surface this gate does not scan. An explicitly named path is still scanned, whatever it is
+  called. Sixteen of the documentation set's seventeen tracked files are markdown, and this adds only
+  the navigation config beside them.
+
+  One floor hit surfaced, and it is not patient data: the package manifest's `author` field carries a
+  company mailbox at our own domain, registry metadata that already ships in every published tarball.
+  It is declared in the allow-list rather than narrowing the sweep back to where it could not see the
+  file, and the cost is stated with it, because such a declaration is global and route-blind. A
+  positive control puts that manifest at the same out-of-root path in a throwaway tree and strikes the
+  declaration, so the same corpus reds at exit 1: the green is earned by the declaration rather than by
+  the file never being opened. The address is deliberately not written out in the allow-list's own
+  comment, which sits inside a scan root; an earlier draft that spelled it out made that file red too,
+  and a control that reds on two files cannot tell which one it read.
+
+  That declaration is also the one place this change makes the gate see less rather than more, so the
+  word union is worth pinning down: it is a union of BYTES, not of detections. The sweep gains 19 files
+  it never opened, and separately the email floor stops firing on one exact domain, in every file and
+  on every route. Both halves are stated where they are decided.
+
+  20 cases added, 15 of them red against the previous scanner and the other five negative controls on
+  the union and exclusion boundaries. The suite's throwaway-repository helper now commits its baseline,
+  because an empty index refuses.
+
+- 759b2b7: Dates inside the HL7 v2 segments a pass hands through are now transformed, blocked or kept by a named retention class, and every one of those outcomes is in the manifest. Before this change a `safe-harbor` pass returned full-precision timestamps from those segments with no manifest entry at all: the admission-precision stamps in EVN, PV2, PR1, RXA, RXD, FT1, TXA and SPM that the published limitations named, the order dates in ORC (ORC-9 Date/Time of Transaction, ORC-15 Order Effective Date/Time) that they did not, an OBX-5 the message itself typed as a date, and the OBX segment's own reference-range, observation and analysis timestamps (OBX-12, OBX-14, OBX-19), which a result message carries on nearly every observation. A date other than the year, directly related to the individual, is what 45 CFR 164.514(b)(2)(i)(C) removes, so emitting one under a policy named `safe-harbor` was the leak the name promises to prevent, and emitting it unrecorded broke the second promise: if it is not in the manifest, the library did not do it.
+
+  **How a date is decided.** An HL7 v2 message does not declare its field datatypes, so the classification cannot come from the wire and must not come from the shape of a value: guessing would flag an eight-digit numeric result as a date and would miss a date that does not look like one. It comes instead from a committed, value-free enumeration of every position the **HL7 v2.5.1** segment definitions type `DT` or `TS`, plus the date/time components of the composites they define. It is complete over every segment whose bytes a pass can hand through, rather than over the segments a limitation happened to name: the retain-list, plus `OBX`, which is handed through by its own `OBX-2` value-type branch instead of by that list. Being handed through, not being named by a list, is what makes a date position inside a segment reachable; a segment that fails closed is blocked field by field and can carry nothing forward. Each row carries the chapter, the field, the component, the datatype and the position's own name, so a reviewer re-derives a row instead of trusting it. `HL7_DATE_LOCI`, `HL7_DATE_LOCUS_VERSION`, `HL7_PASSED_THROUGH_SEGMENTS` and `OBX_DATE_VALUE_TYPES` are exported from the `hl7` subpath. `OBX-5` is the one date position the message types for itself, at `OBX-2`. What the pass RETAINS is unchanged: no segment was added to the retain-list.
+
+  **The version is fixed at 2.5.1 and is never re-read from `MSH-12`**, so identical wire bytes yield an identical set of positions whatever a sender declares. The price is stated rather than hidden: a position only some other version types as a date is a residual, as is a retained segment v2.5.1 does not define, and so are the file and batch envelope headers, which number their fields from a leading delimiter.
+
+  **Each position is acted on at its own unit.** A `DT`/`TS` field is acted on as a field. A date inside a composite, a specimen collection range, an order's quantity/timing, a discharged-to location's effective date, is acted on as that **component** only: the field around it is never emptied and every sibling component keeps its bytes and its ordinal. A repeating field gets one locus **per repetition**, so an unreadable repetition is emptied while the one beside it keeps its value and its position. The manifest path carries all three, so two date components of one field never share a path and never aggregate: `ORC-9[0]` is a field, `SPM-17[0].2` is a component, `OBX[1]-5[0]` names the repetition.
+
+  **What each policy does.** Under a policy named `safe-harbor` a date is reduced to its four-digit year, or emptied when the transform cannot read one; there is no second, shape-based year reader beside it, so free text sitting in a date field is blocked rather than mined for a year. Under a date-shift policy a date is shifted by the same per-patient offset as every other date in the message, and a value whose encoding that transform does not accept, including a legitimately reduced-precision year or year-and-month, is **blocked**: never expanded into a fuller instant, never year-shifted, never passed through. None of the newly classified positions is retainable under either shipped profile, and no retention class was added, renamed or removed.
+
+  **A transformed message that does not round-trip through its own parser is now a fatal `DEID_OUTPUT_INVALID`** rather than a returned document. That is an addition to the fatal set; nothing was renamed or removed. It is reachable where it was not before, because emptying a date locus is a change to the wire that passing one through was not.
+
+  **Corrected claims.** The HL7 guide and the Known Limitations page now say that dates inside the segments a pass hands through are acted on and recorded, name the set those segments form and the version the classification is fixed at, name the residual that version choice leaves, and correct the over-scrub sentence that claimed every structured OBX value survives byte-identical: the date-typed subset does not, and neither do the OBX segment's own date/time fields, while the result, its units and its reference range beside them are untouched. What genuinely remains is named in its place: the non-patient person names in PV1-7/8 and OBR-16, the date/time components carried inside a person-name or address composite, and every other unacted non-date position.
+
+- ba257b9: The `safe-harbor` policy now actually removes the encounter loci Safe Harbor requires it to remove. Seven identifying values previously survived a `safe-harbor` pass byte-identical, with no manifest entry at all: the visit number (PV1-19), the admit and discharge dates (PV1-44/45), the observation date (OBR-7), the diagnosis date (DG1-5), and the placer and filler order numbers (OBR-2/3, ORC-2/3). Retaining an HL7 segment retained every field inside it, and nothing carved these back out.
+
+  45 CFR 164.514(b)(2)(i)(C) requires removal of all elements of dates except year that are directly related to an individual, and names admission and discharge dates in the regulation text itself; a visit or order number is a unique identifying code the (R) catch-all reaches. A policy named `safe-harbor` that returned them was a trap for anyone who trusted the name, so this is a deliberate breaking change while the package is pre-alpha.
+
+  **What changes.** Under `SAFE_HARBOR_PROFILE` the four dates now generalize to their year and the five identifier loci are removed as category (R). Under `LIMITED_DATA_SET_PROFILE` all seven are kept unchanged, because 164.514(e)(2)'s limited-data-set exclusion list enumerates sixteen direct identifiers, contains no date, and has no catch-all. The split is expressed by two named retention classes, `encounter-dates` and `encounter-identifiers`, on the new `retainedLoci` field of a profile.
+
+  **Retention takes three independent keys, and a missing one always means the transform runs.** The adapter must propose a class for the locus; the configured options must list that class, so an adapter can never retain anything by itself and an options bag that omits `retainedLoci` keeps nothing; and the resolved category must be one a limited data set may carry at all. That last key is the one that matters most in practice: `PV1-19` is a CX list, and a visit-number field routinely carries a medical record or account number typed as such by the standard's own CX-5 identifier-type code. Both are named by 164.514(e)(2), so both are now routed through the identifier-type code and transformed, and an `MR`-typed visit number gets the _same_ keyed surrogate as the matching PID-3 entry rather than being republished in the clear beside it. `LIMITED_DATA_SET_DIRECT_IDENTIFIERS` and `isRetainableCategory()` are exported so the rule is inspectable: exactly two of the eighteen categories are retainable.
+
+  **A policy carrying the reserved `safe-harbor` label may not retain at all**, whatever the options bag says. That is a fatal `DEID_POLICY_INVALID`, the retention analogue of the guard that stops a date-shifting policy wearing the same label, and it closes the hand-built-options route no profile-level check can see.
+
+  **Anything still retained is now recorded.** A kept locus emits a manifest entry with disposition `retained`, transform `retain`, and code `DEID_RESIDUAL_RETAINED`, so it reaches the Expert-Determination support report's residual inventory rather than being invisible in both artifacts. `DeidManifestEntry["disposition"]` and `ReportDisposition` gain `"retained"`, `DispositionSummary` gains a `retained` count, and each inventory row now carries its `transform` so a kept year is distinguishable from a kept full-precision timestamp.
+
+  **`defineDeidProfile()`'s widen-never-narrow contract now covers retention, and it reads the opposite way round from a transform override:** dropping a retained class removes more and is allowed; adding one keeps more and is a fatal `DEID_PROFILE_INVALID`. It is a subset test, not a rank comparison.
+
+  **Corrected claims.** The published limitations page claimed that loci absent from the parser models fail closed, which read as the opposite of the truth for a retained segment; that claim is deleted. In its place the page states the true class: every field of a retained segment that the carve-out does not name is still passed through and recorded nowhere, still including full-precision timestamps in EVN, PV2, PR1, RXA, RXD, FT1, TXA and SPM and the provider names in PV1-7/8 and OBR-16. The carve-out narrows that class; it does not close it. Note also that the retention classes are read by the HL7 v2 adapter only: passing a retention set to the other five adapters changes nothing there.
+
+- 49eaefb: The `safe-harbor` label now covers every identifier it acts on, not just the dates. A keyed surrogate of a medical record, health plan beneficiary or account number is **derived from information about the individual**, so 45 CFR 164.514(c)(1) does not permit it as a retained code and the (R) catch-all exception does not reach it. It is an Expert-Determination technique that was wearing a Safe Harbor label. The library already made exactly this argument once, for dates; it now makes it for every transform whose output is computed from the value it replaces.
+
+  **The label contract is now a (category, transform) classification, not a single test.** A policy claiming the `safe-harbor` label is refused with a typed `DEID_POLICY_INVALID` fatal naming the offending category and the offending transform, at mint time and at the point of use alike. `pseudonymize`, `hash` and `date-shift` are refused on all 18 categories. `generalize` is permitted on (B) geographic subdivisions and (C) dates and ages over 89 - the two sub-paragraphs that state a permitted coarsening rather than naming an identifier - and refused on the other sixteen. `redact` and `block` withhold the value and are always permitted, and `byo-redact` and `retain` fall closed to a block from the per-category map, so they are permitted too. An assignment that is not one of the eight published transform names is refused rather than assumed safe: a pair whose derivation cannot be established is never permitted. The label is matched by exact equality, so a policy named `Safe-Harbor` is a different policy the guard does not reach, and a policy that does not claim the label keeps its keyed surrogate - nothing is ever silently strengthened, renamed or downgraded behind the caller's back.
+
+  **The label is claimed on two surfaces, and both are guarded.** A policy claims it by name; a profile claims it by declaring the `safe-harbor` standard. The second is enforced where a profile becomes engine options and where it is used as a derivation base, before any locus is transformed, because the engine downstream sees only the policy. Where a derived profile would draw both that refusal and the reserved-standard-name refusal on one call, the derive-time `DEID_PROFILE_INVALID` comes first: a profile that is refused never mints a policy to label.
+
+  **The built-in Safe Harbor default moves from a surrogate to a removal.** `SAFE_HARBOR_POLICY` now assigns `redact` to the medical record, health plan beneficiary and account number categories. Every consumer of the built-in profile sees this: those loci now carry the `redact` transform, the `removed` disposition and the `DEID_CATEGORY_REMOVED` code where they previously carried a keyed surrogate. It also means the Safe Harbor profile now uses **no keyed transform at all**, so a pass over a document carrying those identifiers no longer asks for a key and no longer fails with `DEID_NO_KEY` on account of them. Removal is strictly stronger than pseudonymization on the leak axis; the cross-format leak and over-scrub corpus is unchanged and green.
+
+  **Consistent keyed surrogates stay available, behind a preset that does not claim Safe Harbor.** `LIMITED_DATA_SET_PROFILE` now names those three categories explicitly rather than inheriting them, so it still emits a consistent keyed surrogate for each and cross-document linkage is not lost. It does not carry the `safe-harbor` label, does not declare the `safe-harbor` standard, and says in its own description that it is neither Safe Harbor nor a certified de-identification. Its assignment for the other fourteen categories is unchanged. No new export ships with this change apart from the report type below.
+
+  **A keyed surrogate is now visible in the artifacts an expert reads.** Every manifest entry carries one additive, value-free boolean field, `reidentificationCode`, true exactly where the pass emitted a keyed surrogate (`pseudonymize`, `hash` or `date-shift`) and false everywhere else. It is additive by construction: no existing field, disposition or disposition code changes its value at any locus, so `DEID_CATEGORY_PSEUDONYMIZED`, `DEID_CATEGORY_HASHED` and `DEID_CATEGORY_DATE_SHIFTED` keep their present meaning and a consumer branching on one is unaffected. The Expert-Determination support report gains a sibling inventory built from that flag, `keyedSurrogateResiduals` (type `KeyedSurrogateResidual`), carrying the locus, the category, the count and the transform, plus a section of its own in the human-readable rendering. Keyed surrogates deliberately do **not** join the retained-quasi-identifier inventory: a retained quasi-identifier is a piece of the original value that survived, while a keyed surrogate is a computed replacement that carries no plaintext but preserves linkage, and a determiner reasons about the two very differently. Every existing report field keeps its meaning, membership and counts, except where the changed default above moves a disposition roll-up or per-category count at one of those three loci.
+
+  **Corrected claims.** The Safe Harbor profile's own description, the README, and the published guides for HL7 v2, C-CDA, FHIR, X12, NCPDP, the overview, the longitudinal guide, the quickstart, the limitations page and the troubleshooting page no longer say the built-in profile pseudonymizes those three categories, and no longer imply a Safe Harbor pass needs a key. The manifest's published shape now documents the re-identification flag wherever it is described, and both residual inventories are described alongside what distinguishes them.
+
 ## 0.0.9
 
 ### Patch Changes
