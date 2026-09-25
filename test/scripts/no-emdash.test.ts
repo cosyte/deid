@@ -26,8 +26,8 @@
  *  5. THE FIXTURE RULE, IN BOTH DIRECTIONS. The same bytes pass under the excluded prefix and red
  *     one directory away. A one-directional test would pass just as happily over a gate that had
  *     stopped scanning anything at all.
- *  6. THE VENDORED-TARBALL RULE, likewise, and it is the rule that carries a live occurrence on
- *     this repository's real tree.
+ *  6. THERE IS NO VENDORED-TARBALL RULE. Nothing is tracked under `vendor/`, so a file there is
+ *     scanned like any other and reds; an exclusion for it would be a stale rule (7).
  *  7. A STALE EXCLUSION REFUSES. An exclusion naming a directory that has gone is how a stated
  *     scope drifts into covering something nobody argued for.
  *  8. THE CHANGELOG REGION RULE, IN BOTH DIRECTIONS. Above the divider is scanned; the frozen
@@ -88,7 +88,7 @@ function runGate(root: string, args: readonly string[] = [], env: NodeJS.Process
 
 /**
  * A throwaway repository carrying everything the gate's stated scope names: a changelog with the
- * archive divider, a vendored directory, a fixture directory, and ordinary prose. Small on purpose.
+ * archive divider, a fixture directory, and ordinary prose. Small on purpose.
  * The gate's corpus rules (git-enumerated, every path opened or refused) are what make a synthetic
  * tree a fair test of them.
  */
@@ -136,7 +136,6 @@ function baseFiles(): Record<string, string> {
       "- The first release.",
       "",
     ].join("\n"),
-    "vendor/upstream.tgz": "pretend tarball bytes\n",
     "test/fixtures/sample.hl7": "MSH|^~\\&|SENDING|FACILITY\n",
     "src/index.ts": "export const value = 1;\n",
   };
@@ -162,11 +161,11 @@ describe("check-no-emdash: the tracked-file scan", () => {
         expect(run.stderr).toBe("");
         expect(run.status).toBe(0);
         expect(run.stdout).toContain("check-no-emdash: OK");
-        // Five tracked files: two scanned, two excluded by the prefix rules, and CHANGELOG.md
+        // Four tracked files: two scanned, one excluded by the prefix rule, and CHANGELOG.md
         // handled by the region rule and reported separately. The arithmetic is asserted rather
         // than the headline alone, because an OK line that adds up is how a shrunken scan shows.
         expect(run.stdout).toContain("2 tracked file(s) scanned");
-        expect(run.stdout).toContain("2 file(s) excluded");
+        expect(run.stdout).toContain("1 file(s) excluded");
         expect(run.stdout).toContain("archive divider at line 7");
       });
     },
@@ -240,14 +239,14 @@ describe("check-no-emdash: the tracked-file scan", () => {
   );
 
   it(
-    "6. the vendored-tarball rule: bytes under vendor/ are out of scope",
+    "6. no vendored-tarball rule: bytes under vendor/ are scanned like any other tracked file",
     () => {
       const files = baseFiles();
       files["vendor/upstream.tgz"] = `compressed ${BANNED} bytes\n`;
       withRepo(files, (fx) => {
         const run = runGate(fx.root);
-        expect(run.stderr).toBe("");
-        expect(run.status).toBe(0);
+        expect(run.status).toBe(1);
+        expect(run.stderr).toContain("./vendor/upstream.tgz:1:");
       });
     },
     CASE_TIMEOUT,
@@ -257,12 +256,12 @@ describe("check-no-emdash: the tracked-file scan", () => {
     "7. a stale exclusion REFUSES rather than silently covering nothing",
     () => {
       const files = baseFiles();
-      delete files["vendor/upstream.tgz"];
+      delete files["test/fixtures/sample.hl7"];
       withRepo(files, (fx) => {
         const run = runGate(fx.root);
         expect(run.status).toBe(1);
         expect(run.stderr).toContain("matches no tracked file");
-        expect(run.stderr).toContain("vendor/");
+        expect(run.stderr).toContain("test/fixtures/");
       });
     },
     CASE_TIMEOUT,
