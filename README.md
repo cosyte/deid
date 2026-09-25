@@ -419,7 +419,7 @@ const { x12, manifest } = deidentifyX12(parseX12(raw), { context });
 
 | Locus                                                        | Handling                                                                                                                                                     |
 | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **`NM1`** (subscriber / patient / dependent)                 | name (`03–07`) **removed**; id (`09`) routed by the `08` qualifier: SSN **removed**, member **removed** under Safe Harbor                                    |
+| **`NM1`** (subscriber / patient / dependent)                 | name (`03` to `07`) **removed**; id (`09`) routed by the `08` qualifier: SSN **removed**, member **removed** under Safe Harbor                               |
 | **`NM1` / `N1`** (employer, entity code `36`)                | name + id **removed** on the same footing as a patient-side party: §164.514(b)(2)(i) names the individual's **employers**                                    |
 | **`NM1`** (recognized provider / organization)               | **retained** (provider identity is not the individual's PHI, mirroring the HL7 adapter), and the **role code** it was classified on is recorded at its locus |
 | **`NM1`** (unknown entity code)                              | **fails closed**: name + id blocked                                                                                                                          |
@@ -460,6 +460,13 @@ SCRIPT document to either NCPDP entry point and you get a typed `DEID_FORMAT_UNS
 the format and the parser-surface reason, and **no** transformed document, manifest or partial output
 of any kind, rather than whatever the Telecom parser would have made of those bytes. Telecom callers
 are unaffected.
+
+**One transaction per Telecom message in this release.** `deidentifyTelecom` handles a message that
+carries one transaction. A message whose header declares more than one is not handled yet: with
+`@cosyte/ncpdp` 0.1.x installed the call throws that parser's multi-transaction build error and
+returns nothing, and an older `@cosyte/ncpdp` returns only the first transaction with the header count
+unchanged. Split a multi-transaction message before you de-identify it. A later release de-identifies
+every transaction or refuses the message with a typed `DEID_*` error.
 
 ## De-identify a DICOM study
 
@@ -642,7 +649,8 @@ const opts = profileOptions(strict, ctx); // pass straight to any adapter
 `@cosyte/deid` **transforms per a policy and evidences what it did: it never certifies**. Read
 [`docs-content/limitations.md`](docs-content/limitations.md) before relying on it for anything that
 leaves your control: the fail-closed posture, structured-core-only (free text is block-by-default),
-**DICOM metadata-only** (burned-in pixels flagged, not cleaned), **NCPDP SCRIPT refused**, the BYO
+**DICOM metadata-only** (burned-in pixels flagged, not cleaned), **NCPDP SCRIPT refused**, **NCPDP
+Telecom one transaction per message**, the BYO
 free-text redactor is the consumer's responsibility, and the Expert-Determination report **makes no
 determination**.
 
@@ -651,7 +659,7 @@ determination**.
 - **Policy engine**: `safe-harbor` built in; `defineDeidPolicy()` to deviate deliberately.
 - **Five transforms**: redact, generalize (date→year, ZIP→3-digit/`000`, age→`90+`), keyed date-shift,
   keyed-HMAC pseudonymize, keyed hash.
-- **18 Safe Harbor categories**: §164.514(b)(2)(i)(A)–(R), including the open-ended catch-all (R).
+- **18 Safe Harbor categories**: §164.514(b)(2)(i)(A) to (R), including the open-ended catch-all (R).
 - **Fail-closed rule**: anything uncertain is blocked, never passed through; clinical values are
   retained untouched.
 - **Value-free manifest**: category + transform + locus + count + disposition + code + a boolean
