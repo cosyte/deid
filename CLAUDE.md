@@ -63,65 +63,7 @@ optional-peer arrangement:
 
 ### Branch protection and Dependabot
 
-- **`main` is protected by the repository ruleset `ci-required-checks`** (7 required contexts, each
-  pinned to the GitHub Actions app; blocks deletion and force-push). Before it, `main` had **no rules at
-  all**. → `documentation/agent-notes.md#the-ruleset-ci-required-checks`
-- **A required context a branch cannot emit leaves that PR PENDING, not failing: rebase it.** Expect it
-  EVERY time a context is added; it has happened twice.
-  → `documentation/agent-notes.md#a-required-context-a-branch-cannot-emit-leaves-the-pr-pending`
-- **Never require `scorecard`** (it never runs on `pull_request`), nor the GHAS `CodeQL` check.
-  → `documentation/agent-notes.md#why-scorecard-is-not-required`
-- **Read `ci.yml`'s job-name banner before renaming a job or splitting a step out of `verify`**: a
-  required job gates its steps, so promoting one silently un-requires it. **The PHI scan is a STEP of
-  `verify`, so it is required only for as long as it stays one.** **The leak/over-scrub corpus
-  (`test/corpus/`, the cross-format zero-leak gate, proven non-vacuous) is protected by NO ruleset**: it
-  is glob-selected in `vitest.config.ts`, so narrowing the glob, moving it or `.skip`-ing it drops this
-  repo's headline leak gate with nothing to notice.
-  → `documentation/agent-notes.md#job-names-and-what-a-ruleset-cannot-see`
-- **`pnpm smoke` is a real gate; the shared pipeline's `Dual ESM/CJS smoke` step is NOT the same check**
-  (root entry only). **Its scope is DERIVED from `package.json`'s `exports`: replacing that with a
-  hand-written array reopens the hole above.** **Its leak sweep is HL7-ONLY**: the cross-format
-  zero-leak gate is `test/corpus/`, from source. → `documentation/agent-notes.md#the-smoke-gate`
-- **`pnpm check:no-internal-refs`** runs in its own workflow; context is the bare job id
-  `no-internal-refs`. **Read a real context name off a live check run, never off a workflow's `name:`.**
-  It gates the _source_ of published text, not `dist/`. **It DELIBERATELY does not scan `CHANGELOG.md`,
-  `.changeset/`, this file, or `//` comments: identifiers BELONG there, so do not "fix" one out of
-  them.** → `documentation/agent-notes.md#the-no-internal-refs-gate`
-- **`pnpm check:test-selection` gates what the required test job SELECTS.** Context `test-selection` is
-  **deliberately NOT in the ruleset yet**: let it run on `main` first. **Its subject is DERIVED from
-  `exports`; there is no exemption list, because every exemption a sibling offered was walked through by
-  a rename. The cost is paid in the repo instead: A MODULE THAT IS NOT A TEST MAY NOT IMPORT A PUBLISHED
-  ENTRY POINT.** So `test/helpers/run-date-shift.ts` imports `src/` directly on purpose: **do not
-  "tidy" it back to the root entry.** **Self-test D covers THREE NAMED DERIVATIONS, not "the
-  derivations": a diff touching `exportedSourceEntries` or `resolveSpecifier` is reviewed by a person
-  against the OK line's counts. DO NOT REMOVE D TO "SIMPLIFY"**: the other three self-tests cannot see
-  what it sees. Selection is not execution, and the measured limits are listed, none claimed closed.
-  **The per-rule tallies are absent from this file DELIBERATELY: they went stale before the files they
-  counted existed. The OK line prints the live figures on every run; do not write one back in here.**
-  → `documentation/agent-notes.md#the-test-selection-gate`
-- **`pnpm check:agent-notes` gates this file's pointers into the narrative one**, on `pnpm check` and
-  `pnpm test`, riding required `ci / verify`; NO new required context. **MATCHER, ANCHOR SPACE AND
-  CORPUS PARTITION WERE EACH DERIVED FROM THIS TREE AND NONE PORTS**: a bare anchor or explicit anchor
-  tag REFUSES; the partition is **UTF-8 decodability, NOT NUL**. **It asserts this repo's promise,
-  never a universal about a sibling. Never clear a red by deleting a pointer, heading or span.**
-  → `documentation/agent-notes.md#the-narrative-pointer-gate`
-- **The ruleset BLOCKS the "Version Packages" PR by design: it needs one push** (an empty commit onto
-  `changeset-release/main`), done **last**, immediately before merging. `bypass_actors` is empty on
-  purpose. → `documentation/agent-notes.md#the-version-packages-pr-is-blocked-by-design`
-- **Unproven, and stated as unproven: PRs from FORKS.** No fork PR has ever run here.
-  → `documentation/agent-notes.md#fork-pull-requests-are-unproven`
-- **Nothing in this repository can observe its own ruleset: do NOT take this section as evidence.**
-  Verify with `gh api repos/cosyte/deid/rules/branches/main`.
-  → `documentation/agent-notes.md#nothing-here-can-observe-its-own-ruleset`
-- **Dependabot cannot see the six vendored sibling parsers** (`file:` tarballs) or `pnpm.overrides`,
-  re-pack the `@cosyte/dicom` tarball by hand when the upstream pass changes.
-  → `documentation/agent-notes.md#what-dependabot-watches`
-- **The config buys VERSION updates only; automatic SECURITY update PRs are a separate repo setting**
-  that read `disabled`. Check `gh api repos/cosyte/deid --jq .security_and_analysis`, not this line.
-  → `documentation/agent-notes.md#what-the-dependabot-config-does-not-buy`
-- **Unobserved: whether Dependabot's pnpm updater tolerates this manifest. Do not read "no open
-  Dependabot PR" as "nothing is stale".**
-  → `documentation/agent-notes.md#whether-the-pnpm-updater-tolerates-this-manifest`
+Relocated in full: [documentation/branch-protection.md](documentation/branch-protection.md).
 
 ## Engineering Guardrails
 
@@ -216,80 +158,8 @@ hits` at exit 0 on base; the decoy at a tracked path is why it exists. **The mec
 
 ### The `attw` gate
 
-- **`attw` SAYS "does not contain types" AND EXITS 0, SO THE `attw` SCRIPT IS A WRAPPER, NOT THE BARE
-  CLI**: for a package that ships types that is a broken publish reported as a pass.
-  → `documentation/agent-notes.md#attw-exits-0-on-an-untyped-package`
-- **Concurrency only supplies the condition; the BUILD ORDER is the trigger**: `tsup` emits JS before
-  declarations, so every build has a window. The answer is **not** a lock, a lease or a build queue.
-  **Do not read the measured window timings as constants.**
-  → `documentation/agent-notes.md#the-build-order-is-the-trigger`
-- **TOTAL declaration loss is silent; PARTIAL loss exits 1. A missing JS entry point is invisible to a
-  types analyser. Do not carry a sibling's sentence over without re-running it here, and specifically do
-  NOT write "No problems found" into that row: it is false for this package even on a pristine run.**
-  → `documentation/agent-notes.md#what-is-measured-on-this-package`
-- **`scripts/attw.mjs` carries TWO nets that catch different things** (a manifest-path preflight, and a
-  post-check on the untyped sentence). **Anything that would hide the sentence is refused BY OPTION NAME,
-  in TWO shapes: an argv token, and a combined short-option cluster containing `q` or `f`**. A
-  whole-token-only draft walked back to exit 0 over an untyped pack. **That is a claim about two shapes,
-  not that no spelling remains.** → `documentation/agent-notes.md#the-two-nets`
-- **This is a PER-REPO script. Landing it here fixes this repo only**: check the siblings before
-  claiming the class is closed. → `documentation/agent-notes.md#what-the-gate-test-pins`
+Relocated in full: [documentation/attw-gate.md](documentation/attw-gate.md).
 
 ## Standing disciplines (every change)
 
-Mirrors the disciplines in the meta-repo's `documentation/conventions.md`: they bind here too. Full
-text and every sub-case: `documentation/agent-notes.md#standing-disciplines-every-change`.
-
-1. **Documentation follows code**: this repo's `README.md` / `docs-content/`, the meta-repo
-   `documentation/repos/deid.md` ("last verified" bumped), and the `ecosystem-map.md` status table.
-2. **Version + changelog**: a Changeset (`patch` on the `0.0.x` ladder) per meaningful change. **The
-   changeset summary IS the changelog entry: `.changeset/config.json` names a generator, so DO NOT
-   HAND-EDIT `CHANGELOG.md` and never reintroduce an `[Unreleased]` heading** (one stood unrolled for
-   this package's whole published history, which is how a shipped tarball came to call its own
-   contents unreleased). **Nothing but the H1 sits above the first heading**, compare version headings
-   **whole** (`## 0.0.1` is a substring of `## 0.0.10`), and **the Prettier pass stays ON here (no
-   `"prettier"` key), DERIVED from this repo having no `.prettierignore` and a `format:check` that
-   globs root markdown, never copied. A sibling that DOES ignore `*.md` needs it OFF: leaving it ON
-   there rewrote already-published text and corrupted a shipped tarball. Never resync this value.**
-   `test/scripts/changelog-generation.test.ts` pins the above, plus a digest of the frozen archive.
-   **Scope, because the gap matters: the digest sees a hand-edit BELOW the divider only. A fabricated
-   release section ABOVE it passes every case**, and a publish with an unchanged changelog is a
-   swallowed write failure that **nothing here guards** (do not misread it as a reverted flag).
-   → `documentation/agent-notes.md#the-changelog-generator-and-why-the-unreleased-heading-may-not-come-back`
-   Renaming a stable warning code is a **breaking change**.
-3. **Crew + knowledgebase loop**: if the public API or warning codes change, flag/update the matching
-   `crew` healthcare skill + the KB product doc.
-4. **No internal project bookkeeping on a public surface** (founder directive, 2026-07-27). Item ids,
-   phase/roadmap language, ADR numbers and meta-repo paths belong in the changeset, `CHANGELOG.md`, the
-   commit, the PR and the roadmap, never in `README.md`, `docs-content/`, the npm `description`, a
-   release body, or the JSDoc that compiles into `dist/**/*.d.ts`. Gated by
-   `pnpm check:no-internal-refs`. → `documentation/agent-notes.md#no-internal-project-bookkeeping-on-a-public-surface`
-   - **The gate keys on KNOWN PROJECT PREFIXES, never the `WORD-N` shape: in THIS repo that is not
-     stylistic.** `deid` documents the loci of all six standards (`PID-3`, `NM1-03`, `DTP-03`, `CLP-01`,
-     `US-SSN`, `ICD-10-CM`, …); a shape rule deletes the coordinates a consumer needs to audit what was
-     transformed. **Never resync the prefix list with a sibling copy** without re-reading why `SYNTH` is
-     here and absent in `ncpdp`'s. → `documentation/agent-notes.md#the-gate-keys-on-known-project-prefixes`
-   - **The bare-`§` non-catch is a DECISION pinned by `BARE_SECTION_SAMPLE`**: `§` here is
-     overwhelmingly `§164.514`. Closing that gap has to be deliberate.
-     → `documentation/agent-notes.md#the-section-sign-non-catch`
-   - **The gate catches identifiers, not English about our process, and the residual is large. A count is
-     a function of the rule set: quote the rule set with the count, or the count means nothing.**
-     → `documentation/agent-notes.md#the-gate-catches-identifiers-not-english`
-   - **CUT, do not rewrite.** In THIS package the risk is a safety one: every claim is deliberately
-     scoped, and two sentences in one sweep would have become **guarantees the code does not provide** if
-     the citation had simply been cut. Restate as a limitation instead.
-     → `documentation/agent-notes.md#cut-do-not-rewrite`
-   - **THE RELEASE BODY IS THE ONE PUBLIC SURFACE THIS REPO CANNOT GATE, AND `.changeset/` IS ITS
-     SOURCE.** An internal-only change is dropped **by word**, not reworded: fix the changeset's wording,
-     and **never widen the shared word list in `cosyte/.github` to fit one repo's prose.** The renderer
-     strips phase language and cannot check the result reads: **open every changeset with a sentence that
-     stands on its own once the identifier is gone.**
-     → `documentation/agent-notes.md#the-release-body-is-the-one-public-surface-this-repo-cannot-gate`
-   - **Stated as a limit, not chased: that fix depends on ANOTHER REPO's word list holding, and nothing
-     here fails when it changes.** → `documentation/agent-notes.md#the-word-list-is-in-another-repo`
-   - **The mitigation is redundancy, not coverage. Do not read the recorded figures as the measurement:
-     re-run the probe against the renderer.**
-     → `documentation/agent-notes.md#the-leave-one-out-measurement-and-its-probe`
-   - **Do not let a changeset headline drift toward the 200-character HARD REFUSAL**: it refuses (it
-     does not trim) on the version commit, after the Version PR has merged.
-     → `documentation/agent-notes.md#the-200-character-headline-refusal`
+Relocated in full: [documentation/standing-disciplines.md](documentation/standing-disciplines.md).
