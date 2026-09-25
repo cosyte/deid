@@ -19,23 +19,23 @@ importers:
         specifier: 2.31.0
         version: 2.31.0(@types/node@22.20.1)
       '@cosyte/ccda':
-        specifier: file:vendor/cosyte-ccda-0.0.1.tgz
-        version: file:vendor/cosyte-ccda-0.0.1.tgz
+        specifier: ^0.1.0
+        version: 0.1.0
       '@cosyte/dicom':
-        specifier: file:vendor/cosyte-dicom-0.0.1.tgz
-        version: file:vendor/cosyte-dicom-0.0.1.tgz
+        specifier: ^0.1.0
+        version: 0.1.0
       '@cosyte/eslint-config':
         specifier: ^0.0.4
         version: 0.0.4(eslint@10.5.0)(typescript@5.9.3)
       '@cosyte/fhir':
-        specifier: file:vendor/cosyte-fhir-0.0.0.tgz
-        version: file:vendor/cosyte-fhir-0.0.0.tgz
+        specifier: ^0.1.0
+        version: 0.1.0
       '@cosyte/hl7':
-        specifier: file:vendor/cosyte-hl7-0.0.1.tgz
-        version: file:vendor/cosyte-hl7-0.0.1.tgz
+        specifier: ^0.1.0
+        version: 0.1.0
       '@cosyte/ncpdp':
-        specifier: file:vendor/cosyte-ncpdp-0.0.1.tgz
-        version: file:vendor/cosyte-ncpdp-0.0.1.tgz
+        specifier: ^0.1.0
+        version: 0.1.0
       '@cosyte/prettier-config':
         specifier: ^0.0.2
         version: 0.0.2
@@ -52,8 +52,8 @@ importers:
         specifier: ^0.0.2
         version: 0.0.2(@vitest/coverage-v8@4.1.4)(vite@7.3.6(@types/node@22.20.1)(tsx@4.21.0))(vitest@4.1.4)
       '@cosyte/x12':
-        specifier: file:vendor/cosyte-x12-0.0.1.tgz
-        version: file:vendor/cosyte-x12-0.0.1.tgz
+        specifier: ^0.1.0
+        version: 0.1.0
       '@types/node':
         specifier: ^22.0.0
         version: 22.20.1
@@ -192,14 +192,12 @@ packages:
     resolution: {integrity: sha512-ooWCrlZP11i8GImSjTHYHLkvFDP48nS4+204nGb1RiX/WXYHmJA2III9/e2DWVabCESdW7hBAEzHRqUn9OUVvQ==}
     engines: {node: '>=0.1.90'}
 
-  '@cosyte/ccda@file:vendor/cosyte-ccda-0.0.1.tgz':
-    resolution: {integrity: sha512-uH7A0/ySsTkPnYjAXT2kGV6ITTWt+djcO97i2SBQZpTwAhAJtQ1TjM5fNi+fIvtEde5VQyGlmDnUo5v2KhIq3g==, tarball: file:vendor/cosyte-ccda-0.0.1.tgz}
-    version: 0.0.1
+  '@cosyte/ccda@0.1.0':
+    resolution: {integrity: sha512-aaHWn4xacMbqw+Bm/rkaE+yFZA0NwoIvPy4H1s9xWM9PPW11PmRGM1KrS7n1spwVwp0Qw/r8yYDLKWpb1nmQ3A==}
     engines: {node: '>=22.0.0'}
 
-  '@cosyte/dicom@file:vendor/cosyte-dicom-0.0.1.tgz':
-    resolution: {integrity: sha512-zVbPqiVTOW8Yh3P5d1zA//a7n4y556SI7YbY8fakyC049RPwmjYmXRdrkxhDz345wW2+CjaKPsSkJfUIn+S5bg==, tarball: file:vendor/cosyte-dicom-0.0.1.tgz}
-    version: 0.0.1
+  '@cosyte/dicom@0.1.0':
+    resolution: {integrity: sha512-hPVZIQWKc5wtei3YqIQuf9DIhJdTZ/mUU1SjGP4V2/12F5AAylLZBUK3eNN8pqCB8j7pFeG2MHK6yJfKSQOJ0A==}
     engines: {node: '>=22.0.0'}
 
   '@cosyte/eslint-config@0.0.4':
@@ -208,19 +206,16 @@ packages:
       eslint: ^9.0.0 || ^10.0.0
       typescript: '>=5.0.0'
 
-  '@cosyte/fhir@file:vendor/cosyte-fhir-0.0.0.tgz':
-    resolution: {integrity: sha512-K3EI+MI5iDb4F5t8R+bOAXggS7JGVl2Ux5J7+G7KJO9BonrpsiK8PEu/LeRh7D6sWBJYl8eLmGkdcdOKevANhQ==, tarball: file:vendor/cosyte-fhir-0.0.0.tgz}
-    version: 0.0.0
+  '@cosyte/fhir@0.1.0':
+    resolution: {integrity: sha512-N2bwMyjCGeBRi/5AZijJi+a2QX4KWW7+aWC+xzAJFmzRVmz4XpvI19tBJ4nNHHN9SaAvmw58YmlVcxm3iQj+HA==}
     engines: {node: '>=22.0.0'}
 
-  '@cosyte/hl7@file:vendor/cosyte-hl7-0.0.1.tgz':
-    resolution: {integrity: sha512-wVBIKj6Wk+hQtQYFk7JP3WhMkoynPWJ0ah/n3Jg1sHDe0/yjaivLffwpByg8ukgos0Go2INh16JPgdwAIxXBWg==, tarball: file:vendor/cosyte-hl7-0.0.1.tgz}
-    version: 0.0.1
+  '@cosyte/hl7@0.1.0':
+    resolution: {integrity: sha512-vscdMcPWyB+VsXzmRzzFNsYWtiNotl5wm+kO2OTvGFw2T94BmHPXfFpswSbyiqBH4DlKBIrgi4PJIzOU78v6pw==}
     engines: {node: '>=22.0.0'}
 
-  '@cosyte/ncpdp@file:vendor/cosyte-ncpdp-0.0.1.tgz':
-    resolution: {integrity: sha512-9z1xpKWXyEkcQoAlohLu4sRuLk6lHFI1GMS+awDtktmlwR7wXw5LE81yy1Htcd0koy5lc5wWjF/sXu6HaO2xYQ==, tarball: file:vendor/cosyte-ncpdp-0.0.1.tgz}
-    version: 0.0.1
+  '@cosyte/ncpdp@0.1.0':
+    resolution: {integrity: sha512-u0tyk7A5nLHs9UO+6XAfI7ma8m7u7/DwkwP9jSrrG2VXsJSqnMfTePLWNGpE3wB+lZxDVB0AxVIlexjwfW3EVQ==}
     engines: {node: '>=22.0.0'}
 
   '@cosyte/prettier-config@0.0.2':
@@ -247,9 +242,8 @@ packages:
       vite: ^6.0.0 || ^7.0.0 || ^8.0.0
       vitest: ^4.0.0
 
-  '@cosyte/x12@file:vendor/cosyte-x12-0.0.1.tgz':
-    resolution: {integrity: sha512-3ONax3aDPjNwlmCm368qbfgVjMne2QaoS/4H96ATWixkNdmtnWbnbFlgpdF6d/jjMlQTrxEJRz01u9N3EMsOoQ==, tarball: file:vendor/cosyte-x12-0.0.1.tgz}
-    version: 0.0.1
+  '@cosyte/x12@0.1.0':
+    resolution: {integrity: sha512-XqqIPjDisdPkD9izTGlaAqOzMiUlqFFZ7J37aBrnk8fQDyhzPOuG2rL7kzyc7gWb8AU6es5FdviSzk8X53z/ig==}
     engines: {node: '>=22.0.0'}
 
   '@es-joy/jsdoccomment@0.88.0':
@@ -2059,11 +2053,11 @@ snapshots:
   '@colors/colors@1.5.0':
     optional: true
 
-  '@cosyte/ccda@file:vendor/cosyte-ccda-0.0.1.tgz':
+  '@cosyte/ccda@0.1.0':
     dependencies:
       '@xmldom/xmldom': 0.9.10
 
-  '@cosyte/dicom@file:vendor/cosyte-dicom-0.0.1.tgz': {}
+  '@cosyte/dicom@0.1.0': {}
 
   '@cosyte/eslint-config@0.0.4(eslint@10.5.0)(typescript@5.9.3)':
     dependencies:
@@ -2076,11 +2070,11 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@cosyte/fhir@file:vendor/cosyte-fhir-0.0.0.tgz': {}
+  '@cosyte/fhir@0.1.0': {}
 
-  '@cosyte/hl7@file:vendor/cosyte-hl7-0.0.1.tgz': {}
+  '@cosyte/hl7@0.1.0': {}
 
-  '@cosyte/ncpdp@file:vendor/cosyte-ncpdp-0.0.1.tgz':
+  '@cosyte/ncpdp@0.1.0':
     dependencies:
       fast-xml-parser: 5.10.1
 
@@ -2102,7 +2096,7 @@ snapshots:
       vite: 7.3.6(@types/node@22.20.1)(tsx@4.21.0)
       vitest: 4.1.4(@types/node@22.20.1)(@vitest/coverage-v8@4.1.4)(vite@7.3.6(@types/node@22.20.1)(tsx@4.21.0))
 
-  '@cosyte/x12@file:vendor/cosyte-x12-0.0.1.tgz': {}
+  '@cosyte/x12@0.1.0': {}
 
   '@es-joy/jsdoccomment@0.88.0':
     dependencies:

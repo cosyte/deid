@@ -9,18 +9,14 @@ version: 2
 #   github-actions  .github/workflows/*.yml
 # There is no third. No Dockerfile, no Terraform, no pnpm workspace, no second package.json,
 # no submodules of its own, no Python/Go/Rust manifest. The only other tracked non-source
-# trees are `vendor/` (see the honest note below), `docs-content/` (prose) and `scripts/`
-# (repo-local TypeScript, no manifest of its own).
+# trees are `docs-content/` (prose) and `scripts/` (repo-local TypeScript, no manifest of its
+# own).
 #
-# ▶ TWO THINGS THIS FILE DOES NOT BUY, BECAUSE IT IS EASY TO OVER-READ.
-# (1) It configures VERSION updates only. Automatic SECURITY update PRs are a repo setting, not a
-#     config key: alerts are enabled here, but `security_and_analysis.dependabot_security_updates`
-#     read `disabled` when this file was written, so an advisory raises an alert and opens no fix PR
-#     on its own. Check with `gh api repos/cosyte/deid --jq .security_and_analysis`.
-# (2) It is UNOBSERVED whether Dependabot's pnpm updater tolerates the six `file:` tarball
-#     devDependencies below. That shape is unusual in this org and no real run has been seen against
-#     it, so it is not known whether it skips those entries cleanly or errors the whole `npm` job.
-#     Until one weekly run has been watched, "no open Dependabot PR" still does not mean "current".
+# ▶ ONE THING THIS FILE DOES NOT BUY, BECAUSE IT IS EASY TO OVER-READ.
+# It configures VERSION updates only. Automatic SECURITY update PRs are a repo setting, not a
+# config key: alerts are enabled here, but `security_and_analysis.dependabot_security_updates`
+# read `disabled` when this file was written, so an advisory raises an alert and opens no fix PR
+# on its own. Check with `gh api repos/cosyte/deid --jq .security_and_analysis`.
 
 updates:
   # npm. This package ships ZERO runtime dependencies by design -- `dependencies` is `{}` and
@@ -28,16 +24,12 @@ updates:
   # here is a devDependency, and one group is the whole tree. The `npm` ecosystem covers pnpm:
   # Dependabot infers the package manager from the lockfile, which is `pnpm-lock.yaml`.
   #
-  # ▶ WHAT THIS DELIBERATELY CANNOT SEE, STATED PLAINLY: the six sibling parsers are declared
-  # as optional PEER dependencies and are installed for tests from `pnpm pack` tarballs
-  # committed under `vendor/` (`"@cosyte/dicom": "file:vendor/cosyte-dicom-0.0.1.tgz"` and its
-  # five siblings). Dependabot does not bump a `file:` specifier, and it does not open a PR
-  # when a peer dependency's registry version moves. So a fix landing in a sibling parser does
-  # NOT arrive here automatically -- somebody re-packs the tarball by hand. That matters more
-  # here than it would elsewhere: `@cosyte/deid/dicom` DELEGATES its de-identification pass to
-  # `@cosyte/dicom`, so the vendored tarball is the version this package's DICOM tests actually
-  # exercise, and it is pinned. Re-pack it deliberately when the upstream pass changes; do not
-  # read "no open Dependabot PR" as "the vendored parsers are current".
+  # ▶ THE SIX SIBLING PARSERS ARE COVERED HERE. They are declared as optional PEER dependencies
+  # and installed for tests as registry devDependencies resolved through `pnpm-lock.yaml`, so
+  # this entry watches the versions the tests actually exercise. That matters more here than it
+  # would elsewhere: `@cosyte/deid/dicom` DELEGATES its de-identification pass to
+  # `@cosyte/dicom`, so a change to the upstream pass arrives as a grouped bump and runs this
+  # package's DICOM tests before it lands.
   #
   # NOTE: package.json carries `pnpm.overrides` pinning esbuild and js-yaml above advisory
   # ranges. Dependabot does not manage those overrides -- if it proposes a bump that makes one

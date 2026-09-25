@@ -113,11 +113,11 @@
  *
  * THE PARTITION USED HERE IS UTF-8 DECODABILITY, and it is derived rather than assumed. A pointer is
  * prose; prose in this repository is UTF-8. Measured on this tree, the set of tracked files that do
- * not decode as UTF-8 is exactly the vendored `@cosyte/*` tarballs, which are DEFLATE streams, and
- * every NUL-bearing hand-written source decodes cleanly and STAYS IN THE SWEEP. Both directions are
- * asserted in `test/scripts/agent-notes.test.ts`, and the count of files opened DESPITE a NUL byte
- * is printed on the OK line so that a regression to the sibling partition is visible as a number
- * rather than as silence.
+ * not decode as UTF-8 is EMPTY (a DEFLATE stream, such as a vendored tarball, is what would land in
+ * it), and every NUL-bearing hand-written source decodes cleanly and STAYS IN THE SWEEP. Both
+ * directions are asserted in `test/scripts/agent-notes.test.ts`, and the count of files opened
+ * DESPITE a NUL byte is printed on the OK line so that a regression to the sibling partition is
+ * visible as a number rather than as silence.
  *
  * ---------------------------------------------------------------------------
  * EXISTENCE IS NOT OBSERVATION, WHICH IS WHY THE OK LINE RECONCILES AND WHY REFUSALS EXIST.
