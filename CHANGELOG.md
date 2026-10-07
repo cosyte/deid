@@ -536,7 +536,7 @@ heading itself, its link definition at the foot of the file, and the one empty s
 existed to receive the next hand-written entry. No entry was reworded, re-sorted or removed.
 
 The entries below follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this package
-versions on the cosyte `0.0.x` ladder, which is [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
+versions on the Cosyte `0.0.x` ladder, which is [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 held at `0.0.x` until first alpha.
 
 ### Added

@@ -276,7 +276,7 @@ a summary.
 
 `scripts/check-agent-notes.ts`, landed 2026-08-11. **It is named for what it checks and it asserts no
 universal about any sibling repository.** That sentence is the most load-bearing one here, so it comes
-first: the two-file split was applied across much of the cosyte tree, and the tempting framing is
+first: the two-file split was applied across much of the Cosyte tree, and the tempting framing is
 "every repo has this pair, and this gate enforces the contract". **It is not.** Measured across the
 umbrella's own checkout on 2026-08-06, `config`, `hl7`, `workflow`, `crew`, `knowledgebase`, `.github`
 and `claude-containers` carry **no narrative file at all**, so the ecosystem-wide contract is either
