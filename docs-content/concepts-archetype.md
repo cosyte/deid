@@ -11,7 +11,7 @@ sidebar_position: 1
 
 ## Fail closed (the inverted reflex)
 
-A parser is liberal in what it accepts. A de-identifier is the opposite: on **any** ambiguity (an
+A parser is liberal in what it accepts. A de-identifier is the opposite: on each of these ambiguities (an
 unrecognized structure, an un-locatable identifier, a field it cannot classify, a free-text blob, a
 date/ZIP it cannot generalize), it **blocks** the value (withholds it), and records the decision. It
 never passes a value through as "probably safe". Liberality here leaks patients.

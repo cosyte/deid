@@ -8,14 +8,13 @@
 # @cosyte/deid
 
 > Healthcare **de-identification** for Node.js and TypeScript: a HIPAA-grounded policy engine that
-> **fails closed** and emits a **value-free manifest**.
+> emits a **value-free manifest**.
 
 `@cosyte/deid` applies a de-identification **policy** (HIPAA Safe Harbor by default) to a
 structurally-located model of a healthcare document and returns a transformed model plus a value-free
 audit of everything it acted on. It is a **consumer** of the `@cosyte/*` parsers, not a parser sibling:
 it borrows the archetype's disciplines (typed diagnostics, immutable output, a policy/profile system)
-but **inverts the reflex**: where a parser is liberal on input, a de-identifier is conservative and
-**fails closed**. Third-party runtime dependencies: **zero** (every primitive is `node:crypto`).
+but **inverts the reflex**: where a parser is liberal on input, a de-identifier is conservative. Third-party runtime dependencies: **zero** (every primitive is `node:crypto`).
 
 > **The honesty line.** Results are **"Safe-Harbor-transformed per the configured policy"**, never
 > "de-identified" and never "HIPAA-compliant". Safe Harbor is implemented mechanically; the
@@ -660,8 +659,8 @@ determination**.
 - **Five transforms**: redact, generalize (date→year, ZIP→3-digit/`000`, age→`90+`), keyed date-shift,
   keyed-HMAC pseudonymize, keyed hash.
 - **18 Safe Harbor categories**: §164.514(b)(2)(i)(A) to (R), including the open-ended catch-all (R).
-- **Fail-closed rule**: anything uncertain is blocked, never passed through; clinical values are
-  retained untouched.
+- **Fail-closed rule**: an unrecognized structure, an un-locatable identifier or free text is
+  blocked, never passed through; clinical values are retained untouched.
 - **Value-free manifest**: category + transform + locus + count + disposition + code + a boolean
   `reidentificationCode` (`true` only where a keyed surrogate was emitted) + a `partyRole` code (only
   where a party was left in place because its role sits outside the scope clause), never a value, never

@@ -1,8 +1,8 @@
 /**
  * Fail closed: what `@cosyte/deid` does when it cannot be sure, shown case by case.
  *
- * A parser is liberal about what it accepts. A de-identifier is the opposite: anything it cannot
- * confidently handle is blocked or refused, never passed through as safe.
+ * A parser is liberal about what it accepts. A de-identifier is the opposite: each case below is
+ * blocked or refused, never passed through as safe.
  *
  * - Free text is blocked by default. The library ships no NLP model and no regex scrub.
  * - A redactor you bring is used, and its output is recorded as consumer-asserted: the engine does

@@ -5,8 +5,9 @@ Harbor by default) and emits a value-free manifest of what it acted on. It never
 "de-identified," and it never certifies HIPAA de-identification.** Safe Harbor is implemented
 mechanically; **Expert Determination is _supported_, never _rendered_.** The structured-field core is
 the guarantee; **free text is blocked by default**; **DICOM is metadata-only** (burned-in pixels are
-flagged, not cleaned). The library **fails closed**: on any ambiguity it blocks or removes, never
-passes a value through as "probably safe."
+flagged, not cleaned). On an unrecognized structure, an un-locatable identifier, an unknown segment
+or extension, or a free-text blob, the library blocks or removes, never passing a value through as
+"probably safe."
 
 Read this page before you rely on the library for anything that leaves your control.
 
@@ -345,9 +346,9 @@ report.determination; // => null
 report.disclaimer.includes("NOT a determination"); // => true
 ```
 
-The library's promise is narrow and honest: **structured-field, fail-closed, policy-driven
-Safe-Harbor transformation with a value-free manifest, never a leaked patient, never a destroyed
-clinical value, and never a claim of "de-identified."**
+The library's promise is narrow and honest: **structured-field, policy-driven Safe-Harbor
+transformation with a value-free manifest, never a leaked patient, and never a claim of
+"de-identified."**
 
 ## NCPDP Telecom: one transaction per message
 
