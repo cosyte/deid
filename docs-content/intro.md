@@ -10,7 +10,7 @@ Apply a HIPAA-grounded **de-identification policy** to a healthcare document's s
 model and get back a transformed model plus a **value-free manifest** of everything acted on, without
 reading 45 CFR §164.514 or hand-writing a scrubber.
 
-`@cosyte/deid` is a consumer-tier library, **not a parser**. It borrows the cosyte parser archetype's
+`@cosyte/deid` is a consumer-tier library, **not a parser**. It borrows the Cosyte parser archetype's
 disciplines (typed diagnostics, immutable output, a policy/profile system) but **inverts the parser's
 reflex**: where a parser is liberal on input (Postel's Law), a de-identifier is conservative: an
 unrecognized structure or an un-locatable identifier is **blocked**, never passed through as safe.
