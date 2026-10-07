@@ -57,8 +57,8 @@ warning -- read it before quoting anything from it.
   **FHIR R4** (`@cosyte/deid/fhir`, DEID-4), **X12 EDI** (`@cosyte/deid/x12`) and **NCPDP Telecom**
   (`@cosyte/deid/ncpdp`) (DEID-5), and **DICOM** (`@cosyte/deid/dicom`, DEID-6 -- the one adapter that
   **delegates** to `@cosyte/dicom`'s PS3.15 Annex E pass, metadata-only, burned-in pixels flagged not
-  cleaned). Each format's parser is an **optional peer dep** consumed only from its subpath (vendored
-  `pnpm pack` tarballs pre PUB-FLIP). **NCPDP SCRIPT remains deferred** -- its lossy serialize +
+  cleaned). Each format's parser is an **optional peer dep** consumed only from its subpath (a
+  registry devDependency for this repo's own tests). **NCPDP SCRIPT remains deferred** -- its lossy serialize +
   address-less `Patient` model block a faithful structural de-id through the current parser surface.
   **DEID-7** adds the format-agnostic **longitudinal layer** over all six adapters: the corpus registry
   (`createDeidRegistry`) for cross-document consistency, the formalized key contract (consumer-supplied
@@ -99,8 +99,8 @@ place.
 - **The repo is PUBLIC and the package IS published.** Those two are independent here and neither
   implies the other, so do not infer one from the other. Check each. `gh api repos/cosyte/deid --jq
 .visibility` reports `public`, so the flip once described here as a pending gate has happened, and
-  the "pre `PUB-FLIP`" note on the vendored tarballs is stale as a reason even though the vendoring
-  is still real. **The whole "still unpublished" paragraph that stood here was FALSE and is deleted
+  the "pre `PUB-FLIP`" note on the vendored tarballs is stale, as is the vendoring: every sibling
+  parser installs from the registry. **The whole "still unpublished" paragraph that stood here was FALSE and is deleted
   rather than reworded**: it said the registry returns 404 for `@cosyte/deid`, that no publish
   attempt was recorded, that `version` was still `0.0.0` and that there were no tags. The registry
   serves this package under several versions, `git tag` lists a release tag for each, and the hold it
@@ -131,8 +131,9 @@ a summary.
 - **CI/CD:** thin callers of the reusable `cosyte/.github` workflows.
 - **Runtime deps:** **Zero.** Node stdlib only.
 - **License:** MIT.
-- **Optional peer deps, vendored.** Each format's parser is an **optional peer dep** consumed only from
-  its subpath, installed from `pnpm pack` tarballs committed under `vendor/`. *(Relocated verbatim from
+- **Optional peer deps.** Each format's parser is an **optional peer dep** consumed only from its
+  subpath, installed for this repo's own tests as a registry devDependency resolved through
+  `pnpm-lock.yaml`. *(Relocated verbatim from
   `CLAUDE.md` on 2026-08-11 to make room for the narrative-pointer gate's entry; the bullet list above
   it in `CLAUDE.md` was a second copy of this section and was compressed to the facts plus its pointer,
   which is relocation, not deletion. Nothing here was shortened.)*
@@ -344,7 +345,7 @@ census with nothing to notice. This repository already had that measurement writ
 calls `src/context.ts` and `src/manifest.ts` binary and `src/report.ts` not, because its heuristic
 reads only the head of a file. So neither `grep -I` nor `git ls-files --eol` may be substituted in as
 a simplification: either drops authored source from the sweep with no tell. The set that does not
-decode as UTF-8 is exactly the six vendored tarballs, and **the count of files opened despite carrying
+decode as UTF-8 is empty in this tree, and **the count of files opened despite carrying
 a NUL byte is printed on the OK line** so a regression to the sibling partition shows up as a number
 rather than as silence.
 
@@ -478,12 +479,11 @@ repos/cosyte/deid/rulesets/19907854`, not off this file):
 ### What dependabot watches
 
 - **`.github/dependabot.yml`** watches `npm` (the single root `package.json` + `pnpm-lock.yaml`) and
-  `github-actions`. It **cannot** see the six sibling parsers: they are optional peer deps installed
-  from `pnpm pack` tarballs committed under `vendor/` via `file:` specifiers, which Dependabot does
-  not bump. `@cosyte/deid/dicom` delegates its pass to `@cosyte/dicom`, so that vendored tarball is
-  the version the DICOM tests actually exercise, so re-pack it by hand when the upstream pass changes.
-  `package.json` also carries `pnpm.overrides`, which Dependabot does not manage; when a bump makes
-  one redundant, remove the override by hand.
+  `github-actions`. The six sibling parsers are optional peer deps installed for tests as registry
+  devDependencies, so it **watches** them like any other devDependency. `@cosyte/deid/dicom`
+  delegates its pass to `@cosyte/dicom`, so a change to that pass arrives as a grouped bump and runs
+  the DICOM tests before it lands. `package.json` also carries `pnpm.overrides`, which Dependabot
+  does not manage; when a bump makes one redundant, remove the override by hand.
 
 ### What the Dependabot config does not buy
 
@@ -496,12 +496,11 @@ repos/cosyte/deid/rulesets/19907854`, not off this file):
 
 ### Whether the pnpm updater tolerates this manifest
 
-- **Unobserved, and stated as unobserved: whether Dependabot's pnpm updater tolerates this manifest.**
-  Six `devDependencies` here are `file:` tarballs under `vendor/`, which is unusual in this org. No
-  real Dependabot run has been seen against it, so it is not known whether it skips those entries
-  cleanly or errors the whole `npm` job. **Do not read "no open Dependabot PR" as "nothing is
-  stale"** until one weekly run has actually been observed; that inference is the exact mistake the
-  missing config caused in the first place.
+- **Unobserved, and stated as unobserved: a Dependabot run against this manifest.** It carries no
+  `file:` specifier (every devDependency, the six sibling parsers included, resolves from the
+  registry), but no real Dependabot run has been seen against it. **Do not read "no open Dependabot
+  PR" as "nothing is stale"** until one weekly run has actually been observed; that inference is the
+  exact mistake the missing config caused in the first place.
 
 ## Engineering Guardrails
 
@@ -578,12 +577,12 @@ R100` and this route printed its clean line (measured on git 2.39.5; the all-mod
   `PID|…` literals. Both routes now share one `isUnderScanRoot`. **`mllp` walks `test/` too but
   EXCLUDES `.ts` from it** -- correct there, and it would have closed **none** of these 38, because
   every one is a `.ts`. **`ccda` roots at the repo root**, which this tree cannot do without walking
-  `node_modules/`, `dist/`, `coverage/` and six binary `vendor/*.tgz`. Out of scope **for the walk
-  and for `--staged`**, stated as such: `.github/`, `docs-content/`, `vendor/`, the root manifests.
+  `node_modules/`, `dist/` and `coverage/`. Out of scope **for the walk and for `--staged`**, stated
+  as such: `.github/`, `docs-content/`, the root manifests.
 
   **▶ ALL MODE ALSO READS THE INDEX, SO THAT LIST IS NO LONGER THE WHOLE ANSWER -- AND IT IS EASY TO
   OVERSTATE IN EITHER DIRECTION.** `.github/` and the root manifests **are** swept from their
-  committed bytes; `vendor/` and **every `.md`** are excluded there. **So `docs-content/` REMAINS A
+  committed bytes; **every `.md`** is excluded there. **So `docs-content/` REMAINS A
   PUBLISHED CONSUMER SURFACE THIS GATE DOES NOT SCAN FOR PHI: 16 of its 17 tracked files are `.md`,
   and the index route adds only `sidebars.json`.** A draft of this slice wrote that `docs-content/`
   was "no longer out of scope full stop" and **deleted the sentence that said otherwise** -- the
@@ -768,20 +767,21 @@ R100` and this route printed its clean line (measured on git 2.39.5; the all-mod
 
 ### What the index route excludes
 
-  **▶ `vendor/` IS EXCLUDED, AS A LITERAL PATH PREFIX AND NOT A PREDICATE.** It is **not a new
-  exemption**: the scanner's header banner and `CLAUDE.md` already declared `vendor/` out of scope,
-  and the route honours that rather than quietly overriding it. The six entries are third-party
-  `pnpm pack` tarballs of the sibling parsers, not this package's corpus.
+  **▶ NO PATH PREFIX IS EXCLUDED: `INDEX_EXCLUDED_PREFIXES` IS EMPTY.** Every sibling parser is a
+  registry devDependency and nothing is tracked under `vendor/`, so a `vendor/` rule would describe
+  a directory that has gone, which is how an exclusion drifts into covering something nobody argued
+  for. A file committed under `vendor/` is read from its committed bytes like any other tracked path
+  outside the scan roots, pinned by a case that commits one and expects exit 1.
 
-  **▶ THE COST IS MEASURED, NOT ASSUMED.** They are gzip, so their text is compressed and no
-  detector here can read it without decompressing an archive, which this scanner does not do.
-  Handing the compressed bytes to the detectors as UTF-8 is **noise, not weak coverage**: with the
-  exclusion removed, all mode over this repo reports **45 hits across all six tarballs and exits
-  1 -- 44 spurious NCPDP Telecom field tokens and one spurious email address.** The Telecom detector
-  splits on `0x1C`/`0x1D`/`0x1E` and reads the next two bytes as a field id; those bytes occur
-  throughout compressed data, so it fires indefinitely. **A gate that red-locks the repo on mojibake
-  teaches developers to bypass it.** Re-derive that figure rather than trusting it: it is a function
-  of what is vendored *and* of the detector set, and both move.
+  **▶ WHAT AN ENTRY WOULD NEED, MEASURED RATHER THAN ASSUMED.** A tracked gzip archive is the case
+  that qualifies: its text is compressed, and handing the compressed bytes to the detectors as UTF-8
+  is **noise, not weak coverage**. Measured while six sibling-parser tarballs were tracked under
+  `vendor/`, all mode without an exclusion reported **45 hits across the six and exited 1 -- 44
+  spurious NCPDP Telecom field tokens and one spurious email address.** The Telecom detector splits
+  on `0x1C`/`0x1D`/`0x1E` and reads the next two bytes as a field id; those bytes occur throughout
+  compressed data, so it fires indefinitely. **A gate that red-locks the repo on mojibake teaches
+  developers to bypass it.** Re-derive that figure rather than trusting it: it is a function of what
+  is tracked *and* of the detector set, and both move.
 
   **▶ A "BINARY BLOB" PREDICATE WAS MEASURED AND REJECTED, AND THIS IS THE REASON TO WRITE DOWN.**
   Two real TypeScript sources here -- `src/context.ts` and `src/manifest.ts` -- **embed NUL bytes as
@@ -789,10 +789,10 @@ R100` and this route printed its clean line (measured on git 2.39.5; the all-mod
   predicate would have dropped two hand-written source files out of the decoy defence the route
   exists to provide.
 
-  **▶ BOTH NAME RULES (`.md` AND `vendor/`) ARE APPLIED *LAST*, TO THE READABLE SET ONLY, AND THE
-  ORDER IS A HOLE RATHER THAN A STYLE POINT.** Git carries a link's **target path**, which is itself
-  a PHI surface, so naming a link `vendor/x.tgz` or `x.md` must not buy it a pass. Pinned by a case
-  that stages a link under each name and expects exit 2.
+  **▶ THE NAME RULE (`.md`) IS APPLIED *LAST*, TO THE READABLE SET ONLY, AND THE ORDER IS A HOLE
+  RATHER THAN A STYLE POINT.** Git carries a link's **target path**, which is itself a PHI surface,
+  so naming a link `x.md` must not buy it a pass. Pinned by a case that stages a link named `x.md`,
+  and one under `vendor/`, and expects exit 2 for each.
 
   **▶ THE SKIP IS A BYTE COMPARISON -- NOT A STAT, NOT AN MTIME, NOT A HASH.** Those are exactly what
   a decoy defeats. **AND IT MAY NOT NORMALIZE LINE ENDINGS FIRST**: that compares a *derived* form

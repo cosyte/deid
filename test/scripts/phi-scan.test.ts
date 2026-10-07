@@ -741,8 +741,8 @@ describe("phi-scan: the all-mode walk covers src/, test/ and scripts/", () => {
   });
 
   it("does NOT reach outside those roots, the residual, pinned rather than implied", () => {
-    // `.github/`, `docs-content/`, `vendor/` and the root-level manifests are not
-    // claimed covered. If a later change widens to the repo root, this is the
+    // `.github/`, `docs-content/` and the root-level manifests are not claimed
+    // covered. If a later change widens to the repo root, this is the
     // case that should be REWRITTEN, not deleted quietly.
     const root = makeRepo();
     mkdirSync(join(root, "docs-content"));
@@ -1789,24 +1789,26 @@ describe("phi-scan index corpus: it is a UNION, never a replacement", () => {
 });
 
 describe("phi-scan index corpus: what it excludes, and what an exclusion may not excuse", () => {
-  it("does not read a tracked file under vendor/, which is declared out of scope", () => {
-    // `vendor/` holds third-party `pnpm pack` tarballs: gzip, so their text is
-    // compressed and no detector here can read it without decompressing an
-    // archive. Handing the compressed bytes to the detectors as UTF-8 is noise,
-    // not coverage. The cost is that a tracked file there is not swept.
+  it("reads a tracked file under vendor/: no path prefix is excluded", () => {
+    // `INDEX_EXCLUDED_PREFIXES` is empty. Nothing is tracked under `vendor/`
+    // here, so an exclusion for it would cover a directory that has gone, and a
+    // file committed there is swept from its committed bytes like any other
+    // tracked path outside the scan roots.
     const root = makeRepo();
     mkdirSync(join(root, "vendor"));
     writeFileSync(join(root, "vendor", "payload.hl7"), SYNTHETIC_PHI);
     commitAll(root, "vendor");
 
     const r = runIn(root, []);
-    expect(r.code, `stderr: ${r.stderr}`).toBe(0);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toContain("vendor/payload.hl7");
   });
 
   it("but a NAME exclusion never excuses an entry whose bytes the route cannot read", () => {
-    // Both name rules are applied LAST, to the readable set only. Putting either
-    // first is a real hole: git carries a link's TARGET PATH, which is itself a
-    // PHI surface, so naming a link `vendor/…` or `….md` must not buy it a pass.
+    // The name rule is applied LAST, to the readable set only. Putting it first
+    // is a real hole: git carries a link's TARGET PATH, which is itself a PHI
+    // surface, so naming a link `….md` must not buy it a pass, and neither does
+    // placing one under `vendor/`.
     for (const rel of ["vendor/decoy.tgz", "notes.md"]) {
       const root = makeRepo();
       mkdirSync(join(root, "vendor"));

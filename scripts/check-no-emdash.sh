@@ -34,16 +34,12 @@
 # ---------------------------------------------------------------------------
 # WHAT IS EXCLUDED, EACH BY A RULE WITH ITS REASON, NEVER BY A PER-OCCURRENCE EXCEPTION.
 # There is no allow-list in this gate and there is no way to spend an exception on one hit. A file
-# is either in scope or it is out of scope by one of the three rules below, and each rule REDS when
-# the thing it names stops existing, so an exclusion cannot quietly grow into a hole.
+# is either in scope or it is out of scope by one of the two rules below, and each rule REDS when
+# the thing it names stops existing, so an exclusion cannot quietly grow into a hole. There is no
+# `vendor/` rule: every sibling parser is a registry devDependency, nothing is tracked under
+# `vendor/`, and a file added there is scanned like any other.
 #
-#   (E1) `vendor/` -- the vendored sibling-parser tarballs this package depends on through `file:`
-#        specifiers. They are gzip streams, not text authored here: one of them carries the banned
-#        character's UTF-8 byte sequence inside compressed data by coincidence, and there is no
-#        text edit that clears it. Excluded as a LITERAL PATH PREFIX, matching the decision
-#        `scripts/phi-scan.ts` already took for the same directory and the same reason.
-#
-#   (E2) `test/fixtures/` -- sample clinical documents whose EXACT BYTES are the subject under
+#   (E1) `test/fixtures/` -- sample clinical documents whose EXACT BYTES are the subject under
 #        test: the HL7 v2 messages, the C-CDA document, the FHIR bundle, the X12 claim and the
 #        NCPDP Telecom payload the de-identification suites assert against. Rewriting one changes
 #        what the test asserts, and this repository's tests are the evidence its de-identification
@@ -52,7 +48,7 @@
 #        which must carry the character is a stated, reasoned non-catch rather than a surprise
 #        exemption argued for under time pressure.
 #
-#   (E3) `CHANGELOG.md` BELOW THE ARCHIVE DIVIDER -- the frozen archive, which is a GOLDEN pinned
+#   (E2) `CHANGELOG.md` BELOW THE ARCHIVE DIVIDER -- the frozen archive, which is a GOLDEN pinned
 #        byte for byte by `FROZEN_ARCHIVE_SHA256` and `FROZEN_ARCHIVE_BYTES` in
 #        `test/scripts/changelog-generation.test.ts`, and which has already been published inside
 #        shipped npm tarballs. Rewriting it fails that test and rewrites history a consumer has
@@ -134,7 +130,7 @@ HORIZONTAL_BAR=$(printf '\xe2\x80\x95')
 # ---------------------------------------------------------------------------
 # Exclusion rules. Each is stated in the banner with its reason.
 # ---------------------------------------------------------------------------
-EXCLUDED_PREFIXES=(vendor/ test/fixtures/)
+EXCLUDED_PREFIXES=(test/fixtures/)
 CHANGELOG_FILE='CHANGELOG.md'
 ARCHIVE_HEADING='## Released before this file was generated'
 
@@ -496,7 +492,7 @@ if [ "$changelog_seen" -ne 1 ]; then
     "Refusing to report green from a scan that lost one of its stated inputs."
 fi
 
-# RULE (E3), applied. The divider is located in the tracked file itself, the region ABOVE it is
+# RULE (E2), applied. The divider is located in the tracked file itself, the region ABOVE it is
 # scanned under the file's own name so a hit's line number is the file's line number, and a missing
 # divider REFUSES rather than defaulting to either extreme.
 divider=''
@@ -530,4 +526,4 @@ if [ -n "$HITS" ]; then
   fail_with_hits "the tracked files listed above" "$HITS"
 fi
 
-echo "check-no-emdash: OK (${scanned} tracked file(s) scanned for ${BANNED_NAME}, plus ${CHANGELOG_FILE} above the archive divider at line ${divider}; ${excluded} file(s) excluded by the stated rules for vendored tarballs and byte-exact test fixtures; ${gitlinks} gitlink(s) skipped)"
+echo "check-no-emdash: OK (${scanned} tracked file(s) scanned for ${BANNED_NAME}, plus ${CHANGELOG_FILE} above the archive divider at line ${divider}; ${excluded} file(s) excluded by the stated rule for byte-exact test fixtures; ${gitlinks} gitlink(s) skipped)"

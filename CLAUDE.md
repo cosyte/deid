@@ -57,7 +57,7 @@ never rendered**. Full statement: `documentation/agent-notes.md#project`.
 Per the published `@cosyte/*` config packages, never by copying files: TypeScript strict
 (**ES2023**, `NodeNext`, 5.9.x pinned), **Node >= 22** (CI 22+24), **pnpm@10**, dual ESM + CJS via
 `tsup`, ESLint 10 + Prettier, `--max-warnings=0`, Vitest 4 at >= 90 per-directory coverage,
-**runtime deps zero**, MIT. **`attw` is a WRAPPER, not the bare CLI**: see below. Detail + the vendored
+**runtime deps zero**, MIT. **`attw` is a WRAPPER, not the bare CLI**: see below. Detail + the
 optional-peer arrangement:
 `documentation/agent-notes.md#tech-stack-the-shared-cosyte-standard`.
 
@@ -113,14 +113,14 @@ optional-peer arrangement:
 - **Nothing in this repository can observe its own ruleset: do NOT take this section as evidence.**
   Verify with `gh api repos/cosyte/deid/rules/branches/main`.
   → `documentation/agent-notes.md#nothing-here-can-observe-its-own-ruleset`
-- **Dependabot cannot see the six vendored sibling parsers** (`file:` tarballs) or `pnpm.overrides`,
-  re-pack the `@cosyte/dicom` tarball by hand when the upstream pass changes.
+- **Dependabot watches the six sibling parsers** (registry devDependencies), but not
+  `pnpm.overrides`: remove an override by hand when a bump makes it redundant.
   → `documentation/agent-notes.md#what-dependabot-watches`
 - **The config buys VERSION updates only; automatic SECURITY update PRs are a separate repo setting**
   that read `disabled`. Check `gh api repos/cosyte/deid --jq .security_and_analysis`, not this line.
   → `documentation/agent-notes.md#what-the-dependabot-config-does-not-buy`
-- **Unobserved: whether Dependabot's pnpm updater tolerates this manifest. Do not read "no open
-  Dependabot PR" as "nothing is stale".**
+- **Unobserved: a Dependabot run against this manifest. Do not read "no open Dependabot PR" as
+  "nothing is stale".**
   → `documentation/agent-notes.md#whether-the-pnpm-updater-tolerates-this-manifest`
 
 ## Engineering Guardrails
@@ -165,7 +165,7 @@ Every line here is clinical-safety content. Full cases: `documentation/agent-not
   inline `PID|…` literals. **`.md` IS EXEMPT ON BOTH ENUMERATING ROUTES AND ON THE INDEX ROUTE (an
   explicit path is still scanned), SO `docs-content/` REMAINS A PUBLISHED CONSUMER SURFACE THIS GATE
   DOES NOT SCAN FOR PHI**: 16 of its 17 files are `.md`; the index adds only `sidebars.json`.
-  `.github/` and the root manifests ARE read there; `vendor/` is not.
+  `.github/` and the root manifests ARE read there.
   → `documentation/agent-notes.md#the-scan-roots`
 - **ENUMERATING THE FILES BUYS THE SSN/EMAIL FLOOR AND NOTHING ELSE: a detector has to RECOGNISE the
   document first, and every recogniser was written for a file that _is_ the document.** This repo's
@@ -204,10 +204,10 @@ hits` at exit 0 on base; the decoy at a tracked path is why it exists. **The mec
   swallow a real hit -- `makeRepo()` commits its baseline, and `--allow-fixture` is subtracted here
   too: live, not dead code, because a refusal may not report what it refused over.**
   → `documentation/agent-notes.md#all-mode-reads-the-bytes-git-carries`
-- **`vendor/` IS EXCLUDED FROM THAT ROUTE, AS A LITERAL PATH** (45 mojibake hits without it). **A
-  "binary blob" PREDICATE was measured and REJECTED: two hand-written `src/*.ts` embed NUL bytes.**
-  **The byte skip MAY NOT normalize line endings**; `.md`/`vendor/` apply LAST, after the mode
-  refusals. → `documentation/agent-notes.md#what-the-index-route-excludes`
+- **NO PATH PREFIX IS EXCLUDED FROM THAT ROUTE, ONLY `.md`**: an exclusion for a directory that has
+  gone is a stale rule. **A "binary blob" PREDICATE was measured and REJECTED: two hand-written
+  `src/*.ts` embed NUL bytes.** **The byte skip MAY NOT normalize line endings**; the `.md` rule
+  applies LAST, after the mode refusals. → `documentation/agent-notes.md#what-the-index-route-excludes`
 - **THE POSITIVE CONTROL STRIKES `EMAILDOMAIN cosyte.com` AND THE SAME CORPUS REDS.** That floor hit
   is `package.json`'s contact address: **published registry metadata, NOT PHI**; an `EMAILDOMAIN`
   entry is **global and route-blind**. **Never spell the address out in the allow-list: it sits in a
