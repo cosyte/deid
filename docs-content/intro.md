@@ -12,9 +12,8 @@ reading 45 CFR §164.514 or hand-writing a scrubber.
 
 `@cosyte/deid` is a consumer-tier library, **not a parser**. It borrows the cosyte parser archetype's
 disciplines (typed diagnostics, immutable output, a policy/profile system) but **inverts the parser's
-reflex**: where a parser is liberal on input (Postel's Law), a de-identifier is conservative; it
-**fails closed**. An unrecognized structure or an un-locatable identifier is **blocked**, never passed
-through as safe.
+reflex**: where a parser is liberal on input (Postel's Law), a de-identifier is conservative: an
+unrecognized structure or an un-locatable identifier is **blocked**, never passed through as safe.
 
 > **The honesty line that governs the whole library.** Results are **"Safe-Harbor-transformed per the
 > configured policy"**, never "de-identified" and never "HIPAA-compliant". Safe Harbor is implemented

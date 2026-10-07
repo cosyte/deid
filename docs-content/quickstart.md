@@ -7,8 +7,8 @@ sidebar_position: 1
 # Quickstart
 
 De-identify a structurally-located model under a policy and read the value-free manifest.
-`@cosyte/deid` **fails closed**: anything it cannot confidently handle is **blocked**, never passed
-through as safe. The result is **"Safe-Harbor-transformed per the configured policy"**, never
+In `@cosyte/deid`, an unrecognized structure or an un-locatable identifier is **blocked**, never
+passed through as safe. The result is **"Safe-Harbor-transformed per the configured policy"**, never
 "de-identified".
 
 ## De-identify a model
