@@ -1,295 +1,52 @@
-# @cosyte/deid: Project Guide for Claude
+# @cosyte/deid
 
-> **▶ THE NARRATIVE BEHIND EVERY TRAP BELOW IS IN `documentation/agent-notes.md`**: relocated there
-> **verbatim** on 2026-08-04, nothing deleted. Each line here is the imperative; the anchor after it is
-> the case that earned it (the measurement, the sha, the negative control). **Read the section before
-> you touch the thing it guards.** This file is always-read for every worker that `cd`s in, so it is
-> budgeted at write time by this repo's entry in `REPO_CLAUDE`, in the umbrella's
-> `.claude/hooks/doc-budget.mjs` (ADR 0023). It is a per-repo ratchet that is LOWERED as relocations
-> land, so **no byte figure is written here**: read the hook. The notes are read on demand. **The
-> remedy for size is always relocation, never deleting a trap.**
+`@cosyte/deid` is our de-identification library for Node.js and TypeScript, published to npm under MIT from this public repository. It takes a document parsed by one of the `@cosyte/*` parsers (HL7 v2, C-CDA, FHIR R4, X12, NCPDP Telecom, DICOM) and returns a copy transformed per the configured policy (Safe Harbor, a limited data set, or a profile built on one) plus a value-free manifest of what was done where, with keyed date shifting, a bring-your-own free-text redactor and an Expert Determination support report. It has zero runtime dependencies: the parsers are optional peers, vendored as tarballs under `vendor/` for the tests, and the DICOM adapter delegates to that parser's own metadata pass, flagging burned-in pixels rather than cleaning them.
 
-## Project
+## Gate
 
-**`@cosyte/deid`**: a developer-focused healthcare **de-identification** library for Node.js/TypeScript,
-published under the Cosyte brand. Open-source (MIT). It is a **consumer** of the `@cosyte/*` parsers,
-**not a parser sibling**: it borrows the archetype's disciplines (typed diagnostics, immutable output,
-the policy/profile system) but **inverts the reflex**: a parser is liberal on input (Postel's Law); a
-de-identifier is conservative and **fails closed**.
+From the repo root, in this order, with pnpm 10 (the `packageManager` pin). Where `pnpm --version` prints another major, put the pinned one first on PATH, since `test/docs-content.test.ts` shells out to bare `pnpm`: `mkdir -p ~/.pnpm10 && corepack enable --install-directory ~/.pnpm10 pnpm && export PATH="$HOME/.pnpm10:$PATH"`.
 
-**North star:** a developer holds a parsed healthcare document full of PHI and calls
-`deidentify(model, { policy: "safe-harbor" })`, getting back a Safe-Harbor-transformed model plus a
-**value-free manifest**. The governing honesty line: output is **"Safe-Harbor-transformed per the
-configured policy,"** never "de-identified" / "HIPAA-compliant"; Expert Determination is **supported,
-never rendered**. Full statement: `documentation/agent-notes.md#project`.
+```sh
+pnpm install --frozen-lockfile
+pnpm typecheck
+pnpm lint
+pnpm format:check
+pnpm phi-scan
+pnpm test
+pnpm test:coverage
+pnpm build
+pnpm attw
+pnpm smoke
+pnpm examples
+pnpm check:test-selection
+pnpm check:no-emdash
+pnpm check:no-internal-refs
+```
 
-## Status
+The first nine are the shared `cosyte/.github` CI ladder (`ci / verify`, on Node 22 and 24). `pnpm smoke` is `.github/workflows/smoke.yml`, `pnpm examples` the `examples` job in `.github/workflows/ci.yml`, `pnpm check:test-selection` `.github/workflows/test-selection.yml`, and the last two are the em-dash and public-surface gates. CI alone also loads `dist/` as ESM and as CJS, runs actionlint and CodeQL, packs the tree and installs the tarball into a clean directory, and runs the em-dash check over the PR title, body and commit messages.
 
-- **DEID-1…DEID-10 shipped; the roadmap is complete.** Pre-alpha on the `0.0.x` ladder. Format-agnostic
-  core plus **all six adapters** (`hl7`, `ccda`, `fhir`, `x12`, `ncpdp`, `dicom`), the longitudinal
-  registry, the BYO free-text interface, the Expert-Determination _support_ report, and DEID-10 release
-  hardening (profiles, leak/over-scrub corpus, `pnpm smoke`, the tsup shared-core chunk fix).
-  **Third-party runtime deps: zero (`node:crypto` only).** What each phase shipped, and the scoped
-  claims that go with it: `documentation/agent-notes.md#shipped-phases-deid-1-through-deid-10`.
-- **NCPDP SCRIPT remains deferred**: lossy serialize + address-less `Patient` block a faithful
-  structural de-id through the current parser surface.
-- **The DICOM adapter DELEGATES to `@cosyte/dicom`'s PS3.15 Annex E pass: metadata-only, burned-in
-  pixels FLAGGED not cleaned.** Never describe it as cleaning pixels.
-- **▶ THE OTHER SCOPED SAFETY CLAIMS, EACH OF WHICH BECOMES A FALSE GUARANTEE IF YOU BROADEN IT.** The
-  free-text interface is **block-by-default**, and a consumer redactor is **consumer-asserted, never
-  re-verified**. `defineDeidProfile` is fail-closed under a **widen-never-narrow** contract. The
-  `DEID_POLICY_INVALID` label guard exists so **date-shift may not wear the `safe-harbor` label**. The
-  registry key is consumer-supplied, fail-closed on `DEID_NO_KEY`, and **rotation is intentional linkage
-  breakage**. → `documentation/agent-notes.md#shipped-phases-deid-1-through-deid-10`
-- **Publish state and repo visibility are INDEPENDENT: check each, never infer one from the other, and
-  NEVER QUOTE A VERSION IN THIS FILE.** `npm view @cosyte/deid version`, `git tag` and
-  `gh api repos/cosyte/deid --jq .visibility` are the only authorities. **⚠ TWO DATED CLAIMS ARE IN
-  PLAY AND NEITHER IS A STANDING FACT:** the publish-state paragraph this file used to carry (itself a
-  _correction_ of an earlier "not yet published" claim, preserved at
-  `documentation/agent-notes.md#publish-state-and-visibility`), and the umbrella backlog entry
-  `CHANGELOG-PREAMBLE-FUTURE-TENSE`, which still names this file alongside `hl7`, `mllp` and
-  `transform` as saying "not yet published". **That entry is out of date for `deid`.** Re-measure;
-  restate neither as fact from here. `npm publish` is waived by standing founder directive;
-  **flipping a repo public is not.**
+## Hazard
 
-## Tech Stack (the shared `@cosyte/*` standard)
+Every document this library is handed carries a patient's identity, and what it returns gets released as transformed. A defect here re-identifies patients: an identifier that survives the pass, or that the manifest never mentions, cannot be recalled once the output is shared, and no re-run undoes it. So the reflex is the opposite of a parser's: an unrecognized structure, an identifier we cannot locate, or free text is blocked or removed and recorded, never passed through as safe, and a value, the key or a date-shift offset never reaches the manifest, a diagnostic or a log. Clinical values are the mirror case: scrubbing one is a defect too.
 
-Per the published `@cosyte/*` config packages, never by copying files: TypeScript strict
-(**ES2023**, `NodeNext`, 5.9.x pinned), **Node >= 22** (CI 22+24), **pnpm@10**, dual ESM + CJS via
-`tsup`, ESLint 10 + Prettier, `--max-warnings=0`, Vitest 4 at >= 90 per-directory coverage,
-**runtime deps zero**, MIT. **`attw` is a WRAPPER, not the bare CLI**: see below. Detail + the vendored
-optional-peer arrangement:
-`documentation/agent-notes.md#tech-stack-the-shared-cosyte-standard`.
+## Rules that bind here
 
-### Branch protection and Dependabot
+Each names the failure that put it here: a pull request in this repo, or a section of `documentation/agent-notes.md`.
 
-- **`main` is protected by the repository ruleset `ci-required-checks`** (7 required contexts, each
-  pinned to the GitHub Actions app; blocks deletion and force-push). Before it, `main` had **no rules at
-  all**. → `documentation/agent-notes.md#the-ruleset-ci-required-checks`
-- **A required context a branch cannot emit leaves that PR PENDING, not failing: rebase it.** Expect it
-  EVERY time a context is added; it has happened twice.
-  → `documentation/agent-notes.md#a-required-context-a-branch-cannot-emit-leaves-the-pr-pending`
-- **Never require `scorecard`** (it never runs on `pull_request`), nor the GHAS `CodeQL` check.
-  → `documentation/agent-notes.md#why-scorecard-is-not-required`
-- **Read `ci.yml`'s job-name banner before renaming a job or splitting a step out of `verify`**: a
-  required job gates its steps, so promoting one silently un-requires it. **The PHI scan is a STEP of
-  `verify`, so it is required only for as long as it stays one.** **The leak/over-scrub corpus
-  (`test/corpus/`, the cross-format zero-leak gate, proven non-vacuous) is protected by NO ruleset**: it
-  is glob-selected in `vitest.config.ts`, so narrowing the glob, moving it or `.skip`-ing it drops this
-  repo's headline leak gate with nothing to notice.
-  → `documentation/agent-notes.md#job-names-and-what-a-ruleset-cannot-see`
-- **`pnpm smoke` is a real gate; the shared pipeline's `Dual ESM/CJS smoke` step is NOT the same check**
-  (root entry only). **Its scope is DERIVED from `package.json`'s `exports`: replacing that with a
-  hand-written array reopens the hole above.** **Its leak sweep is HL7-ONLY**: the cross-format
-  zero-leak gate is `test/corpus/`, from source. → `documentation/agent-notes.md#the-smoke-gate`
-- **`pnpm check:no-internal-refs`** runs in its own workflow; context is the bare job id
-  `no-internal-refs`. **Read a real context name off a live check run, never off a workflow's `name:`.**
-  It gates the _source_ of published text, not `dist/`. **It DELIBERATELY does not scan `CHANGELOG.md`,
-  `.changeset/`, this file, or `//` comments: identifiers BELONG there, so do not "fix" one out of
-  them.** → `documentation/agent-notes.md#the-no-internal-refs-gate`
-- **`pnpm check:test-selection` gates what the required test job SELECTS.** Context `test-selection` is
-  **deliberately NOT in the ruleset yet**: let it run on `main` first. **Its subject is DERIVED from
-  `exports`; there is no exemption list, because every exemption a sibling offered was walked through by
-  a rename. The cost is paid in the repo instead: A MODULE THAT IS NOT A TEST MAY NOT IMPORT A PUBLISHED
-  ENTRY POINT.** So `test/helpers/run-date-shift.ts` imports `src/` directly on purpose: **do not
-  "tidy" it back to the root entry.** **Self-test D covers THREE NAMED DERIVATIONS, not "the
-  derivations": a diff touching `exportedSourceEntries` or `resolveSpecifier` is reviewed by a person
-  against the OK line's counts. DO NOT REMOVE D TO "SIMPLIFY"**: the other three self-tests cannot see
-  what it sees. Selection is not execution, and the measured limits are listed, none claimed closed.
-  **The per-rule tallies are absent from this file DELIBERATELY: they went stale before the files they
-  counted existed. The OK line prints the live figures on every run; do not write one back in here.**
-  → `documentation/agent-notes.md#the-test-selection-gate`
-- **`pnpm check:agent-notes` gates this file's pointers into the narrative one**, on `pnpm check` and
-  `pnpm test`, riding required `ci / verify`; NO new required context. **MATCHER, ANCHOR SPACE AND
-  CORPUS PARTITION WERE EACH DERIVED FROM THIS TREE AND NONE PORTS**: a bare anchor or explicit anchor
-  tag REFUSES; the partition is **UTF-8 decodability, NOT NUL**. **It asserts this repo's promise,
-  never a universal about a sibling. Never clear a red by deleting a pointer, heading or span.**
-  → `documentation/agent-notes.md#the-narrative-pointer-gate`
-- **The ruleset BLOCKS the "Version Packages" PR by design: it needs one push** (an empty commit onto
-  `changeset-release/main`), done **last**, immediately before merging. `bypass_actors` is empty on
-  purpose. → `documentation/agent-notes.md#the-version-packages-pr-is-blocked-by-design`
-- **Unproven, and stated as unproven: PRs from FORKS.** No fork PR has ever run here.
-  → `documentation/agent-notes.md#fork-pull-requests-are-unproven`
-- **Nothing in this repository can observe its own ruleset: do NOT take this section as evidence.**
-  Verify with `gh api repos/cosyte/deid/rules/branches/main`.
-  → `documentation/agent-notes.md#nothing-here-can-observe-its-own-ruleset`
-- **Dependabot cannot see the six vendored sibling parsers** (`file:` tarballs) or `pnpm.overrides`,
-  re-pack the `@cosyte/dicom` tarball by hand when the upstream pass changes.
-  → `documentation/agent-notes.md#what-dependabot-watches`
-- **The config buys VERSION updates only; automatic SECURITY update PRs are a separate repo setting**
-  that read `disabled`. Check `gh api repos/cosyte/deid --jq .security_and_analysis`, not this line.
-  → `documentation/agent-notes.md#what-the-dependabot-config-does-not-buy`
-- **Unobserved: whether Dependabot's pnpm updater tolerates this manifest. Do not read "no open
-  Dependabot PR" as "nothing is stale".**
-  → `documentation/agent-notes.md#whether-the-pnpm-updater-tolerates-this-manifest`
-
-## Engineering Guardrails
-
-- No `any`. No unjustified `as` casts. Use `unknown` and narrow.
-- JSDoc (with `@example`) on every public export: the JSDoc lint rule is an **error** on public
-  exports, so this is enforced, not optional.
-- Immutable by default. Mutation only via explicit methods.
-- No `console.*` in library code. Throw typed errors or return results.
-- Short, testable functions over big parsing blobs.
-- **Inverted Postel's Law: fail CLOSED.** Unlike a parser, the de-id reflex is conservative: an
-  unrecognized structure / un-locatable identifier / uncertain field is **blocked or removed**, never
-  passed through as safe. Clinical values are the mirror guard: retained untouched (no over-scrub).
-- Fatal errors only for the sanctioned fatal set (`EMPTY_INPUT`, `DEID_NO_KEY`). A keyed transform
-  **never** silently falls back to unkeyed. Everything else is a value-free manifest disposition with a
-  stable `DEID_*` code + locus (never a value, never the key, never the date-shift offset).
-- Coverage: per-directory >= 90% (lines/branches/functions/statements), enforced by
-  `pnpm test:coverage`.
-
-### The PHI commit gate (`scripts/phi-scan.ts`)
-
-Every line here is clinical-safety content. Full cases: `documentation/agent-notes.md#the-phi-scan`.
-
-- **The scan FOLLOWS NOTHING: a non-regular in-scope entry REFUSES the scan (exit 2). Never "fix"
-  this by following the link.** Both routes read a symlink as **clean**; reproduced on `e040ffc`. The
-  narrowing is **structural**; **the kind tokens are labels with a catch-all arm, never the decision:
-  do not turn either into a list of shapes.** → `documentation/agent-notes.md#phi-scan-follows-nothing`
-- **THE ONE-LETTER TRAP: `--diff-filter` MUST KEEP `T`.** Without it a tracked file replaced by a link
-  staged green through `pre-commit`. → `documentation/agent-notes.md#the-one-letter-trap-t-in-the-diff-filter`
-- **`R`/`C` are closed by `--no-renames`, not by the filter**: the enumeration becomes a superset and
-  the stride structural. **The old "needs the two-path record shape, a scope decision" framing is
-  WITHDRAWN as FALSE, not deferred.** → `documentation/agent-notes.md#closed-by-no-renames`
-- **A REFUSAL NAMES THE ENTRY'S OWN PATH AND AN ENGINE-OWNED KIND TOKEN, NEVER THE LINK TARGET.** A
-  diagnostic about a PHI leak is itself a PHI surface, **and so is the prose explaining it**: no
-  example target path in the docblock, CHANGELOG or changeset.
-  → `documentation/agent-notes.md#closed-by-no-renames`
-- **Two things NOT covered, both measured:** explicit-path mode still reads through a link; a file
-  that vanishes between enumeration and read fails **closed** (exit 2) -- a false-red risk, not a
-  false-green one. → `documentation/agent-notes.md#closed-by-no-renames`
-- **THE WALK ROOTS ARE `src/`, `test/` (ALL of it) AND `scripts/`: A DIFFERENT DECISION FROM EVERY
-  SIBLING'S. DO NOT PORT ONE OVER IT.** The old scopes missed **38 tracked files**, four carrying
-  inline `PID|…` literals. **`.md` IS EXEMPT ON BOTH ENUMERATING ROUTES AND ON THE INDEX ROUTE (an
-  explicit path is still scanned), SO `docs-content/` REMAINS A PUBLISHED CONSUMER SURFACE THIS GATE
-  DOES NOT SCAN FOR PHI**: 16 of its 17 files are `.md`; the index adds only `sidebars.json`.
-  `.github/` and the root manifests ARE read there; `vendor/` is not.
-  → `documentation/agent-notes.md#the-scan-roots`
-- **ENUMERATING THE FILES BUYS THE SSN/EMAIL FLOOR AND NOTHING ELSE: a detector has to RECOGNISE the
-  document first, and every recogniser was written for a file that _is_ the document.** This repo's
-  fixtures are `.ts` string literals, so each file is also scanned as its **decoded, joined
-  literals**; four recognisers widened with it.
-  → `documentation/agent-notes.md#enumerating-the-files-buys-the-floor-only`
-- **WIDENING A RECOGNISER IS TWO-SIDED. EVERY MECHANISM IS "IN ADDITION TO", NEVER "INSTEAD OF": DO
-  NOT SIMPLIFY ONE AWAY.** A per-line split silently took a hard-wrapped `NM1*IL` from three patient
-  identifiers to zero. **Each of the four mechanisms has a case that goes RED when it is removed:
-  verified by removing each one, not by reading the code.**
-  → `documentation/agent-notes.md#widening-a-recogniser-is-two-sided`
-- **▶ THE EVIDENCE STANDARD FOR THIS REPO: PROVE EVERY WIDENING WITH A CASE THAT IS RED BEFORE AND
-  GREEN AFTER. A recogniser that quietly matches nothing reports "no hits."** A claim without a
-  red-before case is not evidence. → `documentation/agent-notes.md#what-is-not-claimed-to-be-reached`
-- **None of that claims arbitrary embedded text is reached**; the banner in `scripts/phi-scan.ts`
-  enumerates what is not. → `documentation/agent-notes.md#what-is-not-claimed-to-be-reached`
-- **A comment in `scripts/phi-scan.ts` is INSIDE a scan root**: an escaped example decodes into a
-  segment the detector reads as a fixture. It did, on the first draft.
-  → `documentation/agent-notes.md#a-comment-in-the-scanner-is-inside-a-scan-root`
-- **`19800101` MUST STAY OUT OF THE ALLOW-LIST**: the undeclared DOB four positive tests use; declare
-  it and all four assert nothing. → `documentation/agent-notes.md#the-undeclared-dob-must-stay-out-of-the-allow-list`
-- **NO FILE IS BYPASSED, AND `--allow-fixture` CANNOT REACH A CLEAN RUN.** A target the run
-  ENUMERATED AND NEVER READ refuses it (exit 2), in every mode and on both all-mode routes. The
-  flag, the log and the rejection gate are all KEPT, so an attempt is **recorded and refused**, not
-  honoured. **There is no whole-file escape left**: declare tokens in `scripts/phi-allow-list.txt`,
-  or assemble the shape at run time as `test/scripts/phi-scan.test.ts` now does (a `${…}`
-  substitution site at every PHI position; the floor's two shapes built from pieces). **The floor
-  was NOT weakened to buy that** and an undeclared SSN shape is still a hard hit.
-  → `documentation/agent-notes.md#exactly-one-file-is-bypassed`
-- **`U` is in the `--diff-filter` and is REFUSED, not read.** → `documentation/agent-notes.md#unmerged-entries-are-refused`
-- **EXIT 1 MEANS HITS AND NOTHING ELSE MAY SPEND IT.** Failure is the default path; do not go back to
-  catching by type. → `documentation/agent-notes.md#exit-1-means-hits`
-- **ALL MODE READS THE BYTES GIT CARRIES, AS A UNION WITH THE WALK.** Five states printed `OK, no
-hits` at exit 0 on base; the decoy at a tracked path is why it exists. **The mechanism is written
-  ONCE, at `buildTargetsForIndex`.** **Refusals run AFTER the walk is scanned -- a refusal must not
-  swallow a real hit -- `makeRepo()` commits its baseline, and `--allow-fixture` is subtracted here
-  too: live, not dead code, because a refusal may not report what it refused over.**
-  → `documentation/agent-notes.md#all-mode-reads-the-bytes-git-carries`
-- **`vendor/` IS EXCLUDED FROM THAT ROUTE, AS A LITERAL PATH** (45 mojibake hits without it). **A
-  "binary blob" PREDICATE was measured and REJECTED: two hand-written `src/*.ts` embed NUL bytes.**
-  **The byte skip MAY NOT normalize line endings**; `.md`/`vendor/` apply LAST, after the mode
-  refusals. → `documentation/agent-notes.md#what-the-index-route-excludes`
-- **THE POSITIVE CONTROL STRIKES `EMAILDOMAIN cosyte.com` AND THE SAME CORPUS REDS.** That floor hit
-  is `package.json`'s contact address: **published registry metadata, NOT PHI**; an `EMAILDOMAIN`
-  entry is **global and route-blind**. **Never spell the address out in the allow-list: it sits in a
-  scan root, and a control that reds on two files proves nothing.**
-  → `documentation/agent-notes.md#the-positive-control-and-its-floor-hit`
-
-### The `attw` gate
-
-- **`attw` SAYS "does not contain types" AND EXITS 0, SO THE `attw` SCRIPT IS A WRAPPER, NOT THE BARE
-  CLI**: for a package that ships types that is a broken publish reported as a pass.
-  → `documentation/agent-notes.md#attw-exits-0-on-an-untyped-package`
-- **Concurrency only supplies the condition; the BUILD ORDER is the trigger**: `tsup` emits JS before
-  declarations, so every build has a window. The answer is **not** a lock, a lease or a build queue.
-  **Do not read the measured window timings as constants.**
-  → `documentation/agent-notes.md#the-build-order-is-the-trigger`
-- **TOTAL declaration loss is silent; PARTIAL loss exits 1. A missing JS entry point is invisible to a
-  types analyser. Do not carry a sibling's sentence over without re-running it here, and specifically do
-  NOT write "No problems found" into that row: it is false for this package even on a pristine run.**
-  → `documentation/agent-notes.md#what-is-measured-on-this-package`
-- **`scripts/attw.mjs` carries TWO nets that catch different things** (a manifest-path preflight, and a
-  post-check on the untyped sentence). **Anything that would hide the sentence is refused BY OPTION NAME,
-  in TWO shapes: an argv token, and a combined short-option cluster containing `q` or `f`**. A
-  whole-token-only draft walked back to exit 0 over an untyped pack. **That is a claim about two shapes,
-  not that no spelling remains.** → `documentation/agent-notes.md#the-two-nets`
-- **This is a PER-REPO script. Landing it here fixes this repo only**: check the siblings before
-  claiming the class is closed. → `documentation/agent-notes.md#what-the-gate-test-pins`
-
-## Standing disciplines (every change)
-
-Mirrors the disciplines in the meta-repo's `documentation/conventions.md`: they bind here too. Full
-text and every sub-case: `documentation/agent-notes.md#standing-disciplines-every-change`.
-
-1. **Documentation follows code**: this repo's `README.md` / `docs-content/`, the meta-repo
-   `documentation/repos/deid.md` ("last verified" bumped), and the `ecosystem-map.md` status table.
-2. **Version + changelog**: a Changeset (`patch` on the `0.0.x` ladder) per meaningful change. **The
-   changeset summary IS the changelog entry: `.changeset/config.json` names a generator, so DO NOT
-   HAND-EDIT `CHANGELOG.md` and never reintroduce an `[Unreleased]` heading** (one stood unrolled for
-   this package's whole published history, which is how a shipped tarball came to call its own
-   contents unreleased). **Nothing but the H1 sits above the first heading**, compare version headings
-   **whole** (`## 0.0.1` is a substring of `## 0.0.10`), and **the Prettier pass stays ON here (no
-   `"prettier"` key), DERIVED from this repo having no `.prettierignore` and a `format:check` that
-   globs root markdown, never copied. A sibling that DOES ignore `*.md` needs it OFF: leaving it ON
-   there rewrote already-published text and corrupted a shipped tarball. Never resync this value.**
-   `test/scripts/changelog-generation.test.ts` pins the above, plus a digest of the frozen archive.
-   **Scope, because the gap matters: the digest sees a hand-edit BELOW the divider only. A fabricated
-   release section ABOVE it passes every case**, and a publish with an unchanged changelog is a
-   swallowed write failure that **nothing here guards** (do not misread it as a reverted flag).
-   → `documentation/agent-notes.md#the-changelog-generator-and-why-the-unreleased-heading-may-not-come-back`
-   Renaming a stable warning code is a **breaking change**.
-3. **Crew + knowledgebase loop**: if the public API or warning codes change, flag/update the matching
-   `crew` healthcare skill + the KB product doc.
-4. **No internal project bookkeeping on a public surface** (founder directive, 2026-07-27). Item ids,
-   phase/roadmap language, ADR numbers and meta-repo paths belong in the changeset, `CHANGELOG.md`, the
-   commit, the PR and the roadmap, never in `README.md`, `docs-content/`, the npm `description`, a
-   release body, or the JSDoc that compiles into `dist/**/*.d.ts`. Gated by
-   `pnpm check:no-internal-refs`. → `documentation/agent-notes.md#no-internal-project-bookkeeping-on-a-public-surface`
-   - **The gate keys on KNOWN PROJECT PREFIXES, never the `WORD-N` shape: in THIS repo that is not
-     stylistic.** `deid` documents the loci of all six standards (`PID-3`, `NM1-03`, `DTP-03`, `CLP-01`,
-     `US-SSN`, `ICD-10-CM`, …); a shape rule deletes the coordinates a consumer needs to audit what was
-     transformed. **Never resync the prefix list with a sibling copy** without re-reading why `SYNTH` is
-     here and absent in `ncpdp`'s. → `documentation/agent-notes.md#the-gate-keys-on-known-project-prefixes`
-   - **The bare-`§` non-catch is a DECISION pinned by `BARE_SECTION_SAMPLE`**: `§` here is
-     overwhelmingly `§164.514`. Closing that gap has to be deliberate.
-     → `documentation/agent-notes.md#the-section-sign-non-catch`
-   - **The gate catches identifiers, not English about our process, and the residual is large. A count is
-     a function of the rule set: quote the rule set with the count, or the count means nothing.**
-     → `documentation/agent-notes.md#the-gate-catches-identifiers-not-english`
-   - **CUT, do not rewrite.** In THIS package the risk is a safety one: every claim is deliberately
-     scoped, and two sentences in one sweep would have become **guarantees the code does not provide** if
-     the citation had simply been cut. Restate as a limitation instead.
-     → `documentation/agent-notes.md#cut-do-not-rewrite`
-   - **THE RELEASE BODY IS THE ONE PUBLIC SURFACE THIS REPO CANNOT GATE, AND `.changeset/` IS ITS
-     SOURCE.** An internal-only change is dropped **by word**, not reworded: fix the changeset's wording,
-     and **never widen the shared word list in `cosyte/.github` to fit one repo's prose.** The renderer
-     strips phase language and cannot check the result reads: **open every changeset with a sentence that
-     stands on its own once the identifier is gone.**
-     → `documentation/agent-notes.md#the-release-body-is-the-one-public-surface-this-repo-cannot-gate`
-   - **Stated as a limit, not chased: that fix depends on ANOTHER REPO's word list holding, and nothing
-     here fails when it changes.** → `documentation/agent-notes.md#the-word-list-is-in-another-repo`
-   - **The mitigation is redundancy, not coverage. Do not read the recorded figures as the measurement:
-     re-run the probe against the renderer.**
-     → `documentation/agent-notes.md#the-leave-one-out-measurement-and-its-probe`
-   - **Do not let a changeset headline drift toward the 200-character HARD REFUSAL**: it refuses (it
-     does not trim) on the version commit, after the Version PR has merged.
-     → `documentation/agent-notes.md#the-200-character-headline-refusal`
+- A manifest locus built from document bytes (a segment id, an element name, a `resourceType`) goes through `src/derived-token.ts`, and one that fails its shape is replaced whole by `WITHHELD_LOCUS_TOKEN` plus its index, never truncated: unbounded narrative prose reached the value-free manifest and the Expert Determination report with no options set. Bound only what comes from the document: a first cut that also bounded DICOM's table-built tags withheld real ones (#25).
+- Every position a pass hands through is transformed, recorded or counted, never silently kept: under `safe-harbor` the HL7 v2 pass returned visit and order numbers, admit and discharge dates and every date in EVN, ORC, OBX and other retained segments, unrecorded (#49, #51). Take the domain from what the pass hands through, not from a list (`OBX` reaches it by its own value-type branch and was missed, #51); what no rule examines is counted in `unexaminedResiduals` (#56).
+- Decide a locus by what it is (its datatype, its party role), never by the resource or segment around it: a `HumanName` on `Organization.contact`, an `Address` on `Location` (#59) and an employer filed as an organization (#54) all passed through.
+- A policy or profile claiming `safe-harbor` may not pseudonymize, hash or date-shift any category, or retain any locus: `DEID_POLICY_INVALID` refuses it, by policy name and by profile standard alike, and retention under any other label needs all three keys (adapter class, `retainedLoci`, a retainable category). The label once shipped keyed surrogates and retained encounter identifiers (#49, #52).
+- Two positions never share a manifest row: same-named C-CDA siblings collapsed into one (#29), and an HL7 date is addressed by field, component and repetition (#51).
+- `test/corpus/` is the cross-format zero-leak and over-scrub gate, and a sweep sees only sentinels a fixture seeds: a new locus gets a fixture value that is red before the fix (no HL7 fixture carried `PV1-19/44/45`, #49). It is selected only by the `include` glob in `vitest.config.ts`, so never narrow that or `.skip` the suite, and a module that is not a test may not import a published entry point, which is why `test/helpers/run-date-shift.ts` imports `src/` (#23).
+- `pnpm phi-scan` follows nothing: a symlink, gitlink or unmerged entry under `src/`, `test/` or `scripts/` refuses the scan (exit 2), the `--staged` route (the pre-commit hook) keeps `--no-renames` and `--diff-filter=AMTU`, and all mode reads the bytes git carries as well as the tree, `vendor/` excluded. Each closed a route that read a PHI payload clean (#33, #34, #38, #47). Exit 1 means hits and nothing else.
+- Widen a PHI-scan recogniser only beside the mechanisms it improves on, with a case red before and green after: a per-line split that replaced the rejoin took a hard-wrapped `NM1*IL` from three patient identifiers to zero (#34).
+- `pnpm attw` stays `node scripts/attw.mjs --profile node16`, never bare `attw` (`node_modules/.bin`, from the `@arethetypeswrong/cli` devDependency), which exits 0 on a pack with no types (#31).
+- `pnpm smoke` takes its subpaths from `package.json` `exports`, never from a list: it was documented as a CI gate while running in no job, and the `Dual ESM/CJS smoke` step in `ci / verify` loads only the root entry (#18).
+- Job names in `ci.yml` and `smoke.yml` are required check contexts, and a required job gates its steps: renaming the `ci` job or moving a step (the PHI scan) out of `verify` drops it from the ruleset in silence, and a newly required context leaves every older branch pending until it is rebased (#16, `documentation/agent-notes.md#a-required-context-a-branch-cannot-emit-leaves-the-pr-pending`).
+- The changeset summary is the changelog entry: never hand-edit `CHANGELOG.md` or bring back an `[Unreleased]` heading, which shipped in every tarball calling released work unreleased (#42).
+- A changeset's first sentence becomes the release bullet: under 200 characters (the release refuses, never trims, #15), standing on its own once identifiers are stripped, and an internal-only change worded so the release drops it: two would have published as consumer changes (#22).
+- `README.md`, `docs-content/`, the npm `description` and `/** */` comments in `src/` (they ship in `dist/*.d.ts`) carry no item ids, phase language, ADR numbers or private paths. Restate a limitation rather than cut its citation, since cutting the citation alone would have turned two limits into claims the code does not keep (#21), and never delete a doc comment to pass `pnpm check:no-internal-refs`: every public export carries JSDoc with an `@example`.
+- Public text claims what the code blocks and nothing wider: a blanket "fails closed" was narrowed to the cases blocked (#71), and output is "Safe-Harbor-transformed per the configured policy", never "de-identified".
+- `.github/workflows/release.yml` keeps all four grants (`actions: read`, `contents: write`, `id-token: write`, `pull-requests: write`): without them every release failed at startup and logged nothing (#12, #53).
+- `test/docs-content.test.ts` runs a full `pnpm build` under a 120 s budget and timed out on a loaded box (#22): re-run it before calling it red.
