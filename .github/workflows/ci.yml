@@ -5,6 +5,10 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  schedule:
+    # The nightly run on main, 05:41 UTC. An odd minute: GitHub delays scheduled runs at the start of every hour.
+    - cron: "41 5 * * *"
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -31,6 +35,20 @@ jobs:
   # skipped required context as never-satisfied (a stuck PR, loud) or as satisfied (the lint
   # silently un-required, quiet) has NOT been established here against a primary source or a live
   # run. Do not change that input without settling it first.
+  #
+  # The input IS changed for `schedule` runs only, and that leaves the case above untouched: the
+  # expression below is `true` on every other event, so a pull request, a push and a dispatch run
+  # lint exactly as before, and no ruleset ever reads a scheduled run. The reason is upstream. The
+  # shared `actionlint` job reports through reviewdog's `github-pr-check` reporter, which takes the
+  # repository owner and name from the event payload, and a `schedule` event has none (GitHub's
+  # events reference lists its payload as not applicable). reviewdog then posts its check run to
+  # `repos///check-runs`, gets a 404 rather than the 403 it falls back from, and fails the job
+  # (reviewdog/reviewdog#832 and #1263, both open), so the nightly run would be red every night
+  # with nothing wrong on main. Skipping it there loses little: our workflow files change only by a
+  # push, and every push is linted. What only a nightly lint would catch is a new actionlint pin in
+  # the shared job (called at `@main`) judging unchanged files differently, and that waits for the
+  # next push or pull request instead. Drop the expression when the shared job stops failing on
+  # `schedule`.
   #
   # ▶ AND: a required JOB gates all of its STEPS. `verify` runs typecheck, lint, format:check, the
   # PHI scan, tests, the gating coverage run, build, attw and the dual ESM/CJS smoke as steps inside
@@ -64,6 +82,8 @@ jobs:
     uses: cosyte/.github/.github/workflows/ci.yml@main
     with:
       run-phi-scan: true
+      # Off on the nightly run only; see "The input IS changed" above.
+      run-actionlint: ${{ github.event_name != 'schedule' }}
 
   # The programs under examples/, run against the BUILT package the way a consumer imports it:
   # `pnpm examples` (scripts/run-examples.ts) fails when any example exits non-zero, and each
