@@ -44,9 +44,11 @@ jobs:
   # events reference lists its payload as not applicable). reviewdog then posts its check run to
   # `repos///check-runs`, gets a 404 rather than the 403 it falls back from, and fails the job
   # (reviewdog/reviewdog#832 and #1263, both open), so the nightly run would be red every night
-  # with nothing wrong on main. Skipping it there loses nothing: the action is pinned to a commit,
-  # so linting a tree no push changed repeats the push run's verdict on that same commit. Drop the
-  # expression when the shared job stops failing on `schedule`.
+  # with nothing wrong on main. Skipping it there loses little: our workflow files change only by a
+  # push, and every push is linted. What only a nightly lint would catch is a new actionlint pin in
+  # the shared job (called at `@main`) judging unchanged files differently, and that waits for the
+  # next push or pull request instead. Drop the expression when the shared job stops failing on
+  # `schedule`.
   #
   # ▶ AND: a required JOB gates all of its STEPS. `verify` runs typecheck, lint, format:check, the
   # PHI scan, tests, the gating coverage run, build, attw and the dual ESM/CJS smoke as steps inside
