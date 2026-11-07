@@ -40,12 +40,11 @@ name: Test-selection gate
 # `test-selection` is emitted by this file and is NOT in the `ci-required-checks` ruleset. Adding a
 # required context before its workflow has completed on `main` does not turn PRs red; it leaves
 # every one of them PENDING and unmergeable, with nothing anywhere saying why. This repo has already
-# paid that cost twice (the two `smoke` contexts, then `no-internal-refs`), and `deid#17` is blocked
-# by it right now. Wire the workflow first, let it run on `main`, then require the context as its own
+# paid that cost twice (the two `smoke` contexts, then `no-internal-refs`), and `deid#17` was blocked
+# by it. Wire the workflow first, let it run on `main`, then require the context as its own
 # deliberate change -- and rename the job and the required context together or neither.
 #
-# Run it locally with `pnpm check:test-selection`, also reached by `pnpm check`, which is on the
-# meta-repo's `scripts/verify.sh deid` ladder.
+# Run it locally with `pnpm check:test-selection`, also reached by `pnpm check`.
 
 on:
   push:
@@ -64,6 +63,7 @@ jobs:
   # The job id is the check-run context name. See the banner before renaming it.
   test-selection:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
