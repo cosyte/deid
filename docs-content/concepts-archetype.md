@@ -47,7 +47,7 @@ stronger transform, and never rewrites a caller's policy name.
 
 ## The 18 Safe Harbor categories
 
-The `SAFE_HARBOR_CATEGORIES` registry models §164.514(b)(2)(i)(A)–(R), including the open-ended
+The `SAFE_HARBOR_CATEGORIES` registry models §164.514(b)(2)(i)(A) to (R), including the open-ended
 catch-all **(R)** ("any other unique identifying number, characteristic, or code"), which is exactly
 why fail-closed is not optional: a closed allow-list of 17 concrete types can never satisfy (R).
 

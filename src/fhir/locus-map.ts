@@ -237,7 +237,7 @@ export function categoryForIdentifierSystem(
  *
  * Detection is **value-shaped and validated**, not element-name-based: any primitive whose whole value
  * is a real calendar date (`YYYY-MM`, `YYYY-MM-DD`, or a full `YYYY-MM-DDThh:mm:ss…` instant, with a
- * plausible year, month `01–12`, and day `01–31`) is a date wherever it sits, so a date in an
+ * plausible year, month `01` to `12`, and day `01` to `31`) is a date wherever it sits, so a date in an
  * unexpected or vendor element is generalized too (fail closed on dates). The strict full-match with
  * month/day validation is what keeps a clinical code (`"2951-2"`, `"1234-56"`) from being mistaken for a
  * date and over-scrubbed: `2951-2` has a one-digit tail, `1234-56` has an impossible month.

@@ -292,7 +292,7 @@ function emitRetainedParty(
   );
 }
 
-/** Handle an `NM1`: entity-classified name (03–07) + identifier (09 routed by the 08 qualifier). */
+/** Handle an `NM1`: entity-classified name (03 to 07) + identifier (09 routed by the 08 qualifier). */
 function handleNm1(out: X12LocusAccumulator, seg: X12Segment, pos: TxSegPos): void {
   // The `NM1` rules name the entity code the classification reads, the five name components, the
   // identifier and the qualifier that routes it, whichever branch the party classification then takes.

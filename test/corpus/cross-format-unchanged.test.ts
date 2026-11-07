@@ -487,7 +487,7 @@ describe("the Expert-Determination support report keeps its shape, not only its 
     expect(headings).toMatchInlineSnapshot(`
       [
         "# Expert-Determination support report",
-        "## Safe Harbor category coverage (§164.514(b)(2)(i) A–R)",
+        "## Safe Harbor category coverage (§164.514(b)(2)(i) A to R)",
         "## Retained quasi-identifiers (identifying residuals recorded as retained)",
         "## Unexamined residual positions (handed through, no locus rule reached them)",
         "## Keyed surrogate residuals (re-identification codes, a separate kind of residual)",

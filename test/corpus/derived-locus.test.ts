@@ -52,7 +52,7 @@ const MARKER = "ZZLOCUSMARKERZZ";
 /**
  * How far past every legitimate identifier the planted token runs. A real HL7 segment id is 3
  * characters, a CDA element name and a FHIR element name are bounded by their specs, an X12 segment id
- * is 2–3 and an NCPDP segment code is 2, so 4 KB is unambiguously not one of them, while staying small
+ * is 2 to 3 and an NCPDP segment code is 2, so 4 KB is unambiguously not one of them, while staying small
  * enough that the suite runs in milliseconds.
  */
 const PAD = 4096;
