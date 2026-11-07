@@ -2,6 +2,7 @@
 id: guides-longitudinal
 title: Longitudinal de-identification
 sidebar_position: 8
+description: "Keep one patient linkable across documents with a keyed registry, the key contract, and what the limited-data-set preset keeps."
 ---
 
 # Longitudinal de-identification
@@ -17,8 +18,8 @@ job of the **registry** (`createDeidRegistry`).
 > the (R) exception does not reach it. Both are therefore **Expert-Determination-supporting**
 > techniques, **not** Safe Harbor. The library enforces this: a policy carrying the `safe-harbor`
 > label may carry **neither** (see below), and it is refused with a typed fatal naming the offending
-> category and transform. Under Safe Harbor, dates are generalized to year and the medical record,
-> health plan beneficiary and account numbers are removed instead. Every keyed surrogate a
+> category and transform. Under Safe Harbor, dates are generalized to year, and the medical record,
+> health plan beneficiary, and account numbers are removed instead. Every keyed surrogate a
 > non-Safe-Harbor preset does emit is flagged `reidentificationCode` in the manifest and inventoried
 > in the Expert-Determination support report.
 
@@ -102,11 +103,11 @@ defineDeidPolicy({ name: "safe-harbor", transforms: { [SAFE_HARBOR_CATEGORIES.MR
 
 The preset carries the three retention classes §164.514(e)(2) permits: the encounter dates, the
 encounter and order identifiers, and the postal address parts (e)(2)(ii) names. On an address that is
-the **town or city, the State and the WHOLE zip code**; the street address and every other geographic
+the **town or city, the State, and the WHOLE zip code**; the street address and every other geographic
 component are removed, and every kept part is recorded as a residual at its own component. The
 three-digit / `000` ZIP rule is §164.514(b)(2)(i)(B), Safe Harbor's, so a restricted-prefix ZIP is kept
-in full here and is still suppressed under Safe Harbor. The geographic allowance is honoured by the
-**HL7 v2 pass alone**: the C-CDA, FHIR, X12, NCPDP and DICOM adapters reduce an address exactly as Safe
+in full here and is still suppressed under Safe Harbor. The geographic allowance is honored by the
+**HL7 v2 pass alone**: the C-CDA, FHIR, X12, NCPDP, and DICOM adapters reduce an address exactly as Safe
 Harbor does.
 
 **On dates the preset is deliberately stricter than the regulation it is named for.** §164.514(e)(2)

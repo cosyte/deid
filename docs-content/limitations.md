@@ -1,4 +1,11 @@
-# Known Limitations & Honesty
+---
+id: limitations
+title: Known limitations and honesty
+sidebar_position: 2
+description: "What @cosyte/deid does and does not do, what fails closed and what that does not cover, the Limited Data Set caveat, and free text."
+---
+
+# Known limitations and honesty
 
 **`@cosyte/deid` transforms a healthcare document per a configured de-identification policy (Safe
 Harbor by default) and emits a value-free manifest of what it acted on. It never labels output
@@ -64,7 +71,7 @@ an unmapped position was removed.
 Two things follow, and the second is the one that surprises people:
 
 - **The identifying loci inside retained HL7 v2 structures are carved back out and acted on.** Under a
-  Safe-Harbor-labelled policy the admit (PV1-44), discharge (PV1-45), observation (OBR-7) and diagnosis
+  Safe-Harbor-labeled policy the admit (PV1-44), discharge (PV1-45), observation (OBR-7) and diagnosis
   (DG1-5) dates are reduced to their **year**, and the visit number (PV1-19) with the placer and filler
   order numbers (OBR-2/3, ORC-2/3) are **removed**. §164.514(b)(2)(i)(C) names admission and discharge
   dates in the regulation text itself.
@@ -78,10 +85,10 @@ Two things follow, and the second is the one that surprises people:
   hand through, is reduced to its year under a Safe-Harbor-named policy, shifted under a date-shift
   policy, or blocked when the configured transform cannot read the value, and **every one of those
   outcomes is in the manifest** and therefore in the support report. That covers the timestamps in EVN,
-  PV2, PR1, RXA, RXD, FT1, TXA and SPM, the order dates in ORC and OBR that no earlier limitation
+  PV2, PR1, RXA, RXD, FT1, TXA, and SPM, the order dates in ORC and OBR that no earlier limitation
   named, the date components of a date range or other composite (a specimen collection range, an
   order's quantity/timing, a discharged-to location's effective date), an OBX-5 the message itself
-  types as a date, and the **OBX segment's own** reference-range, observation and analysis timestamps
+  types as a date, and the **OBX segment's own** reference-range, observation, and analysis timestamps
   (OBX-12, OBX-14, OBX-19). The classification is **structural, never a guess from the value**: an
   eight-digit numeric result is not a date.
 - **The set of segments that reaches is what the pass hands through, not a list of names.** It is the
@@ -98,14 +105,14 @@ Two things follow, and the second is the one that surprises people:
   above narrow this class; they do not close it. The attending / referring **provider** names survive
   in PV1-7/8 and OBR-16, among others, and so do the date/time components carried **inside** a
   person-name or address composite (a provider name's effective or expiration date, an authenticator's
-  timestamp, a licence expiry), because acting on those dates while leaving the names they qualify
+  timestamp, a license expiry), because acting on those dates while leaving the names they qualify
   would record half a position. **Do not read the named loci above as the complete set of what a
   retained structure can carry.** If your threat model includes these, filter them yourself.
 
 - **Every one of those positions IS counted and located, as an unexamined residual.** A value-bearing
   position inside a structure the pass hands through that no locus rule names is recorded on
-  `result.unexaminedResiduals` with its **structural locus**, a **count** and the fact that nothing
-  examined it. It carries no value, no key and no offset, exactly like the manifest,
+  `result.unexaminedResiduals` with its **structural locus**, a **count**, and the fact that nothing
+  examined it. It carries no value, no key, and no offset, exactly like the manifest,
   and it is a separate list precisely so that a position nothing looked at can never be mistaken for a
   residual of a value the pass did examine. All six adapters produce it: the fields of a retained HL7 v2
   segment, the entry dates / entry ids / in-entry performers and family-history demographics inside a
@@ -115,9 +122,9 @@ Two things follow, and the second is the one that surprises people:
 
 - **The envelope around a document is counted too, in every format that has one.** Retaining a
   _structure_ names no position inside it, so the positions of an HL7 v2 `MSH`, of a CDA document
-  envelope, of the X12 interchange and functional-group envelope (`ISA` / `TA1` / `GS` / `GE` / `IEA`)
+  envelope, of the X12 interchange and functional-group envelope (`ISA` / `TA1` / `GS` / `GE` / `IEA`),
   and of the DICOM Part 10 File Meta group `(0002,xxxx)` are all enumerated and reported. Read those
-  counts as the measurement they are: control numbers, trading-partner ids, timestamps and transfer
+  counts as the measurement they are: control numbers, trading-partner ids, timestamps, and transfer
   syntaxes sit there, and the number says only that no rule examined them.
 
 - **The unit is the position, never the element it sits on.** A rule that reaches one position says
@@ -139,15 +146,15 @@ Two things follow, and the second is the one that surprises people:
   carrier inside one, a FHIR primitive's extension metadata) does not appear: counting one would report
   an exposure that does not exist. The count is a measurement of what left the pass untouched.
 
-- **Counting is not removal, and it is not an allegation.** Nothing is scrubbed, generalized, blocked
+- **Counting is not removal, and it is not an allegation.** Nothing is scrubbed, generalized, blocked,
   or otherwise transformed on account of the count: what to do about a measured residual is a separate
   decision, and the mirror risk of acting on it blindly is over-removal, which destroys clinical
   meaning. A position no rule examined also has **no established Safe Harbor category**, so it is
-  attributed to none of the 18 and moves no category total: a clinical code, a dose unit and an order
+  attributed to none of the 18 and moves no category total: a clinical code, a dose unit, and an order
   status all sit at positions like these.
 
 - **Two fail-safes, because a count nobody can qualify is worse than no count.** A position whose
-  structural locus cannot be expressed is **still counted**, recorded under a withheld locus token and
+  structural locus cannot be expressed is **still counted**, recorded under a withheld locus token, and
   flagged, so losing the "where" never also loses the "how many". And a structure whose value-bearing
   positions cannot be enumerated **fails the pass** with a typed `DEID_POSITIONS_UNENUMERABLE` error
   naming the structure, rather than emitting a zero or a partial count that a reader would take for a
@@ -164,11 +171,11 @@ Two things follow, and the second is the one that surprises people:
   §164.514(b)(2)(i) removes the identifiers of the individual "or of relatives, **employers**, or
   household members", so an X12 party whose entity-identifier code is `36` and the employer positions
   the HL7 v2.5.1 financial segments type (GT1-16/17/18/19/29, IN1-10/11, IN2-3/49/50/64, and IN2-70 as
-  an organisation) are acted on and recorded. What that does **not** reach: **an employer named only in
+  an organization) are acted on and recorded. What that does **not** reach: **an employer named only in
   free text**, which is the consumer's redactor's business like any other prose; and **an employer
   carried as a separate `Organization` resource in a FHIR graph**, where no role is typed at the
   position and the reference `display` that names it is blocked rather than classified. The guarantor's
-  employer organisation name at **GT1-51** is likewise unreached: it is not among the positions this
+  employer organization name at **GT1-51** is likewise unreached: it is not among the positions this
   pass names.
 
 <a id="fhir-non-person-loci"></a>
@@ -185,10 +192,10 @@ Two things follow, and the second is the one that surprises people:
   one FHIR R4 defines on `HumanName`, at least one of them is a marker property (`family`, `given`,
   `prefix`, `suffix`), and that marker holds **the exact value shape R4 gives it**: `family` a single
   string, the other three repeating. An `Address` the same way, with `line` repeating and `city`,
-  `district`, `state`, `postalCode` and `country` single. Reading the shape per marker is what
+  `district`, `state`, `postalCode`, and `country` single. Reading the shape per marker is what
   separates a marker from an R4 element that merely shares its name, and R4 supplies two such
   collisions: `country`, which every colliding element types as a `CodeableConcept` where an address
-  types a string, and `prefix`, which `Questionnaire.item`, `PlanDefinition.action` and
+  types a string, and `prefix`, which `Questionnaire.item`, `PlanDefinition.action`, and
   `RequestGroup.action` each type as a single string where a name types it repeating. Both of the
   latter two backbones make **every** child optional, so a conformant instance can carry nothing but
   `prefix`, and the shape is the only thing that tells it from a person's name. A newly reached element
@@ -196,7 +203,7 @@ Two things follow, and the second is the one that surprises people:
   unexpected shape at a part the reduction would keep, is **removed whole** and recorded, never partly
   retained. So is **any** complex the classifier cannot pin down at an element name R4 **types** as one
   of the two datatypes (`name`, `address`, a choice-type `locationAddress`, an open `valueAddress` /
-  `valueHumanName`) - whether nothing is left to key on, a property R4 does not define sits beside a
+  `valueHumanName`), whether nothing is left to key on, a property R4 does not define sits beside a
   `family` or a `line`, or every property it carries is foreign to both datatypes. The test is whether
   the pass can read what the standard promised at that position, not which keys are present, so an
   unrecognized sibling never unblocks an element that was already unreadable. Two conformant R4
@@ -207,9 +214,9 @@ Two things follow, and the second is the one that surprises people:
 
 - **Five FHIR surfaces this release still does not reach.** Three because no person is typed at the
   position. A **`ContactPoint` outside a person resource**: a phone or an email on an `Organization`,
-  a `Location` or an `Endpoint` is passed through, because widening to telecom would put a payer's or a
+  a `Location`, or an `Endpoint` is passed through, because widening to telecom would put a payer's or a
   facility's own switchboard number in scope, which the HL7 v2 pass deliberately keeps (`IN1-7`, the
-  insurer's own phone, is untouched there). An **organisation's own `name`**: a plain string, never a
+  insurer's own phone, is untouched there). An **organization's own `name`**: a plain string, never a
   `HumanName`, and administrative content rather than a person's identity. And the **individual's
   employer carried as a separate `Organization` resource**, per the bullet above. The fourth is the
   stated cost of the closed, shape-read classification: **a name or an address carrying a property R4
@@ -222,7 +229,7 @@ Two things follow, and the second is the one that surprises people:
   element name neither half is a residual: the standard promised a name or an address there, so
   whatever the classifier declines is blocked whole. The
   fifth is the scope of the sweep itself: **a name or an address inside a person resource, at a
-  property the demographic map does not list.** The map already decides `name`, `telecom`, `photo` and
+  property the demographic map does not list.** The map already decides `name`, `telecom`, `photo`, and
   `address` there, so the datatype sweep does not run, and a vendor `Patient.alias` carrying
   `{ family, given }` is passed through where the same bytes on an `Organization` are removed. All
   five are passed through, and all five are counted as unexamined residual positions like anything
@@ -236,17 +243,17 @@ only when a real de-identified document grounds it.
 ## Policy profiles, and the Limited Data Set caveat
 
 - **`SAFE_HARBOR_PROFILE`**: the fail-closed default, dates generalized to year, the (R) catch-all
-  blocked. It retains **no** identifying locus: an admission, discharge or service date keeps only its
+  blocked. It retains **no** identifying locus: an admission, discharge, or service date keeps only its
   year, and an encounter or order number is removed. It emits **no keyed surrogate**: the medical
-  record, health plan beneficiary and account numbers are **removed**, because a surrogate derived
+  record, health plan beneficiary, and account numbers are **removed**, because a surrogate derived
   from the individual's own value is not a §164.514(c)(1) code and the (R) exception does not reach
   it. It therefore **needs no key at all**.
 - **`LIMITED_DATA_SET_PROFILE`**: a **research / longitudinal** preset that **date-shifts** dates
   (interval-preserving) rather than generalizing them, and that keeps a **consistent keyed surrogate**
-  for the medical record, health plan beneficiary and account numbers so cross-document linkage
+  for the medical record, health plan beneficiary, and account numbers so cross-document linkage
   survives. It is deliberately **less protective than Safe Harbor** on both counts: a shifted-but-real
   date is still "an element of a date," and a keyed surrogate is a re-identification code anyone
-  holding the key can reverse the linkage of. Therefore it is **not** labelled `safe-harbor`, it
+  holding the key can reverse the linkage of. Therefore it is **not** labeled `safe-harbor`, it
   **requires** a keyed per-patient context, and it produces an **Expert-Determination-supporting**
   dataset, **not** a certified de-identification, and **not**, on its own, a HIPAA §164.514(e) Limited
   Data Set. Disclosing an actual Limited Data Set additionally requires a **Data Use Agreement**, which
@@ -258,7 +265,7 @@ only when a real de-identified document grounds it.
   identifiers** (a `VN`-typed or untyped visit number, and the placer and filler order numbers), and
   the **named parts of a postal address**. That list of sixteen direct identifiers names no date and
   has no catch-all, which is exactly why the first two survive here and are removed under Safe Harbor.
-  It **does** name medical record, account and social security numbers, so a PV1-19 typed as one of
+  It **does** name medical record, account, and social security numbers, so a PV1-19 typed as one of
   those is transformed here too. Every one is still **recorded** as a `DEID_RESIDUAL_RETAINED` residual
   and appears in the support report's inventory, so nothing is kept silently.
 
@@ -278,17 +285,17 @@ removed under every profile, because the clause names neither.
   no (e)(2) counterpart. A restricted-prefix ZIP is therefore carried in full under this class, and is
   still reduced to `000` under Safe Harbor, which this class does not touch.
 - **The allowance follows the party list.** (e)(2) opens on "the individual or of relatives, employers,
-  or household members", so the patient, the next of kin, the guarantor, the guarantor's employer and
+  or household members", so the patient, the next of kin, the guarantor, the guarantor's employer, and
   the insured are all treated alike.
 - **Every kept part is recorded**, as a `DEID_RESIDUAL_RETAINED` residual located to its own field,
-  repetition and component, so it reaches the determiner's residual inventory.
+  repetition, and component, so it reaches the determiner's residual inventory.
 - **Nothing widens by omission.** A profile or an options bag that does not name the class reduces
   every address exactly as it always did. Options built by hand from a profile's `policy` alone keep
   nothing, and a profile derived from the Safe Harbor base may not add the class at all.
 - **It fails closed.** An address whose zip code is not a whole zip code is not partially kept: the
   locus falls back to the Safe Harbor generalization, which drops the whole address when it cannot read
   a prefix. No residual is recorded for anything that was not actually retained.
-- **The geographic allowance is honoured by the HL7 v2 pass alone.** The **C-CDA, FHIR, X12, NCPDP and
+- **The geographic allowance is honored by the HL7 v2 pass alone.** The **C-CDA, FHIR, X12, NCPDP, and
   DICOM** adapters do not read retention classes at all, so under those five an address is reduced
   exactly as Safe Harbor reduces it. They remain stricter, and that is the safe direction, but one
   profile therefore means something narrower for those five formats than it does for HL7 v2.
@@ -328,7 +335,7 @@ The report is descriptive input a determiner consumes and documents; it reaches 
 ```ts runnable
 import { OUTPUT_LABEL, SAFE_HARBOR_PROFILE, LIMITED_DATA_SET_PROFILE } from "@cosyte/deid";
 
-// The output is never labelled "de-identified".
+// The output is never labeled "de-identified".
 OUTPUT_LABEL; // => "Safe-Harbor-transformed per the configured policy"
 OUTPUT_LABEL.includes("de-identified"); // => false
 

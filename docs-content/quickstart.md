@@ -2,6 +2,7 @@
 id: quickstart
 title: Quickstart
 sidebar_position: 1
+description: "Run the built-in Safe Harbor policy over a parsed document, read the value-free manifest, and see when a keyed transform needs a key."
 ---
 
 # Quickstart
@@ -14,7 +15,7 @@ passed through as safe. The result is **"Safe-Harbor-transformed per the configu
 ## De-identify a model
 
 The core operates on a **generic locus model**: a flat list of structurally-located candidate values.
-The per-format adapters for HL7 v2, C-CDA, FHIR, X12, NCPDP and DICOM live behind their own subpath
+The per-format adapters for HL7 v2, C-CDA, FHIR, X12, NCPDP, and DICOM live behind their own subpath
 exports.
 
 ```ts runnable
@@ -43,8 +44,7 @@ on, never *what the value was*.
 ## Keyed transforms
 
 Pseudonymization and keyed hashing use a **keyed HMAC**: the key is the consumer's and never leaves
-the process. The **built-in Safe Harbor policy uses no keyed transform at all** - medical record,
-health plan beneficiary and account numbers are **removed** - so it needs no key. A keyed surrogate
+the process. The **built-in Safe Harbor policy uses no keyed transform at all**: medical record, health plan beneficiary, and account numbers are **removed**, so it needs no key. A keyed surrogate
 is derived from the individual's own value, which is why it belongs to a preset that does not claim
 Safe Harbor, such as `LIMITED_DATA_SET_PROFILE`. Supply the key through a context:
 

@@ -213,9 +213,9 @@ describe("deidentifyFhir, structured per-category behavior", () => {
     )
       .replaceAll("*", "")
       .replace(/\s+/g, " ");
-    expect(limitations).toContain("geographic allowance is honoured by the HL7 v2 pass alone");
+    expect(limitations).toContain("geographic allowance is honored by the HL7 v2 pass alone");
     expect(limitations).toContain(
-      "C-CDA, FHIR, X12, NCPDP and DICOM adapters do not read retention classes at all",
+      "C-CDA, FHIR, X12, NCPDP, and DICOM adapters do not read retention classes at all",
     );
     expect(limitations).toContain("They remain stricter");
   });

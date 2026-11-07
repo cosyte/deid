@@ -2,9 +2,10 @@
 id: concepts-archetype
 title: Core concepts
 sidebar_position: 1
+description: "How the library works: it fails closed, applies five transforms over the 18 Safe Harbor categories, and records every decision in a value-free manifest."
 ---
 
-# Core Concepts
+# Core concepts
 
 `@cosyte/deid` is built from five pieces: the **policy engine**, the **five transforms**, the
 **18-category Safe Harbor model**, the **fail-closed rule**, and the **value-free manifest**.
@@ -56,7 +57,7 @@ why fail-closed is not optional: a closed allow-list of 17 concrete types can ne
 Every `DeidManifestEntry` records the **category** acted on, the **transform** applied, the **locus**
 (a path: segment/field index, XPath, FHIRPath, DICOM tag), a **count**, a **disposition**, a stable
 **code**, and a boolean **`reidentificationCode`**. That last field is `true` exactly where the pass
-emitted a **keyed surrogate** (`pseudonymize`, `hash` or `date-shift`) and `false` everywhere else:
+emitted a **keyed surrogate** (`pseudonymize`, `hash`, or `date-shift`) and `false` everywhere else:
 it is a flag, never a key or an offset, and it is what the support report's keyed-surrogate residual
 inventory is built from. It **never** records the value that was removed, generalized, or
 pseudonymized: a manifest that logged a value would be a PHI leak in the audit trail. The date-shift

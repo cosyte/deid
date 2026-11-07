@@ -2,6 +2,7 @@
 id: guides-overview
 title: Guides
 sidebar_position: 1
+description: "Choose a policy, keep records linkable without leaking, read the manifest, and find the guide for each format."
 ---
 
 # Guides

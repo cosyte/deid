@@ -2,6 +2,7 @@
 id: guides-ccda
 title: De-identifying C-CDA
 sidebar_position: 6
+description: "What the C-CDA adapter locates, how to read a C-CDA locus path, and its known limitations."
 ---
 
 # De-identifying C-CDA
@@ -65,7 +66,7 @@ duration, not a calendar date, and is never generalized.
 ## How to read a C-CDA locus path
 
 A locus is a `/`-joined path of element names. Entries that agree on **all five** of locus, category,
-transform, disposition and code are aggregated into one entry with a running `count`, and two
+transform, disposition, and code are aggregated into one entry with a running `count`, and two
 narratives blocked the same way agree on the other four, so two narrative positions printing the same
 path would arrive as **one row with `count: 2`**. That is why the index in a path matters, and it has
 one meaning:

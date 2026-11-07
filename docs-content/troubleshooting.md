@@ -1,10 +1,11 @@
 ---
 id: troubleshooting
-title: Troubleshooting & limits
+title: Troubleshooting and limits
 sidebar_position: 1
+description: "Why a value was blocked, why a keyed transform needs a key, why a policy is refused, and what the manifest is safe to log."
 ---
 
-# Troubleshooting & Known Limitations
+# Troubleshooting and known limitations
 
 ## A value I expected to be transformed was `blocked`
 
@@ -26,11 +27,10 @@ pass asks you for a key, a custom policy or profile put a keyed transform in it.
 
 A policy claiming the `safe-harbor` label, either by its own name or through a profile that declares
 the `safe-harbor` standard, assigned a category a transform whose output is **derived from that
-category's own value**: `pseudonymize`, `hash` or `date-shift` on any category, or `generalize` on any
+category's own value**: `pseudonymize`, `hash`, or `date-shift` on any category, or `generalize` on any
 category other than (B) geography and (C) dates and ages over 89. The message names the offending
 category and transform. Those are Expert-Determination techniques rather than Safe Harbor ones, so
-either withhold the value (`redact` or `block`) or name the policy distinctly - the library never
-silently strengthens a transform, and never renames a policy, behind your back. An assignment that is
+either withhold the value (`redact` or `block`) or name the policy distinctly. The library never silently strengthens a transform, and never renames a policy, behind your back. An assignment that is
 not one of the eight published transform names draws the same refusal: a pair whose derivation cannot
 be established is refused, never permitted.
 
@@ -44,7 +44,7 @@ Error messages carry **no PHI**: every message this library raises is a fixed se
 key, or date-shift offset is ever interpolated into one. A manifest entry never carries the value that
 was removed, generalized, or pseudonymized, and never the key or the offset. Its
 `reidentificationCode` field is a **boolean** flag saying whether a keyed surrogate was emitted there,
-never the surrogate, the key or the offset itself.
+never the surrogate, the key, or the offset itself.
 
 The **locus** needs one more sentence, because it is the one field built out of the document rather
 than chosen by the library. A per-format adapter names a locus using the identifier at that position:
@@ -57,7 +57,7 @@ locus reads `WITHHELD_LOCUS_TOKEN` (`<withheld>`) plus a structural index, so tw
 stay distinguishable and nothing is silently dropped.
 
 That is a bound, not a guarantee of impossibility, and how much it leaves behind depends on the
-position. An HL7 v2 segment id, an X12 segment or transaction-set id and an NCPDP code are at most
+position. An HL7 v2 segment id, an X12 segment or transaction-set id, and an NCPDP code are at most
 three characters with no separator and no whitespace, so the residue there is a narrative line whose
 entire content is three letters, which is indistinguishable from a real segment id. A C-CDA element
 name and a FHIR element name are bounded at 64 and 65 characters, so an unspaced token that long is
@@ -70,7 +70,7 @@ or the raw document; it carries protected health information.
 > unbounded, so a malformed document could put document content into the manifest and into
 > `buildExpertDeterminationSupportReport`'s output. See the changelog entry for the full detail.
 
-## Known Limitations (this release, the format-agnostic core)
+## Known limitations (this release, the format-agnostic core)
 
 The library's promise is **narrow and honest**. Do **not** over-trust it:
 

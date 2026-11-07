@@ -2,6 +2,7 @@
 id: installation
 title: Installation
 sidebar_position: 1
+description: "Install @cosyte/deid and the parser packages for the formats you transform, check the Node.js versions it supports, and run a smoke test."
 ---
 
 # Installation
@@ -16,7 +17,7 @@ configuration.
 
 ## Prerequisites
 
-- **Node.js >= 22** (the whole `@cosyte/*` suite targets ES2023 / Node 22+).
+- **Node.js 22 or later, tested on 22 and 24** (the whole `@cosyte/*` suite targets ES2023).
 - A package manager: `pnpm`, `npm`, or `yarn`.
 
 ## Install

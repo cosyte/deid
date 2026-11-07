@@ -2,6 +2,7 @@
 id: guides-freetext
 title: Free text (block-by-default + BYO redaction)
 sidebar_position: 9
+description: "Free text is blocked by default; bring your own redactor to transform it, and see what the library does and does not guarantee."
 ---
 
 # Free text (block-by-default + BYO redaction)
