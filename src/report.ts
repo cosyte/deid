@@ -79,7 +79,7 @@ export const EXPERT_DETERMINATION_DISCLAIMER =
 export type ReportDisposition = "transformed" | "removed" | "blocked" | "retained";
 
 /**
- * Per-category coverage, for one of the 18 Safe Harbor categories (45 CFR §164.514(b)(2)(i)(A)–(R)),
+ * Per-category coverage, for one of the 18 Safe Harbor categories (45 CFR §164.514(b)(2)(i)(A) to (R)),
  * whether the pass acted on it and how. Present for **all 18** categories in the report (in regulatory
  * order A→R), so a reader sees the categories **not** acted on as plainly as those that were.
  *
@@ -98,9 +98,9 @@ export type ReportDisposition = "transformed" | "removed" | "blocked" | "retaine
 export interface CategoryCoverage {
   /** The Safe Harbor category. */
   readonly category: SafeHarborCategory;
-  /** The §164.514(b)(2)(i) sub-paragraph letter (A–R). */
+  /** The §164.514(b)(2)(i) sub-paragraph letter (A to R). */
   readonly letter: string;
-  /** The category ordinal (1–18). */
+  /** The category ordinal (1 to 18). */
   readonly number: number;
   /** A short human title (no PHI). */
   readonly title: string;
@@ -738,7 +738,7 @@ export function formatExpertDeterminationSupportReport(
       ` (free-text blocked: ${String(d.freeTextBlocked)}, consumer-redacted: ${String(d.freeTextConsumerRedacted)})`,
   );
   lines.push("");
-  lines.push("## Safe Harbor category coverage (§164.514(b)(2)(i) A–R)");
+  lines.push("## Safe Harbor category coverage (§164.514(b)(2)(i) A to R)");
   lines.push("");
   lines.push("| # | Category | Acted on | Count | Transforms |");
   lines.push("|---|---|---|---|---|");

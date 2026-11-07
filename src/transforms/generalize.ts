@@ -96,7 +96,7 @@ export function generalizeZip(zip: string): GeneralizeOutcome | null {
 }
 
 /**
- * Generalize an age (§164.514(b)(2)(i)(C)): any age **over 89** aggregates to `"90+"`; ages 0–89 are
+ * Generalize an age (§164.514(b)(2)(i)(C)): any age **over 89** aggregates to `"90+"`; ages 0 to 89 are
  * retained (a residual). Fails closed (`null`) for a non-finite or negative age.
  *
  * @param age - The age in years.

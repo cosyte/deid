@@ -90,7 +90,7 @@ describe("code surface stability", () => {
         "VEHICLE",
       ]
     `);
-    // Every category has regulatory metadata (letter A–R, number 1–18).
+    // Every category has regulatory metadata (letter A to R, number 1 to 18).
     const letters = Object.values(SAFE_HARBOR_CATEGORY_META)
       .map((m) => m.letter)
       .sort();

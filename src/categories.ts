@@ -1,5 +1,5 @@
 /**
- * The **18 HIPAA Safe Harbor identifier categories**, 45 CFR §164.514(b)(2)(i)(A)–(R), modelled as
+ * The **18 HIPAA Safe Harbor identifier categories**, 45 CFR §164.514(b)(2)(i)(A) to (R), modelled as
  * typed categories, including the open-ended catch-all (R).
  *
  * These are the categories of identifiers that Safe Harbor de-identification requires be removed or
@@ -76,8 +76,8 @@ export type SafeHarborCategory =
   (typeof SAFE_HARBOR_CATEGORIES)[keyof typeof SAFE_HARBOR_CATEGORIES];
 
 /**
- * Per-category regulatory metadata: the §164.514(b)(2)(i) sub-paragraph letter (A–R), the ordinal
- * number (1–18), and a short human title. Grounded firsthand in the regulation text; contains no PHI.
+ * Per-category regulatory metadata: the §164.514(b)(2)(i) sub-paragraph letter (A to R), the ordinal
+ * number (1 to 18), and a short human title. Grounded firsthand in the regulation text; contains no PHI.
  *
  * @example
  * ```ts

@@ -1,8 +1,8 @@
 /**
- * Tests for `scripts/check-no-emdash.sh`: the gate that keeps the banned dash character out of this
+ * Tests for `scripts/check-no-emdash.sh`: the gate that keeps the banned dash characters out of this
  * repository's tracked files and out of a pull request's title, body and commit messages.
  *
- * ▶ THE BANNED CHARACTER IS NEVER SPELLED IN THIS FILE. It is built from its code point and
+ * ▶ THE BANNED CHARACTERS ARE NEVER SPELLED IN THIS FILE. Each is built from its code point and
  * assembled into samples at runtime. That is not a style choice: the gate's corpus is
  * `git ls-files` over the whole repository and it carves out NO exemption for its own source, its
  * own workflow or this file, so a literal glyph here would red the gate on its own test suite. An
@@ -20,9 +20,11 @@
  *  2. THE POSITIVE CONTROL: a seeded occurrence reds at exit 1 and names the file AND the line.
  *  3. THE COUNT IS OF OCCURRENCES, NOT LINES. Two on one line is two violations, and a report that
  *     says "1" understates the work left to do.
- *  4. THE EN DASH IS NOT BANNED. The directive names one character. This is the assertion that
- *     makes widening the gate to the rest of the dash family a decision somebody takes on purpose
- *     rather than a side effect of editing a pattern.
+ *  4. THE EN DASH IS BANNED TOO, AND NOTHING ELSE IN THE DASH FAMILY IS. The rule names two
+ *     characters: the en dash joined the em dash on 2026-11-07, and this case used to assert the
+ *     opposite. The red half proves the widening reaches the real scan path and the stdin mode; the
+ *     green half keeps any further widening a decision somebody takes on purpose rather than a side
+ *     effect of editing a pattern.
  *  5. THE FIXTURE RULE, IN BOTH DIRECTIONS. The same bytes pass under the excluded prefix and red
  *     one directory away. A one-directional test would pass just as happily over a gate that had
  *     stopped scanning anything at all.
@@ -59,8 +61,11 @@ const CASE_TIMEOUT = 30_000;
 
 /** The banned character, written as a code point so this source file stays free of it. */
 const BANNED = String.fromCodePoint(0x2014);
-/** U+2013 EN DASH: a different character, and deliberately not banned. */
+/** U+2013 EN DASH: banned on the same footing as the em dash, and built the same way. */
 const EN_DASH = String.fromCodePoint(0x2013);
+/** Two characters the rule does not name, so the gate must stay green on them. */
+const HORIZONTAL_BAR = String.fromCodePoint(0x2015);
+const MINUS_SIGN = String.fromCodePoint(0x2212);
 
 const ARCHIVE_HEADING = "## Released before this file was generated";
 
@@ -183,7 +188,7 @@ describe("check-no-emdash: the tracked-file scan", () => {
         expect(run.status).toBe(1);
         expect(run.stderr).toContain("./README.md:3:");
         expect(run.stderr).toContain("1 occurrence(s)");
-        expect(run.stderr).toContain("U+2014 EM DASH found in");
+        expect(run.stderr).toContain("U+2014 EM DASH or U+2013 EN DASH found in");
       });
     },
     CASE_TIMEOUT,
@@ -204,11 +209,37 @@ describe("check-no-emdash: the tracked-file scan", () => {
   );
 
   it(
-    "4. does NOT ban the en dash: the directive names one character",
+    "4. bans the en dash on the same footing, and nothing else in the dash family",
     () => {
       const files = baseFiles();
-      files["README.md"] = `# Sample\n\nA range 6${EN_DASH}7 stays.\n`;
+      files["README.md"] = `# Sample\n\nA range 6${EN_DASH}7 goes.\n`;
       withRepo(files, (fx) => {
+        const run = runGate(fx.root);
+        expect(run.status).toBe(1);
+        expect(run.stderr).toContain("./README.md:3:");
+        expect(run.stderr).toContain("1 occurrence(s)");
+        expect(run.stderr).toContain("U+2014 EM DASH or U+2013 EN DASH found in");
+
+        const stdin = spawnSync("bash", [GATE, "--stdin", "a label"], {
+          cwd: fx.root,
+          encoding: "utf8",
+          input: `a range 6${EN_DASH}7\n`,
+        });
+        expect(stdin.status).toBe(1);
+        expect(stdin.stderr).toContain("a label:1:");
+      });
+
+      const both = baseFiles();
+      both["README.md"] = `# Sample\n\nOne ${BANNED} two ${EN_DASH} three.\n`;
+      withRepo(both, (fx) => {
+        const run = runGate(fx.root);
+        expect(run.status).toBe(1);
+        expect(run.stderr).toContain("2 occurrence(s)");
+      });
+
+      const rest = baseFiles();
+      rest["README.md"] = `# Sample\n\nA ${HORIZONTAL_BAR} bar and a ${MINUS_SIGN}3 stay.\n`;
+      withRepo(rest, (fx) => {
         const run = runGate(fx.root);
         expect(run.stderr).toBe("");
         expect(run.status).toBe(0);

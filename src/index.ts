@@ -27,7 +27,7 @@ export { OUTPUT_LABEL, VERSION } from "./labels.js";
 // ── What a manifest locus prints in place of an identifier the adapter would not echo.
 export { WITHHELD_LOCUS_TOKEN } from "./derived-token.js";
 
-// ── The Safe Harbor category model (45 CFR §164.514(b)(2)(i)(A)–(R)).
+// ── The Safe Harbor category model (45 CFR §164.514(b)(2)(i)(A) to (R)).
 export {
   SAFE_HARBOR_CATEGORIES,
   SAFE_HARBOR_CATEGORY_META,

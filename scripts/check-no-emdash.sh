@@ -6,13 +6,17 @@
 # brand voice document; this file is what enforces it in this repository. Plain hyphens only. Where
 # a sentence wants the pause an em dash used to give it, write `--`, a comma, or two sentences.
 #
+# SINCE 2026-11-07 THE CHARACTER U+2013 EN DASH IS BANNED ON THE SAME FOOTING: the brand rule is no
+# em or en dashes anywhere. Every mode below refuses both, the same change swept the en dash out of
+# the tracked files, and a range is written with "to" ("2 to 3").
+#
 # ---------------------------------------------------------------------------
-# THE BANNED CHARACTER IS NEVER SPELLED IN THIS FILE, AND THAT IS LOAD-BEARING RATHER THAN CUTE.
+# THE BANNED CHARACTERS ARE NEVER SPELLED IN THIS FILE, AND THAT IS LOAD-BEARING RATHER THAN CUTE.
 # This gate's corpus is `git ls-files` over the whole repository and it carves out NO exemption for
 # its own source, its own workflow or its own tests, deliberately: an exemption for the gate's own
 # files is precisely where a real violation would hide, and a sibling repository shipped that hole.
-# So the character is CONSTRUCTED from its code point below, and every caller that needs a sample
-# constructs one the same way. Write the glyph out anywhere in this tree and the gate reds on the
+# So each character is CONSTRUCTED from its code point below, and every caller that needs a sample
+# constructs one the same way. Write either glyph out anywhere in this tree and the gate reds on the
 # file that wrote it, which is the correct outcome and not an accident to be exempted away.
 #
 # ---------------------------------------------------------------------------
@@ -118,18 +122,20 @@ set -euo pipefail
 export LC_ALL=C.UTF-8
 
 # ---------------------------------------------------------------------------
-# The banned character, constructed rather than spelled. See the banner.
+# The banned characters, constructed rather than spelled. See the banner.
 # ---------------------------------------------------------------------------
-BANNED_NAME='U+2014 EM DASH'
-BANNED_RE='\x{2014}'
+BANNED_NAME='U+2014 EM DASH or U+2013 EN DASH'
+BANNED_RE='[\x{2013}\x{2014}]'
 BANNED=$(printf '\xe2\x80\x94')
-
-# Characters that must NOT match. The directive names U+2014 and nothing else, so this gate bans
-# U+2014 and nothing else. Widening it to the whole dash family is a decision somebody makes on
-# purpose, with the measurement of what it takes with it; these samples make that decision visible
-# rather than accidental.
 EN_DASH=$(printf '\xe2\x80\x93')
+
+# Characters that must NOT match. The rule names U+2014 and U+2013 and nothing else, so this gate
+# bans those two and nothing else. Widening it further into the dash family is a decision somebody
+# makes on purpose, with the measurement of what it takes with it; these samples make that decision
+# visible rather than accidental. The en dash was such a decision, taken on 2026-11-07, and it moved
+# from this list to the banned pair in the same change that swept it.
 HORIZONTAL_BAR=$(printf '\xe2\x80\x95')
+MINUS_SIGN=$(printf '\xe2\x88\x92')
 
 # ---------------------------------------------------------------------------
 # Exclusion rules. Each is stated in the banner with its reason.
@@ -242,8 +248,8 @@ fail_with_hits() {
   printf '%s\n' "$hits" >&2
   echo "" >&2
   echo "ERROR: check-no-emdash - ${BANNED_NAME} found in ${what}." >&2
-  echo "       Founder directive, 2026-07-24: that character is banned outright on every cosyte" >&2
-  echo "       surface, commit messages included. Plain hyphens only." >&2
+  echo "       Brand rule: both characters are banned outright on every cosyte surface, commit" >&2
+  echo "       messages included. Plain hyphens only, and a range is written with 'to'." >&2
   echo "       Rewrite the text: '--', a comma, a colon, or two sentences. Do NOT reach for a" >&2
   echo "       colon inside an unquoted YAML plain scalar, which cannot contain one followed by" >&2
   echo "       a space: the file stops parsing. Rewrite the sentence, never the key." >&2
@@ -254,24 +260,31 @@ fail_with_hits() {
 # SELF-TESTS. A gate is believed only after it has shown it can still see. These run in EVERY mode.
 # ---------------------------------------------------------------------------
 
-# (a) The pattern matches the banned character, and matches it as ONE character. The anchors are
+# (a) The pattern matches each banned character, and matches it as ONE character. The anchors are
 #     what make this an encoding test as well as a pattern test: under a non-UTF-8 locale the three
-#     bytes are three characters and the anchored match fails.
-if ! printf '%s\n' "$BANNED" | grep -qP -e "^${BANNED_RE}\$"; then
-  self_test_fail "the pattern no longer matches ${BANNED_NAME} as a single character. Either the pattern was changed or the locale pin was lost, and a scan under a non-UTF-8 locale reports every tree clean."
-fi
+#     bytes are three characters and the anchored match fails. Both characters are asserted, so
+#     dropping either from the pattern refuses every run rather than reporting it clean.
+for sample_name in em-dash en-dash; do
+  case "$sample_name" in
+    em-dash) sample="$BANNED" ;;
+    en-dash) sample="$EN_DASH" ;;
+  esac
+  if ! printf '%s\n' "$sample" | grep -qP -e "^${BANNED_RE}\$"; then
+    self_test_fail "the pattern no longer matches the ${sample_name} as a single character. Either the pattern was changed or the locale pin was lost, and a scan under a non-UTF-8 locale reports every tree clean."
+  fi
+done
 
-# (b) It matches nothing else in the dash family. The directive names one character; a gate that
-#     quietly grew to three would red on legitimate text and would be deleted rather than narrowed.
-for sample_name in hyphen double-hyphen en-dash horizontal-bar; do
+# (b) It matches nothing else in the dash family. The rule names two characters; a gate that
+#     quietly grew further would red on legitimate text and would be deleted rather than narrowed.
+for sample_name in hyphen double-hyphen horizontal-bar minus-sign; do
   case "$sample_name" in
     hyphen) sample='a - b' ;;
     double-hyphen) sample='a -- b' ;;
-    en-dash) sample="a ${EN_DASH} b" ;;
     horizontal-bar) sample="a ${HORIZONTAL_BAR} b" ;;
+    minus-sign) sample="a ${MINUS_SIGN} b" ;;
   esac
   if printf '%s\n' "$sample" | grep -qP -e "$BANNED_RE"; then
-    self_test_fail "the pattern now matches a ${sample_name}, which the directive does not ban. Widening this gate to the rest of the dash family is a decision to take deliberately, with the measurement of what it takes with it, not a side effect of editing the pattern."
+    self_test_fail "the pattern now matches a ${sample_name}, which the rule does not ban. Widening this gate further into the dash family is a decision to take deliberately, with the measurement of what it takes with it, not a side effect of editing the pattern."
   fi
 done
 
@@ -280,17 +293,21 @@ done
 #     primitives above are run over a seeded file and over a clean one, and both answers are
 #     asserted. This is the assertion that stops this gate from reporting OK over a tree it never
 #     opened.
-printf 'clean line\nbefore %s after\n' "$BANNED" > "${SELFDIR}/seeded.txt"
+printf 'clean line\nbefore %s after\nrange 6%s7\n' "$BANNED" "$EN_DASH" > "${SELFDIR}/seeded.txt"
 printf 'clean line\nanother clean line\n' > "${SELFDIR}/clean.txt"
 printf '%s\0' "${SELFDIR}/seeded.txt" > "${SELFDIR}/list"
 self_hits=$(scan_paths "${SELFDIR}/list")
 case "$self_hits" in
   *"seeded.txt:2:"*) ;;
-  *) self_test_fail "the real scan path did not locate a seeded ${BANNED_NAME} at line 2 of a two-line file. It reported: '${self_hits}'." ;;
+  *) self_test_fail "the real scan path did not locate a seeded em dash at line 2 of a three-line file. It reported: '${self_hits}'." ;;
+esac
+case "$self_hits" in
+  *"seeded.txt:3:"*) ;;
+  *) self_test_fail "the real scan path did not locate a seeded en dash at line 3 of a three-line file. It reported: '${self_hits}'." ;;
 esac
 self_count=$(count_paths "${SELFDIR}/list")
-if [ "$self_count" != "1" ]; then
-  self_test_fail "the occurrence counter reported ${self_count} for a file holding exactly one ${BANNED_NAME}."
+if [ "$self_count" != "2" ]; then
+  self_test_fail "the occurrence counter reported ${self_count} for a file holding exactly one em dash and one en dash."
 fi
 printf '%s\0' "${SELFDIR}/clean.txt" > "${SELFDIR}/list"
 self_hits=$(scan_paths "${SELFDIR}/list")

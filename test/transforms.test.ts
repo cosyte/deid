@@ -85,7 +85,7 @@ describe("generalizeAge, the mandatory age-90 aggregation", () => {
       expect(generalizeAge(age)).toEqual({ value: "90+", residual: false });
     }
   });
-  it("retains ages 0–89 as a residual (89 is the boundary that is kept)", () => {
+  it("retains ages 0 to 89 as a residual (89 is the boundary that is kept)", () => {
     expect(generalizeAge(89)).toEqual({ value: "89", residual: true });
     expect(generalizeAge(0)?.value).toBe("0");
   });
