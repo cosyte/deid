@@ -155,8 +155,9 @@ untouched, because none of them is the individual's, a relative's, or an employe
 
 **Inside a retained segment**, the identifying loci are carved back out: under a Safe-Harbor-labeled
 policy the admit (PV1-44), discharge (PV1-45), observation (OBR-7) and diagnosis (DG1-5) dates keep only
-their **year**, and the visit number (PV1-19) with the placer and filler order numbers (OBR-2/3, ORC-2/3)
-are **removed**. A profile that names their retention class, as the limited-data-set preset does, keeps
+their **year**, and the visit number (PV1-19) with the placer and filler order numbers (OBR-2/3, ORC-2/3) are
+**blocked** as the (R) catch-all: the value does not reach the output, and the manifest records a block
+(`DEID_LOCUS_BLOCKED`), not a removal. A profile that names their retention class, as the limited-data-set preset does, keeps
 them **unchanged and recorded**. PV1-19 is a CX list routed by its CX-5 identifier-type code, like PID-3:
 only a `VN`-typed or untyped visit number is the encounter identifier, while an `MR`/`AN`/`SS`-typed one
 is transformed as the medical record / account / social security number it is, under **both** profiles.
