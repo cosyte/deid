@@ -2,6 +2,7 @@
 id: intro
 title: Getting started
 sidebar_position: 1
+description: "What @cosyte/deid does: it applies a de-identification policy (HIPAA Safe Harbor by default) to a parsed healthcare document and returns the transformed copy with a value-free manifest."
 ---
 
 # @cosyte/deid

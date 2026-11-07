@@ -2,6 +2,7 @@
 id: guides-ncpdp
 title: De-identifying NCPDP
 sidebar_position: 9
+description: "What the NCPDP Telecom adapter locates, why NCPDP SCRIPT is refused, and its one-transaction limit."
 ---
 
 # De-identifying NCPDP
@@ -71,7 +72,7 @@ pass would silently drop content and leave unmodeled patient identifiers unhandl
 hazard the fail-closed posture forbids. SCRIPT support waits for a parser surface that preserves the full
 document.
 
-**That is a behaviour, not a note.** Hand a SCRIPT document to either entry point and it is **refused**,
+**That is a behavior, not a note.** Hand a SCRIPT document to either entry point and it is **refused**,
 before anything is parsed:
 
 ```ts
@@ -90,7 +91,7 @@ try {
 
 The error is a typed `DeidError` carrying `DEID_FORMAT_UNSUPPORTED`, and its message names the format
 and states the parser-surface reason. It carries no byte of the document, and the call returns **no**
-transformed document, **no** manifest and no partial output of any kind. A **Telecom** caller sees no
+transformed document, **no** manifest, and no partial output of any kind. A **Telecom** caller sees no
 change: a parsed Telecom transaction is never a candidate for the refusal.
 
 ## Known limitation

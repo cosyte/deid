@@ -2,6 +2,7 @@
 id: guides-dicom
 title: De-identifying DICOM
 sidebar_position: 10
+description: "What the DICOM adapter changes through @cosyte/dicom's metadata pass, how UIDs are remapped, and why burned-in pixels are flagged, never cleaned."
 ---
 
 # De-identifying DICOM
@@ -89,9 +90,9 @@ dataset.get("00120064"); // the same terms, on the dataset and in the re-seriali
 
 Three rules govern it, and the second is the one to read twice:
 
-- **Only the published terms are ever emitted.** Every Code Value, Code Meaning and Coding Scheme
+- **Only the published terms are ever emitted.** Every Code Value, Code Meaning, and Coding Scheme
   Designator comes from the thirteen rows of CID 7050 (context group `1.2.840.10008.6.1.925`),
-  reproduced verbatim. Nothing is composed, abbreviated or paraphrased, and no term outside that table
+  reproduced verbatim. Nothing is composed, abbreviated, or paraphrased, and no term outside that table
   is emitted into the dataset or onto the result.
 - **A withheld option is declared on the result and NEVER in `(0012,0064)`.** The standard's own words
   are "corresponding to the Profile and Options **used**", so a term in that sequence means the option
@@ -107,7 +108,7 @@ A De-identification Method Code Sequence the **input** already carried is **drop
 its items are unaudited bytes from an untrusted file, and no de-identification rule inspects what is
 inside that sequence, so keeping any of it would put unexamined input text inside output stamped
 `Patient Identity Removed = YES`. The loss is disclosed rather than made silently, by a value-free
-`DICOM_INPUT_DEIDENTIFICATION_METHOD_CODES_DROPPED` warning that carries no Code Value, no Code Meaning
+`DICOM_INPUT_DEIDENTIFICATION_METHOD_CODES_DROPPED` warning that carries no Code Value, no Code Meaning,
 and no other text read from the input.
 
 ## UID remapping: keeping relationships

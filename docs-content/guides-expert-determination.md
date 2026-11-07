@@ -2,6 +2,7 @@
 id: guides-expert-determination
 title: Expert-Determination support (never certification)
 sidebar_position: 10
+description: "The Expert Determination support report: what it gives a qualified expert, and why the library never makes a determination itself."
 ---
 
 # Expert-Determination support (never certification)
@@ -51,8 +52,7 @@ would be a real compliance harm, so the report is deliberately descriptive.
 ## What the report contains
 
 Feed it the manifest from any adapter (or an array of manifests for a corpus). You get: per-locus
-dispositions, coverage across all 18 Safe Harbor categories, a disposition roll-up, and **three
-residual inventories** - the retained-quasi-identifier one, the keyed-surrogate one, and the
+dispositions, coverage across all 18 Safe Harbor categories, a disposition roll-up, and **three residual inventories**: the retained-quasi-identifier one, the keyed-surrogate one, and the
 unexamined-position one. Pass `unexaminedResiduals` from the same pass to fill the third.
 
 ```ts runnable
@@ -87,7 +87,7 @@ report.retainedQuasiIdentifiers[0].locus; // => "PID-7"
 The **retained-quasi-identifier inventory** is the residual an expert cares about most: the identifying
 elements the pass kept for utility and **recorded** as `DEID_RESIDUAL_RETAINED`. Two kinds land there: a
 coarse residual left by a generalization (a year-only date, a safe 3-digit ZIP prefix, an exact age
-≤ 89), and a **whole unreduced value** a profile's retention set kept, such as the admission, discharge
+≤ 89), and a **whole unreduced value** a profile's retention set kept, such as the admission, discharge,
 and service dates and the encounter and order numbers a limited-data-set preset carries. The second kind
 is the stronger residual, and it is inventoried here rather than left to a footnote. These are the
 §164.514(b)(2)(ii) actual-knowledge considerations.
@@ -104,7 +104,7 @@ not decide to keep it. Nothing reached it. Every adapter counts and locates thos
 them on `result.unexaminedResiduals`; hand that list to the report and it becomes an inventory beside
 the other two.
 
-Each record carries the **structural locus**, a **count** and the fact of being unexamined, and never a
+Each record carries the **structural locus**, a **count**, and the fact of being unexamined, and never a
 value, a key or an offset. It is deliberately not folded into the retained-quasi-identifier inventory:
 that one holds residuals of values the pass **examined**, and admitting a position nothing looked at
 would make a kept year and an unexamined field read as the same thing.
@@ -130,7 +130,7 @@ unmeasured.dispositionSummary.unexaminedResidualPositions; // => null
 
 **Counting is not removal.** Nothing is scrubbed or generalized because it was counted, and a position
 no rule examined has **no established Safe Harbor category**: it is credited to none of the 18 and moves
-no category total. A clinical code, a dose unit and an order status all sit at positions like these, so
+no category total. A clinical code, a dose unit, and an order status all sit at positions like these, so
 read the number as the size of what went unexamined, never as a count of PHI.
 
 **What the number is a count of.** The set of positions is derived from what each parser's model can
@@ -154,8 +154,8 @@ emits none. Folding the two together would tell a determiner that a re-identific
 same kind of residual as a kept year, so each has its own section.
 
 Every locus the pass surrogated carries `reidentificationCode: true` in the manifest, and
-`report.keyedSurrogateResiduals` is built from that flag, carrying the locus, the category, the count
-and the transform that produced it - never a value, never the key, never the shift offset. An empty
+`report.keyedSurrogateResiduals` is built from that flag, carrying the locus, the category, the count,
+and the transform that produced it: never a value, never the key, never the shift offset. An empty
 inventory means the pass emitted no keyed surrogate, never that one went unmeasured.
 
 ```ts runnable

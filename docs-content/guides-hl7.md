@@ -2,6 +2,7 @@
 id: guides-hl7
 title: De-identifying HL7 v2
 sidebar_position: 5
+description: "What the HL7 v2 adapter locates, how each position is transformed under the configured policy, and its known limitations."
 ---
 
 # De-identifying HL7 v2
@@ -34,7 +35,7 @@ document.toString(); // spec-clean, de-identified HL7 wire
 manifest; // value-free audit: category + locus + disposition, never a value
 ```
 
-The built-in Safe Harbor policy uses **no keyed transform**: MRN, account and beneficiary numbers are
+The built-in Safe Harbor policy uses **no keyed transform**: MRN, account, and beneficiary numbers are
 **removed**, so a Safe Harbor pass over a v2 message needs no `context` at all. Under a preset that
 keeps consistent keyed surrogates instead, such as `LIMITED_DATA_SET_PROFILE`, a `context` is
 required and calling without one when the message needs it is a fatal `DEID_NO_KEY`: the engine never
@@ -44,10 +45,10 @@ falls back to an unkeyed surrogate.
 
 | Segment                                                                                              | Loci                                                                                                                                                       | Transform                                                                                                                                                                   |
 | ---------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **PID**                                                                                              | name (5/6/9), DOB (7/29), address (11), SSN (19), phone (13/14), driver's licence (20), MRN/account/mother-id (2/3/4/18/21), county (12), birth place (23) | names/phone/SSN/licence/MRN/account **removed** (a consistent keyed surrogate for MRN and account only under a preset that does not claim the label); DOB → **year**; ZIP → safe **3-digit** (or `000`); county/birth place fail closed |
+| **PID**                                                                                              | name (5/6/9), DOB (7/29), address (11), SSN (19), phone (13/14), driver's license (20), MRN/account/mother-id (2/3/4/18/21), county (12), birth place (23) | names/phone/SSN/license/MRN/account **removed** (a consistent keyed surrogate for MRN and account only under a preset that does not claim the label); DOB → **year**; ZIP → safe **3-digit** (or `000`); county/birth place fail closed |
 | **NK1 / GT1 / IN1 / IN2**                                                                            | relatives / guarantor / insured names, addresses, phones, SSNs, DOBs, member/policy/Medicare/Medicaid ids                                                  | same category transforms: Safe Harbor removes identifiers of **relatives, employers, and household members**, not only the patient                                          |
 | **The employer positions** (GT1-16/17/18/19/29, IN1-10/11, IN2-3/49/50/64)                           | the employer's name, address, phone, contact person, and the employee / employer identification numbers                                                    | same category transforms: an employer is inside the removal list, so a name is removed, an address reduced to the safe 3-digit ZIP, a phone removed, an identifier blocked as (R) |
-| **IN2-70**                                                                                           | the insured employer ORGANISATION (name at XON.1, identifier at XON.10)                                                                                    | decided by the same party-role test the X12 map applies to an `NM1` / `N1` party, and **fails closed**: an employer is never outside the scope clause, so name and identifier both go |
+| **IN2-70**                                                                                           | the insured employer ORGANIZATION (name at XON.1, identifier at XON.10)                                                                                    | decided by the same party-role test the X12 map applies to an `NM1` / `N1` party, and **fails closed**: an employer is never outside the scope clause, so name and identifier both go |
 | **GT1-20, IN1-3/4/5/7**                                                                              | the coded employment status, and the INSURER's own company id, name, address and phone                                                                     | **retained untouched** (the over-scrub guard): an insurer is not the individual, a relative, an employer or a household member                                              |
 | **OBX-5, NTE-3**                                                                                     | narrative / ambiguous free text (OBX-5 unless OBX-2 types it structured)                                                                                   | **fail closed**: blocked, never regex-scrubbed                                                                                                                              |
 | **MRG / ACC / FAM / PEO / PDA**                                                                      | known patient-identity / relative / geographic segments absent from the map                                                                                | **fail closed**: blocked (e.g. a merge message's prior name + MRN)                                                                                                          |
@@ -105,7 +106,7 @@ category each entry lands in and therefore which transform the configured policy
   implied, and there are two, both of them dates: an OBX-5 whose OBX-2 types it as a **date** is a date,
   and is acted on and recorded like any other, so a structured OBX value is retained byte-identical
   **except** for that date-typed subset; and the OBX segment's own date/time fields (OBX-12, OBX-14,
-  OBX-19) are acted on whatever OBX-2 says, while the result, its units and its reference range beside
+  OBX-19) are acted on whatever OBX-2 says, while the result, its units, and its reference range beside
   them are untouched.
 
 ## Known limitations (this release)
@@ -118,10 +119,10 @@ category each entry lands in and therefore which transform the configured policy
   creation timestamps are left untouched because those headers number their fields from a leading
   delimiter.
 - Within retained segments, the **non-date** positions the maps do not name are still passed through
-  untouched. That includes the **provider and other non-patient person names** (PV1-7/8, OBR-16 and
+  untouched. That includes the **provider and other non-patient person names** (PV1-7/8, OBR-16, and
   their siblings), and the date/time components that live **inside** a person-name or address composite
-  (an effective, expiration or action-performed date carried by a provider name, an authenticator's
-  timestamp, a licence expiry). Retaining a segment is not auditing every field in it. If your threat
+  (an effective, expiration, or action-performed date carried by a provider name, an authenticator's
+  timestamp, a license expiry). Retaining a segment is not auditing every field in it. If your threat
   model includes these, filter them yourself.
 - Every one of those positions **is counted and located**: it appears on `result.unexaminedResiduals`
   with its structural locus (`PV1-8.2`, `OBR-32.1`, one component of one repetition), a count, and the

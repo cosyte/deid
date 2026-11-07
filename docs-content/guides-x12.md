@@ -2,6 +2,7 @@
 id: guides-x12
 title: De-identifying X12 EDI
 sidebar_position: 8
+description: "What the X12 EDI adapter locates, how each position is transformed, the REF frontier, and its known limitations."
 ---
 
 # De-identifying X12 EDI
@@ -51,7 +52,7 @@ implicit, so the map keys off each **segment id** plus two **qualifier classifie
 | Locus                                                            | Handling                                                                                                            |
 | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
 | **`NM1`**: subscriber / patient / dependent (`IL` / `QC` / `03`) | name (`NM1-03..07`) **removed**; id (`NM1-09`) routed by the `NM1-08` qualifier: SSN **removed**, member **removed** under Safe Harbor |
-| **`NM1`** / **`N1`**: the individual's employer (`36`)          | name and id **removed**, on the same footing as a patient-side party: §164.514(b)(2)(i) removes the identifiers of the individual's **employers**, so an employer is not an unrelated organisation |
+| **`NM1`** / **`N1`**: the individual's employer (`36`)          | name and id **removed**, on the same footing as a patient-side party: §164.514(b)(2)(i) removes the identifiers of the individual's **employers**, so an employer is not an unrelated organization |
 | **`NM1`**: recognized provider / organization (`85` / `82` / …)  | **retained**: provider identity is not the individual's PHI (mirrors the HL7 adapter's provider retention), and the **entity-identifier code** it was classified on is recorded, value-free, at the party's locus |
 | **`NM1`**: unknown entity code                                  | **fails closed**: name and id blocked (an unrecognized entity could be the patient)                                |
 | **`N1`** (payer / provider org)                                 | **retained**; a patient-side or **unknown** party's name + id scrubbed / **fail closed** (same classification as `NM1`) |

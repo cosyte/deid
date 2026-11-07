@@ -1,14 +1,13 @@
 <a href="https://cosyte.com">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="https://cosyte.com/tile/cosyte-lockup-tile-on-dark-1200x300.png">
-    <img alt="Cosyte: a plus mark set in two overlapping rounded squares, one solid and one outlined, beside the Cosyte wordmark" src="https://cosyte.com/tile/cosyte-lockup-tile-on-light-1200x300.png">
+    <img alt="The Cosyte logo on its own white ground: the icon beside the word Cosyte." src="https://cosyte.com/tile/cosyte-lockup-tile-on-light-1200x300.png">
   </picture>
 </a>
 
 # @cosyte/deid
 
-> Healthcare **de-identification** for Node.js and TypeScript: a HIPAA-grounded policy engine that
-> emits a **value-free manifest**.
+> Healthcare **de-identification** for Node.js and TypeScript: Safe Harbor policies and a **value-free manifest**.
 
 `@cosyte/deid` applies a de-identification **policy** (HIPAA Safe Harbor by default) to a
 structurally-located model of a healthcare document and returns a transformed model plus a value-free
@@ -22,8 +21,8 @@ but **inverts the reflex**: where a parser is liberal on input, a de-identifier 
 > (§164.514(b)(1)) is supported, never rendered or certified.** The certification is
 > always the consumer's.
 
-> **Status:** `0.1`, published on npm. Below 1.0, a breaking change raises the minor version and the
-> changelog says what broke. This release ships the **format-agnostic core** plus six format
+> **Status:** the 0.1 line, published on npm. Below 1.0, a breaking change raises the minor version
+> and the changelog says what broke. This release ships the **format-agnostic core** plus six format
 > bindings: the **HL7 v2 adapter** (`@cosyte/deid/hl7`), the **C-CDA adapter**
 > (`@cosyte/deid/ccda`), the **FHIR R4 adapter** (`@cosyte/deid/fhir`), the **X12 EDI adapter**
 > (`@cosyte/deid/x12`), the **NCPDP Telecom adapter** (`@cosyte/deid/ncpdp`), and the **DICOM
@@ -39,6 +38,8 @@ but **inverts the reflex**: where a parser is liberal on input, a de-identifier 
 ```bash
 npm install @cosyte/deid
 ```
+
+Node.js 22 or later, tested on 22 and 24.
 
 ## De-identify
 
@@ -70,16 +71,16 @@ console.log(manifest.map((entry) => `${entry.locus} ${entry.category} ${entry.di
 ```
 
 The name is removed, the date keeps only its year, and the clinical value is retained untouched (the
-over-scrub guard). The manifest records the category, locus and disposition of each decision, never
+over-scrub guard). The manifest records the category, locus, and disposition of each decision, never
 the value. [`examples/`](https://github.com/cosyte/deid/tree/main/examples) has runnable programs for
-the HL7 v2 adapter, the fail-closed cases and the Expert Determination support report.
+the HL7 v2 adapter, the fail-closed cases, and the Expert Determination support report.
 
 ## Keyed transforms
 
 Pseudonymization and keyed hashing use a **keyed HMAC-SHA-256**; the key is the consumer's and never
 leaves the process. The **built-in Safe Harbor policy uses none of them**: a surrogate derived from
 the individual's own value is a re-identification code §164.514(c)(1) does not permit, so medical
-record, health plan beneficiary and account numbers are **removed** and the profile needs **no key at
+record, health plan beneficiary, and account numbers are **removed** and the profile needs **no key at
 all**. Keyed surrogates live behind a preset that does not claim Safe Harbor:
 
 ```ts
@@ -138,7 +139,7 @@ coded / a time of day); narrative (`TX`/`FT`), ambiguous String (`ST`), and any 
 closed, as do **NTE-3** comments, and a **date/time** value type makes OBX-5 a date the pass acts on.
 Structured clinical values, units, codes, and statuses survive untouched.
 
-**The individual's employer is a Safe Harbor subject, not an unrelated organisation.**
+**The individual's employer is a Safe Harbor subject, not an unrelated organization.**
 §164.514(b)(2)(i) removes the identifiers of the individual "or of relatives, **employers**, or
 household members", so the employer positions the v2.5.1 financial segments type are acted on and
 recorded like any other mapped locus: the guarantor's employer name (**GT1-16**), address
@@ -146,13 +147,13 @@ recorded like any other mapped locus: the guarantor's employer name (**GT1-16**)
 employer identification numbers (**GT1-19**, **GT1-29**); the insured's group employer id and name
 (**IN1-10**, **IN1-11**); the insured's employer name (**IN2-3**); the employer contact person's name
 and phone (**IN2-49**, **IN2-50**); and the insured's employer phone (**IN2-64**). **IN2-70** types an
-_organisation_ rather than a value, so it goes through the same party-role test the X12 adapter applies
+_organization_ rather than a value, so it goes through the same party-role test the X12 adapter applies
 to an `NM1` / `N1` party and **fails closed**: an employer is never outside the scope clause, so the
-organisation's name and its identifier both go. The mirror control holds: the coded employment status
-(**GT1-20**) and the _insurer's own_ company id, name, address and phone (**IN1-3/4/5/7**) are
-untouched, because none of them is the individual's, a relative's or an employer's identity.
+organization's name and its identifier both go. The mirror control holds: the coded employment status
+(**GT1-20**) and the _insurer's own_ company id, name, address, and phone (**IN1-3/4/5/7**) are
+untouched, because none of them is the individual's, a relative's, or an employer's identity.
 
-**Inside a retained segment**, the identifying loci are carved back out: under a Safe-Harbor-labelled
+**Inside a retained segment**, the identifying loci are carved back out: under a Safe-Harbor-labeled
 policy the admit (PV1-44), discharge (PV1-45), observation (OBR-7) and diagnosis (DG1-5) dates keep only
 their **year**, and the visit number (PV1-19) with the placer and filler order numbers (OBR-2/3, ORC-2/3)
 are **removed**. A profile that names their retention class, as the limited-data-set preset does, keeps
@@ -174,7 +175,7 @@ under every profile, because the clause names neither. The three-digit / `000` r
 is still suppressed under Safe Harbor. **Nothing widens by omission**: without the class an address is
 reduced exactly as it always was, and an address whose zip code is not a whole zip code falls back to
 that generalization, which drops the whole address rather than keeping part of it. This adapter is the
-**only** one that reads retention classes; under C-CDA, FHIR, X12, NCPDP and DICOM an address is reduced
+**only** one that reads retention classes; under C-CDA, FHIR, X12, NCPDP, and DICOM an address is reduced
 exactly as Safe Harbor reduces it.
 
 **Every other date inside a segment the pass hands through** is acted on and recorded too: every
@@ -189,7 +190,7 @@ The classification is structural and version-fixed: an eight-digit numeric resul
 **Known limitations (this release).** Free text is block-by-default (no built-in scrub; opt-in BYO
 redaction: see [Free text](#free-text-block-by-default--byo-redaction)); every **non-date** field of a
 retained segment that the carve-outs do not name is **not** de-identified, which still includes the
-_provider_ names in PV1-7/8 and OBR-16, the guarantor's employer organisation name at GT1-51, and the
+_provider_ names in PV1-7/8 and OBR-16, the guarantor's employer organization name at GT1-51, and the
 date components carried inside a person-name or address composite; a position only a version other than
 v2.5.1 types as a date is a stated residual; the address generalization keeps only the Safe Harbor
 3-digit ZIP, unless the profile names the §164.514(e)(2)(ii) geographic retention class described
@@ -197,14 +198,14 @@ above.
 
 **Those positions are now counted and located, which is a different thing from being cleaned.** Every
 value-bearing position a pass hands through that no locus rule names is recorded as an **unexamined
-residual** on `result.unexaminedResiduals`, with its structural locus, a count and the fact that nothing
+residual** on `result.unexaminedResiduals`, with its structural locus, a count, and the fact that nothing
 examined it, and never a value. Hand that list to the support report alongside the manifest and the
 report says how many there were; hand it an empty list and the report says the inventory was **measured
 and empty**, which reads differently from a pass that measured nothing at all.
 
 **Counting is not removal, and an unexamined position is not an allegation.** Nothing is scrubbed,
-generalized or blocked on account of the count, and a position no rule examined has no established Safe
-Harbor category, so it joins none of the 18 and moves no category total. A clinical code, a dose unit and
+generalized, or blocked on account of the count, and a position no rule examined has no established Safe
+Harbor category, so it joins none of the 18 and moves no category total. A clinical code, a dose unit, and
 an order status all sit at positions like these. The two fail-safes are worth knowing: a position whose
 locus cannot be expressed is still counted, under a withheld locus token, and a structure whose positions
 cannot be enumerated **fails the pass** rather than contribute a zero a reader would take for a
@@ -221,7 +222,7 @@ left the pass untouched. [Limitations](./docs-content/limitations.md) states the
 **Employer surfaces that remain residual, in every format.** Two, named so a consumer can tell a
 covered surface from an uncovered one. **An employer named only in free text** (an OBX-5 narrative, an
 NTE comment, a C-CDA section `<text>`, a FHIR `note`) is reached only by an opt-in BYO redactor, never
-by this library. And **an employer carried as a separate organisation resource in a FHIR graph** is not
+by this library. And **an employer carried as a separate organization resource in a FHIR graph** is not
 reached either: in FHIR an employer arrives as a `Reference` (whose `display` is already blocked) to a
 standalone `Organization` whose `name` the map retains as administrative data, so classifying it would
 be a cross-resource role derivation rather than a typed position. The employer positions above are the
@@ -320,16 +321,15 @@ producing system made: the same home address arrives at `Patient.address` from o
 `Location.address` from a home-health sender. A rule keyed on the enclosing resource therefore hands you
 coverage that depends on that choice. Positive classification is **closed**: an element is a `HumanName`
 only when every property it carries is one R4 defines on `HumanName`, **and** at least one of them is a
-marker property (`family` / `given` / `prefix` / `suffix`), **and** that marker holds **the exact value
-shape R4 gives it** - `family` a single string, the other three repeating. An `Address` the same way,
+marker property (`family` / `given` / `prefix` / `suffix`), **and** that marker holds **the exact value shape R4 gives it**: `family` a single string, the other three repeating. An `Address` the same way,
 with `line` repeating and `city` / `district` / `state` / `postalCode` / `country` single. All three
-halves earn their place: they keep the wider sweep off an **organisation's own `name`** (a plain
+halves earn their place: they keep the wider sweep off an **organization's own `name`** (a plain
 string, never a `HumanName`), off a `CodeableConcept` carrying only its `text`, and off every clinical
-code, value, unit and status.
+code, value, unit, and status.
 
 Reading the shape **per marker** is what separates a marker from an R4 element that merely shares its
 name, and R4 supplies two such collisions. The several elements called `country` are coded concepts
-where `Address.country` is a string. And `Questionnaire.item`, `PlanDefinition.action` and
+where `Address.country` is a string. And `Questionnaire.item`, `PlanDefinition.action`, and
 `RequestGroup.action` each carry a `prefix` that is a single string, where a name's `prefix` repeats;
 the latter two backbones make **every** child optional, so `{ "prefix": "1." }` alone is a conformant
 numbered workflow step, and the shape is the only thing that tells it from a person. The rule leans on
@@ -348,17 +348,15 @@ that is not on a `Coding` is treated as a Reference person-label and blocked, in
 removed **whole** rather than partly retained: a `postalCode` that is not a whole zip code (a
 four-digit `0110` still has three leading digits, and generalizing it would keep a fragment of
 something that was never a ZIP), or an unexpected JSON shape at a part Safe Harbor would let it keep,
-takes the street, the city, the state, the country and the ZIP with it, and the disposition is
-recorded. At an element name R4 **types** as one of the two datatypes - `name`, `address`, the
-choice-type `locationAddress`, an open `valueAddress` / `valueHumanName` - **any** complex the
+takes the street, the city, the state, the country, and the ZIP with it, and the disposition is
+recorded. At an element name R4 **types** as one of the two datatypes (`name`, `address`, the choice-type `locationAddress`, an open `valueAddress` / `valueHumanName`), **any** complex the
 classifier cannot pin down is blocked whole rather than descended into: a `{ text }` or
 `{ use, text }` representation with no part to key on, a `{ family, given, … }` carrying some property
 R4 does not define, and equally a `{ streetAddress, town, zip }` whose every property is foreign to
 both datatypes. The standard promised a name or an address there and the pass could not read the one
 it was given, so the boundary is readability rather than which keys happen to be present: adding an
 unrecognized sibling to an element that was already unreadable never unblocks it. Exactly two
-conformant R4 backbones share one of those element names - `MedicinalProduct.name` and
-`SubstanceSpecification.name` - and both are excluded positively, by the property R4 makes `1..1` on
+conformant R4 backbones share one of those element names, `MedicinalProduct.name` and `SubstanceSpecification.name`, and both are excluded positively, by the property R4 makes `1..1` on
 each together with that backbone's own closed property set. A plain string at one of those names is
 not a complex and is never a candidate, which is what leaves `Organization.name` and
 `Endpoint.address` untouched. The disposition is recorded either way. That block is scoped to those
@@ -375,10 +373,10 @@ narrative scrub and `contentAttachment` binary content remain out of scope for t
 Five residual surfaces, the first three because FHIR types no person at the position:
 
 - **A `ContactPoint` outside a person resource.** A phone or an email on an `Organization`, a
-  `Location` or an `Endpoint` is passed through. Widening to telecom here would put a payer's or a
+  `Location`, or an `Endpoint` is passed through. Widening to telecom here would put a payer's or a
   facility's own switchboard number in scope, which the HL7 v2 adapter deliberately keeps (`IN1-7`,
   the insurer's own phone, is untouched there).
-- **An organisation's own `name`.** It is a plain string, not a `HumanName`, so no datatype rule
+- **An organization's own `name`.** It is a plain string, not a `HumanName`, so no datatype rule
   reaches it, and it is administrative content rather than a person's identity.
 - **The individual's employer carried as a separate `Organization` resource.** Unlike X12 and HL7 v2,
   FHIR types no employer role at the position, so reaching it would be a cross-resource role
@@ -387,15 +385,14 @@ Five residual surfaces, the first three because FHIR types no person at the posi
   value shape R4 does not give that marker, at an element name R4 does not type as one of the two
   datatypes.** Positive classification is closed and shape-read, so an unrecognized sibling or the
   wrong shape stops it, and the fail-closed block above is scoped to the typed element names. At any
-  other name the same evidence is routinely something else - `{ "prefix": "1." }` is a conformant
-  `RequestGroup.action`, not a person - and blocking it would destroy conformant clinical and
+  other name the same evidence is routinely something else (`{ "prefix": "1." }` is a conformant `RequestGroup.action`, not a person), and blocking it would destroy conformant clinical and
   structural content that no re-run restores. Such a value is passed through and counted as an
   unexamined residual position, like anything else no rule names. At a **typed** element name neither
   half is a residual: the standard promised a name or an address there, so whatever the classifier
   declines is blocked whole.
 - **A name or an address INSIDE a person resource, at a property the demographic map does not list.**
   The datatype sweep runs outside a person resource only, because inside one the map above has already
-  decided `name`, `telecom`, `photo` and `address`. A vendor `Patient.alias` carrying
+  decided `name`, `telecom`, `photo`, and `address`. A vendor `Patient.alias` carrying
   `{ family, given }` is therefore passed through, where the same bytes on an `Organization` are
   removed. Counted as unexamined like the rest.
 
@@ -456,7 +453,7 @@ only modeled fields (a round-trip drops unmodeled XML) and its `Patient` model h
 patient-id field, so a faithful structural de-id is not achievable through the current public surface,
 and shipping a partial pass would be a false-safety hazard the fail-closed posture forbids. Hand a
 SCRIPT document to either NCPDP entry point and you get a typed `DEID_FORMAT_UNSUPPORTED` error naming
-the format and the parser-surface reason, and **no** transformed document, manifest or partial output
+the format and the parser-surface reason, and **no** transformed document, manifest, or partial output
 of any kind, rather than whatever the Telecom parser would have made of those bytes. Telecom callers
 are unaffected.
 
@@ -483,7 +480,7 @@ const { bytes } = deidentifyDicomBuffer(part10Bytes); // parse → de-id → re-
 ```
 
 The full Basic Profile applies by default (no key needed): Patient Name/ID/Birth Date, institution,
-referring physician, dates and the enumerated Annex E attributes are **removed**; Study / Series / SOP
+referring physician, dates, and the enumerated Annex E attributes are **removed**; Study / Series / SOP
 Instance UIDs are **consistently remapped** so image/series/study relationships survive; **private tags are
 removed** (fail-closed, kept only via a known-safe retain list, empty by default); clinical/technical
 values and pixel bytes are **retained untouched**. The output carries `Patient Identity Removed = YES`.
@@ -626,7 +623,7 @@ SAFE_HARBOR_PROFILE.standard; // => "safe-harbor"
 // parts §164.514(e)(2)(ii) NAMES (town or city, State, the WHOLE zip code) under the HL7 v2 pass, with
 // the street and every other geographic component removed and each kept part recorded. On DATES it is
 // deliberately STRICTER than §164.514(e)(2), which names no date at all: it shifts them by choice.
-// Deliberately less protective than Safe Harbor → NOT labelled "safe-harbor", requires a keyed
+// Deliberately less protective than Safe Harbor → NOT labeled "safe-harbor", requires a keyed
 // per-patient context, and is NOT a certified de-identification (nor, on its own, a §164.514(e)
 // Limited Data Set; that needs a Data Use Agreement, which is yours, and which this library neither
 // holds nor checks).
@@ -643,10 +640,10 @@ const ctx = createDeidContext({ key: process.env.DEID_KEY! });
 const opts = profileOptions(strict, ctx); // pass straight to any adapter
 ```
 
-## Known limitations & honesty
+## Known limitations and honesty
 
 `@cosyte/deid` **transforms per a policy and evidences what it did: it never certifies**. Read
-[`docs-content/limitations.md`](docs-content/limitations.md) before relying on it for anything that
+[the limitations page](https://docs.cosyte.com/deid/limitations) before relying on it for anything that
 leaves your control: the fail-closed posture, structured-core-only (free text is block-by-default),
 **DICOM metadata-only** (burned-in pixels flagged, not cleaned), **NCPDP SCRIPT refused**, **NCPDP
 Telecom one transaction per message**, the BYO
@@ -659,7 +656,7 @@ determination**.
 - **Five transforms**: redact, generalize (date→year, ZIP→3-digit/`000`, age→`90+`), keyed date-shift,
   keyed-HMAC pseudonymize, keyed hash.
 - **18 Safe Harbor categories**: §164.514(b)(2)(i)(A) to (R), including the open-ended catch-all (R).
-- **Fail-closed rule**: an unrecognized structure, an un-locatable identifier or free text is
+- **Fail-closed rule**: an unrecognized structure, an un-locatable identifier, or free text is
   blocked, never passed through; clinical values are retained untouched.
 - **Value-free manifest**: category + transform + locus + count + disposition + code + a boolean
   `reidentificationCode` (`true` only where a keyed surrogate was emitted) + a `partyRole` code (only
@@ -671,4 +668,4 @@ determination**.
 
 ## License
 
-MIT © Cosyte
+MIT, copyright Cosyte LLC. See [LICENSE](https://github.com/cosyte/deid/blob/main/LICENSE).

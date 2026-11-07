@@ -2,6 +2,8 @@
 
 `@cosyte/deid` is our de-identification library for Node.js and TypeScript, published to npm under MIT from this public repository. It takes a document parsed by one of the `@cosyte/*` parsers (HL7 v2, C-CDA, FHIR R4, X12, NCPDP Telecom, DICOM) and returns a copy transformed per the configured policy (Safe Harbor, a limited data set, or a profile built on one) plus a value-free manifest of what was done where, with keyed date shifting, a bring-your-own free-text redactor and an Expert Determination support report. It has zero runtime dependencies: the parsers are optional peers, vendored as tarballs under `vendor/` for the tests, and the DICOM adapter delegates to that parser's own metadata pass, flagging burned-in pixels rather than cleaning them.
 
+@AGENTS.md
+
 ## Gate
 
 From the repo root, in this order, with pnpm 10 (the `packageManager` pin). Where `pnpm --version` prints another major, put the pinned one first on PATH, since `test/docs-content.test.ts` shells out to bare `pnpm`: `mkdir -p ~/.pnpm10 && corepack enable --install-directory ~/.pnpm10 pnpm && export PATH="$HOME/.pnpm10:$PATH"`.

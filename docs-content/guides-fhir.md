@@ -2,6 +2,7 @@
 id: guides-fhir
 title: De-identifying FHIR
 sidebar_position: 7
+description: "What the FHIR R4 adapter locates, how it classifies names and addresses by datatype, where it fails closed, and its known limitations."
 ---
 
 # De-identifying FHIR
@@ -68,22 +69,21 @@ of the residuals below.
 | **Person resources**: `Patient` / `RelatedPerson` / `Practitioner` / `Person` (+ nested `Patient.contact`, a relative) | `name`, `telecom`, `photo`, `address`, `birthDate`, `deceasedDateTime` | name/telecom/photo **removed**; `address` → safe **3-digit ZIP** (or `000` for a restricted prefix), finer geography dropped; dates → **year** |
 | **Every resource, by datatype** | any `HumanName`, any `Address`: `Organization.contact.name`, `Location.address`, `Organization.address`, a choice-type `locationAddress` | name **removed**; address → the same safe **3-digit ZIP** (or `000`), finer geography dropped, that a person resource's address gets |
 | **Every resource (the universal PHI vectors)** | `identifier`, PHI-bearing dates, narrative `text.div`, `extension` / `modifierExtension` values, `Reference.display` | identifier **removed** under Safe Harbor, `system` retained (a consistent keyed surrogate by `system` only under a preset that does not claim the label); dates → **year**; narrative div / extension values / reference labels **blocked** |
-| **Contained resources & `Bundle` entries** | each nested resource | **walked**: the resource role is re-derived at every `resourceType`, so a contained `RelatedPerson` or a Bundled `Patient` is de-identified too |
+| **Contained resources and `Bundle` entries** | each nested resource | **walked**: the resource role is re-derived at every `resourceType`, so a contained `RelatedPerson` or a Bundled `Patient` is de-identified too |
 | **Clinical resources**: `Observation`, `Condition`, `Encounter`, … | codes, values, units, statuses, reference ranges, reference wiring | **retained untouched** (the over-scrub guard) |
 
 Positive classification is **closed**, and that is the over-scrub guard: an element is a `HumanName`
 only when every property it carries is one FHIR R4 defines on `HumanName`, **and** at least one of them
-is a marker property (`family` / `given` / `prefix` / `suffix`), **and** that marker holds **the exact
-value shape R4 gives it** - `family` a single string, the other three repeating. An `Address` the same
+is a marker property (`family` / `given` / `prefix` / `suffix`), **and** that marker holds **the exact value shape R4 gives it**: `family` a single string, the other three repeating. An `Address` the same
 way, with `line` repeating and `city` / `district` / `state` / `postalCode` / `country` single. So an
-**organisation's own `name`** is untouched (it is a plain string, never a `HumanName`), a
+**organization's own `name`** is untouched (it is a plain string, never a `HumanName`), a
 `CodeableConcept` carrying only its `text` is untouched (that shape is an `Observation` code, a dose
-unit or an order status far more often than it is a name), and every clinical code, value, unit and
+unit, or an order status far more often than it is a name), and every clinical code, value, unit, and
 status survives byte-identical.
 
 Reading the shape **per marker** is what separates a marker from an R4 element that merely shares its
 name. The several elements called `country` are coded concepts where `Address.country` is a string, and
-`Questionnaire.item`, `PlanDefinition.action` and `RequestGroup.action` each carry a `prefix` that is a
+`Questionnaire.item`, `PlanDefinition.action`, and `RequestGroup.action` each carry a `prefix` that is a
 single string where a name's `prefix` repeats. The latter two backbones make **every** child optional,
 so `{ "prefix": "1." }` alone is a conformant numbered workflow step, and the shape is the only thing
 that tells it from a person's name. The rule leans on no sibling those other elements happen to
@@ -119,7 +119,7 @@ not mistaken for a date, so it survives.
   `postalCode` that is not a whole zip code (a four-digit `0110` still has three leading digits, and
   keeping them would retain a fragment of something that was never a ZIP), or an unexpected JSON shape
   where R4 types a string at a part the reduction would re-emit verbatim. The street, the city, the
-  state, the country and the ZIP all go, and the disposition is recorded.
+  state, the country, and the ZIP all go, and the disposition is recorded.
 - At an element name R4 **types** as one of the two datatypes (`name`, `address`, the choice-type
   `locationAddress`, an open `valueAddress` / `valueHumanName`), **any** complex the classifier cannot
   pin down is **blocked whole** rather than descended into: a `{ text }` or `{ use, text }`
@@ -159,8 +159,8 @@ not mistaken for a date, so it survives.
 - Free-text **prose** loci (`note`, `contentString`, uncoded `valueString`) fail closed by default; a
   semantic (NLP) narrative scrub and `contentAttachment` binary content remain out of scope.
 - Three surfaces are still not reached because FHIR types no person at the position: a
-  **`ContactPoint` outside a person resource** (a phone or an email on an `Organization`, a `Location`
-  or an `Endpoint`), an **organisation's own `name`** (a plain string, never a `HumanName`), and the
+  **`ContactPoint` outside a person resource** (a phone or an email on an `Organization`, a `Location`,
+  or an `Endpoint`), an **organization's own `name`** (a plain string, never a `HumanName`), and the
   **individual's employer carried as a separate `Organization` resource**, which would need a
   cross-resource role derivation rather than a typed read.
 - A fourth is the stated cost of the closed, shape-read classification: **a name or an address carrying
@@ -173,7 +173,7 @@ not mistaken for a date, so it survives.
   At a **typed** element name neither half is a residual: whatever the classifier declines is blocked
   whole.
 - A fifth is the scope of the datatype sweep: **a name or an address inside a person resource, at a
-  property the demographic map does not list.** The map has already decided `name`, `telecom`, `photo`
+  property the demographic map does not list.** The map has already decided `name`, `telecom`, `photo`,
   and `address` there, so the sweep does not run inside a person resource, and a vendor
   `Patient.alias` carrying `{ family, given }` is passed through where the same bytes on an
   `Organization` are removed.
