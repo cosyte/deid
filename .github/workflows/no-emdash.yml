@@ -1,14 +1,14 @@
 name: Em-dash gate
 
-# Founder directive, 2026-07-24: the character U+2014 EM DASH is banned outright across every
-# cosyte surface, and COMMIT MESSAGES ARE NAMED EXPLICITLY. The rule is stated canonically in the
-# brand voice document; `scripts/check-no-emdash.sh` is what enforces it here, and this file is what
-# runs it. Plain hyphens only.
+# Founder directive, 2026-07-24, widened by the operator on 2026-11-07: the em dash (U+2014) and the
+# en dash (U+2013) are banned outright across every Cosyte surface, and COMMIT MESSAGES ARE NAMED
+# EXPLICITLY. The rule is stated canonically in the brand voice document; `scripts/check-no-emdash.sh`
+# is what enforces it here, and this file is what runs it. Plain hyphens only.
 #
-# THE CHARACTER IS NOT SPELLED ANYWHERE IN THIS REPOSITORY, THIS FILE INCLUDED. The tracked-file
+# NEITHER CHARACTER IS SPELLED ANYWHERE IN THIS REPOSITORY, THIS FILE INCLUDED. The tracked-file
 # scan below is `git ls-files` over the whole tree with no exemption for the gate's own source, its
-# own tests or this workflow, so writing the glyph out here would red this job on itself. That is
-# the correct outcome: the checker constructs the character from its code point instead.
+# own tests or this workflow, so writing either glyph out here would red this job on itself. That is
+# the correct outcome: the checker constructs each character from its code point instead.
 #
 # ---------------------------------------------------------------------------
 # TWO JOBS, DELIBERATELY, AND THE SPLIT IS THE DESIGN RATHER THAN A TIDINESS CHOICE.
@@ -49,7 +49,7 @@ name: Em-dash gate
 #   `ci.yml` is a THIN CALLER of cosyte/.github/.github/workflows/ci.yml@main, which runs a fixed
 #   ladder and no arbitrary repository script, so there is nowhere in it to hang this rule. The
 #   shared GATE workflow this file now calls is a different thing: it carries no pattern, no
-#   allow-list and no file selection of its own, and it exists precisely so the harness can be
+#   allow-list and no file selection of its own, and it exists precisely so the machinery can be
 #   shared while the rule stays in the repository it governs.
 #
 #   Within this repository, keeping it out of ci.yml also keeps it cheap: the tracked-file job is a

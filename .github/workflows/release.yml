@@ -1,8 +1,12 @@
 name: Release
 
-# Thin caller of the shared release pipeline: Changesets -> npm publish (provenance auto-enables when
-# this repo is public) -> docs artifacts -> GitHub release -> repository_dispatch to cosyte/docs.
-# Requires the NPM_TOKEN and DOCS_REPO_DISPATCH_TOKEN secrets (passed via `secrets: inherit`).
+# Thin caller of the shared release pipeline: Changesets -> npm publish through npm trusted
+# publishing (OIDC, with provenance; the publish uses no npm token) -> docs artifacts -> GitHub
+# release -> repository_dispatch to cosyte/docs. Uses the DOCS_REPO_DISPATCH_TOKEN and
+# RELEASE_PR_TOKEN secrets (passed via `secrets: inherit`), the second so the "Version Packages"
+# pull request it opens runs its checks. The trusted publisher registered for this package on
+# npmjs.com names this repository, this file (`release.yml`) and the `release` environment, so
+# renaming the file or the environment stops every publish.
 #
 # ▶ THE "Version Packages" PR THIS OPENS WILL SIT BLOCKED UNTIL SOMEONE PUSHES TO IT. That is the
 # expected state, not a broken pipeline. Changesets opens it as `github-actions[bot]` with the

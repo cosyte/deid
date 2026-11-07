@@ -33,7 +33,7 @@
   "engines": {
     "node": ">=22.0.0"
   },
-  "packageManager": "pnpm@10.0.0",
+  "packageManager": "pnpm@10.34.5",
   "pnpm": {
     "overrides": {
       "esbuild@>=0.27.3 <0.28.1": "0.28.1",
@@ -191,15 +191,15 @@
     "@changesets/cli": "2.31.0",
     "@cosyte/ccda": "file:vendor/cosyte-ccda-0.0.1.tgz",
     "@cosyte/dicom": "file:vendor/cosyte-dicom-0.0.1.tgz",
-    "@cosyte/eslint-config": "^0.0.4",
+    "@cosyte/eslint-config": "^0.1.1",
     "@cosyte/fhir": "file:vendor/cosyte-fhir-0.0.0.tgz",
     "@cosyte/hl7": "file:vendor/cosyte-hl7-0.0.1.tgz",
     "@cosyte/ncpdp": "file:vendor/cosyte-ncpdp-0.0.1.tgz",
-    "@cosyte/prettier-config": "^0.0.2",
-    "@cosyte/test-utils": "^0.0.1",
-    "@cosyte/tsconfig": "^0.0.2",
-    "@cosyte/tsup-config": "^0.0.1",
-    "@cosyte/vitest-config": "^0.0.2",
+    "@cosyte/prettier-config": "^0.1.1",
+    "@cosyte/test-utils": "^0.1.1",
+    "@cosyte/tsconfig": "^0.1.1",
+    "@cosyte/tsup-config": "^0.1.1",
+    "@cosyte/vitest-config": "^0.1.1",
     "@cosyte/x12": "file:vendor/cosyte-x12-0.0.1.tgz",
     "@types/node": "^22.0.0",
     "@vitest/coverage-v8": "4.1.4",

@@ -33,5 +33,3 @@ Pick the bump type from what the change does to the published package. On the `0
 - **major** only when you mean to declare `1.0.0`. Before that, a breaking change is a **minor**,
   and the break has to be spelled out in the summary, because the number alone tells a consumer on
   a `0.x` release nothing.
-
-See the Cosyte version ladder in the meta-repo's `documentation/conventions.md`.

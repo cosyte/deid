@@ -4,9 +4,8 @@
 
 `CLAUDE.md` in this repo is always-read for any worker that `cd`s in, so on 2026-08-04 it was cut from
 45,611 bytes to a cursor plus a one-line imperative per trap. **Nothing was deleted.** Every paragraph
-that left it is below, **verbatim**, under a heading `CLAUDE.md` links to by anchor. Governed by the
-2026-08-04 amendment to the meta-repo's `documentation/decisions/0023-doc-budgets.md`:
-*relocate the narrative; keep the cursor, the rule, and every trap.*
+that left it is below, **verbatim**, under a heading `CLAUDE.md` links to by anchor. The rule it
+follows: *relocate the narrative; keep the cursor, the rule, and every trap.*
 
 **These are the lessons that cost a defect to learn.** Every refuted claim here became a paragraph and
 none were ever removed. Do not compress a paragraph into a summary of itself: the measurements, the
@@ -49,7 +48,7 @@ warning -- read it before quoting anything from it.
 
 ### Shipped phases DEID-1 through DEID-10
 
-- **DEID-1…DEID-10 shipped, and the roadmap is complete.** Pre-alpha `0.0.x`, published to npm.
+- **DEID-1…DEID-10 shipped.** Published to npm, on the 0.1 line.
   `src/` carries the format-agnostic core (DEID-1: the policy engine `deidentify` / `SAFE_HARBOR_POLICY`
   / `defineDeidPolicy`, the five `node:crypto`-backed transforms, the 18-category Safe Harbor model, the
   fail-closed rule, the value-free manifest) plus **all six per-format adapters** on the core's generic
@@ -113,8 +112,8 @@ place.
 ## Tech Stack (the shared `@cosyte/*` standard)
 
 This repo inherits the canonical toolchain by depending on the published `@cosyte/*` config packages,
-not by copying files. The source of truth is the meta-repo's `documentation/conventions.md` -- this is
-a summary.
+not by copying files. The source of truth is those packages (cosyte/config) and the standards in the
+umbrella's `plans/standards.md` -- this is a summary.
 
 - **Language:** TypeScript (strict, full rigor set incl. `noUncheckedIndexedAccess`) via
   `@cosyte/tsconfig`. **Target ES2023**, `NodeNext`. TypeScript 5.9.x, exact-pinned.
@@ -422,7 +421,7 @@ the rest of the file. And the filed claim that a pointer must be spelled in a pa
 in ASCII bytes**.
 
 **Wiring, and what it deliberately does not add.** It runs from `pnpm check:agent-notes`, is reached by
-`pnpm check` (so it is on the meta-repo's `scripts/verify.sh deid` ladder) and by `pnpm test` (so it
+`pnpm check` and by `pnpm test` (so it
 rides the required `ci / verify` context and `prepublishOnly`). **No new workflow and no new required
 check-run context**: requiring a context before its workflow has run on `main` leaves every PR
 **PENDING** rather than red, and this repo has already paid that cost twice.
@@ -431,8 +430,8 @@ check-run context**: requiring a context before its workflow has run on `main` l
 directory, so moving it while the pointers keep their old prefix exits 0 with every rendered link
 broken. A file that is not valid UTF-8 is skipped whole, and the tell is the skipped count. A pointer
 at any other file's anchor is out of scope. A section with a body is not a section with the **right**
-body -- that half stays human. And it checks no byte budget: `CLAUDE.md`'s ceiling belongs to the
-umbrella's hook, and a second copy of that number inside this package would go stale. The full list,
+body -- that half stays human. And it checks no byte budget: a size ceiling for `CLAUDE.md` is not
+this script's to keep, and a copy of that number inside this package would go stale. The full list,
 with which items a test pins, is the disclosed-miss block in the script header.
 
 ### The Version Packages PR is blocked by design
@@ -907,13 +906,12 @@ R100` and this route printed its clean line (measured on git 2.39.5; the all-mod
 
 ## Standing disciplines (every change)
 
-Mirrors the three disciplines in the meta-repo's `documentation/conventions.md` -- they bind here too:
+Three disciplines bind every change here:
 
 1. **Documentation follows code** -- a change to the public surface/stack/status isn't done until the
-   docs are: this repo's docs content (`README.md`, `docs-content/`), the meta-repo
-   `documentation/repos/deid.md` (bump its "last verified" date), and the `ecosystem-map.md`
-   status table.
-2. **Version + changelog** -- a Changeset (`patch` on the `0.0.x` ladder) per meaningful change.
+   docs are: this repo's docs content (`README.md`, `docs-content/`).
+2. **Version + changelog** -- a Changeset per meaningful change (`.changeset/README.md` says which
+   bump).
    **The changeset summary IS the changelog entry.** `.changeset/config.json` names a `changelog`
    generator, so the release writes the version heading and the entry itself, above
    `## Released before this file was generated`. **Do not hand-edit `CHANGELOG.md`, and do not
@@ -1008,7 +1006,7 @@ whole-line anchoring survives it; that is what makes it safe there and unsafe in
    JSDoc that compiles into `dist/**/*.d.ts` and renders on hover) says what the software does and
    what changed. Item identifiers (`DEID-8`), phase and roadmap-section language (`roadmap §4.6`,
    `Phase 10`), ADR numbers, meta-repo paths and "how this got built" commentary belong in the
-   changeset, `CHANGELOG.md`, the commit, the PR and the roadmap. Gated by
+   changeset, `CHANGELOG.md`, the commit, the PR and the umbrella's plans. Gated by
    `pnpm check:no-internal-refs` and `.github/workflows/no-internal-refs.yml`.
 
 ### The gate keys on known project prefixes
