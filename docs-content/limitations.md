@@ -72,11 +72,12 @@ Two things follow, and the second is the one that surprises people:
 
 - **The identifying loci inside retained HL7 v2 structures are carved back out and acted on.** Under a
   Safe-Harbor-labeled policy the admit (PV1-44), discharge (PV1-45), observation (OBR-7) and diagnosis
-  (DG1-5) dates are reduced to their **year**, and the visit number (PV1-19) with the placer and filler
-  order numbers (OBR-2/3, ORC-2/3) are **removed**. §164.514(b)(2)(i)(C) names admission and discharge
+  (DG1-5) dates are reduced to their **year**, and the visit number (PV1-19) with the placer and filler order numbers (OBR-2/3, ORC-2/3) are
+  **blocked** as the (R) catch-all: the value does not reach the output, and the manifest records a
+  block (`DEID_LOCUS_BLOCKED`), not a removal. §164.514(b)(2)(i)(C) names admission and discharge
   dates in the regulation text itself.
 - **PV1-19 is routed by its CX-5 identifier-type code**, like PID-3. A `VN`-typed or untyped visit
-  number is the encounter identifier and is removed as the (R) catch-all; an `MR`/`AN`/`SS`-typed one is
+  number is the encounter identifier and is blocked as the (R) catch-all; an `MR`/`AN`/`SS`-typed one is
   handled as the medical record / account / social security number it actually is, so it is
   **transformed under both profiles and is never retained** (§164.514(e)(2) names all three). A kept
   visit number is therefore only ever one the wire did not type as something stronger.
@@ -244,7 +245,7 @@ only when a real de-identified document grounds it.
 
 - **`SAFE_HARBOR_PROFILE`**: the fail-closed default, dates generalized to year, the (R) catch-all
   blocked. It retains **no** identifying locus: an admission, discharge, or service date keeps only its
-  year, and an encounter or order number is removed. It emits **no keyed surrogate**: the medical
+  year, and an encounter or order number is blocked. It emits **no keyed surrogate**: the medical
   record, health plan beneficiary, and account numbers are **removed**, because a surrogate derived
   from the individual's own value is not a §164.514(c)(1) code and the (R) exception does not reach
   it. It therefore **needs no key at all**.
