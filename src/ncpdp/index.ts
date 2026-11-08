@@ -66,7 +66,7 @@ import { assertSingleTransaction } from "./multi-transaction-refusal.js";
  *
  * const tx = parseTelecom(raw);
  * const result: TelecomDeidResult = deidentifyTelecom(tx, {
- *   context: createDeidContext({ key: "secret" }),
+ *   context: createDeidContext({ key: process.env.DEID_KEY! }),
  * });
  * result.telecom;  // de-identified NCPDP Telecom text
  * result.manifest; // value-free audit: category + locus, never a value
@@ -145,7 +145,7 @@ export function deidentifyTelecom(
  * import { createDeidContext } from "@cosyte/deid";
  *
  * const { telecom, manifest } = deidentifyTelecomString(input, {
- *   context: createDeidContext({ key: "secret" }),
+ *   context: createDeidContext({ key: process.env.DEID_KEY! }),
  * });
  * ```
  */

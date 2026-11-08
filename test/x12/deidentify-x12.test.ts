@@ -38,7 +38,10 @@ function load(name: string): string {
   return readFileSync(join(FIXTURES, `${name}.edi`), "utf8");
 }
 
-const ctx = createDeidContext({ key: "x12-test-key", patientId: "patient-x12-1" });
+const ctx = createDeidContext({
+  key: "x12-test-key-synthetic-hmac-key",
+  patientId: "patient-x12-1",
+});
 
 /** The synthetic PHI sentinels seeded into `837p.edi`: every one must be GONE after a de-id pass. */
 const SENTINELS = [

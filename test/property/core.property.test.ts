@@ -55,7 +55,7 @@ function locusArb(): fc.Arbitrary<GenericLocus> {
 
 describe("deid core conformance (fail-safe invariants)", () => {
   it("fail-safe: arbitrary loci never throw a non-fatal, and every manifest entry is value-free", () => {
-    const ctx = createDeidContext({ key: "property-key", patientId: "p1" });
+    const ctx = createDeidContext({ key: "property-key-synthetic-hmac-key", patientId: "p1" });
     fc.assert(
       fc.property(fc.array(locusArb(), { maxLength: 40 }), (loci) => {
         let result;

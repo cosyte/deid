@@ -35,7 +35,10 @@ const VENDOR_ELEMENT_XML = `<?xml version="1.0" encoding="UTF-8"?>
 
 const RAW = readFileSync(join(import.meta.dirname, "..", "fixtures", "ccda", "ccd.xml"), "utf8");
 
-const ctx = createDeidContext({ key: "ccda-unexamined", patientId: "p-ccda-unexamined" });
+const ctx = createDeidContext({
+  key: "ccda-unexamined-synthetic-hmac-key",
+  patientId: "p-ccda-unexamined",
+});
 
 const ENTRY = "component/structuredBody/component[0]/section/entry/organizer/component/observation";
 

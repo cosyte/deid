@@ -143,7 +143,10 @@ async function run() {
 
   const esmRoot = await import(dist(entry(".").esm));
   const esmHl7 = await import(dist(entry("./hl7").esm));
-  const esmCtx = esmRoot.createDeidContext({ key: "smoke-key", patientId: "p1" });
+  const esmCtx = esmRoot.createDeidContext({
+    key: "smoke-key-synthetic-hmac-key",
+    patientId: "p1",
+  });
   let esmWire = "";
   try {
     esmWire = esmHl7
@@ -160,7 +163,10 @@ async function run() {
 
   const cjsRoot = require(dist(entry(".").cjs));
   const cjsHl7 = require(dist(entry("./hl7").cjs));
-  const cjsCtx = cjsRoot.createDeidContext({ key: "smoke-key", patientId: "p1" });
+  const cjsCtx = cjsRoot.createDeidContext({
+    key: "smoke-key-synthetic-hmac-key",
+    patientId: "p1",
+  });
   let cjsWire = "";
   try {
     cjsWire = cjsHl7

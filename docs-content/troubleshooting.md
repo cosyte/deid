@@ -23,6 +23,16 @@ unkeyed hash of an identifier is re-identifiable. Date-shift additionally needs 
 The **built-in Safe Harbor policy uses none of the three**, so it never raises this: if a Safe Harbor
 pass asks you for a key, a custom policy or profile put a keyed transform in it.
 
+## Creating a context threw `DEID_KEY_TOO_SHORT`
+
+`createDeidContext` and `createDeidRegistry` refuse a key, or an explicit `dateShiftSeed`, shorter
+than **16 bytes (128 bits)**. A short key can be guessed, and a guessed key reverses every surrogate
+and date-shift offset made under it. The length is counted on the bytes the HMAC uses: a `Uint8Array`
+as given, a string as its UTF-8 bytes. Use 32 random bytes: `crypto.randomBytes(32)`, or the output of
+`openssl rand -hex 32` passed as the string it is. The message names the minimum and never carries the
+key. A new key gives new surrogates and offsets, so a corpus made under the old key no longer links to
+output made under the new one.
+
 ## A policy threw `DEID_POLICY_INVALID`
 
 A policy claiming the `safe-harbor` label, either by its own name or through a profile that declares
@@ -82,8 +92,8 @@ The library's promise is **narrow and honest**. Do **not** over-trust it:
   The per-format locus maps (HL7 v2, C-CDA, FHIR, X12, NCPDP, DICOM), which is where "the parser knows
   where the name is" becomes automatic, live behind the matching subpath exports.
 - **DOB vs. age is not linked in the core.** Under the default policy a date generalizes to its
-  **year**, and a year is retained as a `DEID_RESIDUAL_RETAINED` residual. A birth-date *indicative of
-  an age over 89* is **not** aggregated to `90+` by the generic core, because resolving DOB→age needs a
+  **year**, and a year is retained as a `DEID_RESIDUAL_RETAINED` residual. A birth-date _indicative of
+  an age over 89_ is **not** aggregated to `90+` by the generic core, because resolving DOB→age needs a
   reference date the core does not have. Surface the residual and apply the age-90 rule at the format
   layer (or via a profile) when a DOB is known to indicate age > 89.
 - **`GEOGRAPHIC` is generalized as a ZIP.** A locus of category `GEOGRAPHIC` is treated as a ZIP code

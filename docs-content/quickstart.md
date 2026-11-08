@@ -24,7 +24,12 @@ import { deidentify, SAFE_HARBOR_CATEGORIES } from "@cosyte/deid";
 const { document, manifest } = deidentify(
   {
     loci: [
-      { path: "PID-5", kind: "identifier", category: SAFE_HARBOR_CATEGORIES.NAMES, value: "SENTINEL_NAME" },
+      {
+        path: "PID-5",
+        kind: "identifier",
+        category: SAFE_HARBOR_CATEGORIES.NAMES,
+        value: "SENTINEL_NAME",
+      },
       { path: "PID-7", kind: "date", category: SAFE_HARBOR_CATEGORIES.DATES, value: "1985-07-02" },
     ],
   },
@@ -38,8 +43,8 @@ manifest[0].disposition; // => "removed"
 
 Each **manifest** entry records the category acted on, the transform applied, the **locus** (a path,
 never a value), a count, a disposition, a stable code, and a boolean `reidentificationCode` that is
-`true` only where the pass emitted a **keyed surrogate**: the auditable record of *what* was acted
-on, never *what the value was*.
+`true` only where the pass emitted a **keyed surrogate**: the auditable record of _what_ was acted
+on, never _what the value was_.
 
 ## Keyed transforms
 
@@ -49,7 +54,12 @@ is derived from the individual's own value, which is why it belongs to a preset 
 Safe Harbor, such as `LIMITED_DATA_SET_PROFILE`. Supply the key through a context:
 
 ```ts
-import { deidentify, createDeidContext, profileOptions, LIMITED_DATA_SET_PROFILE } from "@cosyte/deid";
+import {
+  deidentify,
+  createDeidContext,
+  profileOptions,
+  LIMITED_DATA_SET_PROFILE,
+} from "@cosyte/deid";
 
 const context = createDeidContext({ key: process.env.DEID_KEY!, patientId: "patient-1" });
 
@@ -58,7 +68,11 @@ const result = deidentify(model, profileOptions(LIMITED_DATA_SET_PROFILE, contex
 // emitted, and the locus is flagged `reidentificationCode` so the support report inventories it.
 ```
 
-> **About runnable examples.** The first block above is tagged ```` ```ts runnable ````: the docs
+The key must be at least **16 bytes (128 bits)**, counted as UTF-8 bytes for a string; a shorter one
+is refused with `DEID_KEY_TOO_SHORT`. Use 32 random bytes: `openssl rand -hex 32` makes a 64-character
+value for `DEID_KEY`, or pass `crypto.randomBytes(32)` directly.
+
+> **About runnable examples.** The first block above is tagged ` ```ts runnable `: the docs
 > build extracts it, runs it against the package, and asserts the `// =>` result, so a documented
 > example can never silently drift from the code.
 

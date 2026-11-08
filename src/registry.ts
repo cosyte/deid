@@ -20,7 +20,8 @@
  * optionally, a distinct date-shift seed). It is **held only in a module-private registry keyed by the
  * instance**: the registry handle carries no enumerable secret field and redacts itself through every
  * stringify channel, exactly like {@link DeidContext}. There is **no default/weak key**: an absent or
- * empty key is a fatal `DEID_NO_KEY`, never a silent fallback. **Rotation is intentional linkage
+ * empty key is a fatal `DEID_NO_KEY`, and a key or seed shorter than 16 bytes (128 bits) is a fatal
+ * `DEID_KEY_TOO_SHORT`, never a silent fallback. **Rotation is intentional linkage
  * breakage**: a new key deterministically produces *different* offsets and *different* pseudonyms, so
  * a rotated key un-links a corpus from records de-identified under the old key. That is the point:
  * rotate to sever linkage, keep the key to preserve it. The library holds **no persistent key store**:
@@ -60,7 +61,10 @@ const STATE = new WeakMap<DeidRegistry, RegistryState>();
  * ```
  */
 export interface DeidRegistrySpec {
-  /** The HMAC key for keyed transforms. Consumer-held; never emitted. Must be non-empty. */
+  /**
+   * The HMAC key for keyed transforms. Consumer-held; never emitted. At least 16 bytes (128 bits),
+   * counted as UTF-8 bytes when given as a string; use 32 random bytes.
+   */
   readonly key: string | Uint8Array;
   /**
    * A separate seed for deriving per-patient date-shift offsets. Defaults to the `key` when omitted;
@@ -80,7 +84,7 @@ export interface DeidRegistrySpec {
  * ```ts
  * import { createDeidRegistry } from "@cosyte/deid";
  *
- * const registry = createDeidRegistry({ key: "secret" });
+ * const registry = createDeidRegistry({ key: process.env.DEID_KEY! });
  * // Same patient across documents shifts by the same offset:
  * const a = registry.forPatient("patient-1");
  * const b = registry.forPatient("patient-1");
@@ -121,7 +125,7 @@ export class DeidRegistry {
    * ```ts
    * import { createDeidRegistry } from "@cosyte/deid";
    *
-   * const registry = createDeidRegistry({ key: "secret" });
+   * const registry = createDeidRegistry({ key: process.env.DEID_KEY! });
    * const ctx = registry.forPatient("patient-1");
    * ```
    */
@@ -147,7 +151,7 @@ export class DeidRegistry {
    * ```ts
    * import { createDeidRegistry } from "@cosyte/deid";
    *
-   * const registry = createDeidRegistry({ key: "secret" });
+   * const registry = createDeidRegistry({ key: process.env.DEID_KEY! });
    * registry.pseudonym("MRN-1") === registry.pseudonym("MRN-1"); // => true (consistent)
    * ```
    */
@@ -168,7 +172,7 @@ export class DeidRegistry {
    * ```ts
    * import { createDeidRegistry } from "@cosyte/deid";
    *
-   * const registry = createDeidRegistry({ key: "secret" });
+   * const registry = createDeidRegistry({ key: process.env.DEID_KEY! });
    * registry.remapUid("1.2.840.113619.2.55") === registry.remapUid("1.2.840.113619.2.55"); // => true
    * ```
    */
@@ -192,17 +196,21 @@ function stateOf(registry: DeidRegistry): RegistryState {
 
 /**
  * Create a {@link DeidRegistry} from consumer-held key material. **Fails closed** on an absent/empty
- * key: there is no default or weak key (the underlying {@link createDeidContext} throws `DEID_NO_KEY`).
+ * key: there is no default or weak key (the underlying {@link createDeidContext} throws `DEID_NO_KEY`,
+ * and `DEID_KEY_TOO_SHORT` for a key or seed under 16 bytes).
  * The key is stored only in the module-private state, never on the returned handle.
  *
  * @param spec - The key, optional date-shift seed, and optional offset bound.
  * @returns An opaque, self-redacting corpus consistency handle.
- * @throws {@link DeidError} with code `DEID_NO_KEY` if the key (or an explicit seed) is empty.
+ * @throws {@link DeidError} with code `DEID_NO_KEY` if the key (or an explicit seed) is empty, and
+ *   `DEID_KEY_TOO_SHORT` if either is shorter than 16 bytes.
  * @example
  * ```ts
+ * import { randomBytes } from "node:crypto";
  * import { createDeidRegistry } from "@cosyte/deid";
  *
- * const registry = createDeidRegistry({ key: "consumer-secret" });
+ * // 32 random bytes. Keep the key to keep surrogates and offsets stable across runs.
+ * const registry = createDeidRegistry({ key: randomBytes(32) });
  * ```
  */
 export function createDeidRegistry(spec: DeidRegistrySpec): DeidRegistry {

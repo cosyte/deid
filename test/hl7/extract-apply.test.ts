@@ -10,7 +10,7 @@ import { createDeidContext } from "../../src/index.js";
 import { extractHl7Loci, applyHl7 } from "../../src/hl7/index.js";
 import { deidentifyHl7 } from "../../src/hl7/index.js";
 
-const ctx = createDeidContext({ key: "edge-key", patientId: "p1" });
+const ctx = createDeidContext({ key: "edge-key-synthetic-hmac-key", patientId: "p1" });
 const MSH = "MSH|^~\\&|A|B|C|D|20200101||ADT^A01|M1|P|2.5";
 
 describe("extractHl7Loci, edge cases", () => {

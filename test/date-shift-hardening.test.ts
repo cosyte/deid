@@ -18,7 +18,7 @@ import { describe, expect, it } from "vitest";
 
 import { createDeidContext, dateShift, DeidError, FATAL_CODES } from "../src/index.js";
 
-const ctx = createDeidContext({ key: "shift-key", patientId: "patient-1" });
+const ctx = createDeidContext({ key: "shift-key-synthetic-hmac-key", patientId: "patient-1" });
 
 describe("date-shift is timezone-independent (nit #1)", () => {
   it("shifts the calendar date only and preserves the time-of-day + zone suffix verbatim", () => {
@@ -62,13 +62,17 @@ describe("date-shift maxShiftDays:0 fails closed (nit #2)", () => {
   it("rejects a maxShiftDays that floors to 0 (a guaranteed no-op shift is a leak)", () => {
     for (const bad of [0, 0.4, -0.9]) {
       expect(() =>
-        createDeidContext({ key: "k", patientId: "p1", maxShiftDays: bad }),
+        createDeidContext({ key: "k-synthetic-hmac-key", patientId: "p1", maxShiftDays: bad }),
       ).toThrowError(expect.objectContaining({ code: FATAL_CODES.DEID_CONTEXT_INVALID }));
     }
   });
 
   it("accepts maxShiftDays >= 1 and still shifts", () => {
-    const tight = createDeidContext({ key: "k", patientId: "p1", maxShiftDays: 1 });
+    const tight = createDeidContext({
+      key: "k-synthetic-hmac-key",
+      patientId: "p1",
+      maxShiftDays: 1,
+    });
     const out = dateShift("2020-06-15", tight);
     // Within [-1, +1] days of the original, but a valid, defined value, not a rejected context.
     expect(out).toMatch(/^2020-06-1[456]$/);
@@ -76,7 +80,7 @@ describe("date-shift maxShiftDays:0 fails closed (nit #2)", () => {
 
   it("the rejection is a DeidError carrying the stable fatal code", () => {
     try {
-      createDeidContext({ key: "k", patientId: "p1", maxShiftDays: 0 });
+      createDeidContext({ key: "k-synthetic-hmac-key", patientId: "p1", maxShiftDays: 0 });
       expect.unreachable("should have thrown");
     } catch (err) {
       expect(err).toBeInstanceOf(DeidError);

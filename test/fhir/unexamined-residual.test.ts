@@ -25,7 +25,10 @@ const RAW = readFileSync(
   "utf8",
 );
 
-const ctx = createDeidContext({ key: "fhir-unexamined", patientId: "p-fhir-unexamined" });
+const ctx = createDeidContext({
+  key: "fhir-unexamined-synthetic-hmac-key",
+  patientId: "p-fhir-unexamined",
+});
 
 describe("FHIR unexamined residual positions", () => {
   const { resource } = parseResource(RAW);

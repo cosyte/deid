@@ -26,7 +26,10 @@ const wire = (name: string): string =>
     .split(/\r?\n/)
     .join("\r");
 
-const ctx = createDeidContext({ key: "hl7-unexamined", patientId: "p-hl7-unexamined" });
+const ctx = createDeidContext({
+  key: "hl7-unexamined-synthetic-hmac-key",
+  patientId: "p-hl7-unexamined",
+});
 
 describe("HL7 v2 unexamined residual positions", () => {
   const raw = wire("adt-a03");

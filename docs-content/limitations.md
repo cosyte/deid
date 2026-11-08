@@ -56,7 +56,8 @@ Uniquely, harm here runs in **two** directions and both are guarded:
   clinician relies on. Clinical-kind loci are **retained untouched**.
 
 A keyed transform with no key is a **fatal** `DEID_NO_KEY`, never a silent unkeyed fallback (an
-unkeyed hash of an identifier is re-identifiable). A context configured with `maxShiftDays: 0` is a
+unkeyed hash of an identifier is re-identifiable). A key or date-shift seed shorter than 16 bytes
+(128 bits) is a fatal `DEID_KEY_TOO_SHORT`. A context configured with `maxShiftDays: 0` is a
 fatal `DEID_CONTEXT_INVALID`, a zero-bound shift is a guaranteed no-op, i.e. the original real dates.
 
 <a id="retained-loci"></a>

@@ -34,6 +34,11 @@ function isoDateArb(): fc.Arbitrary<string> {
     .map((d) => d.toISOString().slice(0, 10));
 }
 
+/** Arbitrary synthetic HMAC key: at least 16 UTF-8 bytes, the minimum the registry accepts. */
+function keyArb(): fc.Arbitrary<string> {
+  return fc.string({ minLength: 16 }).filter((key) => Buffer.byteLength(key, "utf8") >= 16);
+}
+
 /** Shift a single date for a patient key under an independent registry built from `key`. */
 function shiftOne(key: string, patient: string, date: string): string | null | undefined {
   const registry = createDeidRegistry({ key });
@@ -50,24 +55,19 @@ function daysBetween(a: string, b: string): number {
 describe("longitudinal consistency (property)", () => {
   it("same (key, patient, date) → same shifted output across independent passes", () => {
     fc.assert(
-      fc.property(
-        fc.string({ minLength: 1 }),
-        fc.string({ minLength: 1 }),
-        isoDateArb(),
-        (key, patient, date) => {
-          const a = shiftOne(key, patient, date);
-          const b = shiftOne(key, patient, date);
-          expect(a).toBe(b);
-          expect(typeof a).toBe("string");
-        },
-      ),
+      fc.property(keyArb(), fc.string({ minLength: 1 }), isoDateArb(), (key, patient, date) => {
+        const a = shiftOne(key, patient, date);
+        const b = shiftOne(key, patient, date);
+        expect(a).toBe(b);
+        expect(typeof a).toBe("string");
+      }),
     );
   });
 
   it("preserves the interval between two dates of the same patient exactly", () => {
     fc.assert(
       fc.property(
-        fc.string({ minLength: 1 }),
+        keyArb(),
         fc.string({ minLength: 1 }),
         isoDateArb(),
         isoDateArb(),
@@ -92,7 +92,7 @@ describe("longitudinal consistency (property)", () => {
   it("distinct identifiers never share a pseudonym; the same identifier always does", () => {
     fc.assert(
       fc.property(
-        fc.string({ minLength: 1 }),
+        keyArb(),
         fc.string({ minLength: 1 }),
         fc.string({ minLength: 1 }),
         (key, id1, id2) => {
@@ -109,8 +109,8 @@ describe("longitudinal consistency (property)", () => {
   it("secret absence: the key never appears in the output or the value-free manifest", () => {
     fc.assert(
       fc.property(
-        // A key with enough length that an accidental substring match would be meaningful.
-        fc.string({ minLength: 8 }),
+        // A key long enough that an accidental substring match would be meaningful.
+        keyArb(),
         fc.string({ minLength: 1 }),
         isoDateArb(),
         (key, patient, date) => {

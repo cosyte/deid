@@ -37,7 +37,7 @@ function loadFixture(name: string): string {
     .join("\r");
 }
 
-const ctx = createDeidContext({ key: "hl7-test-key", patientId: "patient-1" });
+const ctx = createDeidContext({ key: "hl7-test-key-synthetic-hmac-key", patientId: "patient-1" });
 
 /**
  * The patient / relative / guarantor / insured / **employer** PHI sentinels seeded across
@@ -603,7 +603,7 @@ describe("a visit-number field carrying a REAL direct identifier is never retain
   });
 
   it("an MR-typed visit number is pseudonymized, not retained, EVEN under limited-data-set", () => {
-    const ctx = createDeidContext({ key: "pv19-key", patientId: "p1" });
+    const ctx = createDeidContext({ key: "pv19-key-synthetic-hmac-key", patientId: "p1" });
     const { document, manifest } = deidentifyHl7(
       parseHL7(wire("ZZMRN500^^^HOSP^MR")),
       profileOptions(LIMITED_DATA_SET_PROFILE, ctx),
@@ -618,7 +618,7 @@ describe("a visit-number field carrying a REAL direct identifier is never retain
   });
 
   it("AN / SS / MA typed visit numbers are likewise transformed, never retained", () => {
-    const ctx = createDeidContext({ key: "pv19-key", patientId: "p1" });
+    const ctx = createDeidContext({ key: "pv19-key-synthetic-hmac-key", patientId: "p1" });
     for (const [typeCode, category] of [
       ["AN", C.ACCOUNT],
       ["SS", C.SSN],
@@ -636,7 +636,7 @@ describe("a visit-number field carrying a REAL direct identifier is never retain
   });
 
   it("an untyped or VN-typed visit number IS the encounter identifier, and is retained under LDS", () => {
-    const ctx = createDeidContext({ key: "pv19-key", patientId: "p1" });
+    const ctx = createDeidContext({ key: "pv19-key-synthetic-hmac-key", patientId: "p1" });
     for (const visitNumber of ["ZZVISIT500^^^HOSP^VN", "ZZVISIT500"]) {
       const { document, manifest } = deidentifyHl7(
         parseHL7(wire(visitNumber)),
@@ -650,7 +650,7 @@ describe("a visit-number field carrying a REAL direct identifier is never retain
   });
 
   it("a mixed PV1-19 list routes each repetition on its own type code", () => {
-    const ctx = createDeidContext({ key: "pv19-key", patientId: "p1" });
+    const ctx = createDeidContext({ key: "pv19-key-synthetic-hmac-key", patientId: "p1" });
     const msg = parseHL7(wire("ZZVISIT500^^^H^VN~ZZMRN500^^^H^MR"));
     const { document, manifest } = deidentifyHl7(
       msg,

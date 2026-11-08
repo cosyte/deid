@@ -47,7 +47,10 @@ import { deidentifyFhir, deidentifyFhirJson } from "../../src/fhir/index.js";
 const C = SAFE_HARBOR_CATEGORIES;
 const CODES = DEID_DISPOSITION_CODES;
 
-const ctx = createDeidContext({ key: "non-person-key", patientId: "p-non-person" });
+const ctx = createDeidContext({
+  key: "non-person-key-synthetic-hmac-key",
+  patientId: "p-non-person",
+});
 const options = (): ReturnType<typeof profileOptions> => profileOptions(SAFE_HARBOR_PROFILE, ctx);
 
 const FIXTURE = readFileSync(

@@ -34,7 +34,10 @@ function loadFixture(name: string): string {
   return readFileSync(join(FIXTURES, `${name}.json`), "utf8");
 }
 
-const ctx = createDeidContext({ key: "fhir-test-key", patientId: "patient-fhir-1" });
+const ctx = createDeidContext({
+  key: "fhir-test-key-synthetic-hmac-key",
+  patientId: "patient-fhir-1",
+});
 
 /** Parse + de-identify a fixture, returning the transformed model, serialized wire, and manifest. */
 function deid(name: string, options: DeidOptions = { context: ctx }) {
