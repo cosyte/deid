@@ -15,6 +15,7 @@
 
 import {
   serializeTelecom,
+  type TelecomDecodedTransaction,
   type TelecomSegment,
   type TelecomTransaction,
 } from "@cosyte/ncpdp/telecom";
@@ -88,6 +89,26 @@ export function applyTelecom(
       ? original.header
       : { ...original.header, dateOfService: headerDateOfService };
 
-  const deidentified: TelecomTransaction = { ...original, header, segments };
+  // The model handed to the serializer carries the de-identified segments and nothing of the original
+  // transaction list. `@cosyte/ncpdp` 0.1 puts every decoded transaction on `transactions` as well as
+  // the first one's on `segments`; the entry points refuse a transmission with more than one, and the
+  // one left is rebuilt from the de-identified segments, so no untransformed copy of it rides along in
+  // the model, whichever of the two fields a serializer reads.
+  // A model built by hand rather than by `parseTelecom` may carry no `transactions` list at all.
+  const decoded: readonly TelecomDecodedTransaction[] | undefined = original.transactions;
+  const first = decoded?.[0];
+  const transaction: TelecomDecodedTransaction = {
+    index: 0,
+    byteOffset: first?.byteOffset ?? 0,
+    segments,
+    warnings: first?.warnings ?? [],
+  };
+  const deidentified: TelecomTransaction = {
+    ...original,
+    header,
+    segments,
+    transactions: [transaction],
+    decodedTransactionCount: 1,
+  };
   return serializeTelecom(deidentified);
 }

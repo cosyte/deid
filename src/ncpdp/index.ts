@@ -52,6 +52,7 @@ import { type UnexaminedResidual } from "../residual.js";
 import { applyTelecom } from "./apply.js";
 import { extractTelecomLoci } from "./extract.js";
 import { assertNotScriptModel, assertNotScriptText } from "./script-refusal.js";
+import { assertSingleTransaction } from "./multi-transaction-refusal.js";
 
 /**
  * The result of de-identifying an NCPDP Telecom transaction: the de-identified Telecom byte stream plus
@@ -101,7 +102,8 @@ export interface TelecomDeidResult {
  * @throws {@link "@cosyte/deid".DeidError} `DEID_NO_KEY` when a keyed transform is required for a
  *   category present in the transaction but no key context was supplied;
  *   `DEID_FORMAT_UNSUPPORTED` when the model handed in is an ePrescribing SCRIPT message rather than
- *   a Telecom transaction, which this adapter refuses outright rather than half-handle.
+ *   a Telecom transaction, or a Telecom transmission that carries more than one transaction, both of
+ *   which this adapter refuses outright rather than half-handle.
  * @example
  * ```ts
  * import { parseTelecom } from "@cosyte/ncpdp/telecom";
@@ -118,6 +120,7 @@ export function deidentifyTelecom(
 ): TelecomDeidResult {
   // Refuse before anything is extracted, so a refused format can never leave a partial artifact.
   assertNotScriptModel(tx);
+  assertSingleTransaction(tx);
   const { loci, coords, unexaminedResiduals } = extractTelecomLoci(tx);
   const { document, manifest } = deidentify({ loci }, options);
   const telecom = applyTelecom(tx, document.loci, coords);
@@ -134,7 +137,8 @@ export function deidentifyTelecom(
  * @returns The de-identified Telecom string and the value-free manifest.
  * @throws {@link "@cosyte/deid".DeidError} `DEID_FORMAT_UNSUPPORTED` when the text is an XML
  *   document, which on an NCPDP surface is ePrescribing SCRIPT: it is refused before it is parsed,
- *   so no partial output exists to return.
+ *   so no partial output exists to return; and when the transmission carries more than one
+ *   transaction, which is refused before anything is extracted.
  * @example
  * ```ts
  * import { deidentifyTelecomString } from "@cosyte/deid/ncpdp";
@@ -161,6 +165,7 @@ export {
   type TelecomFieldRule,
 } from "./locus-map.js";
 export { NCPDP_SCRIPT_REFUSAL_MESSAGE } from "./script-refusal.js";
+export { NCPDP_MULTI_TRANSACTION_REFUSAL_MESSAGE } from "./multi-transaction-refusal.js";
 export { extractTelecomLoci, type TelecomCoord, type TelecomExtraction } from "./extract.js";
 export { applyTelecom } from "./apply.js";
 export { type UnexaminedResidual } from "../residual.js";

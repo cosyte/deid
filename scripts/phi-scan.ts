@@ -265,20 +265,19 @@ const OVERRIDE_LOG_PATH = join(REPO_ROOT, "phi-scan-overrides.md");
  * data files and the `.ts` under `test/` are tests carrying deliberate violator
  * literals. Copying that exclusion here would close none of the 38 files above:
  * they are all `.ts`. `ccda` roots at the repo root, which is `ccda`'s answer and
- * not this one: this tree carries `vendor/*.tgz` (third-party binary tarballs)
- * and a lockfile, and walking from the root also descends `node_modules/`,
- * `dist/` and `coverage/` before the gitignore filter can drop them.
+ * not this one: this tree carries a lockfile, and walking from the root also
+ * descends `node_modules/`, `dist/` and `coverage/` before the gitignore filter
+ * can drop them.
  *
  * ▶ WHAT IS OUT OF SCOPE *FOR THE WALK*, STATED RATHER THAN IMPLIED: `.github/`,
- * `docs-content/`, `vendor/`, and the root-level manifests. None of them is
- * reached by the walk or by `--staged`.
+ * `docs-content/`, and the root-level manifests. None of them is reached by the
+ * walk or by `--staged`.
  *
  * ▶ THAT IS NO LONGER THE WHOLE ANSWER, AND THE DIFFERENCE IS WORTH READING
  * CAREFULLY, BECAUSE IT IS EASY TO OVERSTATE IN EITHER DIRECTION. All mode also
  * reads the index (`buildTargetsForIndex`, which is where that scope is decided
  * and is the ONE place it is written down), so `.github/` and the root manifests
- * ARE swept from their committed bytes. `vendor/` is excluded there, and so is
- * every `.md`.
+ * ARE swept from their committed bytes. Every `.md` is excluded there.
  *
  * ▶ SO `docs-content/` IS STILL A PUBLISHED CONSUMER SURFACE THIS GATE DOES NOT
  * SCAN FOR PHI: 16 of its 17 tracked files are `.md`, and the index route adds
@@ -934,9 +933,9 @@ function buildTargetsForStaged(): Target[] {
  *
  * WHAT IT IS. All mode reads the working tree through `walk()`, and then reads
  * THE BYTES GIT CARRIES for every path in the index it can read, wherever that
- * path sits. "Every path it can read" is exact and not a hedge: `.md` and
- * `vendor/` are excluded below, so of the 25 tracked non-markdown paths outside
- * every scan root this route adds 19, and it adds NO `.md` at all.
+ * path sits. "Every path it can read" is exact and not a hedge: `.md` is
+ * excluded below, so this route adds every tracked non-markdown path outside the
+ * scan roots, and it adds NO `.md` at all.
  * It is a UNION with the walk, never a replacement: no scan root was narrowed,
  * no clause was dropped, and a file the walk reads is still read off disk with
  * exactly the two views it had. This route only ever ADDS bytes to the sweep.
@@ -962,9 +961,9 @@ function buildTargetsForStaged(): Target[] {
  *     opened one. This route reads every tracked path it can read, so a new
  *     top-level directory's COMMITTED bytes are in scope the moment git tracks
  *     something in it, with nobody remembering to declare it -- EXCEPT for the
- *     two exclusions below. A new top-level directory of `.md`, or one under
- *     `vendor/`, gets nothing from this route. Do not read this bullet as the
- *     stronger promise: `isDocFile` and `INDEX_EXCLUDED_PREFIXES` bind here.
+ *     `.md` exclusion below. A new top-level directory of `.md` gets nothing
+ *     from this route. Do not read this bullet as the stronger promise:
+ *     `isDocFile` and `INDEX_EXCLUDED_PREFIXES` bind here.
  *     (Named rather than counted: a "N lines below" locator went stale between
  *     two drafts of this very docblock, which is the same defect in miniature.)
  *   - A TRACKED SYMLINK OR GITLINK OUTSIDE EVERY SCAN ROOT. `walk()` classifies
@@ -1034,24 +1033,14 @@ const INDEX_DIVERGENT_ORIGIN = "git index; the working tree differs";
  * Tracked path prefixes this route does not read, as LITERAL PATHS rather than a
  * predicate, which is the form this class of gate has repeatedly paid for.
  *
- * ▶ `vendor/` IS NOT A NEW EXEMPTION. It is already declared out of scope in
- * this file's header banner and in `CLAUDE.md`, and this route honours that
- * declaration rather than quietly overriding it: the six entries are third-party
- * `pnpm pack` tarballs of the sibling parsers, not this package's corpus.
- *
- * ▶ AND THE COST IS MEASURED, NOT ASSUMED. They are gzip, so their text is
- * compressed and no detector in this file can read it without decompressing an
- * archive, which this scanner does not do. Handing the compressed bytes to the
- * detectors as UTF-8 is not weak coverage, it is noise: with this exclusion
- * removed, all mode over THIS repo reports 45 hits across all six tarballs and
- * exits 1 -- 44 spurious NCPDP Telecom field tokens and one spurious email
- * address, and nothing else. The Telecom detector splits on 0x1C/0x1D/0x1E and
- * reads the next two bytes as a field id, and those bytes occur throughout
- * compressed data, so it fires on mojibake indefinitely. A gate that red-locks
- * the repo on mojibake teaches developers to bypass it.
- *
- * Re-derive that figure rather than trusting it: it is a function of what is
- * vendored and of the detector set, and both move.
+ * ▶ THE LIST IS EMPTY. Every sibling parser is a registry devDependency and
+ * nothing is tracked under `vendor/`, so no prefix is excluded: an exclusion for
+ * a directory that has gone is how a stated scope drifts into covering something
+ * nobody argued for. An entry needs a tracked path whose bytes no detector here
+ * can read, written down with its measured cost. A gzip archive is that case:
+ * the Telecom detector splits on 0x1C/0x1D/0x1E and reads the next two bytes as
+ * a field id, those bytes occur throughout compressed data, and a gate that
+ * red-locks the repo on mojibake teaches developers to bypass it.
  *
  * ▶ WHAT IT IS NOT. It is not a content-class predicate. A "binary blob" rule
  * was measured and rejected: two real TypeScript sources here (`src/context.ts`,
@@ -1060,7 +1049,7 @@ const INDEX_DIVERGENT_ORIGIN = "git index; the working tree differs";
  * have dropped two hand-written source files out of the decoy defence this route
  * exists to provide.
  */
-const INDEX_EXCLUDED_PREFIXES: readonly string[] = ["vendor/"];
+const INDEX_EXCLUDED_PREFIXES: readonly string[] = [];
 
 /** `maxBuffer` for the two LISTING calls, which return records and not content. */
 const INDEX_LIST_MAX_BYTES = 64 * 1024 * 1024;
@@ -1263,15 +1252,16 @@ function readBlobs(oids: string[]): Map<string, Buffer> {
 /**
  * One target per index entry whose bytes the walk has not already read.
  *
- * ▶ THE REFUSALS BELOW SEE EVERY ENTRY, WHATEVER IT IS NAMED. The `.md` and
- * `vendor/` exclusions are applied LAST, to the readable set only, and putting
- * either first is a real hole rather than a style point: both are NAME rules,
- * and this file already states (see `walk`) that a name exemption must never be
- * carried over to an entry whose bytes the route cannot read, because a name is
- * no evidence at all about what is on the other side of a link. Git carries a
+ * ▶ THE REFUSALS BELOW SEE EVERY ENTRY, WHATEVER IT IS NAMED. The `.md`
+ * exclusion (and any `INDEX_EXCLUDED_PREFIXES` entry) is applied LAST, to the
+ * readable set only, and putting it first is a real hole rather than a style
+ * point: it is a NAME rule, and this file already states (see `walk`) that a
+ * name exemption must never be carried over to an entry whose bytes the route
+ * cannot read, because a name is no evidence at all about what is on the other
+ * side of a link. Git carries a
  * link's TARGET PATH, which is itself a PHI surface: a target of the shape
  * `../patients/<surname>-<given>-<dob>.txt` is the whole reason the walk refuses
- * links, and naming one `vendor/x.tgz` or `x.md` must not buy it a pass here.
+ * links, and naming one `x.md` must not buy it a pass here.
  *
  * ▶ THE SKIP IS A BYTE COMPARISON, NOT A STAT AND NOT A HASH. `git diff-files`
  * and any mtime or size test are exactly what a decoy defeats, and a hash would
@@ -1307,10 +1297,9 @@ function buildTargetsForIndex(
     "Remove it from the index, or replace it with a regular file.",
   );
 
-  // NOW the two name rules, over entries whose bytes this route can actually
-  // read. `.md` is `walk()`'s own exemption, copied rather than invented;
-  // `vendor/` is the header banner's own out-of-scope declaration, honoured
-  // rather than overridden.
+  // NOW the name rules, over entries whose bytes this route can actually read.
+  // `.md` is `walk()`'s own exemption, copied rather than invented;
+  // `INDEX_EXCLUDED_PREFIXES` is empty and excludes nothing.
   const readable = entries.filter(
     (e) =>
       REGULAR_BLOB_MODES.has(e.mode) &&
@@ -2130,7 +2119,7 @@ function run(): number {
   for (const t of targets) scan(t);
 
   // THE INDEX CORPUS, ALL MODE ONLY: the bytes git carries, at every path it
-  // carries them AND THIS ROUTE CAN READ (`.md` and `vendor/` are excluded),
+  // carries them AND THIS ROUTE CAN READ (`.md` is excluded),
   // whether or not that path sits under a scan root and whether or
   // not the working tree still agrees with it. The mechanism, everything it
   // closes and everything it deliberately does not do are written down once, at

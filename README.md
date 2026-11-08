@@ -458,12 +458,11 @@ the format and the parser-surface reason, and **no** transformed document, manif
 of any kind, rather than whatever the Telecom parser would have made of those bytes. Telecom callers
 are unaffected.
 
-**One transaction per Telecom message in this release.** `deidentifyTelecom` handles a message that
-carries one transaction. A message whose header declares more than one is not handled yet: with
-`@cosyte/ncpdp` 0.1.x installed the call throws that parser's multi-transaction build error and
-returns nothing, and an older `@cosyte/ncpdp` returns only the first transaction with the header count
-unchanged. Split a multi-transaction message before you de-identify it. A later release de-identifies
-every transaction or refuses the message with a typed `DEID_*` error.
+**One transaction per Telecom message.** `deidentifyTelecom` handles a message that carries one
+transaction. A message that carries more than one is **refused**: a typed `DeidError` carrying
+`DEID_FORMAT_UNSUPPORTED` (message `NCPDP_MULTI_TRANSACTION_REFUSAL_MESSAGE`), and no transformed
+message, no manifest and no partial output, so no transaction is dropped or returned untransformed.
+Split such a message and de-identify each transaction on its own.
 
 ## De-identify a DICOM study
 

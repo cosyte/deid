@@ -175,7 +175,9 @@ describe("NCPDP Telecom RESPONSE: the header the pass actually emits is the one 
       kind: "response",
       header: { ...real.header, binNumber: "999999", dateOfService: "20260115" },
       segments: real.segments,
+      transactions: real.transactions,
       transactionCount: real.transactionCount,
+      decodedTransactionCount: real.decodedTransactionCount,
       warnings: real.warnings,
     };
     const fallback = deidentifyTelecom(headerOnly, { context: ctx });

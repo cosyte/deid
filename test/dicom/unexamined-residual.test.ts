@@ -214,20 +214,48 @@ describe("DICOM File Meta positions are enumerated with the rest", () => {
   it("the File Meta positions really reach the returned dataset (non-vacuity)", () => {
     const { dataset } = deidentifyDicom(withFileMetaExtras());
     expect(dataset.fileMeta?.transferSyntaxUID).toBe(TS_EXPLICIT_LE);
-    expect(dataset.fileMeta?.sourceApplicationEntityTitle).toBeDefined();
-    expect(dataset.fileMeta?.extraElements?.length).toBe(1);
+    // `@cosyte/dicom` 0.1's Annex E pass writes its own implementation identity in place of the
+    // sender's, so both positions reach the output, carrying the library's values rather than the file's.
+    expect(dataset.fileMeta?.implementationClassUID).toBeDefined();
+    expect(dataset.fileMeta?.implementationVersionName).toBeDefined();
+    expect(dataset.fileMeta?.implementationVersionName).not.toBe("ZZIMPLVER01");
+    // And it drops the sender's AE title and the element the typed view does not model, so neither
+    // reaches the output: what is left of the group is still more than the transfer syntax alone.
+    expect(dataset.fileMeta?.sourceApplicationEntityTitle).toBeUndefined();
+    expect(dataset.fileMeta?.extraElements ?? []).toHaveLength(0);
     // And none of them is in `Dataset.elements()`, which is why the dataset walk alone cannot see them.
     expect(dataset.elements().some((e) => e.tag.startsWith("0002"))).toBe(false);
   });
 
-  it("lists the modeled, the non-modeled and the transfer-syntax positions", () => {
+  it("lists the File Meta positions the pass hands through, and none it drops", () => {
     const loci = deidentifyDicom(withFileMetaExtras()).unexaminedResiduals.map((r) => r.locus);
     expect(loci).toContain("(0002,0010)"); // Transfer Syntax UID
-    expect(loci).toContain("(0002,0013)"); // Implementation Version Name
-    expect(loci).toContain("(0002,0016)"); // Source Application Entity Title: names the sender
-    expect(loci).toContain("(0002,0100)"); // a `(0002,xxxx)` the typed view does not model
+    expect(loci).toContain("(0002,0012)"); // Implementation Class UID, as the pass writes it
+    expect(loci).toContain("(0002,0013)"); // Implementation Version Name, as the pass writes it
+    // The sender's AE title and the unmodeled `(0002,0100)` are dropped by the pass, so no output
+    // position is left to count.
+    expect(loci).not.toContain("(0002,0016)");
+    expect(loci).not.toContain("(0002,0100)");
     // Ordered ahead of the Data Set, because that is the order the bytes carry them in.
     expect(loci.indexOf("(0002,0010)")).toBeLessThan(loci.indexOf("(0008,0060)"));
+  });
+
+  it("a File Meta group still carrying an AE title and an unmodeled element lists both", () => {
+    // The pass above drops both, so the derivation is read directly here: a group that does hand them
+    // through has them counted, the modeled one by its field and the unmodeled one by its own tag.
+    const carrying: EnumerableDataset = {
+      elements: () => [],
+      fileMeta: {
+        transferSyntaxUID: TS_EXPLICIT_LE,
+        sourceApplicationEntityTitle: "ZZSENDAE",
+        extraElements: [{ tag: "00020100", value: { length: 28 } }],
+      },
+    };
+    expect(deriveUnexaminedResiduals(carrying, EMPTY_REPORT).map((r) => r.locus)).toEqual([
+      "(0002,0010)",
+      "(0002,0016)",
+      "(0002,0100)",
+    ]);
   });
 
   it("NEGATIVE CONTROL: a File Meta field the document did not carry is not a position", () => {
