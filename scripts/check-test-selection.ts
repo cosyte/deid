@@ -81,7 +81,8 @@
  *     produced no arguments, and was reported as PASSING. The rule here is total instead: the body
  *     must equal one of two exact strings. Nothing is interpreted, so there is no spelling to
  *     miss. Those two strings are ported verbatim from `ncpdp` because this repo's `test` and
- *     `test:coverage` bodies are character-identical to that repo's.
+ *     `test:coverage` bodies are character-identical to that repo's. See `ALLOWED_TEST_SCRIPT_BODIES`,
+ *     and `ALLOWED_PROCESS_TEST_SCRIPT_BODIES` for the two `cosyte-process` delegations of them.
  *
  * (4) THE SUBJECTS ARE DERIVED FROM ARTIFACTS THAT EXIST FOR THEIR OWN REASONS. A list in this
  *     file saying "the leak corpus matters" would be a second, hand-editable lever on the gate's
@@ -226,6 +227,8 @@ import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { BASELINE, loadOverrides, toArgv } from "@cosyte/process";
+
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const WORKFLOW_DIR = join(ROOT, ".github", "workflows");
 
@@ -331,9 +334,49 @@ function resolvedSelection(configPath?: string): string[] {
  */
 const ALLOWED_TEST_SCRIPT_BODIES = new Set(["vitest run", "vitest run --coverage"]);
 
-/** True when a script body is an exactly-known-good invocation. Whitespace-normalised. */
-const bodyIsAllowed = (body: string): boolean =>
-  ALLOWED_TEST_SCRIPT_BODIES.has(body.trim().replace(/\s+/g, " "));
+/**
+ * The two `cosyte-process` delegations, allowed ONLY while they still mean exactly the two bodies
+ * above. `cosyte-process test` runs `vitest run` and `--coverage` appends `--coverage`, but two
+ * levers outside `package.json` could make either one narrow the run with this body unchanged:
+ * a `test` key in `cosyte-process.config.json` (its `globs` and `flags` are path filters and
+ * vitest flags), and a future `@cosyte/process` whose baseline `test` invocation is no longer a
+ * bare `vitest run`. Both are read below, from the override file and from the package's own
+ * exported baseline, so these bodies stop being allowed the moment either lever moves. Added on
+ * adopting `@cosyte/process`, as its own commit, for that reason, and ported from `ncpdp`, which
+ * made the same move first.
+ */
+const ALLOWED_PROCESS_TEST_SCRIPT_BODIES = new Set([
+  "cosyte-process test",
+  "cosyte-process test --coverage",
+]);
+
+/**
+ * True when `cosyte-process test` still runs a bare `vitest run`: the override file is absent or
+ * carries no `test` key, and the installed package's baseline `test` invocation is `vitest run`.
+ * An override file that does not load is the tool's own refusal; here it counts as "not bare".
+ */
+function processTestIsBare(): boolean {
+  let overridden: boolean;
+  try {
+    overridden = loadOverrides(ROOT).test !== undefined;
+  } catch {
+    return false;
+  }
+  if (overridden) return false;
+  return toArgv(BASELINE.test).join(" ") === "vitest run";
+}
+
+/**
+ * True when a script body is an exactly-known-good invocation. Whitespace-normalised. The
+ * `cosyte-process` delegations pass only while `processBare` holds (see above).
+ */
+const bodyIsAllowed = (body: string, processBare: boolean = processTestIsBare()): boolean => {
+  const normalised = body.trim().replace(/\s+/g, " ");
+  return (
+    ALLOWED_TEST_SCRIPT_BODIES.has(normalised) ||
+    (processBare && ALLOWED_PROCESS_TEST_SCRIPT_BODIES.has(normalised))
+  );
+};
 
 // ---------------------------------------------------------------------------
 // THE DERIVED SUBJECTS (design rule 4).
@@ -631,7 +674,8 @@ for (const name of CI_TEST_SCRIPTS) {
     fail(
       `package.json script \`${name}\` is not an exactly-known-good vitest invocation:\n` +
         `      ${body}\n    ` +
-        `Anything other than a bare \`vitest run [--coverage]\` can change WHICH FILES run, and ` +
+        `Anything other than a bare \`vitest run [--coverage]\` (or \`cosyte-process test ` +
+        `[--coverage]\` while\n    no override or baseline narrows it) can change WHICH FILES run, and ` +
         `resolving\n    the config cannot see it: a path filter, an alternate --config, a ` +
         `--project, a --shard, or a\n    delegation to another script that does any of those. If ` +
         `this body genuinely cannot narrow the\n    run, add it verbatim to ` +
@@ -751,9 +795,41 @@ function selfTestInvocationRule(): void {
     "",
   ];
   const negatives = ["vitest run", "vitest run --coverage", "  vitest   run  --coverage  "];
+  // The `cosyte-process` delegations: allowed exactly while `cosyte-process test` is a bare
+  // `vitest run`, and red the moment an override or a new baseline could narrow it.
+  const processBodies = ["cosyte-process test", "cosyte-process test --coverage"];
+  const processPositives = [
+    "cosyte-process test --watch",
+    "cosyte-process test --coverage test/hl7",
+    "cosyte-process test && vitest run test/hl7",
+    "pnpm exec cosyte-process test",
+  ];
+
+  for (const b of processBodies) {
+    if (bodyIsAllowed(b, false)) {
+      refuse(
+        `self-test B FAILED: \`${b}\` was accepted while cosyte-process's test invocation could ` +
+          "narrow the run (an override or a changed baseline). The detector cannot detect.",
+      );
+    }
+    if (!bodyIsAllowed(b, true)) {
+      refuse(
+        `self-test B FAILED: \`${b}\` runs a bare \`vitest run\` here, but the invocation rule ` +
+          "rejected it. A rule that reds on correct work gets disabled.",
+      );
+    }
+  }
+  for (const p of processPositives) {
+    if (bodyIsAllowed(p, true)) {
+      refuse(
+        `self-test B FAILED: \`${p}\` can change which files vitest runs, and the invocation ` +
+          "rule accepted it. The detector cannot detect.",
+      );
+    }
+  }
 
   for (const p of positives) {
-    if (bodyIsAllowed(p)) {
+    if (bodyIsAllowed(p, true)) {
       refuse(
         `self-test B FAILED: \`${p}\` can change which files vitest runs, or hides what does, ` +
           "and the invocation rule accepted it. The detector cannot detect.",
@@ -761,7 +837,7 @@ function selfTestInvocationRule(): void {
     }
   }
   for (const n of negatives) {
-    if (!bodyIsAllowed(n)) {
+    if (!bodyIsAllowed(n, false)) {
       refuse(
         `self-test B FAILED: \`${n}\` cannot narrow the file set, but the invocation rule ` +
           "rejected it. A rule that reds on correct work gets disabled.",
