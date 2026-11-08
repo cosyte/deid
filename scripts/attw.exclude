@@ -1,0 +1,4 @@
+# What attw leaves out of this package's analysis, read by the shared gate (@cosyte/script-utils,
+# `cosyte-attw`, ST34). `node10` alone selects attw's node16 profile: the node10 resolution, which
+# predates `exports`, is not one this package promises.
+node10

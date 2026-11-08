@@ -19,10 +19,11 @@ pnpm typecheck && pnpm lint && pnpm format:check && pnpm phi-scan
 pnpm test && pnpm test:coverage && pnpm build && pnpm attw
 pnpm smoke && pnpm examples && pnpm check:test-selection
 pnpm check:no-emdash && pnpm check:no-internal-refs
+pnpm check:readme && pnpm check:claude-card && pnpm check:agent-notes
 ```
 
-The first nine are the shared `ci / verify` ladder, on Node 22, 24, and 26. `smoke`, `examples`
-and `test-selection` have their own jobs; the last two are the dash and public-surface gates.
+The first nine are the shared `ci / verify` ladder, on Node 22, 24, and 26. `smoke`, `examples`,
+`test-selection` and `documents` have their own jobs; the dash and attw gates are script-utils'.
 
 ## Hazard
 
@@ -47,7 +48,7 @@ Each in full, with the failure behind it: documentation/agent-notes.md#rules-in-
   before the fix, and vitest's `include` is never narrowed nor the suite skipped (#23, #49).
 - `pnpm phi-scan` follows nothing, keeps `--no-renames` and `--diff-filter=AMTU`, reads what git
   carries, and exits 1 for hits only (#33, #34, #38, #47); widen a recogniser red to green (#34).
-- `pnpm attw` is the wrapper, never bare `attw`, which exits 0 on a pack with no types (#31).
+- `pnpm attw` is `cosyte-attw` with `scripts/attw.exclude`, never bare attw (exits 0 untyped, #31).
 - `pnpm smoke` takes its subpaths from `package.json` `exports`, never from a list (#18).
 - Job names in `ci.yml` and `smoke.yml` are required contexts (#16,
   documentation/agent-notes.md#a-required-context-a-branch-cannot-emit-leaves-the-pr-pending).

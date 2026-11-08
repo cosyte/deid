@@ -208,8 +208,9 @@ umbrella's `plans/standards.md` -- this is a summary.
   `@cosyte/tsconfig`. **Target ES2023**, `NodeNext`. TypeScript 5.9.x, exact-pinned.
 - **Build:** dual ESM + CJS + `.d.ts` via `tsup` (`@cosyte/tsup-config`); `attw` is a publish gate
   (per-condition types: `.d.ts` for `import`, `.d.cts` for `require`). The `attw` script is
-  **`node scripts/attw.mjs --profile node16`, not the bare CLI** -- see the guardrail below.
-- **Node:** **>= 22** (CI matrix 22 + 24).
+  **`cosyte-attw` from `@cosyte/script-utils`, with `scripts/attw.exclude` selecting the node16
+  profile, not the bare CLI** (since 2026-11-07; the guardrail below is this repo's own wrapper).
+- **Node:** **>= 22** (CI matrix 22 + 24 + 26).
 - **Package manager:** `pnpm@10`.
 - **Lint/format:** **ESLint 10** + unified `typescript-eslint` (type-checked) via
   `@cosyte/eslint-config`; Prettier via `@cosyte/prettier-config`. Lint at `--max-warnings=0`.
@@ -362,6 +363,11 @@ umbrella's `plans/standards.md` -- this is a summary.
     are what a reviewer compares it against.**
 
 ### The narrative-pointer gate
+
+**Superseded 2026-11-07 (RD4, ST34): `pnpm check:agent-notes` now runs `cosyte-agent-notes` from
+`@cosyte/script-utils`, and `scripts/check-agent-notes.ts` and its tests are gone.** The shared
+checker kept the rules this one shared with its siblings. What follows is this repository's own
+gate, kept as history.
 
 `scripts/check-agent-notes.ts`, landed 2026-08-11. **It is named for what it checks and it asserts no
 universal about any sibling repository.** That sentence is the most load-bearing one here, so it comes
@@ -932,6 +938,11 @@ R100` and this route printed its clean line (measured on git 2.39.5; the all-mod
   file(s)`**. Counting the exit code alone is what let it through.
 
 ## The attw wrapper
+
+**Superseded 2026-11-07 (ST34): `pnpm attw` now runs `cosyte-attw` from `@cosyte/script-utils`, which
+carries these nets and two more, with `scripts/attw.exclude` selecting the node16 profile.
+`scripts/attw.mjs` and `test/scripts/attw-gate.test.ts` are gone.** What follows is the history of
+this repository's own wrapper, and the measurements still hold for the shared gate.
 
 ### attw exits 0 on an untyped package
 

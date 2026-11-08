@@ -1,0 +1,9 @@
+# What the shared em and en dash gate (@cosyte/script-utils, `cosyte-no-emdash`, ST34) leaves out of
+# this repository. One tracked path per line; an entry ending in `/` covers every path beneath it.
+#
+# CHANGELOG.md holds the frozen archive below its "Released before this file was generated" divider:
+# history written with dashes before the rule, already shipped in npm tarballs, and pinned byte for
+# byte by test/scripts/changelog-generation.test.ts. The gate leaves out whole files, so the
+# generated sections above the divider go with it; their source, `.changeset/`, is scanned in full,
+# so a dash cannot reach a release section without the gate seeing it first.
+CHANGELOG.md
