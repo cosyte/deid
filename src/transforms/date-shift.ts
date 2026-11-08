@@ -107,7 +107,7 @@ const MS_PER_DAY = 86_400_000;
  * ```ts
  * import { dateShift, createDeidContext } from "@cosyte/deid";
  *
- * const ctx = createDeidContext({ key: "secret", patientId: "patient-1" });
+ * const ctx = createDeidContext({ key: process.env.DEID_KEY!, patientId: "patient-1" });
  * const a = dateShift("2020-01-01", ctx);
  * const b = dateShift("2020-01-11", ctx);
  * // a and b are shifted, but remain exactly 10 days apart.

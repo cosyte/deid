@@ -34,9 +34,10 @@ on:
     # lands, so a retitled or re-described pull request is scanned again.
     types: [opened, synchronize, reopened, edited]
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+# No concurrency group. A push and a title or body edit can arrive together (Dependabot does both),
+# and a run a group cancels, even a queued one under `cancel-in-progress: false`, can count as a
+# failed required check and block the merge until someone re-runs it. Each run takes seconds, so
+# every one finishes and the newest result stands.
 
 permissions:
   contents: read
@@ -47,7 +48,7 @@ jobs:
     # A published reference (ST37): a `workflows-*` release of cosyte/.github. Those releases
     # are immutable, so the tag is locked to one commit, and every caller in this repository
     # moves to the next reference together. The installing form: the gate lives in node_modules.
-    uses: cosyte/.github/.github/workflows/gate-no-emdash-install.yml@498c7c13c8869bf11b67fa8324684ec2dc691ec6 # workflows-2026-11-07-498c7c13c886
+    uses: cosyte/.github/.github/workflows/gate-no-emdash-install.yml@c0db8d8e5927269820de4401b3b5ad6141854b76 # workflows-2026-11-08-c0db8d8e5927
     # No more than the scan needs. A called workflow's GITHUB_TOKEN can only be
     # downgraded by its caller, and this gate reads the tree and nothing else.
     permissions:

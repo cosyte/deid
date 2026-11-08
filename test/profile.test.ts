@@ -83,7 +83,7 @@ describe("built-in profiles", () => {
   });
 
   it("the LDS profile actually shifts a date through the engine with a per-patient context", () => {
-    const ctx = createDeidContext({ key: "lds-key", patientId: "p1" });
+    const ctx = createDeidContext({ key: "lds-key-synthetic-hmac-key", patientId: "p1" });
     const result = deidentify(
       { loci: [{ path: "d", kind: "date", category: C.DATES, value: "2020-06-15" }] },
       profileOptions(LIMITED_DATA_SET_PROFILE, ctx),
@@ -281,7 +281,7 @@ describe("the label contract on a PROFILE that declares the safe-harbor standard
 });
 
 describe("the limited-data-set preset keeps consistent keyed surrogates available", () => {
-  const ctx = createDeidContext({ key: "lds-linkage-key", patientId: "p1" });
+  const ctx = createDeidContext({ key: "lds-linkage-key-synthetic-hmac-key", patientId: "p1" });
   const model = {
     loci: [
       { path: "PID-3", kind: "identifier" as const, category: C.MRN, value: "ZZMRN-1" },
@@ -363,15 +363,15 @@ describe("the limited-data-set preset keeps consistent keyed surrogates availabl
 
 describe("profileOptions composition", () => {
   it("produces DeidOptions carrying the profile policy and the supplied context", () => {
-    const ctx = createDeidContext({ key: "k", patientId: "p1" });
+    const ctx = createDeidContext({ key: "k-synthetic-hmac-key", patientId: "p1" });
     const opts = profileOptions(SAFE_HARBOR_PROFILE, ctx);
     expect(opts.policy).toBe(SAFE_HARBOR_PROFILE.policy);
     expect(opts.context).toBe(ctx);
   });
 
   it("lets an explicit override win over the profile default redactor and context", () => {
-    const base = createDeidContext({ key: "k1", patientId: "p1" });
-    const override = createDeidContext({ key: "k2", patientId: "p1" });
+    const base = createDeidContext({ key: "k1-synthetic-hmac-key", patientId: "p1" });
+    const override = createDeidContext({ key: "k2-synthetic-hmac-key", patientId: "p1" });
     const redactor = () => ({ text: "[redacted]" });
     const withRedactor = defineDeidProfile({ name: "site-r", redactor });
     const opts = profileOptions(withRedactor, base, { context: override });
@@ -468,7 +468,7 @@ describe("policy-scoped retention, and what widen-never-narrow means for it", ()
   });
 
   it("a retained locus is passed through UNCHANGED and always RECORDED as a residual", () => {
-    const ctx = createDeidContext({ key: "retain-key", patientId: "p1" });
+    const ctx = createDeidContext({ key: "retain-key-synthetic-hmac-key", patientId: "p1" });
     const { document, manifest } = deidentify(
       {
         loci: [
@@ -491,7 +491,7 @@ describe("policy-scoped retention, and what widen-never-narrow means for it", ()
   });
 
   it("the retention marker can never keep free text or unrecognized structure (guard order)", () => {
-    const ctx = createDeidContext({ key: "retain-key", patientId: "p1" });
+    const ctx = createDeidContext({ key: "retain-key-synthetic-hmac-key", patientId: "p1" });
     const { document, manifest } = deidentify(
       {
         loci: [
@@ -533,7 +533,7 @@ describe("policy-scoped retention, and what widen-never-narrow means for it", ()
 
 describe("retention needs all three keys, and any one missing means the transform runs", () => {
   const R = RETAINED_LOCUS_CLASSES;
-  const ctx = createDeidContext({ key: "three-keys", patientId: "p1" });
+  const ctx = createDeidContext({ key: "three-keys-synthetic-hmac-key", patientId: "p1" });
   const dateLocus = {
     path: "PV1-44",
     kind: "date",
@@ -620,7 +620,7 @@ describe("retention needs all three keys, and any one missing means the transfor
 describe("§164.514(e)(2)(ii): the list's only PARTIAL exclusion, and what the engine does with it", () => {
   const R = RETAINED_LOCUS_CLASSES;
   const P = LIMITED_DATA_SET_ADDRESS_PARTS;
-  const ctx = createDeidContext({ key: "geo-part-key", patientId: "p1" });
+  const ctx = createDeidContext({ key: "geo-part-key-synthetic-hmac-key", patientId: "p1" });
 
   /** One address-part locus: the unit an adapter emits under the geographic class. */
   const partLoci = (name: RetainedLocusPart, value: string): LocusModel => ({
@@ -744,7 +744,7 @@ describe("§164.514(e)(2)(ii): the list's only PARTIAL exclusion, and what the e
 
 describe("a profile DECLARING the limited-data-set standard is checked against §164.514(e)(2)", () => {
   const R = RETAINED_LOCUS_CLASSES;
-  const ctx = createDeidContext({ key: "e2-guard-key", patientId: "p1" });
+  const ctx = createDeidContext({ key: "e2-guard-key-synthetic-hmac-key", patientId: "p1" });
 
   /** A class the registry does not carry: the only shape a class "beyond the permitted set" has. */
   const BEYOND = "vehicle-identifiers" as RetainedLocusClass;
@@ -896,7 +896,7 @@ describe("widen-never-narrow, and the reserved label, both hold for the geograph
 
 describe("the limited-data-set preset EXCLUDES all sixteen, and says whose the data use agreement is", () => {
   const R = RETAINED_LOCUS_CLASSES;
-  const ctx = createDeidContext({ key: "sixteen-key", patientId: "p1" });
+  const ctx = createDeidContext({ key: "sixteen-key-synthetic-hmac-key", patientId: "p1" });
 
   it("every one of the sixteen is refused retention, even carrying an enabled class marker", () => {
     // §164.514(e)(2) (i) to (xvi), mapped onto this library's category model. Each locus asks to be

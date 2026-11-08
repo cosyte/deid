@@ -118,6 +118,17 @@ export const FATAL_CODES = {
    * additions-only.
    */
   DEID_FORMAT_UNSUPPORTED: "DEID_FORMAT_UNSUPPORTED",
+  /**
+   * An HMAC key or an explicit date-shift seed is **shorter than 16 bytes (128 bits)**. The length is
+   * measured on the bytes the HMAC uses: a `Uint8Array` as given, a string as its UTF-8 encoding (a
+   * hex or base64 string is not decoded). A short key can be guessed, and a guessed key reverses
+   * every keyed surrogate and every date-shift offset made under it, so the context refuses it at
+   * construction rather than mint surrogates nobody can trust.
+   *
+   * The message names the minimum and how to make a key (32 random bytes), and carries no key, no
+   * part of one, and no length. An empty key stays `DEID_NO_KEY`. The fatal set is additions-only.
+   */
+  DEID_KEY_TOO_SHORT: "DEID_KEY_TOO_SHORT",
 } as const;
 
 /**

@@ -63,7 +63,7 @@ describe("deidentifyFhir, property: fail-safe leak + value-free invariants", () 
           ext: token,
           relative: token,
           narrative: token,
-          key: fc.stringMatching(/^[a-z0-9]{8,16}$/),
+          key: fc.stringMatching(/^[a-z0-9]{16,32}$/),
         }),
         (r) => {
           const ctx = createDeidContext({ key: r.key, patientId: "p" });

@@ -19,7 +19,7 @@ import { deidentifyHl7 } from "../../src/hl7/index.js";
 
 const FATAL = new Set<string>(Object.values(FATAL_CODES));
 const KNOWN = new Set<string>(Object.values(DEID_DISPOSITION_CODES));
-const ctx = createDeidContext({ key: "prop-key", patientId: "p1" });
+const ctx = createDeidContext({ key: "prop-key-synthetic-hmac-key", patientId: "p1" });
 
 /** A sentinel token the property seeds into PHI-bearing loci; it must never survive a de-id pass. */
 const SENTINEL = "ZZPROPLEAK";

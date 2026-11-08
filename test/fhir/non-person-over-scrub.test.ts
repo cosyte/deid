@@ -30,7 +30,10 @@ import {
 } from "../../src/index.js";
 import { deidentifyFhir } from "../../src/fhir/index.js";
 
-const ctx = createDeidContext({ key: "over-scrub-key", patientId: "p-over-scrub" });
+const ctx = createDeidContext({
+  key: "over-scrub-key-synthetic-hmac-key",
+  patientId: "p-over-scrub",
+});
 const options = (): ReturnType<typeof profileOptions> => profileOptions(SAFE_HARBOR_PROFILE, ctx);
 
 /** The same compact fingerprint the cross-format corpus uses; it carries nothing of the document. */

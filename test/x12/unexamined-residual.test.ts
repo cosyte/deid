@@ -21,7 +21,10 @@ import { deidentifyX12String } from "../../src/x12/index.js";
 
 const RAW = readFileSync(join(import.meta.dirname, "..", "fixtures", "x12", "837p.edi"), "utf8");
 
-const ctx = createDeidContext({ key: "x12-unexamined", patientId: "p-x12-unexamined" });
+const ctx = createDeidContext({
+  key: "x12-unexamined-synthetic-hmac-key",
+  patientId: "p-x12-unexamined",
+});
 
 describe("X12 unexamined residual positions", () => {
   const { manifest, unexaminedResiduals } = deidentifyX12String(RAW, { context: ctx });

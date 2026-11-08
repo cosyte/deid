@@ -1,82 +1,21 @@
 name: Public-surface gate
 
-# Founder directive 2026-07-27: no internal project bookkeeping on any surface a consumer
-# reads. Item identifiers (`DEID-8`), phase and wave language, roadmap section citations,
-# ADR numbers, private paths and process commentary belong in the changeset,
-# CHANGELOG.md, the commit, the PR and the umbrella's plans, never in README.md,
-# docs-content/, the npm description, a JSDoc block a consumer's editor renders, or a
-# disposition message a consumer reads in their logs. The rule is written out in this
-# repository's CLAUDE.md; `scripts/check-no-internal-refs.sh` is what enforces it.
+# No internal project bookkeeping on a surface a consumer reads: item identifiers, phase and wave
+# language, ADR numbers, internal paths and traceability markers belong in the changeset, the
+# commit, the PR and the umbrella's plans, never in README.md, docs-content/, the npm description
+# and keywords, the doc comments that compile into the shipped type declarations, or a disposition message a consumer reads in their logs.
 #
-# WHY A GATE AND NOT A NOTE. The founder, on the sweep that removed these across the
-# ecosystem: "it needs to not just be a memory note, but something that is addressed in the
-# workflow accordingly. This needs to not happen again." A sweep regresses the first time
-# someone writes `(DEID-10)` into a doc comment; a job that reds does not.
+# The scan is `pnpm check:no-internal-refs`, the shared gate from `@cosyte/script-utils`
+# (`cosyte-internal-refs`, ST34). This repository keeps only its axes, rules and self-test samples
+# in `scripts/internal-refs.json`. The bin comes from the installed dependencies, so this calls the
+# INSTALLING variant of the shared gate workflow.
 #
-# ▶ AND THIS REPO IS THE EVIDENCE FOR THAT SENTENCE. Its public markdown had already been
-# swept and the remaining work was recorded as "1". Measured with this script on `d105b6d`:
-# `src/` JSDoc carried 105 hits, reaching 49 lines of built `.d.ts` and the same 49 again in
-# `.d.cts`, in a package with SEVEN published entry points. The markdown measured 0 BY RULE
-# and still had 18 lines of "arrive in later phases" that no rule here catches (residual (vi)
-# in the script), seven of them factually false on a package that ships all six adapters.
-# Without a gate, the class regrew on the one surface no docs review looks at -- and the
-# gate does not replace the reviewer on the surface it does look at.
+# THE JOB ID IS LOAD-BEARING. A called job's check run is named `<caller job id> / <inner job id>`,
+# so the job id `no-internal-refs` below publishes `no-internal-refs / public-surface`, the context
+# the ruleset requires. Renaming the job detaches that requirement with no error anywhere.
 #
-# WHAT ACTUALLY SCANS, AND WHERE THE RULE LIVES. `pnpm check:no-internal-refs`, which is
-# this repository's own checker. The job below delegates the plumbing (checkout, pnpm,
-# Node) to the shared gate workflow, which carries no pattern, no allow-list and no file
-# selection of its own: it prepares the tree, runs the command, and lets the command's
-# exit status decide the job. The detection rules, the self-tests and the known project
-# prefixes all stay here, because what counts as a project prefix and what counts as a
-# domain designator is a property of this package.
-#
-# THE JOB ID IS LOAD-BEARING. A called job's check run is named
-# `<caller job id> / <inner job id>`, so the job id `no-internal-refs` below publishes
-# `no-internal-refs / public-surface`, which is the context a branch ruleset must require.
-# Renaming the job detaches that requirement with no error anywhere, and a required
-# context nothing emits blocks every pull request.
-#
-# WHY A SEPARATE WORKFLOW, and not a job in ci.yml. Same reasoning as `smoke.yml` next
-# door, and the first half is the deciding one:
-#
-#   The shared ci pipeline is not an option. `ci.yml` is a thin caller of cosyte/.github's
-#   shared `ci.yml`, which runs a fixed ladder and no arbitrary repo script. Adding this there would also flip every other caller red on its next run,
-#   and remediating each repo is its own deliberate piece of work. A shared pipeline is the
-#   wrong place to land a rule most of its callers cannot yet satisfy.
-#
-#   Within this repo, keeping it out of ci.yml also keeps it cheap: this job is a checkout
-#   and a handful of greps over a small markdown surface and 44 source files, while ci.yml
-#   drives the full Node 22 + 24 matrix.
-#
-# ▶ THE JOB ID IS THE CHECK-RUN CONTEXT PREFIX. The `ci-required-checks` ruleset on `main`
-# requires the context this file produces, verbatim:
-#
-#     no-internal-refs / public-surface
-#
-# `no-internal-refs` is the job id below and `public-surface` the job in the shared gate
-# workflow. There is no matrix, so there is no suffix. Renaming the job silently detaches the required
-# check: the ruleset stops protecting anything while still looking configured, and every PR
-# goes PENDING rather than red. Rename the job and the ruleset together or neither, and read
-# the real name off a live check run
-# (`gh api repos/cosyte/deid/commits/<sha>/check-runs --jq '.check_runs[].name'`), never off
-# the `name:` at the top of this file.
-#
-# ▶ NO MATRIX, DELIBERATELY. The script is bash + grep + awk with a pinned `LC_ALL`; it does
-# not load the package and has no Node-version-dependent behaviour beyond one `node -e` read
-# of package.json. `smoke.yml` runs a matrix because module resolution genuinely moves
-# between Node majors. This does not.
-#
-# WHAT THIS DOES NOT CHECK, deliberately: the PR title, the PR body, and commit messages.
-# This rule says identifiers BELONG in the commit, the PR and the changeset, so a PR-text
-# half here would red on correct work. That is also why there is no `edited` trigger:
-# nothing here reads PR text, so retitling a PR cannot change the result.
-#
-# The other half of this rule, the one that keeps identifiers out of a published RELEASE
-# BODY, lives in the shared pipeline: `cosyte/.github` `scripts/release-notes.mjs assert`
-# re-reads the finished body bytes and refuses to publish a violating one. This job covers
-# the repo's own files; that one covers what gets published to the releases page.
-#
-# Run it locally with `pnpm check:no-internal-refs`.
+# It does not read the PR title, body or commit messages, where identifiers belong, so there is no
+# `edited` trigger. The release body is checked by the shared release pipeline.
 
 on:
   push:
@@ -96,10 +35,8 @@ jobs:
   no-internal-refs:
     # A published reference (ST37): a `workflows-*` release of cosyte/.github. Those releases
     # are immutable, so the tag is locked to one commit, and every caller in this repository
-    # moves to the next reference together. The non-installing form, because this repository's
-    # gate is a shell script that needs nothing installed.
-    uses: cosyte/.github/.github/workflows/gate-no-internal-refs.yml@498c7c13c8869bf11b67fa8324684ec2dc691ec6 # workflows-2026-11-07-498c7c13c886
-    # No more than the scan needs. A called workflow's GITHUB_TOKEN can only be
-    # downgraded by its caller, and this gate reads the tree and nothing else.
+    # moves to the next reference together.
+    uses: cosyte/.github/.github/workflows/gate-no-internal-refs-install.yml@c0db8d8e5927269820de4401b3b5ad6141854b76 # workflows-2026-11-08-c0db8d8e5927
+    # No more than the scan needs: it installs and reads the tree.
     permissions:
       contents: read

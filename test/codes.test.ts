@@ -28,13 +28,15 @@ describe("code surface stability", () => {
   // or option it would apply, where an approximate code is a claim a downstream system acts on without
   // a human; the fourth the fail-closed outcome for a document in a format an adapter refuses outright,
   // where the peer parser surface cannot express a faithful structural pass and a partial one would be
-  // read as a whole one.
+  // read as a whole one. `DEID_KEY_TOO_SHORT` is a later addition: a key or date-shift seed under 16
+  // bytes, which used to be accepted, and an empty one is still `DEID_NO_KEY`.
   it("fatal codes are stable", () => {
     expect(sortedCodeSet(FATAL_CODES)).toMatchInlineSnapshot(`
       [
         "DEID_CONTEXT_INVALID",
         "DEID_DECLARATION_UNNAMEABLE",
         "DEID_FORMAT_UNSUPPORTED",
+        "DEID_KEY_TOO_SHORT",
         "DEID_NO_KEY",
         "DEID_OUTPUT_INVALID",
         "DEID_POLICY_INVALID",

@@ -19,7 +19,7 @@ import { deidentifyX12 } from "../../src/x12/index.js";
 
 const FATAL = new Set<string>(Object.values(FATAL_CODES));
 const KNOWN = new Set<string>(Object.values(DEID_DISPOSITION_CODES));
-const ctx = createDeidContext({ key: "prop-x12", patientId: "p1" });
+const ctx = createDeidContext({ key: "prop-x12-synthetic-hmac-key", patientId: "p1" });
 
 /** The 106-byte fixed ISA + the GS/ST envelope shared by every generated interchange. */
 const ISA =

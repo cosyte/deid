@@ -442,7 +442,7 @@ export function defineDeidProfile(spec: DeidProfileSpec): DeidProfile {
  * ```ts
  * import { SAFE_HARBOR_PROFILE, profileOptions, createDeidContext } from "@cosyte/deid";
  *
- * const opts = profileOptions(SAFE_HARBOR_PROFILE, createDeidContext({ key: "k" }));
+ * const opts = profileOptions(SAFE_HARBOR_PROFILE, createDeidContext({ key: process.env.DEID_KEY! }));
  * opts.policy === SAFE_HARBOR_PROFILE.policy; // => true
  * ```
  */

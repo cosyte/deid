@@ -13,5 +13,5 @@
 import { createDeidContext } from "../../src/context.js";
 import { dateShift } from "../../src/transforms/date-shift.js";
 
-const ctx = createDeidContext({ key: "tz-proof-key", patientId: "patient-1" });
+const ctx = createDeidContext({ key: "tz-proof-key-synthetic-hmac-key", patientId: "patient-1" });
 process.stdout.write(String(dateShift("2020-06-15T00:30:00", ctx)));

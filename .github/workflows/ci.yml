@@ -70,7 +70,7 @@ jobs:
   # in this repository moves to the next one together, by hand. A job that calls a reusable workflow
   # cannot carry `timeout-minutes`; the shared jobs set their own.
   ci:
-    uses: cosyte/.github/.github/workflows/ci.yml@498c7c13c8869bf11b67fa8324684ec2dc691ec6 # workflows-2026-11-07-498c7c13c886
+    uses: cosyte/.github/.github/workflows/ci.yml@c0db8d8e5927269820de4401b3b5ad6141854b76 # workflows-2026-11-08-c0db8d8e5927
     with:
       run-phi-scan: true
 
@@ -101,11 +101,10 @@ jobs:
         run: pnpm examples
 
   # The house checks on this repository's documents and its catalog entry, from @cosyte/script-utils
-  # (RD1, RD2, RD4, PF1): the README against the house skeleton and npm's size limit
-  # (`pnpm check:readme`), the CLAUDE.md card against its spec (`pnpm check:claude-card`), every
-  # pointer into documentation/agent-notes.md (`pnpm check:agent-notes`), and the package
-  # description against the catalog that ships in script-utils (`pnpm check:catalog`). The context,
-  # `documents`, is not required yet: a context joins the ruleset after it has run on `main`.
+  # (RD1, RD2, PF1): the README against the house skeleton and npm's size limit
+  # (`pnpm check:readme`), the CLAUDE.md card against its spec (`pnpm check:claude-card`), and the
+  # package description against the catalog that ships in script-utils (`pnpm check:catalog`). The
+  # context, `documents`, is not required yet: a context joins the ruleset after it has run on `main`.
   documents:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -121,7 +120,5 @@ jobs:
         run: pnpm check:readme
       - name: The CLAUDE.md card follows its spec
         run: pnpm check:claude-card
-      - name: Every pointer into the agent notes resolves
-        run: pnpm check:agent-notes
       - name: The package description is the catalog's
         run: pnpm check:catalog

@@ -94,7 +94,7 @@ import { extractFhirLoci } from "./extract.js";
  *
  * const { resource } = parseResource(json);
  * const result: FhirDeidResult = deidentifyFhir(resource, {
- *   context: createDeidContext({ key: "secret" }),
+ *   context: createDeidContext({ key: process.env.DEID_KEY! }),
  * });
  * result.manifest; // value-free audit: category + locus, never a value
  * ```
@@ -164,7 +164,7 @@ export function deidentifyFhir(resource: FhirComplex, options: DeidOptions = {})
  * import { createDeidContext } from "@cosyte/deid";
  *
  * const { json, manifest } = deidentifyFhirJson(input, {
- *   context: createDeidContext({ key: "secret" }),
+ *   context: createDeidContext({ key: process.env.DEID_KEY! }),
  * });
  * ```
  */

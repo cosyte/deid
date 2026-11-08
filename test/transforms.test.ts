@@ -96,13 +96,13 @@ describe("generalizeAge, the mandatory age-90 aggregation", () => {
 });
 
 describe("pseudonymize / keyedHash, consistency + domain separation", () => {
-  const ctx = createDeidContext({ key: "unit-key" });
+  const ctx = createDeidContext({ key: "unit-key-synthetic-hmac-key" });
 
   it("is consistent: same id + same key → same surrogate", () => {
     expect(pseudonymize("MRN-0001", ctx)).toBe(pseudonymize("MRN-0001", ctx));
   });
   it("is key-dependent: a different key yields a different surrogate", () => {
-    const other = createDeidContext({ key: "other-key" });
+    const other = createDeidContext({ key: "other-key-synthetic-hmac-key" });
     expect(pseudonymize("MRN-0001", ctx)).not.toBe(pseudonymize("MRN-0001", other));
   });
   it("domain-separates pseudonymize from keyedHash for the same input", () => {
@@ -130,14 +130,14 @@ describe("the mandatory unsalted-hash reversibility gate", () => {
     const unsaltedTable = new Map(space.map((mrn) => [unkeyedHash(mrn), mrn]));
     expect(unsaltedTable.has(surrogate)).toBe(false);
     // Even enumerating with a WRONG key recovers nothing.
-    const wrong = createDeidContext({ key: "guessed-key" });
+    const wrong = createDeidContext({ key: "guessed-key-synthetic-hmac-key" });
     const wrongTable = new Map(space.map((mrn) => [pseudonymize(mrn, wrong), mrn]));
     expect(wrongTable.has(surrogate)).toBe(false);
   });
 });
 
 describe("dateShift, the mandatory interval-preservation gate", () => {
-  const ctx = createDeidContext({ key: "shift-key", patientId: "patient-1" });
+  const ctx = createDeidContext({ key: "shift-key-synthetic-hmac-key", patientId: "patient-1" });
 
   it("preserves the interval between two dates of the same patient", () => {
     const a = dateShift("2020-01-01", ctx);

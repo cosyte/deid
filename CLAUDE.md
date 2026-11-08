@@ -19,11 +19,12 @@ pnpm typecheck && pnpm lint && pnpm format:check && pnpm phi-scan
 pnpm test && pnpm test:coverage && pnpm build && pnpm attw
 pnpm smoke && pnpm examples && pnpm check:test-selection
 pnpm check:no-emdash && pnpm check:no-internal-refs
-pnpm check:readme && pnpm check:claude-card && pnpm check:agent-notes && pnpm check:catalog
+pnpm check:readme && pnpm check:claude-card && pnpm check:catalog
 ```
 
 The first nine are the shared `ci / verify` ladder, on Node 22, 24, and 26. `smoke`, `examples`,
-`test-selection` and `documents` have their own jobs; the dash and attw gates are script-utils'.
+`test-selection` and `documents` have their own jobs; the dash, attw and internal-refs gates are
+script-utils'.
 
 ## Hazard
 
@@ -34,8 +35,6 @@ blocked or removed and recorded, never passed through, and a value, the key, or 
 never reaches the manifest, a diagnostic, or a log. Scrubbing a clinical value is a defect too.
 
 ## Rules that bind here
-
-Each in full, with the failure behind it: documentation/agent-notes.md#rules-in-full.
 
 - A manifest locus built from document bytes goes through `src/derived-token.ts`; one that fails
   its shape becomes `WITHHELD_LOCUS_TOKEN` plus its index, never truncated (#25).
@@ -50,8 +49,8 @@ Each in full, with the failure behind it: documentation/agent-notes.md#rules-in-
   carries, and exits 1 for hits only (#33, #34, #38, #47); widen a recogniser red to green (#34).
 - `pnpm attw` is `cosyte-attw` with `scripts/attw.exclude`, never bare attw (exits 0 untyped, #31).
 - `pnpm smoke` takes its subpaths from `package.json` `exports`, never from a list (#18).
-- Job names in `ci.yml` and `smoke.yml` are required contexts (#16,
-  documentation/agent-notes.md#a-required-context-a-branch-cannot-emit-leaves-the-pr-pending).
+- Job names in `ci.yml` and `smoke.yml` are required contexts, and a required job gates its steps:
+  renaming one or moving a step out of `verify` drops it from the ruleset in silence (#16).
 - The changeset summary is the changelog entry: never hand-edit `CHANGELOG.md` (#42); its first
   sentence stays under 200 characters and reads on its own without identifiers (#15, #22).
 - Public text carries no item ids, phase words, ADR numbers or private paths, keeps every JSDoc

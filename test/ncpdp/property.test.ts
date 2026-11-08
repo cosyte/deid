@@ -22,7 +22,7 @@ import { deidentifyTelecom } from "../../src/ncpdp/index.js";
 
 const FATAL = new Set<string>(Object.values(FATAL_CODES));
 const KNOWN = new Set<string>(Object.values(DEID_DISPOSITION_CODES));
-const ctx = createDeidContext({ key: "prop-ncpdp", patientId: "p1" });
+const ctx = createDeidContext({ key: "prop-ncpdp-synthetic-hmac-key", patientId: "p1" });
 
 /** A sentinel seeded only into scrub loci; it must never survive a de-id pass. */
 const SENTINEL = "ZZPROPLEAK";
