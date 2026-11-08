@@ -11,9 +11,8 @@ name: Release
 # ▶ THE "Version Packages" PR IS AUTHORED THROUGH RELEASE_PR_TOKEN, so its checks run as they do on
 # any pull request and it merges like one. It used to be opened as `github-actions[bot]` with the
 # default GITHUB_TOKEN, which starts no workflow runs, so it sat with zero check runs until someone
-# pushed to it; documentation/agent-notes.md#the-version-packages-pr-is-blocked-by-design keeps that
-# history. If one ever arrives with no checks, look at that token first, and never unstick it by
-# weakening the ruleset (`bypass_actors` is empty on purpose).
+# pushed to it. If one ever arrives with no checks, look at that token first, and never unstick it
+# by weakening the ruleset (`bypass_actors` is empty on purpose).
 
 on:
   push:
