@@ -1,7 +1,7 @@
 {
   "name": "@cosyte/deid",
   "version": "0.1.2",
-  "description": "Healthcare de-identification for Node.js and TypeScript: applies a HIPAA Safe Harbor policy to HL7 v2, C-CDA, FHIR R4, X12, NCPDP Telecom and DICOM, fails closed, and emits a value-free manifest.",
+  "description": "Healthcare de-identification for Node.js and TypeScript: applies a HIPAA Safe Harbor policy to HL7 v2, C-CDA, FHIR R4, X12, NCPDP Telecom, and DICOM, fails closed, and emits a value-free manifest.",
   "keywords": [
     "deid",
     "de-identification",
