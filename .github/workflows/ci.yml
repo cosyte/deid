@@ -99,3 +99,27 @@ jobs:
         run: pnpm build
       - name: Run every example
         run: pnpm examples
+
+  # The house checks on this repository's documents, from @cosyte/script-utils (RD1, RD2, RD4): the
+  # README against the house skeleton and npm's size limit (`pnpm check:readme`), the CLAUDE.md card
+  # against its spec (`pnpm check:claude-card`), and every pointer into documentation/agent-notes.md
+  # (`pnpm check:agent-notes`). The catalog check (`pnpm check:catalog`, PF1) joins them once
+  # cosyte/config releases a catalog carrying this package's current description. The context,
+  # `documents`, is not required yet: a context joins the ruleset after it has run on `main`.
+  documents:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: "22"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: The README follows the house skeleton
+        run: pnpm check:readme
+      - name: The CLAUDE.md card follows its spec
+        run: pnpm check:claude-card
+      - name: Every pointer into the agent notes resolves
+        run: pnpm check:agent-notes
