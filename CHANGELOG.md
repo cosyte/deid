@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.3
+
+### Patch Changes
+
+- 45298a2: The npm description lists the six formats with a serial comma.
+- 4535d4e: The README follows the house layout, with sections for support, security, and contributing, and the installation page names Node 26, which CI now tests.
+
 ## 0.1.2
 
 ### Patch Changes
