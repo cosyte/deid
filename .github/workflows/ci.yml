@@ -100,11 +100,11 @@ jobs:
       - name: Run every example
         run: pnpm examples
 
-  # The house checks on this repository's documents, from @cosyte/script-utils (RD1, RD2, RD4): the
-  # README against the house skeleton and npm's size limit (`pnpm check:readme`), the CLAUDE.md card
-  # against its spec (`pnpm check:claude-card`), and every pointer into documentation/agent-notes.md
-  # (`pnpm check:agent-notes`). The catalog check (`pnpm check:catalog`, PF1) joins them once
-  # cosyte/config releases a catalog carrying this package's current description. The context,
+  # The house checks on this repository's documents and its catalog entry, from @cosyte/script-utils
+  # (RD1, RD2, RD4, PF1): the README against the house skeleton and npm's size limit
+  # (`pnpm check:readme`), the CLAUDE.md card against its spec (`pnpm check:claude-card`), every
+  # pointer into documentation/agent-notes.md (`pnpm check:agent-notes`), and the package
+  # description against the catalog that ships in script-utils (`pnpm check:catalog`). The context,
   # `documents`, is not required yet: a context joins the ruleset after it has run on `main`.
   documents:
     runs-on: ubuntu-latest
@@ -123,3 +123,5 @@ jobs:
         run: pnpm check:claude-card
       - name: Every pointer into the agent notes resolves
         run: pnpm check:agent-notes
+      - name: The package description is the catalog's
+        run: pnpm check:catalog
