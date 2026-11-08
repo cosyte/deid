@@ -70,7 +70,7 @@ jobs:
   # in this repository moves to the next one together, by hand. A job that calls a reusable workflow
   # cannot carry `timeout-minutes`; the shared jobs set their own.
   ci:
-    uses: cosyte/.github/.github/workflows/ci.yml@workflows-2026-11-07-498c7c13c886
+    uses: cosyte/.github/.github/workflows/ci.yml@498c7c13c8869bf11b67fa8324684ec2dc691ec6 # workflows-2026-11-07-498c7c13c886
     with:
       run-phi-scan: true
 
