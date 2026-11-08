@@ -27,10 +27,17 @@ import {
 const C = SAFE_HARBOR_CATEGORIES;
 const RESEARCH = defineDeidPolicy({ name: "research", transforms: { [C.DATES]: "date-shift" } });
 
-/** Arbitrary valid `YYYY-MM-DD` in a wide but bounded range. */
+/**
+ * Arbitrary valid `YYYY-MM-DD` in a wide but bounded range. `noInvalidDate` is explicit because
+ * fast-check 4 generates an Invalid Date by default, which has no ISO string to slice.
+ */
 function isoDateArb(): fc.Arbitrary<string> {
   return fc
-    .date({ min: new Date("1970-01-01T00:00:00Z"), max: new Date("2035-12-31T00:00:00Z") })
+    .date({
+      min: new Date("1970-01-01T00:00:00Z"),
+      max: new Date("2035-12-31T00:00:00Z"),
+      noInvalidDate: true,
+    })
     .map((d) => d.toISOString().slice(0, 10));
 }
 

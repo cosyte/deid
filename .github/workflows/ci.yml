@@ -103,8 +103,9 @@ jobs:
   # The house checks on this repository's documents and its catalog entry, from @cosyte/script-utils
   # (RD1, RD2, PF1): the README against the house skeleton and npm's size limit
   # (`pnpm check:readme`), the CLAUDE.md card against its spec (`pnpm check:claude-card`), and the
-  # package description against the catalog that ships in script-utils (`pnpm check:catalog`). The
-  # context, `documents`, is not required yet: a context joins the ruleset after it has run on `main`.
+  # package description against the catalog that ships in script-utils (`pnpm check:catalog`), and
+  # the script wiring against @cosyte/process (`pnpm check:process`). The context, `documents`, is
+  # required by the `ci-required-checks` ruleset: rename the job and the ruleset together.
   documents:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -122,3 +123,5 @@ jobs:
         run: pnpm check:claude-card
       - name: The package description is the catalog's
         run: pnpm check:catalog
+      - name: The scripts delegate to @cosyte/process
+        run: pnpm check:process

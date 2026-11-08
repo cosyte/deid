@@ -326,8 +326,7 @@ export interface ExpertDeterminationReportOptions {
    * enumerated the positions it handed through and none went unexamined.
    */
   readonly unexaminedResiduals?:
-    | readonly UnexaminedResidual[]
-    | readonly (readonly UnexaminedResidual[])[];
+    readonly UnexaminedResidual[] | readonly (readonly UnexaminedResidual[])[];
 }
 
 /**

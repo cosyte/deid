@@ -7,7 +7,8 @@ manifest of what was done where. It has zero runtime dependencies.
 
 ## Build and test
 
-Use the pnpm version that `packageManager` in `package.json` pins: run
+Use Node.js 22.22.2 or later (the floor `@cosyte/process` sets for the dev tools; the package itself
+runs on any Node 22) and the pnpm version that `packageManager` in `package.json` pins: run
 `corepack enable pnpm --install-directory <dir>` and put `<dir>` first on `PATH`.
 
 ```sh
@@ -38,6 +39,7 @@ pnpm check:no-internal-refs
 pnpm check:readme
 pnpm check:claude-card
 pnpm check:catalog
+pnpm check:process
 ```
 
 A change that reaches the published package adds a changeset (`pnpm changeset`).
