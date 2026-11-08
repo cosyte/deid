@@ -36,7 +36,7 @@ jobs:
     # A published reference (ST37): a `workflows-*` release of cosyte/.github. Those releases
     # are immutable, so the tag is locked to one commit, and every caller in this repository
     # moves to the next reference together.
-    uses: cosyte/.github/.github/workflows/gate-no-internal-refs-install.yml@498c7c13c8869bf11b67fa8324684ec2dc691ec6 # workflows-2026-11-07-498c7c13c886
+    uses: cosyte/.github/.github/workflows/gate-no-internal-refs-install.yml@c0db8d8e5927269820de4401b3b5ad6141854b76 # workflows-2026-11-08-c0db8d8e5927
     # No more than the scan needs: it installs and reads the tree.
     permissions:
       contents: read
