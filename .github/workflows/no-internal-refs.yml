@@ -95,7 +95,7 @@ jobs:
     # are immutable, so the tag is locked to one commit, and every caller in this repository
     # moves to the next reference together. The non-installing form, because this repository's
     # gate is a shell script that needs nothing installed.
-    uses: cosyte/.github/.github/workflows/gate-no-internal-refs.yml@workflows-2026-11-07-498c7c13c886
+    uses: cosyte/.github/.github/workflows/gate-no-internal-refs.yml@498c7c13c8869bf11b67fa8324684ec2dc691ec6 # workflows-2026-11-07-498c7c13c886
     # No more than the scan needs. A called workflow's GITHUB_TOKEN can only be
     # downgraded by its caller, and this gate reads the tree and nothing else.
     permissions:
