@@ -60,13 +60,7 @@ const XSI_NS = "http://www.w3.org/2001/XMLSchema-instance";
 
 /** How the applier writes one transformed locus back onto the CDA DOM node it came from. */
 export type CcdaEditKind =
-  | "clear-element"
-  | "clear-telecom"
-  | "id"
-  | "date-value"
-  | "address"
-  | "block"
-  | "block-text";
+  "clear-element" | "clear-telecom" | "id" | "date-value" | "address" | "block" | "block-text";
 
 /**
  * A write-back coordinate: a direct handle to the DOM node one extracted locus came from, plus how to

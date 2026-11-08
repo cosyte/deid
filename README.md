@@ -742,11 +742,11 @@ agreed before you write it. Typo, link, and test fixes can go straight to a pull
 
 | check                         | what it is                                                         |
 | ----------------------------- | ------------------------------------------------------------------ |
-| `pnpm typecheck`              | `tsc --noEmit`, strict, over the source and the examples           |
+| `pnpm typecheck`              | `tsc --noEmit`, strict, over the source and the tests              |
 | `pnpm lint`                   | ESLint, at `--max-warnings=0`                                      |
 | `pnpm format:check`           | Prettier                                                           |
 | `pnpm phi-scan`               | no patient-shaped value anywhere in a tracked file                 |
-| `pnpm test`                   | Vitest, including the cross-format zero-leak and over-scrub corpus |
+| `pnpm test`                   | Vitest: the leak and over-scrub corpus and the examples' typecheck |
 | `pnpm test:coverage`          | the coverage gate                                                  |
 | `pnpm build`                  | the dual ESM and CJS bundle                                        |
 | `pnpm attw`                   | per-condition type resolution for consumers                        |

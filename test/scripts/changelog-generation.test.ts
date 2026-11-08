@@ -84,8 +84,8 @@
  *     VALUE BETWEEN REPOS; derive it from the repo in front of you.
  *
  *     STATED HONESTLY, BECAUSE THIS REPO DIFFERS FROM ITS SIBLINGS HERE: this
- *     package's `version` script ends with `prettier --write ... CHANGELOG.md`,
- *     which no sibling's does, so with the pass OFF a LATER link in the chain would
+ *     package's `version` script ends with a format pass over `CHANGELOG.md`
+ *     (`cosyte-process format`), so with the pass OFF a LATER link in the chain would
  *     repair the document before the Version PR opened. The argument for leaving the
  *     pass on is therefore NOT "otherwise CI reds" (that depends on a link this file
  *     cannot speak for); it is that the tool WRITING the file should produce a
@@ -160,6 +160,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import { applyOverride, BASELINE, loadOverrides } from "@cosyte/process";
 import prettier from "prettier";
 import { describe, it, expect, afterAll } from "vitest";
 
@@ -214,6 +215,11 @@ const roots: string[] = [];
 afterAll(() => {
   for (const dir of roots) rmSync(dir, { recursive: true, force: true });
 });
+
+/** The globs `pnpm format` and `pnpm format:check` hand Prettier, read the way the bin reads them. */
+function formatGlobs(): readonly string[] {
+  return applyOverride(BASELINE.format, loadOverrides(REPO_ROOT).format).globs;
+}
 
 /**
  * Would `pnpm format:check` accept this text as the repo's `CHANGELOG.md`?
@@ -480,7 +486,11 @@ describe("the Prettier pass, derived from this repo rather than copied", () => {
     // measurement rather than a preference.
     expect(config.prettier).toBeUndefined();
     expect(existsSync(join(REPO_ROOT, ".prettierignore"))).toBe(false);
-    expect(pkg.scripts?.["format:check"] ?? "").toContain('"*.{json,md,yml}"');
+    // `format:check` delegates to `cosyte-process format --check`, so the globs it checks are
+    // the shared baseline as `cosyte-process.config.json` overrides it, read through the same
+    // functions the bin uses.
+    expect(pkg.scripts?.["format:check"]).toBe("cosyte-process format --check");
+    expect(formatGlobs()).toContain("*.{json,md,yml}");
   });
 
   it("keeps the committed changelog Prettier-canonical, which is what makes leaving it on safe", async () => {
@@ -488,14 +498,15 @@ describe("the Prettier pass, derived from this repo rather than copied", () => {
   });
 
   it("keeps CHANGELOG.md in the version script's trailing format pass", () => {
-    // THIS REPO DIFFERS FROM ITS SIBLINGS HERE and the difference is worth pinning. The
-    // `version` chain ends with a `prettier --write` that names `CHANGELOG.md`, which no
-    // sibling's does, so it is a SECOND net under the release's own Prettier pass. It is not
+    // THIS REPO DIFFERS FROM SOME SIBLINGS HERE and the difference is worth pinning. The
+    // `version` chain ends with `cosyte-process format`, whose globs take in root markdown and
+    // so `CHANGELOG.md`: a SECOND net under the release's own Prettier pass. It is not
     // the reason the pass is left on (see the arms below), but if someone drops `CHANGELOG.md`
-    // from this list while the pass is also off, the Version PR reds on a file no human
+    // from that pass while the pass is also off, the Version PR reds on a file no human
     // touched, and this is where that becomes visible.
     const version = pkg.scripts?.["version"] ?? "";
-    expect(version).toMatch(/prettier --write [^&]*\bCHANGELOG\.md\b/);
+    expect(version).toMatch(/&&\s*cosyte-process format\s*$/);
+    expect(formatGlobs()).toContain("*.{json,md,yml}");
   });
 });
 
@@ -620,7 +631,7 @@ describe("the shape that makes generated output land correctly", () => {
       // on adjacent lines with no blank line between them, which this repo's Prettier config
       // rejects. Stated exactly, because this repo has the extra net a sibling does not: the
       // claim is about what `changeset version` ITSELF writes, not about what survives the
-      // whole `version` chain, whose trailing `prettier --write CHANGELOG.md` would repair it.
+      // whole `version` chain, whose trailing `cosyte-process format` would repair it.
       // That is why the trailing link is pinned above, and why the argument for leaving the
       // pass on is that the ON arm is free rather than that the OFF arm necessarily reds.
       const off = runVersion({ changelogBody: changelog, configOverrides: { prettier: false } });
