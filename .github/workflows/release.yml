@@ -8,28 +8,12 @@ name: Release
 # npmjs.com names this repository, this file (`release.yml`) and the `release` environment, so
 # renaming the file or the environment stops every publish.
 #
-# ▶ THE "Version Packages" PR THIS OPENS WILL SIT BLOCKED UNTIL SOMEONE PUSHES TO IT. That is the
-# expected state, not a broken pipeline. Changesets opens it as `github-actions[bot]` with the
-# default GITHUB_TOKEN, and GitHub does not start workflow runs for events raised by that token, so
-# the PR gets ZERO check runs. The `ci-required-checks` ruleset on `main` requires several contexts
-# (the count has already moved once, so read it with `gh api repos/cosyte/deid/rulesets/19907854`
-# rather than from any comment, including this one), and a required context that
-# never arrives is pending, not failing, so the PR is unmergeable and nobody can bypass it
-# (`bypass_actors` is empty on purpose). One commit onto `changeset-release/main` fires
-# `pull_request: synchronize` under a real user and produces all of them:
-#
-#   gh pr checkout <n> -R cosyte/deid
-#   git commit --allow-empty -m "chore: run CI on the version PR"
-#   git push
-#
-# Do the push LAST, immediately before merging. If another changeset lands on `main` while the
-# version PR is open, this workflow re-runs and `changesets/action` moves the branch head as the bot
-# again, dropping the PR back to zero checks. That is not the escape having failed; just repeat it.
-#
-# Do NOT unstick it by deleting or weakening the ruleset. See
-# documentation/agent-notes.md#the-version-packages-pr-is-blocked-by-design. (Fixing this properly
-# for the whole org means giving `changesets/action` a PAT in cosyte/.github, which is not a
-# per-repo change.)
+# ▶ THE "Version Packages" PR IS AUTHORED THROUGH RELEASE_PR_TOKEN, so its checks run as they do on
+# any pull request and it merges like one. It used to be opened as `github-actions[bot]` with the
+# default GITHUB_TOKEN, which starts no workflow runs, so it sat with zero check runs until someone
+# pushed to it; documentation/agent-notes.md#the-version-packages-pr-is-blocked-by-design keeps that
+# history. If one ever arrives with no checks, look at that token first, and never unstick it by
+# weakening the ruleset (`bypass_actors` is empty on purpose).
 
 on:
   push:
@@ -46,7 +30,7 @@ jobs:
       contents: write # create tags / the GitHub release
       id-token: write # npm provenance
       pull-requests: write # open the "Version Packages" PR
-    uses: cosyte/.github/.github/workflows/release.yml@main
+    uses: cosyte/.github/.github/workflows/release.yml@workflows-2026-11-07-498c7c13c886
     with:
       package-name: "@cosyte/deid"
     secrets: inherit

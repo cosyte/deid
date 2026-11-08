@@ -26,29 +26,16 @@ jobs:
   # The `ci /` prefix is the caller job id below; `verify` / `actionlint` are the job ids in the
   # shared pipeline; the matrix suffix is `node` then `os`. Rename the job below, change the Node
   # matrix, or rename a job upstream in cosyte/.github, and a required context stops being emitted
-  # at all -- which does not fail a PR, it leaves it PENDING and unmergeable forever. Update the
+  # at all: that does not fail a PR, it leaves it PENDING and unmergeable forever. Update the
   # ruleset in the same change.
   #
-  # `run-actionlint: false` is a SEPARATE and UNRESOLVED case, flagged rather than asserted: the
-  # upstream job is `if: ${{ inputs.run-actionlint }}`, so turning it off produces a check run that
-  # exists with conclusion `skipped` rather than no check run at all. Whether the ruleset treats a
-  # skipped required context as never-satisfied (a stuck PR, loud) or as satisfied (the lint
-  # silently un-required, quiet) has NOT been established here against a primary source or a live
-  # run. Do not change that input without settling it first.
-  #
-  # The input IS changed for `schedule` runs only, and that leaves the case above untouched: the
-  # expression below is `true` on every other event, so a pull request, a push and a dispatch run
-  # lint exactly as before, and no ruleset ever reads a scheduled run. The reason is upstream. The
-  # shared `actionlint` job reports through reviewdog's `github-pr-check` reporter, which takes the
-  # repository owner and name from the event payload, and a `schedule` event has none (GitHub's
-  # events reference lists its payload as not applicable). reviewdog then posts its check run to
-  # `repos///check-runs`, gets a 404 rather than the 403 it falls back from, and fails the job
-  # (reviewdog/reviewdog#832 and #1263, both open), so the nightly run would be red every night
-  # with nothing wrong on main. Skipping it there loses little: our workflow files change only by a
-  # push, and every push is linted. What only a nightly lint would catch is a new actionlint pin in
-  # the shared job (called at `@main`) judging unchanged files differently, and that waits for the
-  # next push or pull request instead. Drop the expression when the shared job stops failing on
-  # `schedule`.
+  # Never pass `run-actionlint: false`. The upstream job carries `if: ${{ inputs.run-actionlint }}`,
+  # and a job skipped by a condition SATISFIES its required context (measured in cosyte/.github#46;
+  # that repository's README, "What a skipped required context does to a merge"), so the lint would
+  # stop gating while the ruleset still lists `ci / actionlint`. The nightly run used to switch it
+  # off because the shared job reported through reviewdog, which fails on a `schedule` event; since
+  # the reference below it runs rhysd/actionlint's own release over every tracked workflow file and
+  # reads no event payload, so it runs on every event here.
   #
   # ▶ AND: a required JOB gates all of its STEPS. `verify` runs typecheck, lint, format:check, the
   # PHI scan, tests, the gating coverage run, build, attw and the dual ESM/CJS smoke as steps inside
@@ -72,18 +59,20 @@ jobs:
   # + require of `dist/index.*`) and cannot see a broken subpath, a missing export, or an HL7 leak.
   #
   # Universal gates from the shared pipeline (typecheck, lint, format, test, coverage, build, attw,
-  # dual ESM/CJS smoke, actionlint) on the standard Node matrix. Repo-specific extra jobs (e.g. an
-  # examples smoke, a starter-kit build) are added on top of this caller, never instead of it.
-  # The template ships a PHI scanner (scripts/phi-scan.ts), so the shared pipeline's optional
-  # PHI-scan step is switched on. NOTE: the scaffolded scanner is a STARTER. It detects only
-  # cross-cutting SSN/email shapes until you add structured, field-level detection for this
-  # standard's PHI (see the STARTER banner in scripts/phi-scan.ts).
+  # dual ESM/CJS smoke, actionlint) on its default Node matrix, 22, 24 and 26 (ST15: we claim only
+  # the lines CI runs). Repo-specific extra jobs (e.g. an examples smoke, a starter-kit build) are
+  # added on top of this caller, never instead of it. This repository's own PHI scanner
+  # (scripts/phi-scan.ts, with field-level detection for each format) runs as the shared pipeline's
+  # optional PHI-scan step.
+  #
+  # Called at a published reference, never `@main` (ST37): a `workflows-*` release of cosyte/.github.
+  # Those releases are immutable, so the tag names one commit and cannot be moved, and every caller
+  # in this repository moves to the next one together, by hand. A job that calls a reusable workflow
+  # cannot carry `timeout-minutes`; the shared jobs set their own.
   ci:
-    uses: cosyte/.github/.github/workflows/ci.yml@main
+    uses: cosyte/.github/.github/workflows/ci.yml@workflows-2026-11-07-498c7c13c886
     with:
       run-phi-scan: true
-      # Off on the nightly run only; see "The input IS changed" above.
-      run-actionlint: ${{ github.event_name != 'schedule' }}
 
   # The programs under examples/, run against the BUILT package the way a consumer imports it:
   # `pnpm examples` (scripts/run-examples.ts) fails when any example exits non-zero, and each
