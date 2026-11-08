@@ -41,7 +41,10 @@ function loadRaw(): string {
   return readFileSync(join(FIXTURES, "telecom-b1.ncpdp"), "utf8");
 }
 
-const ctx = createDeidContext({ key: "ncpdp-test-key", patientId: "patient-ncpdp-1" });
+const ctx = createDeidContext({
+  key: "ncpdp-test-key-synthetic-hmac-key",
+  patientId: "patient-ncpdp-1",
+});
 
 /** The synthetic PHI sentinels seeded into `telecom-b1.ncpdp`: every one must be GONE after de-id. */
 const SENTINELS = [

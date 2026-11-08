@@ -91,7 +91,7 @@ interface CorpusCase {
 
 // ── HL7 v2 ────────────────────────────────────────────────────────────────────────────────────────
 function hl7Case(): CorpusCase {
-  const ctx = createDeidContext({ key: "hl7-corpus", patientId: "p-hl7" });
+  const ctx = createDeidContext({ key: "hl7-corpus-synthetic-hmac-key", patientId: "p-hl7" });
   const original = parseHL7(hl7Wire("oru-r01"));
   const { document, manifest, unexaminedResiduals } = deidentifyHl7(parseHL7(hl7Wire("oru-r01")), {
     context: ctx,
@@ -145,7 +145,10 @@ function hl7Case(): CorpusCase {
  * the case cannot be passed by a blanket scrub either.
  */
 function hl7EmployerCase(): CorpusCase {
-  const ctx = createDeidContext({ key: "hl7-emp-corpus", patientId: "p-hl7-emp" });
+  const ctx = createDeidContext({
+    key: "hl7-emp-corpus-synthetic-hmac-key",
+    patientId: "p-hl7-emp",
+  });
   const raw = hl7Wire("adt-a01");
   const { document, manifest, unexaminedResiduals } = deidentifyHl7(parseHL7(raw), {
     context: ctx,
@@ -202,7 +205,10 @@ function hl7EmployerCase(): CorpusCase {
  * only ever proves absence cannot tell a removal from a preset that scrubs everything.
  */
 function hl7EncounterCase(): CorpusCase {
-  const ctx = createDeidContext({ key: "hl7-enc-corpus", patientId: "p-hl7-enc" });
+  const ctx = createDeidContext({
+    key: "hl7-enc-corpus-synthetic-hmac-key",
+    patientId: "p-hl7-enc",
+  });
   const raw = hl7Wire("adt-a03");
   const { document, manifest, unexaminedResiduals } = deidentifyHl7(
     parseHL7(raw),
@@ -243,7 +249,7 @@ function hl7EncounterCase(): CorpusCase {
 
 // ── C-CDA ─────────────────────────────────────────────────────────────────────────────────────────
 function ccdaCase(): CorpusCase {
-  const ctx = createDeidContext({ key: "ccda-corpus", patientId: "p-ccda" });
+  const ctx = createDeidContext({ key: "ccda-corpus-synthetic-hmac-key", patientId: "p-ccda" });
   const raw = FIX("ccda", "ccd.xml");
   const { document, manifest, unexaminedResiduals } = deidentifyCcda(parseCcda(raw), {
     context: ctx,
@@ -282,7 +288,7 @@ function ccdaCase(): CorpusCase {
 
 // ── FHIR R4 ───────────────────────────────────────────────────────────────────────────────────────
 function fhirCase(): CorpusCase {
-  const ctx = createDeidContext({ key: "fhir-corpus", patientId: "p-fhir" });
+  const ctx = createDeidContext({ key: "fhir-corpus-synthetic-hmac-key", patientId: "p-fhir" });
   const raw = FIX("fhir", "bundle.json");
   const { resource } = parseResource(raw);
   const { document, manifest, unexaminedResiduals } = deidentifyFhir(resource, { context: ctx });
@@ -371,7 +377,7 @@ function fhirNonPersonCase(): CorpusCase {
 
 // ── X12 EDI ───────────────────────────────────────────────────────────────────────────────────────
 function x12Case(): CorpusCase {
-  const ctx = createDeidContext({ key: "x12-corpus", patientId: "p-x12" });
+  const ctx = createDeidContext({ key: "x12-corpus-synthetic-hmac-key", patientId: "p-x12" });
   const raw = FIX("x12", "837p.edi");
   const { x12, manifest, unexaminedResiduals } = deidentifyX12String(raw, { context: ctx });
   return {
@@ -406,7 +412,7 @@ function x12Case(): CorpusCase {
 
 // ── NCPDP Telecom ─────────────────────────────────────────────────────────────────────────────────
 function ncpdpCase(): CorpusCase {
-  const ctx = createDeidContext({ key: "ncpdp-corpus", patientId: "p-ncpdp" });
+  const ctx = createDeidContext({ key: "ncpdp-corpus-synthetic-hmac-key", patientId: "p-ncpdp" });
   const raw = FIX("ncpdp", "telecom-b1.ncpdp");
   const { telecom, manifest, unexaminedResiduals } = deidentifyTelecomString(raw, { context: ctx });
   return {
@@ -597,10 +603,16 @@ describe("counted, not removed: a carrier's value reaches the wire and never the
   ];
 
   const ccda = deidentifyCcda(parseCcda(CARRIER_XML), {
-    context: createDeidContext({ key: "carrier-corpus", patientId: "p-carrier" }),
+    context: createDeidContext({
+      key: "carrier-corpus-synthetic-hmac-key",
+      patientId: "p-carrier",
+    }),
   });
   const fhir = deidentifyFhir(parseResource(CARRIER_JSON).resource, {
-    context: createDeidContext({ key: "carrier-corpus", patientId: "p-carrier" }),
+    context: createDeidContext({
+      key: "carrier-corpus-synthetic-hmac-key",
+      patientId: "p-carrier",
+    }),
   });
   const residuals = [...ccda.unexaminedResiduals, ...fhir.unexaminedResiduals];
 
@@ -670,7 +682,10 @@ describe("encounter loci positive control, the limited-data-set profile still ca
     "ZZFILLER700",
   ];
 
-  const ctx = createDeidContext({ key: "hl7-lds-corpus", patientId: "p-hl7-lds" });
+  const ctx = createDeidContext({
+    key: "hl7-lds-corpus-synthetic-hmac-key",
+    patientId: "p-hl7-lds",
+  });
   const { document, manifest } = deidentifyHl7(
     parseHL7(hl7Wire("adt-a03")),
     profileOptions(LIMITED_DATA_SET_PROFILE, ctx),
@@ -765,7 +780,7 @@ describe("consolidated over-scrub corpus, clinical/financial values survive", ()
 
 // ── Pipeline fuzz: truncated / mutated fixtures never leak a full sentinel and always terminate ─────
 describe("pipeline fuzz, mutated fixtures never leak and always terminate", () => {
-  const ctx = createDeidContext({ key: "fuzz-key", patientId: "p-fuzz" });
+  const ctx = createDeidContext({ key: "fuzz-key-synthetic-hmac-key", patientId: "p-fuzz" });
 
   interface FuzzTarget {
     readonly name: string;

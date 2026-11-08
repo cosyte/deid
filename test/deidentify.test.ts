@@ -26,7 +26,7 @@ function loc(partial: GenericLocus): GenericLocus {
 }
 
 describe("deidentify, Safe Harbor per-category defaults", () => {
-  const ctx = createDeidContext({ key: "engine-key", patientId: "p1" });
+  const ctx = createDeidContext({ key: "engine-key-synthetic-hmac-key", patientId: "p1" });
 
   it("redacts direct identifiers (names, phone, fax, email, ssn, url, ip, device, …)", () => {
     const model = {
@@ -94,7 +94,7 @@ describe("deidentify, Safe Harbor per-category defaults", () => {
 });
 
 describe("deidentify, fail closed", () => {
-  const ctx = createDeidContext({ key: "engine-key", patientId: "p1" });
+  const ctx = createDeidContext({ key: "engine-key-synthetic-hmac-key", patientId: "p1" });
 
   it("blocks an unclassified PHI-bearing locus as category (R)", () => {
     const out = deidentify(
@@ -184,7 +184,7 @@ describe("deidentify, fail closed", () => {
 
 describe("deidentify, the keyed-hash transform", () => {
   it("replaces a value with a consistent keyed digest under a hash policy", () => {
-    const ctx = createDeidContext({ key: "k" });
+    const ctx = createDeidContext({ key: "k-synthetic-hmac-key" });
     const hashPolicy = defineDeidPolicy({ name: "hashy", transforms: { [C.ACCOUNT]: "hash" } });
     const out = deidentify(
       { loci: [loc({ path: "acct", kind: "identifier", category: C.ACCOUNT, value: "ACCT-1" })] },
@@ -256,7 +256,7 @@ describe("deidentify, fatal conditions", () => {
   });
 
   it("throws DEID_NO_KEY when date-shift is requested without a per-patient scope", () => {
-    const noPatient = createDeidContext({ key: "k" }); // no patientId
+    const noPatient = createDeidContext({ key: "k-synthetic-hmac-key" }); // no patientId
     const shiftPolicy = defineDeidPolicy({
       name: "shift",
       transforms: { [C.DATES]: "date-shift" },
@@ -272,7 +272,7 @@ describe("deidentify, fatal conditions", () => {
 
 describe("deidentify, manifest shape + aggregation + empty model", () => {
   it("aggregates repeated identical loci into a single entry with a count", () => {
-    const ctx = createDeidContext({ key: "k" });
+    const ctx = createDeidContext({ key: "k-synthetic-hmac-key" });
     const out = deidentify(
       {
         loci: [

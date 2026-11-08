@@ -43,9 +43,21 @@ describe("createDeidRegistry, the key contract", () => {
     expect(() => createDeidRegistry({ key: "" })).toThrowError(
       expect.objectContaining({ code: FATAL_CODES.DEID_NO_KEY }),
     );
-    expect(() => createDeidRegistry({ key: "k", dateShiftSeed: new Uint8Array(0) })).toThrowError(
-      DeidError,
+    expect(() =>
+      createDeidRegistry({ key: "k-synthetic-hmac-key", dateShiftSeed: new Uint8Array(0) }),
+    ).toThrowError(DeidError);
+  });
+
+  it("refuses a key or seed shorter than 16 bytes, and accepts 16 and 32", () => {
+    // Synthetic keys only: 15, 16 and 32 UTF-8 bytes.
+    expect(() => createDeidRegistry({ key: "synthetic-key15" })).toThrowError(
+      expect.objectContaining({ code: FATAL_CODES.DEID_KEY_TOO_SHORT }),
     );
+    expect(() =>
+      createDeidRegistry({ key: "synthetic-key-16", dateShiftSeed: new Uint8Array(15) }),
+    ).toThrowError(expect.objectContaining({ code: FATAL_CODES.DEID_KEY_TOO_SHORT }));
+    expect(() => createDeidRegistry({ key: "synthetic-key-16" })).not.toThrow();
+    expect(() => createDeidRegistry({ key: new Uint8Array(32).fill(7) })).not.toThrow();
   });
 
   it("a directly-constructed handle with no bound key fails closed", () => {
@@ -69,13 +81,13 @@ describe("createDeidRegistry, the key contract", () => {
 
 describe("DeidRegistry.forPatient, cross-document date-shift consistency", () => {
   it("memoizes: the same patient key returns the identical context handle", () => {
-    const registry = createDeidRegistry({ key: "secret" });
+    const registry = createDeidRegistry({ key: "secret-synthetic-hmac-key" });
     expect(registry.forPatient("p1")).toBe(registry.forPatient("p1"));
     expect(registry.forPatient("p1")).not.toBe(registry.forPatient("p2"));
   });
 
   it("same patient → same shifted dates across two separate documents (linkage preserved)", () => {
-    const registry = createDeidRegistry({ key: "secret" });
+    const registry = createDeidRegistry({ key: "secret-synthetic-hmac-key" });
     const ctx = registry.forPatient("patient-1");
     // Two "documents" processed independently, both for patient-1.
     const doc1 = deidentify(datedDoc("2020-01-01", "2020-01-11"), {
@@ -96,7 +108,7 @@ describe("DeidRegistry.forPatient, cross-document date-shift consistency", () =>
   });
 
   it("preserves intervals exactly within a patient", () => {
-    const registry = createDeidRegistry({ key: "secret" });
+    const registry = createDeidRegistry({ key: "secret-synthetic-hmac-key" });
     const ctx = registry.forPatient("patient-1");
     const doc = deidentify(datedDoc("2020-01-01", "2020-01-11"), {
       policy: RESEARCH,
@@ -111,8 +123,8 @@ describe("DeidRegistry.forPatient, cross-document date-shift consistency", () =>
   });
 
   it("is stable across independent registries built from the same key (cross-run consistency)", () => {
-    const a = createDeidRegistry({ key: "shared-secret" });
-    const b = createDeidRegistry({ key: "shared-secret" });
+    const a = createDeidRegistry({ key: "shared-secret-synthetic-hmac-key" });
+    const b = createDeidRegistry({ key: "shared-secret-synthetic-hmac-key" });
     const da = deidentify(datedDoc("2019-06-15", "2019-06-20"), {
       policy: RESEARCH,
       context: a.forPatient("p9"),
@@ -125,8 +137,8 @@ describe("DeidRegistry.forPatient, cross-document date-shift consistency", () =>
   });
 
   it("a rotated key intentionally breaks old linkage (different shifted dates)", () => {
-    const oldReg = createDeidRegistry({ key: "old-key" });
-    const newReg = createDeidRegistry({ key: "new-key" });
+    const oldReg = createDeidRegistry({ key: "old-key-synthetic-hmac-key" });
+    const newReg = createDeidRegistry({ key: "new-key-synthetic-hmac-key" });
     const shift = (r: DeidRegistry): string | null =>
       deidentify(datedDoc("2020-01-01", "2020-01-02"), {
         policy: RESEARCH,
@@ -141,19 +153,19 @@ describe("DeidRegistry.forPatient, cross-document date-shift consistency", () =>
 
 describe("DeidRegistry.pseudonym / remapUid, corpus-wide identifier consistency", () => {
   it("same identifier → same pseudonym; different identifiers → different pseudonyms", () => {
-    const registry = createDeidRegistry({ key: "secret" });
+    const registry = createDeidRegistry({ key: "secret-synthetic-hmac-key" });
     expect(registry.pseudonym("MRN-1")).toBe(registry.pseudonym("MRN-1"));
     expect(registry.pseudonym("MRN-1")).not.toBe(registry.pseudonym("MRN-2"));
   });
 
   it("pseudonym is patient-independent (same MRN links regardless of scope)", () => {
-    const registry = createDeidRegistry({ key: "secret" });
+    const registry = createDeidRegistry({ key: "secret-synthetic-hmac-key" });
     // The surrogate does not depend on which patient scope is active.
     expect(registry.pseudonym("MRN-7")).toBe(registry.pseudonym("MRN-7"));
   });
 
   it("remapUid is consistent and domain-separated from pseudonym", () => {
-    const registry = createDeidRegistry({ key: "secret" });
+    const registry = createDeidRegistry({ key: "secret-synthetic-hmac-key" });
     const uid = "1.2.840.113619.2.55.3.604688";
     expect(registry.remapUid(uid)).toBe(registry.remapUid(uid));
     // Same text through the two channels must not share a surrogate (domain separation).

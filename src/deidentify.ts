@@ -51,7 +51,8 @@ import {
  * ```ts
  * import { type DeidOptions, createDeidContext } from "@cosyte/deid";
  *
- * const opts: DeidOptions = { policy: "safe-harbor", context: createDeidContext({ key: "secret" }) };
+ * const context = createDeidContext({ key: process.env.DEID_KEY! });
+ * const opts: DeidOptions = { policy: "safe-harbor", context };
  * ```
  */
 export interface DeidOptions {

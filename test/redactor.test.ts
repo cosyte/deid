@@ -104,7 +104,7 @@ describe("BYO free-text redactor, redacted-in-place path", () => {
 });
 
 describe("BYO free-text redactor, scope and safety invariants", () => {
-  const ctx = createDeidContext({ key: "k", patientId: "p1" });
+  const ctx = createDeidContext({ key: "k-synthetic-hmac-key", patientId: "p1" });
 
   it("touches ONLY free-text loci, structural removal and the clinical guard are unchanged", () => {
     // A redactor that would emit its input verbatim (an under-redactor) must not affect non-free-text.

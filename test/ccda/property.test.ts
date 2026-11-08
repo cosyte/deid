@@ -53,7 +53,7 @@ describe("deidentifyCcda, property: fail-safe leak + value-free invariants", () 
           street: token,
           guardian: token,
           authorName: token,
-          key: fc.stringMatching(/^[a-z0-9]{8,16}$/),
+          key: fc.stringMatching(/^[a-z0-9]{16,32}$/),
         }),
         (r) => {
           const ctx = createDeidContext({ key: r.key, patientId: "p" });

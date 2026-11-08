@@ -120,6 +120,15 @@ deidentify(model, profileOptions(LIMITED_DATA_SET_PROFILE, context));
 // lists it in the keyed-surrogate residual inventory an expert must reason about.
 ```
 
+**The key.** Use 32 random bytes, and keep them: the same key gives the same surrogates and offsets
+on every run. Make one with `openssl rand -hex 32` (64 hex characters, for example in `DEID_KEY` as
+above) or with `crypto.randomBytes(32)` from `node:crypto`. `createDeidContext` and
+`createDeidRegistry` refuse a key, or an explicit `dateShiftSeed`, shorter than **16 bytes (128
+bits)** with a typed `DEID_KEY_TOO_SHORT` fatal, and an empty one with `DEID_NO_KEY`. The length is
+counted on the bytes the HMAC uses: a `Uint8Array` as given, a string as its UTF-8 bytes (a hex or
+base64 string is not decoded). The check counts bytes, not randomness: a 16-character phrase passes it
+and is still guessable, so draw the key from a random source. Neither fatal carries the key.
+
 A policy carrying the `safe-harbor` label that assigns a category a transform whose output is
 **derived from that category's own value** is refused with a typed `DEID_POLICY_INVALID` fatal naming
 the category and the transform, at mint time and at the point of use alike. A policy that does not
@@ -554,7 +563,8 @@ registry.pseudonym("MRN-1"); // same MRN → same surrogate corpus-wide
 ```
 
 **The key contract.** You supply the key; there is **no weak default** (an absent key is a fatal
-`DEID_NO_KEY`, never a silent fallback). Rotating the key is **intentional linkage breakage**: a new
+`DEID_NO_KEY`, and a key or seed shorter than 16 bytes is a fatal `DEID_KEY_TOO_SHORT`, never a silent
+fallback; see [Keyed transforms](#keyed-transforms) for making one). Rotating the key is **intentional linkage breakage**: a new
 key un-links a corpus from records made under the old one. The library holds no persistent key store.
 Date-shift retains dates in shifted form, and a keyed surrogate is derived from the individual's own
 value, so both are Expert-Determination-supporting, **not** Safe Harbor. The library rejects any

@@ -33,7 +33,10 @@ import {
   type Hl7DateLocusRule,
 } from "../../src/hl7/index.js";
 
-const ctx = createDeidContext({ key: "date-loci-key", patientId: "patient-800" });
+const ctx = createDeidContext({
+  key: "date-loci-key-synthetic-hmac-key",
+  patientId: "patient-800",
+});
 const STAMP = "20240315103000";
 const YEAR = "2024";
 

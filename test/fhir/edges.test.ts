@@ -10,7 +10,7 @@ import { describe, expect, it } from "vitest";
 import { createDeidContext, SAFE_HARBOR_CATEGORIES } from "../../src/index.js";
 import { deidentifyFhirJson } from "../../src/fhir/index.js";
 
-const ctx = createDeidContext({ key: "edge-key", patientId: "p" });
+const ctx = createDeidContext({ key: "edge-key-synthetic-hmac-key", patientId: "p" });
 const C = SAFE_HARBOR_CATEGORIES;
 
 function run(resource: unknown) {

@@ -33,7 +33,7 @@ const HASH_DOMAIN = "keyed-hash";
  * ```ts
  * import { pseudonymize, createDeidContext } from "@cosyte/deid";
  *
- * const ctx = createDeidContext({ key: "secret" });
+ * const ctx = createDeidContext({ key: process.env.DEID_KEY! });
  * pseudonymize("MRN-123", ctx) === pseudonymize("MRN-123", ctx); // => true (consistent)
  * ```
  */
@@ -53,7 +53,7 @@ export function pseudonymize(id: string, ctx: DeidContext): string {
  * ```ts
  * import { keyedHash, createDeidContext } from "@cosyte/deid";
  *
- * const ctx = createDeidContext({ key: "secret" });
+ * const ctx = createDeidContext({ key: process.env.DEID_KEY! });
  * typeof keyedHash("value", ctx); // => "string"
  * ```
  */

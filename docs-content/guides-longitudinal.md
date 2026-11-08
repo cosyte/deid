@@ -31,7 +31,12 @@ across every document: intervals (`3 days later` stays 3 days later) are preserv
 identifier maps to the same pseudonym corpus-wide.
 
 ```ts runnable
-import { createDeidRegistry, deidentify, defineDeidPolicy, SAFE_HARBOR_CATEGORIES } from "@cosyte/deid";
+import {
+  createDeidRegistry,
+  deidentify,
+  defineDeidPolicy,
+  SAFE_HARBOR_CATEGORIES,
+} from "@cosyte/deid";
 
 const registry = createDeidRegistry({ key: "consumer-held-secret" });
 const research = defineDeidPolicy({
@@ -43,7 +48,9 @@ const research = defineDeidPolicy({
 const ctx = registry.forPatient("patient-1");
 const shift = (date: string) =>
   deidentify(
-    { loci: [{ path: "PID-7", kind: "date", category: SAFE_HARBOR_CATEGORIES.DATES, value: date }] },
+    {
+      loci: [{ path: "PID-7", kind: "date", category: SAFE_HARBOR_CATEGORIES.DATES, value: date }],
+    },
     { policy: research, context: ctx },
   ).document.loci[0].value;
 
@@ -66,8 +73,15 @@ identifiers (study/series/instance UIDs, GUIDs) you thread across files.
   error: the registry redacts itself through every stringify channel.
 - **Fail closed, no weak default.** There is no built-in or default key. An absent or empty key is a
   fatal `DEID_NO_KEY`, never a silent fallback that would produce a re-identifiable surrogate.
-- **Rotation is intentional linkage breakage.** A new key deterministically produces *different*
-  offsets and *different* pseudonyms, so a corpus de-identified under a rotated key **no longer links**
+- **At least 16 bytes; use 32 random bytes.** `createDeidRegistry` and `createDeidContext` refuse a
+  key, or an explicit `dateShiftSeed`, shorter than 16 bytes (128 bits) with a fatal
+  `DEID_KEY_TOO_SHORT`. The length is counted on the bytes the HMAC uses: a `Uint8Array` as given, a
+  string as its UTF-8 bytes (a hex or base64 string is not decoded). Make a key with
+  `crypto.randomBytes(32)` or `openssl rand -hex 32`, and store it as you would any secret: keeping it
+  is what keeps the corpus linkable. The check counts bytes, not randomness, so a short phrase padded
+  to 16 characters passes it and is still guessable.
+- **Rotation is intentional linkage breakage.** A new key deterministically produces _different_
+  offsets and _different_ pseudonyms, so a corpus de-identified under a rotated key **no longer links**
   to records made under the old key. Rotate to sever linkage; keep the key to preserve it. The library
   holds **no persistent key store**: key custody and lifetime are yours.
 
@@ -78,6 +92,22 @@ import { createDeidRegistry } from "@cosyte/deid";
 createDeidRegistry({ key: "" });
 ```
 
+```ts runnable throws
+import { createDeidRegistry } from "@cosyte/deid";
+
+// 15 bytes → DEID_KEY_TOO_SHORT. The message names the minimum and never the key.
+createDeidRegistry({ key: "synthetic-key15" });
+```
+
+```ts runnable
+import { randomBytes } from "node:crypto";
+import { createDeidRegistry } from "@cosyte/deid";
+
+// 32 random bytes: the key to use. Persist it to keep linkage across runs.
+const registry = createDeidRegistry({ key: randomBytes(32) });
+registry.pseudonym("MRN-1") === registry.pseudonym("MRN-1"); // => true
+```
+
 A date-shifting policy may not claim the Safe Harbor label: the library rejects the mislabel rather
 than emit shifted real dates under a Safe Harbor claim:
 
@@ -85,7 +115,10 @@ than emit shifted real dates under a Safe Harbor claim:
 import { defineDeidPolicy, SAFE_HARBOR_CATEGORIES } from "@cosyte/deid";
 
 // A shifted real date is still a date element: this is Expert-Determination, not Safe Harbor.
-defineDeidPolicy({ name: "safe-harbor", transforms: { [SAFE_HARBOR_CATEGORIES.DATES]: "date-shift" } });
+defineDeidPolicy({
+  name: "safe-harbor",
+  transforms: { [SAFE_HARBOR_CATEGORIES.DATES]: "date-shift" },
+});
 ```
 
 The same guard covers a keyed surrogate, which is derived from the individual's own value in exactly
@@ -96,7 +129,10 @@ import { defineDeidPolicy, SAFE_HARBOR_CATEGORIES } from "@cosyte/deid";
 
 // A keyed surrogate of a medical record number is a re-identification code §164.514(c)(1) does not
 // permit, so it may not wear the label either.
-defineDeidPolicy({ name: "safe-harbor", transforms: { [SAFE_HARBOR_CATEGORIES.MRN]: "pseudonymize" } });
+defineDeidPolicy({
+  name: "safe-harbor",
+  transforms: { [SAFE_HARBOR_CATEGORIES.MRN]: "pseudonymize" },
+});
 ```
 
 ## What the limited-data-set preset keeps, and where it is stricter than the regulation
