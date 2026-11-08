@@ -19,7 +19,7 @@ pnpm typecheck && pnpm lint && pnpm format:check && pnpm phi-scan
 pnpm test && pnpm test:coverage && pnpm build && pnpm attw
 pnpm smoke && pnpm examples && pnpm check:test-selection
 pnpm check:no-emdash && pnpm check:no-internal-refs
-pnpm check:readme && pnpm check:claude-card && pnpm check:agent-notes
+pnpm check:readme && pnpm check:claude-card && pnpm check:agent-notes && pnpm check:catalog
 ```
 
 The first nine are the shared `ci / verify` ladder, on Node 22, 24, and 26. `smoke`, `examples`,

@@ -37,7 +37,8 @@
   "pnpm": {
     "overrides": {
       "esbuild@>=0.27.3 <0.28.1": "0.28.1",
-      "js-yaml@>=4.0.0 <4.3.0": "4.3.0"
+      "js-yaml@>=4.0.0 <4.3.2": "4.3.2",
+      "js-yaml@>=3.0.0 <3.15.2": "3.15.2"
     }
   },
   "main": "./dist/index.cjs",
@@ -199,14 +200,14 @@
     "@cosyte/hl7": "^0.1.1",
     "@cosyte/ncpdp": "^0.1.1",
     "@cosyte/prettier-config": "^0.1.2",
-    "@cosyte/script-utils": "^0.1.4",
+    "@cosyte/script-utils": "^0.1.5",
     "@cosyte/test-utils": "^0.1.2",
     "@cosyte/tsconfig": "^0.1.2",
     "@cosyte/tsup-config": "^0.1.2",
     "@cosyte/vitest-config": "^0.1.2",
     "@cosyte/x12": "^0.1.2",
     "@types/node": "^22.0.0",
-    "@vitest/coverage-v8": "4.1.4",
+    "@vitest/coverage-v8": "4.1.12",
     "@xmldom/xmldom": "0.9.10",
     "eslint": "10.5.0",
     "fast-check": "3.23.2",
@@ -216,7 +217,7 @@
     "tsx": "4.21.0",
     "typescript": "5.9.3",
     "vite": "7.3.6",
-    "vitest": "4.1.4"
+    "vitest": "4.1.12"
   },
   "dependencies": {}
 }
