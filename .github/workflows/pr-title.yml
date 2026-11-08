@@ -1,0 +1,26 @@
+name: PR title
+
+# The pull request title follows Conventional Commits (ST24), because a squash merge makes the title
+# the commit that lands. The rule lives in the shared workflow, so this file only calls it, at the
+# same published reference as every other caller here (ST37). Its one context is
+# `pr-title / conventional-commits`. It runs on `pull_request` only: on any other event the shared
+# job fails by design rather than passing over no title.
+
+on:
+  pull_request:
+    branches: [main]
+    # `edited` is load-bearing: a title changed after the last push is the title that lands.
+    types: [opened, synchronize, reopened, edited]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  pr-title:
+    permissions:
+      contents: read
+    uses: cosyte/.github/.github/workflows/pr-title.yml@workflows-2026-11-07-498c7c13c886

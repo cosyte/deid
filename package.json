@@ -181,7 +181,7 @@
     "version": "changeset version && node scripts/sync-version.mjs && prettier --write package.json CHANGELOG.md src/labels.ts",
     "release": "changeset publish",
     "prepublishOnly": "pnpm clean && pnpm typecheck && pnpm lint && pnpm test && pnpm build && pnpm attw",
-    "prepare": "command -v simple-git-hooks >/dev/null 2>&1 && simple-git-hooks || true"
+    "prepare": "command -v simple-git-hooks >/dev/null 2>&1 && simple-git-hooks 1>&2 || true"
   },
   "simple-git-hooks": {
     "pre-commit": "pnpm phi-scan --staged"
@@ -191,15 +191,15 @@
     "@changesets/cli": "2.31.0",
     "@cosyte/ccda": "^0.1.1",
     "@cosyte/dicom": "^0.1.1",
-    "@cosyte/eslint-config": "^0.1.1",
+    "@cosyte/eslint-config": "^0.1.2",
     "@cosyte/fhir": "^0.1.1",
     "@cosyte/hl7": "^0.1.1",
     "@cosyte/ncpdp": "^0.1.1",
-    "@cosyte/prettier-config": "^0.1.1",
-    "@cosyte/test-utils": "^0.1.1",
-    "@cosyte/tsconfig": "^0.1.1",
-    "@cosyte/tsup-config": "^0.1.1",
-    "@cosyte/vitest-config": "^0.1.1",
+    "@cosyte/prettier-config": "^0.1.2",
+    "@cosyte/test-utils": "^0.1.2",
+    "@cosyte/tsconfig": "^0.1.2",
+    "@cosyte/tsup-config": "^0.1.2",
+    "@cosyte/vitest-config": "^0.1.2",
     "@cosyte/x12": "^0.1.2",
     "@types/node": "^22.0.0",
     "@vitest/coverage-v8": "4.1.4",

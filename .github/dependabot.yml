@@ -1,55 +1,55 @@
 version: 2
 
-# Nothing watched this repo's dependencies until CI-REQUIRED-CHECKS / DEPENDABOT-PR-QUEUE.
-# `@cosyte/deid` showed ZERO open Dependabot pull requests, which meant nothing was looking,
-# not that nothing was stale.
+# Two ecosystems, because the repository has exactly two dependency surfaces: npm (`package.json`
+# and `pnpm-lock.yaml` at the root, the only manifest) and github-actions (`.github/workflows/`).
+# The shape is the parser template's in cosyte/config (EN5): weekly, one pull request per group, and
+# a release becomes eligible a day after it is published (`cooldown`), which keeps a release pulled
+# within hours out of this repository. Security updates are not delayed.
 #
-# Two ecosystems, because the repo has exactly two dependency surfaces. Swept, not assumed:
-#   npm             package.json + pnpm-lock.yaml at the root, the ONLY manifest in the repo
-#   github-actions  .github/workflows/*.yml
-# There is no third. No Dockerfile, no Terraform, no pnpm workspace, no second package.json,
-# no submodules of its own, no Python/Go/Rust manifest. The only other tracked non-source
-# trees are `docs-content/` (prose) and `scripts/` (repo-local TypeScript, no manifest of its
-# own).
+# Every commit message, and so every pull request title, is `chore(deps): bump ...` or
+# `chore(deps-dev): bump ...`: Conventional Commits, which `pr-title.yml` checks (ST24). Without a
+# prefix Dependabot guesses one from the history, and a guess is not a title rule.
 #
-# ▶ ONE THING THIS FILE DOES NOT BUY, BECAUSE IT IS EASY TO OVER-READ.
-# It configures VERSION updates only. Automatic SECURITY update PRs are a repo setting, not a
-# config key: alerts are enabled here, but `security_and_analysis.dependabot_security_updates`
-# read `disabled` when this file was written, so an advisory raises an alert and opens no fix PR
-# on its own. Check with `gh api repos/cosyte/deid --jq .security_and_analysis`.
-
+# This package ships ZERO runtime dependencies (`dependencies` is `{}` and stays that way; every
+# primitive is `node:crypto`), so the npm group that matters is the development one. The six sibling
+# parsers are optional peers installed for the tests as registry devDependencies, so this entry
+# watches the versions the tests exercise: `@cosyte/deid/dicom` delegates its pass to `@cosyte/dicom`,
+# and an upstream change arrives as a grouped bump that runs the DICOM suites before it lands.
+# `pnpm.overrides` pins esbuild and js-yaml above advisory ranges, and Dependabot does not manage
+# overrides: when a bump makes one redundant, remove it by hand.
+#
+# The cosyte/.github callers name a published `workflows-*` reference, which moves by hand with every
+# caller here (ST37), not through this file. Majors wait for the toolchain-upgrade pass (EN10).
 updates:
-  # npm. This package ships ZERO runtime dependencies by design -- `dependencies` is `{}` and
-  # stays that way (the zero-dep rule; `node:crypto` only). So everything Dependabot can see
-  # here is a devDependency, and one group is the whole tree. The `npm` ecosystem covers pnpm:
-  # Dependabot infers the package manager from the lockfile, which is `pnpm-lock.yaml`.
-  #
-  # ▶ THE SIX SIBLING PARSERS ARE COVERED HERE. They are declared as optional PEER dependencies
-  # and installed for tests as registry devDependencies resolved through `pnpm-lock.yaml`, so
-  # this entry watches the versions the tests actually exercise. That matters more here than it
-  # would elsewhere: `@cosyte/deid/dicom` DELEGATES its de-identification pass to
-  # `@cosyte/dicom`, so a change to the upstream pass arrives as a grouped bump and runs this
-  # package's DICOM tests before it lands.
-  #
-  # NOTE: package.json carries `pnpm.overrides` pinning esbuild and js-yaml above advisory
-  # ranges. Dependabot does not manage those overrides -- if it proposes a bump that makes one
-  # redundant, the override is removed by hand, not silently left to pin a version backwards.
   - package-ecosystem: npm
     directory: "/"
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 1
     open-pull-requests-limit: 5
+    commit-message:
+      prefix: chore
+      include: scope
     groups:
       dev-dependencies:
         dependency-type: development
-
-  # Keep GitHub Actions references current. Four of the five workflows here are THIN CALLERS of
-  # `cosyte/.github/.github/workflows/*.yml@main`, and `@main` is a branch ref, so Dependabot has
-  # nothing to bump in those -- their pinned action SHAs live upstream in `cosyte/.github`, which
-  # has its own config. `smoke.yml` is the exception this entry was written in advance for: it is
-  # the first repo-local job, it pins `actions/checkout`, `pnpm/action-setup` and
-  # `actions/setup-node` by SHA, and those three pins are now what this ecosystem actually watches.
+      dependencies:
+        dependency-type: production
   - package-ecosystem: github-actions
     directory: "/"
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 1
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+    ignore:
+      # From v1.75.0 this action installs actionlint by piping a script from a fork to bash. The
+      # shared CI runs the official rhysd/actionlint release, checked by its SHA-256, instead.
+      - dependency-name: "reviewdog/action-actionlint"
