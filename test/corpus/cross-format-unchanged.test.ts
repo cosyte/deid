@@ -99,11 +99,18 @@ describe("every adapter emits the same transformed document, byte for byte", () 
   // a byte longer on purpose. What must NOT have changed is anything else, and the next test asserts
   // exactly that by digesting the same document with the new element taken back out and matching the
   // pre-existing pin. The other five adapters are untouched and their digests are unmoved.
+  //
+  // IT MOVED A SECOND TIME WITH `@cosyte/dicom` 0.1, AND NOTHING HERE CHANGED. The DICOM adapter
+  // delegates to that package's Annex E pass, which in 0.1 drops the sender's Source Application
+  // Entity Title `(0002,0016)` and the unmodeled `(0002,0100)`, adds Longitudinal Temporal Information
+  // Modified `(0028,0303)` = `REMOVED`, and writes its own File Meta implementation identity
+  // `(0002,0012)` / `(0002,0013)`. No sentinel reaches the output (the leak corpus asserts that), and
+  // the other five adapters' digests are unmoved by their 0.1 peers.
   it("the six adapters' transformed documents are unchanged", () => {
     expect(transformedDocumentDigests()).toMatchInlineSnapshot(`
       {
         "ccda": "152ba0fce5feff3fa707d6c25c868ee9",
-        "dicom": "c5b02868abb92c9221aa105af00ac5cd",
+        "dicom": "99a98829ee94575f76b3a48e89740d5b",
         "fhir": "a9237473c3c96a54b5ad915ad10afe34",
         "hl7": "b0e71b72dd6f4078c43d1d7b767ef843",
         "hl7-encounter": "7aef4fa7fa7ed2ffd1ce4c05158e4773",
@@ -183,7 +190,8 @@ describe("every adapter emits the same transformed document, byte for byte", () 
   });
 
   it("and the DICOM document is unchanged once the added declaration is taken back out", () => {
-    // The pinned value is the ORIGINAL digest, captured before `(0012,0064)` was ever written. Removing
+    // The pinned value is the digest without `(0012,0064)`, recaptured on `@cosyte/dicom` 0.1 for the
+    // reason given above the previous test; before that, it was the ORIGINAL digest. Removing
     // that one element and re-serializing has to reproduce it exactly: that is what makes the digest
     // above an ADDITION rather than a rewrite, and it holds the coded declaration to the same bar the
     // measurement was held to. Every other byte of the pass, the `(0012,0063)` method text and the
@@ -200,7 +208,7 @@ describe("every adapter emits the same transformed document, byte for byte", () 
       ...(dataset.fileMeta !== undefined ? { fileMeta: dataset.fileMeta } : {}),
     });
     expect(digest(serializeDicom(withoutDeclaration).toString("latin1"))).toBe(
-      "8f9e91a91cc7b3a4461af53838c8843e",
+      "3033a8688dbeac85eec96ba1495df9a8",
     );
   });
 });

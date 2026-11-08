@@ -360,8 +360,7 @@ transformation with a value-free manifest, never a leaked patient, and never a c
 
 ## NCPDP Telecom: one transaction per message
 
-`deidentifyTelecom` handles a Telecom message that carries one transaction. A message whose header
-declares more than one is not handled in this release: with `@cosyte/ncpdp` 0.1.x installed the call
-throws that parser's multi-transaction build error and returns nothing, and an older `@cosyte/ncpdp`
-returns only the first transaction with the header count unchanged. Split such a message first. A later
-release de-identifies every transaction or refuses the message with a typed `DEID_*` error.
+`deidentifyTelecom` handles a Telecom message that carries one transaction. A message that carries
+more than one is **refused** with a typed `DeidError` carrying `DEID_FORMAT_UNSUPPORTED`, and returns no
+transformed message, no manifest and no partial output, so no transaction is dropped or returned
+untransformed. Split such a message and de-identify each transaction on its own.

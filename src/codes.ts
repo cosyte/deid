@@ -102,7 +102,8 @@ export const FATAL_CODES = {
   DEID_DECLARATION_UNNAMEABLE: "DEID_DECLARATION_UNNAMEABLE",
   /**
    * A caller handed an adapter a **document in a format that adapter refuses outright**, rather than
-   * the format its entry point de-identifies.
+   * the format its entry point de-identifies, or a shape of that format it refuses outright (an NCPDP
+   * Telecom transmission carrying more than one transaction).
    *
    * Refusal, not best effort. An adapter reaches a document only through the parser surface its peer
    * package publishes, and where that surface cannot express a faithful structural pass, a partial

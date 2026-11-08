@@ -99,3 +99,7 @@ change: a parsed Telecom transaction is never a candidate for the refusal.
 A retained clinical segment may carry a residual patient-related date the map does not surface (e.g. a
 previous date of fill): a documented limitation mirroring the HL7 and X12 adapters; forgetting one fails
 **safe** (retained, not leaked).
+
+A Telecom message that carries more than one transaction is **refused** with a typed `DeidError`
+carrying `DEID_FORMAT_UNSUPPORTED`, with no partial output. Split it and de-identify each transaction on
+its own.
