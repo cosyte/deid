@@ -1,0 +1,203 @@
+{
+  "$comment": [
+    "The axes of the shared internal-reference gate (@cosyte/script-utils, `cosyte-internal-refs`, ST34) for this repository: no item identifiers, phase or wave words, ADR numbers, internal paths or traceability markers on what a consumer reads. That is the README, LICENSE, docs-content/, the npm description and keywords, the doc comments that compile into the shipped declarations, and the string literals in src/, which reach a consumer as a disposition message a consumer reads in their logs.",
+    "The samples are the ones this repository's own gate carried, so every self-test it ran still runs here.",
+    "slice-after-the-or-each and phase-before-a-prose-word keep what this repository's own gate caught and the shared rules let through since 0.1.5 and 0.1.6: `the` and `each` before `slice`, and `phase` before a prose word or after a hyphenated word.",
+    "roadmap-section: this repository cited its roadmap by section (`roadmap §4.6`, `roadmap §Phase 8`). A bare `§` is how it cites 45 CFR 164.514, so that sample is a negative of every rule."
+  ],
+  "projectPrefixes": [
+    "PARSERS-PUBLIC",
+    "DOCS-CONTENT",
+    "KNOWLEDGEBASE",
+    "TERMINOLOGY",
+    "PATHWAYS",
+    "TRANSFORM",
+    "WEBSITE",
+    "STAGING",
+    "SUPPLY",
+    "NCPDP",
+    "ASSETS",
+    "EMDASH",
+    "README",
+    "CONFIG",
+    "DICOM",
+    "SYNTH",
+    "DEID",
+    "CCDA",
+    "ASTM",
+    "MLLP",
+    "FHIR",
+    "CREW",
+    "DOCS",
+    "PERF",
+    "SYNC",
+    "VERSION",
+    "PUBLIC",
+    "HL7",
+    "X12",
+    "IAC",
+    "CLI",
+    "KB",
+    "PW",
+    "PUB",
+    "CI",
+    "REAL",
+    "TERM",
+    "WF",
+    "VERIFY"
+  ],
+  "standardsDesignations": [
+    "NCPDP-(?:SCRIPT|TELECOM|D\\.\\d|F\\d)",
+    "HL7-(?:V2|V3|CDA|FHIR|OMG)",
+    "FHIR-R\\d[A-Z]?",
+    "DICOM-(?:SR|RT|SEG|DIR|PS\\d)",
+    "X12-\\d{3}[A-Z]?",
+    "X12-\\d{6}",
+    "CCDA-R\\d(?:\\.\\d)?",
+    "ASTM-E\\d+"
+  ],
+  "surfacePaths": [
+    "README.md",
+    "LICENSE",
+    "docs-content"
+  ],
+  "accountedTarballFiles": [
+    "CHANGELOG.md",
+    "dist"
+  ],
+  "sourceDocComments": {
+    "enabled": true,
+    "paths": [
+      "src/*.ts",
+      "src/**/*.ts"
+    ]
+  },
+  "sourceStringLiterals": {
+    "enabled": true,
+    "paths": [
+      "src/*.ts",
+      "src/**/*.ts"
+    ]
+  },
+  "extraSamples": {
+    "internal-identifier": {
+      "positives": [
+        "Item DEID-8 is done, and CCDA-P7 with it",
+        "DEID-8 shipped this redaction interface"
+      ],
+      "negatives": [
+        "HL7 v2 loci PID-3, PID-5, PID-7, PID-19, OBX-2, OBX-5, NTE-3, PV1-7, PV1-19 and CX-5; X12 loci NM1-01, NM1-03, NM1-08, REF-01, REF-02, DTP-03, DTM-02, CLM-01, CLP-01, SBR-03, SBR-04, N4-06 and DMG-02; ICD-10-CM coding; identifier kinds US-SSN and MRN-1; HMAC-SHA and SHA-256; the YYYY-MM-DD shape; HL7-V2 and HL7-CDA, FHIR-R4, DICOM-SR, NCPDP-SCRIPT and NCPDP-TELECOM, X12-837P and X12-005010, CCDA-R2.1, ASTM-E1394; HL7-defined tables, FHIR-bridge stability, docs-content/ layout; 45 CFR 164.514(b)(2)(i)(C)",
+        "HL7 v2 loci PID-3, PID-5, PID-7, PID-19, OBX-2, OBX-5, NTE-3, PV1-7 and CX-5; X12 loci NM1-01, NM1-03, NM1-08, REF-01, REF-02, DTP-03, DTM-02, CLM-01, CLP-01, SBR-03, N4-06 and DMG-02; ICD-10-CM coding; US-SSN and MRN-1; HMAC-SHA and SHA-256; YYYY-MM-DD; HL7-V2, FHIR-R4, DICOM-SR, NCPDP-SCRIPT, X12-837P, CCDA-R2.1, ASTM-E1394; HL7-defined tables and FHIR-bridge stability; 45 CFR 164.514(b)(2)(i)(C)",
+        "DEID_LOCUS_BLOCKED and DEID_NO_KEY and DEID_CATEGORY_DATE_SHIFTED and DEID_FREETEXT_CONSUMER_REDACTED, HEALTH_PLAN_BENEFICIARY and CERTIFICATE_LICENSE and FULL_FACE_PHOTO and OTHER_UNIQUE_ID, ./context.js and ../transforms/redact.js, HL7-V2 and FHIR-R4 and DICOM-SR and NCPDP-SCRIPT and X12-837P, PID-3 and OBX-5 and CX-5 and NM1-03 and REF-01 and DTP-03, US-SSN and MRN-1, HMAC-SHA and SHA-256, YYYY-MM-DD, ICD-10-CM",
+        "Grounded on the map (§4.6), per 45 CFR §164.514(b)(2)(i)(C) and §164.514(e)"
+      ]
+    },
+    "phase-or-wave": {
+      "positives": [
+        "Phase 5b closes it (Phase W, Phase-5 and the thirteenth slice landed earlier, in wave 2), and later phases follow, per the map (roadmap §4.6) and (roadmap §Phase 8)",
+        "Added in Phase 9 and reworked in phase 10b"
+      ],
+      "negatives": [
+        "A Phase III oncology trial and a Phase II study reported in an OBX; the clinical phases of a treatment programme; the acute phase reactant; luteal phase and follicular phase dosing; the liquid phase of a specimen; the adapter stays in phase with the source document and is out of phase",
+        "A Phase III oncology trial and a Phase II study reported in an OBX; the clinical phases of a treatment programme; the acute phase reactant; luteal phase dosing; the liquid phase of a specimen; the adapter stays in phase with the source document and is out of phase",
+        "Safe-Harbor-transformed per the configured policy; a Phase III trial and the acute phase reactant are clinical values retained untouched, and the engine stays in phase with the source document.",
+        "Grounded on the map (§4.6), per 45 CFR §164.514(b)(2)(i)(C) and §164.514(e)"
+      ]
+    },
+    "adr-reference": {
+      "positives": [
+        "Decided in ADR 0018, restated in ADR-0021, and recorded in docs/adr/0001-x.md",
+        "Behaviour fixed by ADR 0018",
+        "Ratified in docs/adr/0001-policy-engine.md"
+      ],
+      "negatives": [
+        "ADR is not a DICOM tag, and 0018 alone is a value",
+        "Grounded on the map (§4.6), per 45 CFR §164.514(b)(2)(i)(C) and §164.514(e)"
+      ]
+    },
+    "internal-jargon": {
+      "positives": [
+        "This slice adds the date-shift helper and the final slice removes it",
+        "Added by the final slice of the engine"
+      ],
+      "negatives": [
+        "The slice thickness and the number of slices are DICOM attributes, each slice location is too, and the phase of the clinical study, the phase of illness and each phase of the trial are the reader words this rule must not touch",
+        "The slice thickness and the number of slices are DICOM attributes, each slice location is too; tag.slice(0, 4) and digits.slice(0, 3) are TypeScript; and the phase of the clinical study, the phase of illness and each phase of the trial are the reader words this rule must not touch",
+        "Burned-in pixel data is flagged, not cleaned. The slice thickness and the number of slices are DICOM attributes.",
+        "Grounded on the map (§4.6), per 45 CFR §164.514(b)(2)(i)(C) and §164.514(e)"
+      ]
+    },
+    "internal-repo-path": {
+      "positives": [
+        "Roadmap operations/roadmaps/deid.md and documentation/decisions/0015-x.md",
+        "See operations/roadmaps/deid.md"
+      ],
+      "negatives": [
+        "Deid operations are documented in the README, and documentation for the API is generated",
+        "Grounded on the map (§4.6), per 45 CFR §164.514(b)(2)(i)(C) and §164.514(e)"
+      ]
+    },
+    "traceability-marker": {
+      "positives": [
+        "Repeating [S-DEID], and Open-question #12 resolves the direction",
+        "Traced as [S-DEID]"
+      ],
+      "negatives": [
+        "A character range like [S-Z], a value set written [SNOMED], and open questions about the feed",
+        "Grounded on the map (§4.6), per 45 CFR §164.514(b)(2)(i)(C) and §164.514(e)"
+      ]
+    }
+  },
+  "extraRules": [
+    {
+      "id": "slice-after-the-or-each",
+      "name": "internal jargon (\"the slice\", \"each slice\")",
+      "pattern": {
+        "source": "\\b(?:the|each)\\s+(?:(?!(?:of|in|on|between|per|for|to|with|at)\\s)[\\w-]+\\s+){0,2}slices?\\b(?!\\s+(?:thickness|location|spacing|position|interval|order|number|index|gap|count|data|pixel|orientation|plane|direction|width|vector|sensitivity|progression|factor))",
+        "flags": "i"
+      },
+      "positives": [
+        "The last slice adds the helper, and each slice moves one module"
+      ],
+      "negatives": [
+        "The slice thickness and the number of slices are DICOM attributes, each slice location is too, and the phase of the clinical study, the phase of illness and each phase of the trial are the reader words this rule must not touch",
+        "The slice thickness and the number of slices are DICOM attributes, each slice location is too; tag.slice(0, 4) and digits.slice(0, 3) are TypeScript; and the phase of the clinical study, the phase of illness and each phase of the trial are the reader words this rule must not touch",
+        "Burned-in pixel data is flagged, not cleaned. The slice thickness and the number of slices are DICOM attributes.",
+        "Grounded on the map (§4.6), per 45 CFR §164.514(b)(2)(i)(C) and §164.514(e)"
+      ]
+    },
+    {
+      "id": "phase-before-a-prose-word",
+      "name": "phase or wave language (before a prose word or in a compound)",
+      "pattern": {
+        "source": "\\b(?<!study )(?<!clinical )(?<!trial )(?<!acute )(?<!chronic )(?<!luteal )(?<!follicular )(?<!liquid )(?<!gas )(?<=[A-Za-z]-)phases?[ -](?!of\\b|with\\b|in\\b|out\\b|the\\b|and\\b|is\\b|for\\b|to\\b|(?:I{1,3}|IV)\\s+(?:trial|stud|clinical|oncolog))[A-Za-z0-9]+[a-z]?\\b|\\b(?<!study )(?<!clinical )(?<!trial )(?<!acute )(?<!chronic )(?<!luteal )(?<!follicular )(?<!liquid )(?<!gas )phases?[ -](?=(?:identifier|start|end|evaluability|number|where|are|was|were|during|at)\\b)[A-Za-z0-9]+[a-z]?\\b",
+        "flags": "i"
+      },
+      "positives": [
+        "The connect-phase socket shipped, and the phase was closed"
+      ],
+      "negatives": [
+        "A Phase III oncology trial and a Phase II study reported in an OBX; the clinical phases of a treatment programme; the acute phase reactant; luteal phase and follicular phase dosing; the liquid phase of a specimen; the adapter stays in phase with the source document and is out of phase",
+        "A Phase III oncology trial and a Phase II study reported in an OBX; the clinical phases of a treatment programme; the acute phase reactant; luteal phase dosing; the liquid phase of a specimen; the adapter stays in phase with the source document and is out of phase",
+        "Safe-Harbor-transformed per the configured policy; a Phase III trial and the acute phase reactant are clinical values retained untouched, and the engine stays in phase with the source document.",
+        "Grounded on the map (§4.6), per 45 CFR §164.514(b)(2)(i)(C) and §164.514(e)"
+      ]
+    },
+    {
+      "id": "roadmap-section",
+      "name": "roadmap section citation",
+      "pattern": {
+        "source": "\\b(?:roadmap[ ]?§?[ ]?phases?\\b[ ]?[A-Za-z0-9]*|roadmap[ ]?§[ ]?\\d)",
+        "flags": "i"
+      },
+      "positives": [
+        "Grounded on the map (roadmap §4.6)",
+        "Specified in (roadmap §Phase 8) and roadmap§4"
+      ],
+      "negatives": [
+        "Grounded on the map (§4.6), per 45 CFR §164.514(b)(2)(i)(C) and §164.514(e)",
+        "A product roadmap and the vendor roadmap, and section 4.6 of a published standard"
+      ]
+    }
+  ]
+}

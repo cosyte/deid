@@ -23,7 +23,8 @@ pnpm check:readme && pnpm check:claude-card && pnpm check:catalog
 ```
 
 The first nine are the shared `ci / verify` ladder, on Node 22, 24, and 26. `smoke`, `examples`,
-`test-selection` and `documents` have their own jobs; the dash and attw gates are script-utils'.
+`test-selection` and `documents` have their own jobs; the dash, attw and internal-refs gates are
+script-utils'.
 
 ## Hazard
 
