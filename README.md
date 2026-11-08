@@ -9,6 +9,21 @@
 
 > Healthcare **de-identification** for Node.js and TypeScript: Safe Harbor policies and a **value-free manifest**.
 
+[![npm version](https://img.shields.io/npm/v/@cosyte/deid.svg)](https://www.npmjs.com/package/@cosyte/deid)
+[![CI](https://img.shields.io/github/actions/workflow/status/cosyte/deid/ci.yml?branch=main&label=CI)](https://github.com/cosyte/deid/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/cosyte/deid/blob/main/LICENSE)
+[![Node](https://img.shields.io/badge/node-%3E%3D22.0.0-brightgreen.svg)](https://nodejs.org)
+
+Healthcare de-identification for Node.js and TypeScript: applies a HIPAA Safe Harbor policy to HL7 v2, C-CDA, FHIR R4, X12, NCPDP Telecom, and DICOM, fails closed, and emits a value-free manifest.
+
+## Why this exists
+
+A healthcare document carries a patient's identity in more places than a pattern match finds: a
+relative in a next-of-kin segment, an employer on a guarantor, a date inside an observation, an
+identifier in a segment a sending system defined for itself. A scrubber written by hand for one feed
+tends to miss what the next feed carries, and an identifier that survives cannot be recalled once
+the output is shared.
+
 `@cosyte/deid` applies a de-identification **policy** (HIPAA Safe Harbor by default) to a
 structurally-located model of a healthcare document and returns a transformed model plus a value-free
 audit of everything it acted on. It is a **consumer** of the `@cosyte/*` parsers, not a parser sibling:
@@ -21,17 +36,19 @@ but **inverts the reflex**: where a parser is liberal on input, a de-identifier 
 > (§164.514(b)(1)) is supported, never rendered or certified.** The certification is
 > always the consumer's.
 
-> **Status:** the 0.1 line, published on npm. Below 1.0, a breaking change raises the minor version
-> and the changelog says what broke. This release ships the **format-agnostic core** plus six format
-> bindings: the **HL7 v2 adapter** (`@cosyte/deid/hl7`), the **C-CDA adapter**
-> (`@cosyte/deid/ccda`), the **FHIR R4 adapter** (`@cosyte/deid/fhir`), the **X12 EDI adapter**
-> (`@cosyte/deid/x12`), the **NCPDP Telecom adapter** (`@cosyte/deid/ncpdp`), and the **DICOM
-> adapter** (`@cosyte/deid/dicom`), plus the **longitudinal layer**, the corpus registry
-> (`createDeidRegistry`) for cross-document consistency and the formalized key contract, and the
-> **Expert-Determination support report** (`buildExpertDeterminationSupportReport`) that structures
-> the manifest for a statistician **without ever rendering a determination**. NCPDP SCRIPT is
-> **not** supported, and an entry point handed one refuses it outright rather than returning a
-> partial pass.
+## Status
+
+The 0.1 line, published on npm. Below 1.0, a breaking change raises the minor version
+and the changelog says what broke. This release ships the **format-agnostic core** plus six format
+bindings: the **HL7 v2 adapter** (`@cosyte/deid/hl7`), the **C-CDA adapter**
+(`@cosyte/deid/ccda`), the **FHIR R4 adapter** (`@cosyte/deid/fhir`), the **X12 EDI adapter**
+(`@cosyte/deid/x12`), the **NCPDP Telecom adapter** (`@cosyte/deid/ncpdp`), and the **DICOM
+adapter** (`@cosyte/deid/dicom`), plus the **longitudinal layer**, the corpus registry
+(`createDeidRegistry`) for cross-document consistency and the formalized key contract, and the
+**Expert-Determination support report** (`buildExpertDeterminationSupportReport`) that structures
+the manifest for a statistician **without ever rendering a determination**. NCPDP SCRIPT is
+**not** supported, and an entry point handed one refuses it outright rather than returning a
+partial pass.
 
 ## Install
 
@@ -39,9 +56,14 @@ but **inverts the reflex**: where a parser is liberal on input, a de-identifier 
 npm install @cosyte/deid
 ```
 
-Node.js 22 or later, tested on 22 and 24.
+Node.js 22 or later, tested on 22, 24, and 26.
 
-## De-identify
+## Usage
+
+Every example below uses synthetic values, never a real patient's. The full reference, with a
+guide per format, is on [docs.cosyte.com/deid](https://docs.cosyte.com/deid).
+
+### De-identify
 
 ```ts
 import { deidentify, SAFE_HARBOR_CATEGORIES } from "@cosyte/deid";
@@ -75,7 +97,7 @@ over-scrub guard). The manifest records the category, locus, and disposition of 
 the value. [`examples/`](https://github.com/cosyte/deid/tree/main/examples) has runnable programs for
 the HL7 v2 adapter, the fail-closed cases, and the Expert Determination support report.
 
-## Keyed transforms
+### Keyed transforms
 
 Pseudonymization and keyed hashing use a **keyed HMAC-SHA-256**; the key is the consumer's and never
 leaves the process. The **built-in Safe Harbor policy uses none of them**: a surrogate derived from
@@ -103,7 +125,7 @@ A policy carrying the `safe-harbor` label that assigns a category a transform wh
 the category and the transform, at mint time and at the point of use alike. A policy that does not
 claim the label keeps its keyed surrogate: nothing is silently strengthened behind the caller's back.
 
-## De-identify an HL7 v2 message
+### De-identify an HL7 v2 message
 
 The `@cosyte/deid/hl7` adapter locates PHI **structurally** in the parsed [`@cosyte/hl7`](https://github.com/cosyte/hl7)
 model, never by regex over the raw bytes, and returns a transformed `Hl7Message` plus the value-free
@@ -229,7 +251,7 @@ standalone `Organization` whose `name` the map retains as administrative data, s
 be a cross-resource role derivation rather than a typed position. The employer positions above are the
 covered ones: they are typed at the position by X12 and by HL7 v2, which is what makes them decidable.
 
-## De-identify a C-CDA document
+### De-identify a C-CDA document
 
 The `@cosyte/deid/ccda` adapter locates PHI **structurally** in a parsed [`@cosyte/ccda`](https://github.com/cosyte/ccda)
 document (a `<name>` under `recordTarget/patientRole/patient` is the patient's name because the CDA
@@ -273,7 +295,7 @@ clinical body, entry service _dates_, entry _ids_, in-entry _performer_ names, a
 relative demographics are **not** de-identified (mirroring the HL7 adapter's boundary); the document
 `id`/`code`/`title` envelope is retained (like HL7's MSH).
 
-## De-identify a FHIR R4 resource
+### De-identify a FHIR R4 resource
 
 The `@cosyte/deid/fhir` adapter locates PHI **structurally** in a parsed [`@cosyte/fhir`](https://github.com/cosyte/fhir)
 resource (a `name` under a `Patient` is the patient's name because FHIR says so), and returns a
@@ -397,7 +419,7 @@ Five residual surfaces, the first three because FHIR types no person at the posi
   `{ family, given }` is therefore passed through, where the same bytes on an `Organization` are
   removed. Counted as unexamined like the rest.
 
-## De-identify an X12 EDI interchange
+### De-identify an X12 EDI interchange
 
 The `@cosyte/deid/x12` adapter locates PHI **structurally** in a parsed [`@cosyte/x12`](https://github.com/cosyte/x12)
 interchange (HIPAA 005010: 837 claims, 835 remittance, 270/271 eligibility, …). `@cosyte/x12` is an
@@ -428,7 +450,7 @@ const { x12, manifest } = deidentifyX12(parseX12(raw), { context });
 | **`CLM-01` / `CLP-01`**                                      | patient account number **removed** under Safe Harbor (pseudonymized only under a preset that does not claim it)                                              |
 | **Clinical / financial** (`HI`, `SV*`, `SVC`, `AMT`, `CAS`…) | **retained untouched**: diagnosis / procedure codes, amounts, quantities survive byte-identical                                                              |
 
-## De-identify an NCPDP Telecom transaction
+### De-identify an NCPDP Telecom transaction
 
 The `@cosyte/deid/ncpdp` adapter locates PHI **structurally** in a parsed [`@cosyte/ncpdp`](https://github.com/cosyte/ncpdp)
 Telecommunication (vD.0) transaction. `@cosyte/ncpdp` is an **optional peer dependency**.
@@ -464,7 +486,7 @@ transaction. A message that carries more than one is **refused**: a typed `DeidE
 message, no manifest and no partial output, so no transaction is dropped or returned untransformed.
 Split such a message and de-identify each transaction on its own.
 
-## De-identify a DICOM study
+### De-identify a DICOM study
 
 The `@cosyte/deid/dicom` adapter **delegates rather than reimplements**: [`@cosyte/dicom`](https://github.com/cosyte/dicom)
 already ships the **PS3.15 Annex E** de-identification (the Basic Application Level Confidentiality
@@ -505,7 +527,7 @@ category Q) is not removed. When Pixel Data may carry burned-in annotation, the 
 `burnedInAnnotationHazard === true` and emits `DICOM_BURNED_IN_ANNOTATION_NOT_REMOVED`: do **not** release
 such an image on metadata alone. Pixel cleaning is a future `@cosyte/dicom-pixel`.
 
-## Keep a longitudinal record linkable
+### Keep a longitudinal record linkable
 
 For research and analytics, the same patient must stay linkable across a whole corpus after de-id. A
 **registry** (`createDeidRegistry`) holds your key and keeps the same patient's dates shifting by the
@@ -539,7 +561,7 @@ value, so both are Expert-Determination-supporting, **not** Safe Harbor. The lib
 policy claiming the `safe-harbor` label that carries either (`DEID_POLICY_INVALID`), naming the
 offending category and transform.
 
-## Free text: block-by-default + BYO redaction
+### Free text: block-by-default + BYO redaction
 
 Narrative loci (HL7 `OBX-5` / `NTE`, C-CDA section `<text>`, FHIR `note` / `div`, X12 `MSG` / `NTE`,
 NCPDP free text) can carry any of the 18 categories in prose, with no structural handle on where. The
@@ -569,7 +591,7 @@ redactor's completeness is the consumer's responsibility (Expert-Determination t
 PHI removal the adapters perform, and the clinical over-scrub guard, are **unchanged**: the redactor
 handles the free _prose_ only.
 
-## Expert-Determination support, never certification
+### Expert-Determination support, never certification
 
 HIPAA has two routes to de-identification: **Safe Harbor** (mechanical, implemented here) and **Expert
 Determination** (§164.514(b)(1), a qualified statistician's risk judgment). `@cosyte/deid` **supports**
@@ -599,7 +621,7 @@ a **k-anonymity indicator**) is computed **only** over class sizes _you_ supply 
 of quasi-identifier values) and is stamped a descriptive input, never a verdict.
 `formatExpertDeterminationSupportReport(report)` renders the same facts as Markdown for a statistician.
 
-## Policy profiles: reusable presets, widen-never-narrow
+### Policy profiles: reusable presets, widen-never-narrow
 
 Two named presets ship, and `defineDeidProfile()` derives a per-site profile that can only ever
 **tighten** the base, never loosen it.
@@ -666,6 +688,68 @@ determination**.
   checked against the shape its position promises and a non-conforming one is refused as
   `WITHHELD_LOCUS_TOKEN` (`<withheld>`) rather than echoed.
 
+## Documentation
+
+The full reference is on [docs.cosyte.com/deid](https://docs.cosyte.com/deid):
+
+- [Installation](https://docs.cosyte.com/deid/installation) and the [quickstart](https://docs.cosyte.com/deid/quickstart).
+- Core concepts: [the archetype](https://docs.cosyte.com/deid/concepts-archetype), what a policy, a transform, and the
+  manifest are.
+- Guides: [the overview](https://docs.cosyte.com/deid/guides-overview), [HL7 v2](https://docs.cosyte.com/deid/guides-hl7),
+  [C-CDA](https://docs.cosyte.com/deid/guides-ccda), [FHIR R4](https://docs.cosyte.com/deid/guides-fhir), [X12](https://docs.cosyte.com/deid/guides-x12),
+  [NCPDP Telecom](https://docs.cosyte.com/deid/guides-ncpdp), [DICOM](https://docs.cosyte.com/deid/guides-dicom),
+  [longitudinal linkage](https://docs.cosyte.com/deid/guides-longitudinal), [free text](https://docs.cosyte.com/deid/guides-freetext), and
+  [Expert Determination support](https://docs.cosyte.com/deid/guides-expert-determination).
+- [Troubleshooting](https://docs.cosyte.com/deid/troubleshooting) and the [known limitations](https://docs.cosyte.com/deid/limitations). Read the
+  limitations before you point this at real data.
+- [`CHANGELOG.md`](https://github.com/cosyte/deid/blob/main/CHANGELOG.md): every release.
+
+## Support
+
+Questions, bug reports, and documents a pass handled wrongly go in
+[GitHub issues](https://github.com/cosyte/deid/issues). Use synthetic data only, never a real
+patient's: reduce a document to a synthetic one that reproduces the problem first. For help with a
+de-identification project, see our [integration services](https://cosyte.com/integration-services).
+
+## Security
+
+Report a vulnerability privately, never in a public issue, and with no real patient data in it. Our
+[security policy](https://github.com/cosyte/deid/security/policy) says how. An identifier that
+survives a pass, or a value that reaches the manifest, is a vulnerability: report it that way.
+
+## Contributing
+
+**Where to ask:** open an issue at
+[https://github.com/cosyte/deid/issues](https://github.com/cosyte/deid/issues). A report is most useful
+with the smallest synthetic document that reproduces it and the manifest entries you got back;
+**never attach a real patient document**.
+
+**Unsolicited pull requests are accepted.** For anything that changes what a pass removes, keeps, or
+records, adds a manifest code, or moves the public API, open an issue first so the behavior can be
+agreed before you write it. Typo, link, and test fixes can go straight to a pull request.
+
+**What a contribution has to clear**, every one of them a script this package declares:
+
+| check                         | what it is                                                         |
+| ----------------------------- | ------------------------------------------------------------------ |
+| `pnpm typecheck`              | `tsc --noEmit`, strict, over the source and the examples           |
+| `pnpm lint`                   | ESLint, at `--max-warnings=0`                                      |
+| `pnpm format:check`           | Prettier                                                           |
+| `pnpm phi-scan`               | no patient-shaped value anywhere in a tracked file                 |
+| `pnpm test`                   | Vitest, including the cross-format zero-leak and over-scrub corpus |
+| `pnpm test:coverage`          | the coverage gate                                                  |
+| `pnpm build`                  | the dual ESM and CJS bundle                                        |
+| `pnpm attw`                   | per-condition type resolution for consumers                        |
+| `pnpm smoke`                  | every published subpath loads from the built package               |
+| `pnpm examples`               | the runnable examples, against the built package                   |
+| `pnpm check:no-emdash`        | the house punctuation rule                                         |
+| `pnpm check:no-internal-refs` | no internal bookkeeping on the public surface                      |
+
+New behavior needs a test beside it, and a change a consumer would notice needs a changeset
+(`pnpm changeset`), whose summary becomes the changelog entry.
+
 ## License
 
-MIT, copyright Cosyte LLC. See [LICENSE](https://github.com/cosyte/deid/blob/main/LICENSE).
+MIT, copyright Cosyte LLC. See [LICENSE](https://github.com/cosyte/deid/blob/main/LICENSE). The
+standards this package names belong to their owners; see
+[TRADEMARKS.md](https://github.com/cosyte/deid/blob/main/TRADEMARKS.md).

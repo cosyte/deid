@@ -18,7 +18,7 @@ pnpm test
 
 ## The gate
 
-A pull request is ready when these pass, in this order. CI runs the first nine on Node 22 and 24.
+A pull request is ready when these pass, in this order. CI runs the first nine on Node 22, 24, and 26.
 
 ```sh
 pnpm install --frozen-lockfile
