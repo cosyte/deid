@@ -718,8 +718,9 @@ The full reference is on [docs.cosyte.com/deid](https://docs.cosyte.com/deid):
 
 Questions, bug reports, and documents a pass handled wrongly go in
 [GitHub issues](https://github.com/cosyte/deid/issues). Use synthetic data only, never a real
-patient's: reduce a document to a synthetic one that reproduces the problem first. For help with a
-de-identification project, see our [integration services](https://cosyte.com/integration-services).
+patient's: reduce a document to a synthetic one that reproduces the problem first. Need a
+de-identification pipeline built, or hosted and run for you? See our
+[integration services](https://cosyte.com/integration-services).
 
 ## Security
 
