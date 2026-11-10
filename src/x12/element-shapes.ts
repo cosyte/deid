@@ -129,8 +129,8 @@ export function isX12DateInFormat(value: string, format: string): boolean {
     case "D8":
       return isD8(value);
     case "RD8": {
-      const parts = value.split("-");
-      return parts.length === 2 && isD8(parts[0] ?? "") && isD8(parts[1] ?? "");
+      const range = /^(\d{8})-(\d{8})$/.exec(value);
+      return range !== null && isD8(range[1] as string) && isD8(range[2] as string);
     }
     case "DT":
       return value.length === 12 && isD8(value.slice(0, 8)) && isTime4(value.slice(8));
@@ -270,7 +270,8 @@ const SERVICE_QUALIFIER = new Set<string>([
 
 /** A procedure or product code, shaped by the qualifier the composite's first component names. */
 function serviceCode(value: string, ctx: X12ShapeContext): boolean {
-  switch (ctx.components?.[0] ?? "") {
+  // A component test is only ever called with the composite's components, the first one included.
+  switch ((ctx.components as readonly string[])[0] as string) {
     case "HC": // HCPCS Level I (CPT) or Level II
       return /^[A-Z0-9]\d{3}[A-Z0-9]$/.test(value);
     case "AD": // ADA CDT
@@ -382,7 +383,10 @@ const HEALTH_CARE_CODE: Readonly<Record<string, RegExp>> = {
  */
 const HEALTH_CARE_CODE_INFO = composite(
   part((value) => Object.prototype.hasOwnProperty.call(HEALTH_CARE_CODE, value)),
-  part((value, ctx) => HEALTH_CARE_CODE[ctx.components?.[0] ?? ""]?.test(value) === true),
+  part(
+    (value, ctx) =>
+      HEALTH_CARE_CODE[(ctx.components as readonly string[])[0] as string]?.test(value) === true,
+  ),
   part(oneOf("D8 RD8")),
   { kind: "date", format: { from: "component", position: 3 } },
   part(isDecimal),

@@ -15,10 +15,10 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { parseX12 } from "@cosyte/x12";
+import { parseX12, type X12Interchange } from "@cosyte/x12";
 
 import { createDeidContext, type DeidManifestEntry } from "../../src/index.js";
-import { deidentifyX12String } from "../../src/x12/index.js";
+import { deidentifyX12, deidentifyX12String } from "../../src/x12/index.js";
 
 const ctx = createDeidContext({
   key: "x12-segment-identifier-synthetic-hmac-key",
@@ -149,6 +149,26 @@ describe("a segment whose identifier the pass does not recognize is removed whol
     expect(x12).not.toContain("ZZPATMEMBER");
     expect(body(x12)).toEqual({ segments: [], se: "SE**0006" });
     expect(blockedAt(manifest, "837/SE[0]-1")).toBe(true);
+  });
+
+  it("an SE with no count at all is left as it is", () => {
+    const raw = wrap("ZZPATMEMBER~").replace(/SE\*3\*0006/, "SE");
+    expect(parseX12(raw).groups[0]?.transactions[0]?.se?.raw).toBe("SE");
+    const { x12 } = run(raw);
+    expect(x12).not.toContain("ZZPATMEMBER");
+    expect(x12).toContain("~ST*837*0006~SE~GE*1*6~");
+  });
+
+  it("an interchange from a parser older than the orphan list is decided the same way", () => {
+    const parsed = parseX12(wrap("NM1*IL*1~ZZPATMEMBER~"));
+    const older = Object.fromEntries(
+      Object.entries(parsed).filter(([key]) => key !== "orphanSegments"),
+    ) as unknown as X12Interchange;
+    expect("orphanSegments" in older).toBe(false);
+    const { x12, manifest } = deidentifyX12(older, { context: ctx });
+    expect(x12).not.toContain("ZZPATMEMBER");
+    expect(body(x12)).toEqual({ segments: ["NM1*IL*1"], se: "SE*3*0006" });
+    expect(blockedAt(manifest, `837/${W}[0]-0`)).toBe(true);
   });
 
   it("the output parses again, and its SE-01 matches the segments it carries", () => {

@@ -181,6 +181,13 @@ describe("an element no rule names is removed and recorded", () => {
     expect(blockedAt(manifest, "837/N1[0]-5")).toBe(true);
   });
 
+  it("N1: an unknown party with no name records the identifier it carries, and nothing for the name", () => {
+    const { x12, manifest } = run(wrap("N1*ZZ**PI*ZZN1UNKNOWNID~", 3));
+    expect(x12).not.toContain("ZZN1UNKNOWNID");
+    expect(body(x12)).toEqual(["N1***PI*~"]);
+    expect(manifest.map((e) => e.locus)).toEqual(["837/N1[0]-1", "837/N1[0]-4"]);
+  });
+
   it("REF-03: a name shifted right past the reference, on a reference the rules keep", () => {
     const { x12, manifest } = run(wrap("REF*F8*ZZCLAIMCTRL*ZZPATNAME~", 3));
     expect(x12).not.toContain("ZZPATNAME");

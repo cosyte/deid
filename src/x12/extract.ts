@@ -295,7 +295,9 @@ function declaredFormat(
 ): string {
   if (source.from === "fixed") return source.format;
   if (source.from === "element") return el(seg, source.position);
-  return components[source.position - 1] ?? "";
+  // A component date reads its format from a component before it, which a composite long enough to
+  // hold the date always has.
+  return components[source.position - 1] as string;
 }
 
 /**
@@ -310,10 +312,10 @@ function emitDate(
   pos: SegPos,
   element: number,
   category: SafeHarborCategory,
-  source: X12DateFormatSource | undefined,
+  source: X12DateFormatSource,
 ): void {
   const value = el(seg, element);
-  const format = source === undefined ? "" : declaredFormat(source, seg, []);
+  const format = declaredFormat(source, seg, []);
   if (!isX12DateInFormat(value, format)) {
     blockElement(out, seg, pos, element);
     return;
@@ -325,6 +327,9 @@ function emitDate(
     coord(pos, [element]),
   );
 }
+
+/** The declared format of a date position that names none: no value is a valid date in it. */
+const NO_FORMAT: X12DateFormatSource = { from: "fixed", format: "" };
 
 /** Emit a direct-category locus for one element (redact / date / zip). */
 function emitRule(
@@ -341,7 +346,10 @@ function emitRule(
   }
   // rule.category is required for every non-block mode (the discriminated union guarantees it).
   if (rule.mode === "date") {
-    const source = X12_RULE_DATE_FORMATS.get(`${pos.segId}-${String(rule.element)}`);
+    // Every date rule has its declared format in the table. One without would declare no format, and
+    // no value is a valid date in no format, so it would be removed rather than kept.
+    /* v8 ignore next -- the table holds a format for every date rule (DMG-02, DTP-03, DTM-02) */
+    const source = X12_RULE_DATE_FORMATS.get(`${pos.segId}-${String(rule.element)}`) ?? NO_FORMAT;
     emitDate(out, seg, pos, rule.element, rule.category, source);
     return;
   }
@@ -691,7 +699,8 @@ function decideComposite(
   }
   name(out, pos, [element]);
   for (const { component, date } of decisions) {
-    const value = components[component - 1] ?? "";
+    // `component` is a 1-based index of a component this loop read out of `components` above.
+    const value = components[component - 1] as string;
     const at = `${path(pos, element)}-${String(component)}`;
     push(
       out,
@@ -768,16 +777,17 @@ function orderOf(coordinate: X12Coord): number {
 }
 
 /**
- * Put the loci one segment produced since `start` in element order (and component order inside an
- * element), keeping the loci and coordinates aligned. A segment's rules run before its closing sweep,
- * so without this a code the sweep removed would be recorded after a name the rule removed further
- * along the same segment; the manifest reads in document order instead.
+ * Put the loci one segment produced since `start` in element order, keeping the loci and coordinates
+ * aligned. A segment's rules run before its closing sweep, so without this a code the sweep removed
+ * would be recorded after a name the rule removed further along the same segment; the manifest reads
+ * in document order instead. The sort is stable, and the loci of one composite element are pushed in
+ * component order, so they stay in that order.
  */
 function orderSegmentLoci(out: X12LocusAccumulator, start: number): void {
   const pairs = out.coords
     .slice(start)
     .map((c, i) => ({ c, l: out.loci[start + i] as GenericLocus }));
-  pairs.sort((a, b) => orderOf(a.c) - orderOf(b.c) || (a.c.component ?? 0) - (b.c.component ?? 0));
+  pairs.sort((a, b) => orderOf(a.c) - orderOf(b.c));
   pairs.forEach(({ c, l }, i) => {
     out.coords[start + i] = c;
     out.loci[start + i] = l;
@@ -965,7 +975,11 @@ function recordUnexaminedX12Positions(
 ): void {
   for (let n = 0; n < seg.elements.length; n += 1) {
     if (named?.has(n) === true) continue;
+    // The closing sweep named every value-bearing element, so no input reaches the record below; it
+    // stays as the independent count that would show a position a future rule forgot to decide.
+    /* v8 ignore start -- every value-bearing element is decided before this count runs */
     if (!isValueBearing(seg, pos.segId, n)) continue;
     residuals.record(path(pos, n));
+    /* v8 ignore stop */
   }
 }

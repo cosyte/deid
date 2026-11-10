@@ -98,15 +98,17 @@ describe("deidentifyX12String, segments missing the element a rule acts on", () 
     return x12.split("~").filter((s) => !/^(ISA|GS|ST|SE|GE|IEA)\*/.test(s) && s !== "");
   }
 
-  it("blocks each populated element of an unknown segment and leaves an empty one empty", () => {
+  it("removes an unknown segment whole and records each populated element, not an empty one", () => {
     const { x12, manifest } = deidentifyX12String(
       interchange(["ST*837*0006~ZZZ*ZZPATFIRST**ZZPATMEMBER~SE*3*0006~"]),
       { context: ctx },
     );
-    expect(body(x12)).toEqual(["ZZZ***"]);
+    expect(body(x12)).toEqual([]);
+    expect(x12).toContain("~ST*837*0006~SE*2*0006~");
     expect(manifest.map((m) => `${m.locus} ${m.disposition}`)).toEqual([
-      "837/ZZZ[0]-1 blocked",
-      "837/ZZZ[0]-3 blocked",
+      "837/<withheld>[0]-0 blocked",
+      "837/<withheld>[0]-1 blocked",
+      "837/<withheld>[0]-3 blocked",
     ]);
   });
 
@@ -128,7 +130,8 @@ describe("deidentifyX12String, segments missing the element a rule acts on", () 
     );
     expect(body(x12)).toEqual(["NTE*ADD"]);
     expect(manifest).toEqual([]);
-    expect(unexaminedResiduals.map((r) => r.locus)).toContain("837/NTE[0]-1");
+    // The note code is decided by its shape, so nothing is left unexamined.
+    expect(unexaminedResiduals).toEqual([]);
   });
 });
 
@@ -143,9 +146,9 @@ describe("deidentifyX12String, an interchange with no group or interchange trail
     expect(x12).not.toContain("ZZPATLAST");
     expect(x12.endsWith("~ST*837*0009~NM1*IL*1*~SE*3*0009~")).toBe(true);
     expect(manifest.map((m) => m.locus)).toEqual(["837/NM1[0]-3"]);
-    const residualLoci = unexaminedResiduals.map((r) => r.locus);
-    expect(residualLoci).toContain("GS[0]-1");
-    expect(residualLoci.filter((l) => l.startsWith("GE") || l.startsWith("IEA"))).toEqual([]);
+    // The envelope segments it was given are decided by their shape; the missing ones are not invented.
+    expect(x12).toContain("~GS*HC*COMMERCIAL*CLINICSUBMTR*20260615*0930*2*X*005010X222A2~");
+    expect(unexaminedResiduals).toEqual([]);
   });
 });
 
