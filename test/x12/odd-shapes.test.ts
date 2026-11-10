@@ -76,6 +76,22 @@ describe("deidentifyX12String, an NM1 subject with no name", () => {
   });
 });
 
+describe("deidentifyX12String, an N4 with an empty element between two it acts on", () => {
+  it("acts on the city and the ZIP and leaves the empty state element where it was", () => {
+    const { x12, manifest, unexaminedResiduals } = deidentifyX12String(
+      interchange(["ST*837*0005~N4*ZZCITY**44101~SE*3*0005~"]),
+      { context: ctx },
+    );
+    expect(x12).not.toContain("ZZCITY");
+    expect(x12).toContain("~N4***441~");
+    expect(manifest.map((m) => `${m.locus} ${m.disposition}`)).toEqual([
+      "837/N4[0]-1 blocked",
+      "837/N4[0]-3 transformed",
+    ]);
+    expect(unexaminedResiduals.map((r) => r.locus)).not.toContain("837/N4[0]-2");
+  });
+});
+
 describe("applyX12, hand-built coordinates", () => {
   it("skips a coordinate with no transformed locus beside it, and a hole in the coordinate list", () => {
     const raw = interchange([SUBSCRIBER]);
