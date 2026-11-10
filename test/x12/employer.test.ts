@@ -213,18 +213,37 @@ describe("AC3: a retained party names the role code it was classified on", () =>
 });
 
 describe("AC7: a role code that cannot be established fails closed", () => {
-  const UNESTABLISHED: readonly { readonly label: string; readonly nm1: string }[] = [
-    { label: "unrecognized", nm1: "NM1*ZQ*2*MYSTERY PARTY*****XX*SECRETNPI~" },
-    { label: "empty", nm1: "NM1**2*MYSTERY PARTY*****XX*SECRETNPI~" },
+  // An unrecognized role code is no entity code, so it is removed and recorded at NM1-01 as well. A
+  // real entity code no role table routes on is kept, and the party's name and identifier still go.
+  const UNESTABLISHED: readonly {
+    readonly label: string;
+    readonly nm1: string;
+    readonly blocked: readonly string[];
+  }[] = [
+    {
+      label: "unrecognized",
+      nm1: "NM1*A0*2*MYSTERY PARTY*****XX*SECRETNPI~",
+      blocked: ["837/NM1[0]-1", "837/NM1[0]-3", "837/NM1[0]-9"],
+    },
+    {
+      label: "a real code no role table routes on",
+      nm1: "NM1*ZQ*2*MYSTERY PARTY*****XX*SECRETNPI~",
+      blocked: ["837/NM1[0]-3", "837/NM1[0]-9"],
+    },
+    {
+      label: "empty",
+      nm1: "NM1**2*MYSTERY PARTY*****XX*SECRETNPI~",
+      blocked: ["837/NM1[0]-3", "837/NM1[0]-9"],
+    },
   ];
 
-  for (const { label, nm1 } of UNESTABLISHED) {
+  for (const { label, nm1, blocked } of UNESTABLISHED) {
     it(`blocks the name and the identifier of a party whose role code is ${label}`, () => {
       const { x12, manifest } = deidentifyX12String(wrap(nm1), { context: ctx });
       expect(x12).not.toContain("MYSTERY PARTY");
       expect(x12).not.toContain("SECRETNPI");
       const blocks = manifest.filter((e) => e.disposition === "blocked");
-      expect(blocks.map((e) => e.locus).sort()).toEqual(["837/NM1[0]-3", "837/NM1[0]-9"]);
+      expect(blocks.map((e) => e.locus).sort()).toEqual(blocked);
       // A stable disposition code, and never a retained party row.
       expect(blocks.every((e) => e.code === D.DEID_LOCUS_BLOCKED)).toBe(true);
       expect(partyRows(manifest)).toEqual([]);

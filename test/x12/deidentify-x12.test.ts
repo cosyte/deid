@@ -191,10 +191,15 @@ describe("X12 structured behavior", () => {
 });
 
 describe("X12 fail-closed + manifest + immutability", () => {
-  it("blocks an unknown segment element-by-element (fails closed)", () => {
+  it("removes an unknown segment whole, identifier included (fails closed)", () => {
     const { x12, manifest } = deidentifyX12String(load("837p"), { context: ctx });
-    expect(x12).toContain("ZZZ*~"); // the unknown segment's value is cleared
-    expect(manifest.some((e) => e.locus.includes("ZZZ") && e.disposition === "blocked")).toBe(true);
+    expect(x12).not.toContain("ZZZ"); // the identifier leaves with the value
+    expect(x12).not.toContain("ZZWEIRDPHI");
+    expect(x12).toContain("~K3*~SE*29*0002~"); // SE-01 counts the segment that left
+    // Recorded at the identifier and at the value, under a withheld segment id.
+    for (const locus of ["837/<withheld>[0]-0", "837/<withheld>[0]-1"]) {
+      expect(manifest.some((e) => e.locus === locus && e.disposition === "blocked")).toBe(true);
+    }
   });
 
   it("blocks free-text message segments (MSG/III/K3/NTE) but retains their coded elements", () => {
@@ -285,9 +290,15 @@ describe("X12 edge cases (branch coverage of the fail-closed frontier)", () => {
   });
 
   it("emits no locus for an empty CLM-01 (nothing to pseudonymize)", () => {
-    const raw = wrap("CLM**100.00***11:B:1~");
-    const { manifest } = deidentifyX12String(raw, { context: ctx });
+    const { manifest } = deidentifyX12String(wrap("CLM~"), { context: ctx });
     expect(manifest.some((e) => e.locus.includes("CLM"))).toBe(false);
+    // CLM-01 is required, so an empty one before a value is a shift: the values after it are removed
+    // and recorded, and CLM-01 itself still has nothing to pseudonymize.
+    const shifted = deidentifyX12String(wrap("CLM**100.00***11:B:1~"), { context: ctx });
+    expect(shifted.manifest.map((e) => [e.locus, e.disposition])).toEqual([
+      [expect.stringMatching(/CLM\[0\]-2$/), "blocked"],
+      [expect.stringMatching(/CLM\[0\]-5$/), "blocked"],
+    ]);
   });
 
   it("scrubs the SBR insured group/policy number and group name (was a silent retained leak)", () => {

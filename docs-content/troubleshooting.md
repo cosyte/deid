@@ -64,7 +64,9 @@ those positions that is not an identifier at all, and on an unrecognized narrati
 can be clinical prose. Each identifier is therefore checked against the
 shape its position promises before it is used; one that does not match is refused outright and the
 locus reads `WITHHELD_LOCUS_TOKEN` (`<withheld>`) plus a structural index, so two refused positions
-stay distinguishable and nothing is silently dropped.
+stay distinguishable and nothing is silently dropped. An X12 segment id is held to more than its
+shape: one the adapter does not recognize is withheld whatever it looks like, because that segment is
+removed whole and its id may be a value that landed there.
 
 That is a bound, not a guarantee of impossibility, and how much it leaves behind depends on the
 position. An HL7 v2 segment id, an X12 segment or transaction-set id, and an NCPDP code are at most

@@ -406,6 +406,73 @@ ID 900000201
 ID ZZCHAMPUSID
 ID ZZLOCID
 ID ZZPOLICY777
+# The shifted-value fixture (test/fixtures/x12/837p-shifted.edi) and the inline sentinels in
+# test/x12/qualifier-values.test.ts: values written one position off, each asserted ABSENT after de-id.
+NAME ZZSHIFTSUBLAST
+NAME ZZSHIFTSUBFIRST
+NAME ZZSHIFTN1NAME
+NAME ZZSUBNAME
+ID ZZSHIFTSUBMEMBER
+ID ZZSUBMEMBER
+# The fail-closed fixture (test/fixtures/x12/837p-fail-closed.edi) and the inline sentinels in
+# test/x12/fail-closed-positions.test.ts: values one position off, a segment outside every transaction
+# set, and a second interchange after the IEA, each asserted ABSENT after de-id. `MI` and `F` are a
+# qualifier and a gender code the shift moved into the identifier and date of birth positions, and
+# `1985` is the year a generalized synthetic date of birth keeps.
+NAME ZZORPHANLAST
+NAME ZZORPHANFIRST
+NAME ZZNM102FIRST
+NAME ZZNM110LAST
+NAME ZZNM110FIRST
+NAME ZZN105NAME
+NAME ZZSECONDLAST
+NAME ZZSECONDFIRST
+ID MI
+DOB F
+DOB 1985
+# Values where a segment identifier belongs (test/fixtures/x12/837p-fail-closed.edi and
+# test/x12/segment-identifier.test.ts) and the well-formed transaction set controls
+# (test/x12/transaction-set-controls.test.ts). The first are asserted ABSENT after de-id; the controls
+# assert each name and identifier is removed.
+NAME ZZSEGIDLAST
+NAME ZZSEGIDFIRST
+NAME ZZMEMLAST
+NAME ZZMEMFIRST
+ID ZZGROUP270
+ID ZZSUBNUM834
+ID ZZGROUP834
+ID ZZMEMBER834
+ID ZZMEMBER835
+ID ZZMEMBER277CA
+# The 835 Other Subscriber and 834 responsible-person fixture
+# (test/fixtures/x12/other-insured-and-responsible.edi), the 820 premium payment fixture
+# (test/fixtures/x12/820-premium.edi) and their inline twins in test/x12/entity-roles.test.ts. Each is
+# asserted ABSENT after de-id.
+NAME ZZGBPATLAST
+NAME ZZGBPATFIRST
+NAME ZZMEMBERLAST834
+NAME ZZMEMBERFIRST834
+NAME ZZOTHERSUBLAST
+NAME ZZOTHERSUBFIRST
+NAME ZZRESPGBLAST
+NAME ZZRESPGBFIRST
+NAME ZZCASEMGRLAST
+NAME ZZCASEMGRFIRST
+NAME ZZKEYPERSONLAST
+NAME ZZKEYPERSONFIRST
+NAME ZZDROPOFFLAST
+NAME ZZDROPOFFFIRST
+NAME ZZPREMLAST
+NAME ZZPREMFIRST
+NAME ZZPREMPAYERX12
+ID ZZGBPATMEMBER
+ID ZZOTHERSUBMEMBER
+ID ZZSUBSCRIBER834
+ID ZZPREMMEMBER
+ID ZZPREMPAYEREIN
+# The shifted-date sweep in test/x12/shifted-dates.test.ts: a synthetic date in a DMG-02 sample whose
+# separators are moved one place, asserted ABSENT after de-id.
+DOB 20250117
 
 # --- Synthetic NCPDP Telecom identifiers (test/fixtures/ncpdp) ---
 ID 5550000301

@@ -106,6 +106,13 @@ describe("every adapter emits the same transformed document, byte for byte", () 
   // Modified `(0028,0303)` = `REMOVED`, and writes its own File Meta implementation identity
   // `(0002,0012)` / `(0002,0013)`. No sentinel reaches the output (the leak corpus asserts that), and
   // the other five adapters' digests are unmoved by their 0.1 peers.
+  //
+  // THE X12 DIGEST MOVED ONCE, DELIBERATELY. A segment whose identifier the pass does not recognize is
+  // removed whole, identifier included, so the fixture's `ZZZ*` segment (its value was already
+  // removed) leaves the output and SE-01 counts one segment fewer. The fixture's `REF*ZZ*` qualifier is
+  // a real 005010 code (element 128, mutually defined), so it keeps its place, and the value it routes
+  // is removed as before. The control below puts the segment back and requires the pin from before it,
+  // so nothing else moved.
   it("the six adapters' transformed documents are unchanged", () => {
     expect(transformedDocumentDigests()).toMatchInlineSnapshot(`
       {
@@ -115,9 +122,17 @@ describe("every adapter emits the same transformed document, byte for byte", () 
         "hl7": "b0e71b72dd6f4078c43d1d7b767ef843",
         "hl7-encounter": "7aef4fa7fa7ed2ffd1ce4c05158e4773",
         "ncpdp": "e8a8259ce46ed5764268f2c0a51dbfc5",
-        "x12": "9c207e831fde066fd4ce03e11fdb6b77",
+        "x12": "7afec841b7487faa5774697142fb8514",
       }
     `);
+  });
+
+  it("the X12 document moved only by the removed unknown segment", () => {
+    const wire = deidentifyX12String(FIX("x12", "837p.edi"), options()).x12;
+    expect(wire).toContain("~REF*ZZ*~");
+    expect(wire).toContain("~K3*~SE*29*0002~");
+    const withSegment = wire.replace("~K3*~SE*29*0002~", "~K3*~ZZZ*~SE*30*0002~");
+    expect(digest(withSegment)).toBe("9c207e831fde066fd4ce03e11fdb6b77");
   });
 
   /**
@@ -344,6 +359,9 @@ describe("the other five adapters produce the same manifests, in the same order"
     `);
   });
 
+  // The last row moved on purpose: the fixture's `ZZZ*` segment is removed whole, so its identifier is
+  // recorded at element 0 beside its value, and the path withholds an identifier the pass does not
+  // recognize. Every other row is where it was.
   it("X12", () => {
     const { manifest } = deidentifyX12String(FIX("x12", "837p.edi"), options());
     expect(order(manifest)).toMatchInlineSnapshot(`
@@ -386,7 +404,8 @@ describe("the other five adapters produce the same manifests, in the same order"
         "837/MSG[0]-1",
         "837/III[0]-4",
         "837/K3[0]-1",
-        "837/ZZZ[0]-1",
+        "837/<withheld>[0]-0",
+        "837/<withheld>[0]-1",
       ]
     `);
   });

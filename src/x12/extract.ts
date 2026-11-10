@@ -8,8 +8,10 @@
  * PHI is located **structurally**, per the cited {@link "./locus-map.js"}: `NM1` names + identifiers
  * (entity-classified), `N3` / `N4` address, `DMG` date of birth, `PER` telecom, `REF` identifiers
  * (qualifier-classified), `DTP` / `DTM` dates, and the `CLM-01` / `CLP-01` patient account number.
- * Everything else is either a recognized clinical / financial segment (retained untouched, the
- * over-scrub guard) or an **unknown segment**, which **fails closed** (every populated element blocked).
+ * Everything else is either a recognized clinical / financial segment (each element kept when it has
+ * the shape its position expects, the over-scrub guard) or a segment whose identifier the pass does not
+ * recognize, which **fails closed**: it is removed whole, identifier included, and every value it
+ * carried is recorded.
  *
  * The `@cosyte/x12` model is immutable and its serializer reconstructs from the verbatim `rawSegments`
  * strings, so the extractor never edits the tree; the applier rebuilds the affected raw segments (see
@@ -21,7 +23,7 @@
 import { type X12Interchange, type X12Segment } from "@cosyte/x12";
 
 import { SAFE_HARBOR_CATEGORIES, type SafeHarborCategory } from "../categories.js";
-import { safeLocusToken } from "../derived-token.js";
+import { WITHHELD_LOCUS_TOKEN, safeLocusToken } from "../derived-token.js";
 import type { GenericLocus } from "../locus.js";
 import {
   enumerateOrFail,
@@ -38,8 +40,34 @@ import {
   categoryForNm1IdQualifier,
   classifyNm1Party,
   classifyRefQualifier,
+  isRecognizedX12Code,
   type X12ElementRule,
 } from "./locus-map.js";
+import {
+  X12_ELEMENT_SHAPES,
+  X12_RULE_DATE_FORMATS,
+  isX12DateInFormat,
+  x12SegmentRequirements,
+  x12ShiftPoint,
+  type X12ComponentShape,
+  type X12DateFormatSource,
+  type X12ElementShape,
+  type X12ShapeContext,
+} from "./element-shapes.js";
+
+/**
+ * Where a segment outside every transaction set sits: the interchange header (`ISA`), an envelope-level
+ * acknowledgment (`TA1`, by its index), a functional group's header or trailer (`GS` / `GE`, by the
+ * group's index), the interchange trailer (`IEA`), a segment the parser found outside every transaction
+ * set (`orphan`, by its index in `orphanSegments`), or the bytes the parser kept after the `IEA`
+ * (`trailing`, index `0`).
+ */
+export interface X12EnvelopeAddress {
+  /** Which envelope segment, `orphan`, or `trailing`. */
+  readonly segment: "ISA" | "TA1" | "GS" | "GE" | "IEA" | "orphan" | "trailing";
+  /** The index of that segment among its kind (`0` for `ISA` and `IEA`). */
+  readonly index: number;
+}
 
 /**
  * A write-back coordinate: the structural location of one extracted locus in the interchange. The
@@ -47,11 +75,14 @@ import {
  * in {@link elements}) of the segment at `segIndex` in that transaction's raw stream. Carries no value.
  */
 export interface X12Coord {
-  /** Index of the functional group in `interchange.groups`. */
+  /** Index of the functional group in `interchange.groups` (`-1` for an {@link envelope} segment). */
   readonly groupIndex: number;
-  /** Index of the transaction set in the group's `transactions`. */
+  /** Index of the transaction set in the group's `transactions` (`-1` for an {@link envelope} segment). */
   readonly txIndex: number;
-  /** Index of the segment in the transaction's `segments` / `rawSegments` (they are index-aligned). */
+  /**
+   * Index of the segment in the transaction's `segments` / `rawSegments` (they are index-aligned), or
+   * `-1` for an {@link envelope} segment.
+   */
   readonly segIndex: number;
   /**
    * The 1-based element position(s) this locus governs. A single-value transform (date / zip / id)
@@ -60,6 +91,25 @@ export interface X12Coord {
    * write-nothing coordinate of a party-role record: the party's bytes survive untouched.
    */
   readonly elements: readonly number[];
+  /**
+   * The 1-based component this locus governs inside the one element {@link elements} lists, when the
+   * locus is one component of a composite (a date inside an `HI` entry, a free-text description inside
+   * a procedure composite). The applier rewrites that component and leaves its siblings as they were.
+   */
+  readonly component?: number;
+  /**
+   * Set when the segment sits outside every transaction set: the interchange and functional-group
+   * envelope, or a segment the parser found outside every transaction set. The applier rewrites that
+   * segment instead of a transaction's.
+   */
+  readonly envelope?: X12EnvelopeAddress;
+  /**
+   * Set when the segment this locus sits in is **removed whole**: a segment whose identifier the pass
+   * does not recognize, or a segment outside every transaction set. The applier drops the segment from
+   * the output instead of rewriting one element, and reduces the `SE-01` segment count of the
+   * transaction set it sat in by one.
+   */
+  readonly segmentRemoved?: boolean;
 }
 
 /** The paired output of {@link extractX12Loci}: loci for the engine + coordinates for the applier. */
@@ -69,10 +119,10 @@ export interface X12Extraction {
   /** The write-back coordinates, index-aligned with {@link loci}. */
   readonly coords: X12Coord[];
   /**
-   * Every **value-bearing element the pass hands through that no locus rule named**: the elements of a
-   * retained clinical / financial / control segment, the unmapped positions of a segment whose mapped
-   * ones were acted on, and the interchange and functional-group envelope around them. Counted and
-   * located, never transformed.
+   * Every **value-bearing element the pass hands through that no rule decided**. Every element of every
+   * segment is now decided: acted on by a locus rule, kept because it has the shape its position
+   * expects (see `./element-shapes.js`), or removed and recorded. So this is a measured zero; it stays
+   * as the independent count that would show a position a future rule forgot to decide.
    */
   readonly unexaminedResiduals: readonly UnexaminedResidual[];
 }
@@ -82,11 +132,13 @@ interface X12LocusAccumulator {
   readonly loci: GenericLocus[];
   readonly coords: X12Coord[];
   /**
-   * The elements a locus rule **named**, keyed by segment position: the ones a coordinate writes to,
-   * plus the ones a rule reached and decided to leave alone (a party the scope clause does not reach,
-   * a recognized administrative `REF`, a geographic element on a segment's non-identifier safe list).
+   * The elements a rule **decided**, keyed by segment position: the ones a coordinate writes to, plus
+   * the ones a rule reached and decided to keep (a party the scope clause does not reach, a recognized
+   * administrative `REF`, a code or date of the shape its position expects).
    */
   readonly named: Map<string, Set<number>>;
+  /** The interchange's component and repetition separators, which a composite or repeating shape reads. */
+  readonly delimiters: { readonly component: string; readonly repetition: string };
 }
 
 /**
@@ -96,19 +148,17 @@ interface X12LocusAccumulator {
 interface SegPos {
   /** This segment's unique identity inside the interchange; the named-element sets are held under it. */
   readonly key: string;
-  /** The bounded `ST-01` transaction-set id (`837`), or `""` for a segment outside every transaction set. */
+  /**
+   * The root of every path this segment prints: the bounded `ST-01` transaction-set id (`837`), `orphan`
+   * for a segment the parser found outside every transaction set, or `""` for the envelope.
+   */
   readonly stId: string;
   /** The bounded segment id, e.g. `NM1`; the key every rule lookup uses. */
   readonly segId: string;
   /** The value-free segment label scoped by occurrence, e.g. `NM1[1]`. */
   readonly segIdBracket: string;
-}
-
-/** A {@link SegPos} inside a transaction set, which additionally locates the applier's write-back. */
-interface TxSegPos extends SegPos {
-  readonly groupIndex: number;
-  readonly txIndex: number;
-  readonly segIndex: number;
+  /** Where the applier finds this segment: everything a coordinate carries except its elements. */
+  readonly at: Omit<X12Coord, "elements" | "component">;
 }
 
 /** The only thing reading an element position needs: the 1-indexed element list the parser decoded. */
@@ -125,6 +175,37 @@ function el(seg: SegmentElements, n: number): string {
 function has(seg: SegmentElements, n: number): boolean {
   return el(seg, n).length > 0;
 }
+
+/**
+ * The segment identifiers the pass **recognizes inside a transaction set**: every segment a locus rule
+ * acts on, and every segment it retains and decides by shape (`ST` and `SE` among them). An identifier
+ * outside this set is not trusted as an identifier at all. The usual way one gets there is an extra
+ * segment terminator or a missing element separator after the identifier, which puts a value (a member
+ * id, a date of birth, a last name, a whole segment run together) where the identifier belongs, so a
+ * segment with any other identifier is removed whole.
+ */
+const X12_RECOGNIZED_SEGMENT_IDS: ReadonlySet<string> = new Set<string>([
+  "NM1",
+  "N1",
+  "REF",
+  ...X12_ACCOUNT_SEGMENTS,
+  ...Object.keys(X12_FREE_TEXT_ELEMENTS),
+  ...Object.keys(X12_UNIVERSAL_SEGMENT_RULES),
+  ...X12_RETAIN_SEGMENTS,
+]);
+
+/**
+ * The envelope segment identifiers. Inside a transaction set none of them is a body segment, but a
+ * segment the parser found outside every transaction set can be one (a `TA1` inside an open group, a
+ * `GE` closing nothing), and its identifier is then printed in its `orphan` path like any it knows.
+ */
+const X12_ENVELOPE_SEGMENT_IDS: ReadonlySet<string> = new Set<string>([
+  "ISA",
+  "TA1",
+  "GS",
+  "GE",
+  "IEA",
+]);
 
 /**
  * The one X12 segment whose elements are **fixed-width and space-padded by the standard**: the `ISA` is
@@ -157,9 +238,9 @@ function segKey(pos: SegPos): string {
 }
 
 /**
- * Record that a locus rule **named** these elements of this segment, whatever it then decided about
- * them. A named element is examined and is never an unexamined residual; an element no rule names is
- * exactly what the enumeration measures.
+ * Record that a rule **decided** these elements of this segment: acted on them, kept them, or removed
+ * them. A decided element is never an unexamined residual, and the closing sweep
+ * ({@link closeSegment}) leaves it alone.
  */
 function name(out: X12LocusAccumulator, pos: SegPos, elements: readonly number[]): void {
   const key = segKey(pos);
@@ -169,7 +250,7 @@ function name(out: X12LocusAccumulator, pos: SegPos, elements: readonly number[]
 }
 
 /** Append a locus + its coordinate to the accumulator; the coordinate's elements are named by it. */
-function push(out: X12LocusAccumulator, pos: TxSegPos, locus: GenericLocus, coord: X12Coord): void {
+function push(out: X12LocusAccumulator, pos: SegPos, locus: GenericLocus, coord: X12Coord): void {
   out.loci.push(locus);
   out.coords.push(coord);
   name(out, pos, coord.elements);
@@ -179,7 +260,8 @@ function push(out: X12LocusAccumulator, pos: TxSegPos, locus: GenericLocus, coor
  * Build a value-free manifest path for a segment element (`837/NM1[1]-3`). A segment outside every
  * transaction set - the interchange and functional-group envelope - has no `ST-01` to root its path in
  * and prints its own coordinates alone (`ISA[0]-6`), exactly as HL7 v2's `MSH-1` and the CDA document
- * envelope's `title` print theirs.
+ * envelope's `title` print theirs. A segment the parser found outside every transaction set prints under
+ * `orphan` (`orphan/NM1[0]-3`), which no three-character `ST-01` can spell.
  */
 function path(pos: SegPos, element: number): string {
   const at = `${pos.segIdBracket}-${String(element)}`;
@@ -187,20 +269,15 @@ function path(pos: SegPos, element: number): string {
 }
 
 /** Build a coord for a set of elements at this segment. */
-function coord(pos: TxSegPos, elements: readonly number[]): X12Coord {
-  return {
-    groupIndex: pos.groupIndex,
-    txIndex: pos.txIndex,
-    segIndex: pos.segIndex,
-    elements,
-  };
+function coord(pos: SegPos, elements: readonly number[]): X12Coord {
+  return { ...pos.at, elements };
 }
 
 /** Emit a fail-closed block locus for one element (category omitted → engine blocks as (R)). */
 function blockElement(
   out: X12LocusAccumulator,
-  seg: X12Segment,
-  pos: TxSegPos,
+  seg: SegmentElements,
+  pos: SegPos,
   element: number,
 ): void {
   name(out, pos, [element]);
@@ -213,11 +290,55 @@ function blockElement(
   );
 }
 
+/** Read the declared format a date position names, exactly as written (`""` when absent). */
+function declaredFormat(
+  source: X12DateFormatSource,
+  seg: SegmentElements,
+  components: readonly string[],
+): string {
+  if (source.from === "fixed") return source.format;
+  if (source.from === "element") return el(seg, source.position);
+  // A component date reads its format from a component before it, which a composite long enough to
+  // hold the date always has.
+  return components[source.position - 1] as string;
+}
+
+/**
+ * Emit a date locus for one element when its value is a valid date in the format the segment declares,
+ * and remove and record it otherwise. A value that is no date in the declared format (an identifier
+ * shifted there, a date in some other format, a time of day) is not trusted as a date: a date transform
+ * would keep whatever its front looked like.
+ */
+function emitDate(
+  out: X12LocusAccumulator,
+  seg: SegmentElements,
+  pos: SegPos,
+  element: number,
+  category: SafeHarborCategory,
+  source: X12DateFormatSource,
+): void {
+  const value = el(seg, element);
+  const format = declaredFormat(source, seg, []);
+  if (!isX12DateInFormat(value, format)) {
+    blockElement(out, seg, pos, element);
+    return;
+  }
+  push(
+    out,
+    pos,
+    { path: path(pos, element), kind: "date", category, value },
+    coord(pos, [element]),
+  );
+}
+
+/** The declared format of a date position that names none: no value is a valid date in it. */
+const NO_FORMAT: X12DateFormatSource = { from: "fixed", format: "" };
+
 /** Emit a direct-category locus for one element (redact / date / zip). */
 function emitRule(
   out: X12LocusAccumulator,
   seg: X12Segment,
-  pos: TxSegPos,
+  pos: SegPos,
   rule: X12ElementRule,
 ): void {
   name(out, pos, [rule.element]);
@@ -227,8 +348,15 @@ function emitRule(
     return;
   }
   // rule.category is required for every non-block mode (the discriminated union guarantees it).
-  const kind: GenericLocus["kind"] =
-    rule.mode === "date" ? "date" : rule.mode === "zip" ? "zip" : "identifier";
+  if (rule.mode === "date") {
+    // Every date rule has its declared format in the table. One without would declare no format, and
+    // no value is a valid date in no format, so it would be removed rather than kept.
+    /* v8 ignore next -- the table holds a format for every date rule (DMG-02, DTP-03, DTM-02) */
+    const source = X12_RULE_DATE_FORMATS.get(`${pos.segId}-${String(rule.element)}`) ?? NO_FORMAT;
+    emitDate(out, seg, pos, rule.element, rule.category, source);
+    return;
+  }
+  const kind: GenericLocus["kind"] = rule.mode === "zip" ? "zip" : "identifier";
   push(
     out,
     pos,
@@ -246,7 +374,7 @@ function emitRule(
 function emitId(
   out: X12LocusAccumulator,
   seg: X12Segment,
-  pos: TxSegPos,
+  pos: SegPos,
   element: number,
   category: SafeHarborCategory | undefined,
 ): void {
@@ -265,6 +393,38 @@ function emitId(
 }
 
 /**
+ * Decide a **code position** the rules read and keep (an entity code, an identification code qualifier, a
+ * `REF` qualifier, an `N4` state or country). A recognized code stays where it is: the position is named
+ * and nothing is written. Anything else is not trusted as a code. The usual way an identifier gets there
+ * is a missing element separator that shifts it left by one position, and a kept value would leave with
+ * no manifest row and no unexamined residual, because the position counts as examined. So it fails
+ * closed exactly as an unrecognized structure does: removed, and recorded at its own position.
+ */
+function keepCodeOrBlock(
+  out: X12LocusAccumulator,
+  seg: X12Segment,
+  pos: SegPos,
+  element: number,
+): void {
+  name(out, pos, [element]);
+  if (!has(seg, element)) return;
+  if (isRecognizedX12Code(pos.segId, element, el(seg, element))) return;
+  blockElement(out, seg, pos, element);
+}
+
+/**
+ * Read the code at a code position for a classifier, **only when it passed the exact check**. A value
+ * the position's code list does not hold, exactly as written, was removed by {@link keepCodeOrBlock};
+ * it is equally untrusted as a code to route on, so the classifier sees `""` and routes the party or
+ * reference as unknown, which fails closed. A classifier that folded case or trimmed the raw value
+ * instead would keep a name or an identifier on the strength of a code the pass itself refused.
+ */
+function trustedCode(seg: X12Segment, segId: string, element: number): string {
+  const value = el(seg, element);
+  return isRecognizedX12Code(segId, element, value) ? value : "";
+}
+
+/**
  * Record a party the pass is leaving in place because the role its `-01` entity-identifier code names
  * puts it outside §164.514(b)(2)(i)'s scope clause. The record sits at the party's own structural locus
  * (the `-01` element, where the role code lives), carries the role code and **no value at all**, and is
@@ -276,7 +436,7 @@ function emitId(
 function emitRetainedParty(
   out: X12LocusAccumulator,
   seg: X12Segment,
-  pos: TxSegPos,
+  pos: SegPos,
   roleCode: string,
   identityElements: readonly number[],
 ): void {
@@ -293,15 +453,17 @@ function emitRetainedParty(
 }
 
 /** Handle an `NM1`: entity-classified name (03 to 07) + identifier (09 routed by the 08 qualifier). */
-function handleNm1(out: X12LocusAccumulator, seg: X12Segment, pos: TxSegPos): void {
-  // The `NM1` rules name the entity code the classification reads, the five name components, the
-  // identifier and the qualifier that routes it, whichever branch the party classification then takes.
-  name(out, pos, [1, 3, 4, 5, 6, 7, 8, 9]);
-  const party = classifyNm1Party(el(seg, 1));
+function handleNm1(out: X12LocusAccumulator, seg: X12Segment, pos: SegPos): void {
+  keepCodeOrBlock(out, seg, pos, 1);
+  // The classifier reads the entity code only when it passed the exact check; anything else is unknown.
+  // The transaction set decides a code whose meaning changes by set (the 820 premium payer).
+  const party = classifyNm1Party(trustedCode(seg, "NM1", 1), pos.stId);
   if (party.scope === "outside-scope") {
     // Recognized provider / organization: retained, and the role code that placed it outside the scope
-    // clause is recorded at its locus rather than left to be inferred from an absence.
+    // clause is recorded at its locus rather than left to be inferred from an absence. Its qualifier is
+    // still only kept when it is a qualifier.
     emitRetainedParty(out, seg, pos, party.roleCode, [3, 4, 5, 6, 7, 9]);
+    keepCodeOrBlock(out, seg, pos, 8);
     return;
   }
   // A party the clause reaches: the individual, a relative, or the individual's EMPLOYER, all on the
@@ -311,39 +473,27 @@ function handleNm1(out: X12LocusAccumulator, seg: X12Segment, pos: TxSegPos): vo
 
   // Name components NM1-03..07. A subject entity redacts (category NAMES); an unknown entity fails
   // closed (blocked): an unrecognized entity could be the patient, so its name is never passed through.
+  name(out, pos, [3, 4, 5, 6, 7]);
   const nameElements = [3, 4, 5, 6, 7].filter((n) => has(seg, n));
   if (nameElements.length > 0) {
-    if (subject) {
-      push(
-        out,
-        pos,
-        {
-          path: path(pos, 3),
-          kind: "identifier",
-          category: SAFE_HARBOR_CATEGORIES.NAMES,
-          value: nameElements.map((n) => el(seg, n)).join(" "),
-        },
-        coord(pos, nameElements),
-      );
-    } else {
-      push(
-        out,
-        pos,
-        {
-          path: path(pos, 3),
-          kind: "identifier",
-          value: nameElements.map((n) => el(seg, n)).join(" "),
-        },
-        coord(pos, nameElements),
-      );
-    }
+    push(
+      out,
+      pos,
+      {
+        path: path(pos, 3),
+        kind: "identifier",
+        ...(subject ? { category: SAFE_HARBOR_CATEGORIES.NAMES } : {}),
+        value: nameElements.map((n) => el(seg, n)).join(" "),
+      },
+      coord(pos, nameElements),
+    );
   }
 
-  // Identifier NM1-09, routed by the NM1-08 qualifier. An unknown/absent qualifier fails closed.
-  if (has(seg, 9)) {
-    const category = subject ? categoryForNm1IdQualifier(el(seg, 8)) : undefined;
-    emitId(out, seg, pos, 9, category);
-  }
+  // Identifier NM1-09, routed by the NM1-08 qualifier. An unknown/absent qualifier fails closed, and a
+  // qualifier position holding something that is no qualifier is itself removed and routes nothing.
+  keepCodeOrBlock(out, seg, pos, 8);
+  const category = subject ? categoryForNm1IdQualifier(trustedCode(seg, "NM1", 8)) : undefined;
+  emitId(out, seg, pos, 9, category);
 }
 
 /**
@@ -355,58 +505,42 @@ function handleNm1(out: X12LocusAccumulator, seg: X12Segment, pos: TxSegPos): vo
  * id blocked). `N1` shares the entity-identifier-code (element 98) and identification-code-qualifier
  * (element 66) semantics with `NM1`, so the classifiers are reused.
  */
-function handleN1(out: X12LocusAccumulator, seg: X12Segment, pos: TxSegPos): void {
-  // The `N1` rules name the same four positions: the entity code, the organisation name, the
-  // identification-code qualifier and the identifier it routes.
-  name(out, pos, [1, 2, 3, 4]);
-  const party = classifyNm1Party(el(seg, 1));
+function handleN1(out: X12LocusAccumulator, seg: X12Segment, pos: SegPos): void {
+  keepCodeOrBlock(out, seg, pos, 1);
+  const party = classifyNm1Party(trustedCode(seg, "N1", 1), pos.stId);
   if (party.scope === "outside-scope") {
     // Recognized org / payer / provider party: retained, with the role code recorded at its locus.
     emitRetainedParty(out, seg, pos, party.roleCode, [2, 4]);
+    keepCodeOrBlock(out, seg, pos, 3);
     return;
   }
   const subject = party.scope === "safe-harbor-subject";
 
-  if (has(seg, 2)) {
-    if (subject) {
-      push(
-        out,
-        pos,
-        {
-          path: path(pos, 2),
-          kind: "identifier",
-          category: SAFE_HARBOR_CATEGORIES.NAMES,
-          value: el(seg, 2),
-        },
-        coord(pos, [2]),
-      );
-    } else {
-      blockElement(out, seg, pos, 2); // unknown entity → fail closed
-    }
+  if (subject) {
+    emitId(out, seg, pos, 2, SAFE_HARBOR_CATEGORIES.NAMES);
+  } else {
+    blockElement(out, seg, pos, 2); // unknown entity → fail closed
   }
-  if (has(seg, 4)) {
-    const category = subject ? categoryForNm1IdQualifier(el(seg, 3)) : undefined;
-    emitId(out, seg, pos, 4, category);
-  }
+  keepCodeOrBlock(out, seg, pos, 3);
+  const category = subject ? categoryForNm1IdQualifier(trustedCode(seg, "N1", 3)) : undefined;
+  emitId(out, seg, pos, 4, category);
 }
 
 /** Handle a `REF`: `REF-02` routed by the `REF-01` qualifier (phi → scrub, retain, unknown → block). */
-function handleRef(out: X12LocusAccumulator, seg: X12Segment, pos: TxSegPos): void {
-  // The qualifier table names both elements on every branch: the qualifier the routing reads and the
-  // value it routes. A `retain` outcome is a decision about that value, not a position nothing reached.
-  name(out, pos, [1, 2]);
-  if (!has(seg, 2)) return;
-  const disposition = classifyRefQualifier(el(seg, 1));
-  if (disposition.kind === "retain") return; // recognized administrative / provider reference
-  if (disposition.kind === "block") {
-    blockElement(out, seg, pos, 2); // unknown qualifier → fail closed (category R)
+function handleRef(out: X12LocusAccumulator, seg: X12Segment, pos: SegPos): void {
+  keepCodeOrBlock(out, seg, pos, 1);
+  // The qualifier routes REF-02 only when it passed the exact check; anything else routes as unknown.
+  const disposition = classifyRefQualifier(trustedCode(seg, "REF", 1));
+  if (disposition.kind === "retain") {
+    name(out, pos, [2]); // recognized administrative / provider reference
     return;
   }
-  emitId(out, seg, pos, 2, disposition.category);
+  // An unknown qualifier fails closed (category R); a patient identifier is routed to its category.
+  emitId(out, seg, pos, 2, disposition.kind === "phi" ? disposition.category : undefined);
 }
 
-/** Handle a `CLM` / `CLP`: pseudonymize the `-01` patient account number; retain the rest. */
-function handleAccount(out: X12LocusAccumulator, seg: X12Segment, pos: TxSegPos): void {
+/** Handle a `CLM` / `CLP`: pseudonymize the `-01` patient account number; the sweep decides the rest. */
+function handleAccount(out: X12LocusAccumulator, seg: X12Segment, pos: SegPos): void {
   emitId(out, seg, pos, 1, SAFE_HARBOR_CATEGORIES.ACCOUNT);
 }
 
@@ -419,23 +553,21 @@ function handleAccount(out: X12LocusAccumulator, seg: X12Segment, pos: TxSegPos)
 function handleGeoSegment(
   out: X12LocusAccumulator,
   seg: X12Segment,
-  pos: TxSegPos,
+  pos: SegPos,
   rules: readonly X12ElementRule[],
 ): void {
   const ruleByElement = new Map<number, X12ElementRule>();
   for (const rule of rules) ruleByElement.set(rule.element, rule);
   /* v8 ignore next -- only an X12_GEO_SEGMENTS id (N3, N4) reaches here, and the table has a row for each */
   const retain = X12_GEO_RETAIN_ELEMENTS[pos.segId] ?? new Set<number>();
-  // The sweep is exhaustive over the segment, so every element of it is named: acted on by its mapped
-  // rule, kept because the safe list says it is not an identifier, or blocked. None goes unexamined.
-  name(out, pos, [...retain]);
   for (let n = 1; n < seg.elements.length; n += 1) {
     if (!has(seg, n)) continue;
-    name(out, pos, [n]);
     const rule = ruleByElement.get(n);
     if (rule !== undefined) {
       emitRule(out, seg, pos, rule);
-    } else if (!retain.has(n)) {
+    } else if (retain.has(n)) {
+      keepCodeOrBlock(out, seg, pos, n); // a state or country is kept only when it is one
+    } else {
       blockElement(out, seg, pos, n); // unmapped geographic element → fail closed
     }
   }
@@ -444,12 +576,12 @@ function handleGeoSegment(
 /**
  * Block the free-text element(s) of a message segment (`MSG` / `III` / `K3` / `NTE`): free text can
  * carry any of the 18 categories in prose, so it fails closed (never a naive scrub). The segment's other
- * (coded) elements are retained (the over-scrub guard).
+ * (coded) elements are kept only when they hold a code (the closing sweep decides them).
  */
 function handleFreeTextSegment(
   out: X12LocusAccumulator,
   seg: X12Segment,
-  pos: TxSegPos,
+  pos: SegPos,
   elements: readonly number[],
 ): void {
   name(out, pos, elements);
@@ -469,13 +601,28 @@ function handleFreeTextSegment(
   }
 }
 
-/** Fail closed on an unknown segment: block every populated element (unrecognized structure). */
-function handleUnknown(out: X12LocusAccumulator, seg: X12Segment, pos: TxSegPos): void {
-  for (let n = 1; n < seg.elements.length; n += 1) blockElement(out, seg, pos, n);
+/**
+ * **Remove a segment whole** and record every value it carried, its identifier (element `0`) included,
+ * each at its own position (`837/<withheld>[0]-0`). This is how a segment whose identifier the pass does
+ * not recognize fails closed, and how a segment outside every transaction set leaves: no part of it is
+ * re-emitted, so an identifier that landed where the segment identifier belongs never leaves in the
+ * clear. Each coordinate is marked {@link X12Coord.segmentRemoved}, so the applier drops the segment.
+ */
+function removeSegment(out: X12LocusAccumulator, seg: SegmentElements, pos: SegPos): void {
+  for (let n = 0; n < seg.elements.length; n += 1) {
+    name(out, pos, [n]);
+    if (!has(seg, n)) continue;
+    push(
+      out,
+      pos,
+      { path: path(pos, n), kind: "identifier", value: el(seg, n) },
+      { ...coord(pos, [n]), segmentRemoved: true },
+    );
+  }
 }
 
 /** Dispatch one segment through the X12 PHI rules. */
-function handleSegment(out: X12LocusAccumulator, seg: X12Segment, pos: TxSegPos): void {
+function handleSegment(out: X12LocusAccumulator, seg: X12Segment, pos: SegPos): void {
   const id = pos.segId;
   if (id === "NM1") {
     handleNm1(out, seg, pos);
@@ -500,9 +647,9 @@ function handleSegment(out: X12LocusAccumulator, seg: X12Segment, pos: TxSegPos)
   }
   const universal = X12_UNIVERSAL_SEGMENT_RULES[id];
   if (universal !== undefined) {
-    // Geographic segments fail closed on unmapped elements (a location identifier could leak); the
-    // demographic segments (DMG/PER/DTP/DTM) carry only non-identifier codes in their unmapped
-    // positions and retain them (the over-scrub guard), matching the HL7 adapter.
+    // Geographic segments decide every element themselves (a location identifier could leak). The
+    // demographic segments (DMG/PER/DTP/DTM/SBR) act on their mapped elements here and leave the rest
+    // to the closing sweep, which keeps a code or qualifier only when it is one.
     if (X12_GEO_SEGMENTS.has(id)) {
       handleGeoSegment(out, seg, pos, universal);
       return;
@@ -510,45 +657,283 @@ function handleSegment(out: X12LocusAccumulator, seg: X12Segment, pos: TxSegPos)
     for (const rule of universal) emitRule(out, seg, pos, rule);
     return;
   }
-  if (X12_RETAIN_SEGMENTS.has(id)) return; // recognized clinical / financial / control: retained
-  handleUnknown(out, seg, pos); // fail closed
+  // A recognized clinical, financial or control segment: the closing sweep decides every element by
+  // its shape. A segment whose identifier is not recognized never reaches here (see closeSegment).
+}
+
+/** How a composite element is decided: removed whole, or kept with these components removed. */
+type CompositeJudgment =
+  | { readonly whole: true }
+  | {
+      readonly whole: false;
+      readonly decisions: readonly { readonly component: number; readonly date: boolean }[];
+    };
+
+/**
+ * Judge one composite element component by component against its shape, without recording anything.
+ * A composite with more components than the shape names, or a kept component that fails its test, is
+ * not trusted at all and is removed whole. Otherwise the element is kept, except that a free-text
+ * component is removed, a date component is transformed as a date (or removed, when it is no date in
+ * its declared format), a value whose qualifier is a real code with no shape the pass knows is removed
+ * on its own, and every value after the composite's shift point is removed.
+ */
+function judgeComposite(
+  seg: SegmentElements,
+  components: readonly string[],
+  shape: Extract<X12ElementShape, { kind: "composite" }>,
+  ctx: X12ShapeContext,
+): CompositeJudgment {
+  if (components.length > shape.components.length) return { whole: true };
+  // `n` is in range wherever these read it: the length check above bounds it by the shape's list.
+  const spec = (n: number): X12ComponentShape => shape.components[n - 1] as X12ComponentShape;
+  const value = (n: number): string => components[n - 1] ?? "";
+  const dateFails = (n: number): boolean => {
+    const at = spec(n);
+    return (
+      at.kind === "date" && !isX12DateInFormat(value(n), declaredFormat(at.format, seg, components))
+    );
+  };
+  // A component the composite requires, or one an earlier component implies, left empty while a later
+  // one holds a value, or a date component that is no date in its format: every value after it, or
+  // after the last component before it that held, was shifted there, and is removed on its own. A
+  // kept component that fails its test removes the composite whole below, so only a date fails here.
+  const shift = x12ShiftPoint(
+    {
+      present: (n) => value(n).length > 0,
+      fails: dateFails,
+      anchored: (n) => spec(n).kind !== "free",
+    },
+    components.length,
+    shape.requirements ?? {},
+  );
+  const decisions: { readonly component: number; readonly date: boolean }[] = [];
+  for (const [i, text] of components.entries()) {
+    const n = i + 1;
+    if (text.length === 0) continue;
+    if (shift !== undefined && n > shift) {
+      decisions.push({ component: n, date: false });
+      continue;
+    }
+    const at = spec(n);
+    if (at.kind === "keep") {
+      const withComponents = { ...ctx, components };
+      if (at.test(text, withComponents)) continue;
+      if (at.alone?.(text, withComponents) !== true) return { whole: true };
+      decisions.push({ component: n, date: false });
+    } else {
+      decisions.push({ component: n, date: at.kind === "date" && !dateFails(n) });
+    }
+  }
+  return { whole: false, decisions };
+}
+
+/**
+ * Decide one composite element component by component against its shape ({@link judgeComposite}), and
+ * record each removed or transformed component at its own component position (`837/HI[0]-1-4`).
+ */
+function decideComposite(
+  out: X12LocusAccumulator,
+  seg: SegmentElements,
+  pos: SegPos,
+  element: number,
+  shape: Extract<X12ElementShape, { kind: "composite" }>,
+  ctx: X12ShapeContext,
+): void {
+  const components = el(seg, element).split(out.delimiters.component);
+  const judgment = judgeComposite(seg, components, shape, ctx);
+  // A composite that fails its shape is a shift point, so the closing sweep removes it before it gets
+  // here; removing it whole stays the fail-closed answer should one ever arrive.
+  /* v8 ignore next 4 -- the closing sweep removes a composite that fails its shape before this */
+  if (judgment.whole) {
+    blockElement(out, seg, pos, element);
+    return;
+  }
+  name(out, pos, [element]);
+  for (const { component, date } of judgment.decisions) {
+    // `component` is a 1-based index of a component the judgment read out of `components`.
+    const value = components[component - 1] as string;
+    const at = `${path(pos, element)}-${String(component)}`;
+    push(
+      out,
+      pos,
+      date
+        ? { path: at, kind: "date", category: SAFE_HARBOR_CATEGORIES.DATES, value }
+        : { path: at, kind: "identifier", value },
+      { ...coord(pos, [element]), component },
+    );
+  }
+}
+
+/**
+ * `true` when the value at element `element` fails the shape its position expects: a `keep` value that
+ * fails its test, a date that is no date in its declared format, or a composite that would be removed
+ * whole. A position with no shape (one a locus rule decides, or one the pass does not keep) fails
+ * nothing here.
+ */
+function failsShape(
+  seg: SegmentElements,
+  shape: X12ElementShape | undefined,
+  element: number,
+  ctx: X12ShapeContext,
+): boolean {
+  // A required position with no shape is one a locus rule decides, and the sweep never asks about one.
+  /* v8 ignore next -- the sweep reads only undecided positions that are required or have a shape */
+  if (shape === undefined) return false;
+  const value = el(seg, element);
+  if (shape.kind === "keep") return !shape.test(value, ctx);
+  if (shape.kind === "date") {
+    return !isX12DateInFormat(value, declaredFormat(shape.format, seg, []));
+  }
+  return judgeComposite(seg, value.split(ctx.component), shape, ctx).whole;
+}
+
+/**
+ * Decide one element no locus rule acted on, against the shape its position expects (see
+ * `./element-shapes.js`). A position with no shape is not kept: it is removed and recorded. A kept
+ * position keeps a value only when it has the shape: a code the position knows, a valid date in the
+ * declared format, a number, a bounded administrative reference. Anything else is removed and recorded
+ * at its own position, because the usual way a value lands where it does not belong is a missing or
+ * an extra element separator that shifted an identifier there.
+ */
+function decideByShape(
+  out: X12LocusAccumulator,
+  seg: SegmentElements,
+  pos: SegPos,
+  element: number,
+): void {
+  const shape = X12_ELEMENT_SHAPES[pos.segId]?.[element];
+  if (shape === undefined) {
+    blockElement(out, seg, pos, element); // a position no rule names → fail closed
+    return;
+  }
+  const ctx: X12ShapeContext = { ...out.delimiters, elements: seg.elements };
+  if (shape.kind === "keep") {
+    if (shape.test(el(seg, element), ctx)) name(out, pos, [element]);
+    else blockElement(out, seg, pos, element);
+    return;
+  }
+  if (shape.kind === "date") {
+    emitDate(out, seg, pos, element, SAFE_HARBOR_CATEGORIES.DATES, shape.format);
+    return;
+  }
+  decideComposite(out, seg, pos, element, shape, ctx);
+}
+
+/**
+ * The **closing sweep** every segment the pass hands through gets after its rules ran. It starts at the
+ * segment identifier (element `0`): a segment the pass does not keep (`recognized` is `false`) is
+ * removed whole ({@link removeSegment}); otherwise the identifier is one the pass knows, which is
+ * structure rather than a value, and each value-bearing element no rule decided is decided by its shape
+ * ({@link decideByShape}). After it, no element of the segment is unexamined: each was acted on, kept
+ * because it has the shape its position expects, or removed and recorded.
+ */
+function closeSegment(
+  out: X12LocusAccumulator,
+  seg: SegmentElements,
+  pos: SegPos,
+  recognized: boolean,
+): void {
+  if (!recognized) {
+    removeSegment(out, seg, pos);
+    return;
+  }
+  name(out, pos, [0]);
+  // A position the set's TR3 requires, or one a qualifier implies, left empty while a later one holds a
+  // value, or a required, qualifier, code or date position whose value fails its shape: every value
+  // after it was shifted by an extra or a missing separator. A number shape cannot tell a shifted date
+  // or account number from an amount, so each of them is removed and recorded instead.
+  const shapes = X12_ELEMENT_SHAPES[pos.segId] ?? {};
+  const ctx: X12ShapeContext = { ...out.delimiters, elements: seg.elements };
+  const decided = (n: number): boolean => out.named.get(segKey(pos))?.has(n) === true;
+  // The ISA is read at fixed byte positions, and the parser refuses one whose separators are not all
+  // in place, so no value in it can be shifted: each element is decided by its own shape alone.
+  const fixed = pos.segId === FIXED_WIDTH_SEGMENT_ID;
+  const shift = x12ShiftPoint(
+    {
+      present: (n) => isValueBearing(seg, pos.segId, n),
+      fails: (n) => !decided(n) && failsShape(seg, shapes[n], n, ctx),
+      anchored: (n) => {
+        const shape = shapes[n];
+        if (fixed || shape === undefined) return false;
+        return shape.kind !== "keep" || shape.anchor === true;
+      },
+    },
+    seg.elements.length - 1,
+    x12SegmentRequirements(pos.segId, pos.stId) ?? {},
+  );
+  for (let n = 1; n < seg.elements.length; n += 1) {
+    if (decided(n)) continue;
+    if (!isValueBearing(seg, pos.segId, n)) continue;
+    if (shift !== undefined && n > shift) blockElement(out, seg, pos, n);
+    else decideByShape(out, seg, pos, n);
+  }
+}
+
+/** The element a coordinate is ordered by: its first element, or `1` for a party-role row (no elements). */
+function orderOf(coordinate: X12Coord): number {
+  return coordinate.elements[0] ?? 1;
+}
+
+/**
+ * Put the loci one segment produced since `start` in element order, keeping the loci and coordinates
+ * aligned. A segment's rules run before its closing sweep, so without this a code the sweep removed
+ * would be recorded after a name the rule removed further along the same segment; the manifest reads
+ * in document order instead. The sort is stable, and the loci of one composite element are pushed in
+ * component order, so they stay in that order.
+ */
+function orderSegmentLoci(out: X12LocusAccumulator, start: number): void {
+  const pairs = out.coords
+    .slice(start)
+    .map((c, i) => ({ c, l: out.loci[start + i] as GenericLocus }));
+  pairs.sort((a, b) => orderOf(a.c) - orderOf(b.c));
+  pairs.forEach(({ c, l }, i) => {
+    out.coords[start + i] = c;
+    out.loci[start + i] = l;
+  });
 }
 
 /**
  * The **envelope** the pass hands through around every transaction set, in the order `serializeX12`
- * re-emits it from the verbatim `raw` text the parser preserved: the interchange header and trailer, any
- * envelope-level `TA1` acknowledgment, and each functional group's header and trailer.
- *
- * All of them are retained structures under exactly the reasoning the `ST` / `SE` pair is: no locus rule
- * looks at one, and retaining a STRUCTURE names no position inside it, so their elements are enumerated
- * rather than passing through in silence. This mirrors the other adapters' envelopes, HL7 v2's `MSH` and
- * the CDA document envelope, both of which are counted.
+ * re-emits it: the interchange header and trailer, any envelope-level `TA1` acknowledgment, and each
+ * functional group's header and trailer. No locus rule acts on one, so every element is decided by its
+ * shape, and one that fails it is removed from the envelope and recorded, as anywhere else.
  *
  * An envelope segment identifier is **not document-derived**: `@cosyte/x12` types each of these as raw
  * text plus decoded elements with no `id` field of its own, so the identifier a caller passes here is the
  * one the standard fixes for that envelope position. Nothing read out of the document is interpolated,
  * which is why these are not passed through {@link safeLocusToken} the way an `X12Segment.id` is.
  */
-function envelopePos(segId: string, occurrence: number): SegPos {
+function envelopePos(segId: X12EnvelopeAddress["segment"], occurrence: number): SegPos {
   // A group's header and trailer are indexed by the group's own position, so `GS[1]` and `GE[1]` name
   // the same group even when an earlier group arrived truncated with no trailer at all.
   const segIdBracket = `${segId}[${String(occurrence)}]`;
-  return { key: `envelope:${segIdBracket}`, stId: "", segId, segIdBracket };
+  return {
+    key: `envelope:${segIdBracket}`,
+    stId: "",
+    segId,
+    segIdBracket,
+    at: {
+      groupIndex: -1,
+      txIndex: -1,
+      segIndex: -1,
+      envelope: { segment: segId, index: occurrence },
+    },
+  };
 }
 
 /**
  * Walk a parsed X12 interchange and extract every PHI-bearing (or fail-closed) locus, structurally,
  * from the `@cosyte/x12` model. Never mutates the interchange.
  *
- * Every segment is also **enumerated**: the value-bearing elements it hands through that no rule above
- * named are counted and located as unexamined residuals. A retained clinical / financial / control
- * segment contributes all of its elements, because retaining a STRUCTURE names no position inside it;
- * the `ST` / `SE` transaction-set control pair contributes its own, and so does the interchange and
- * functional-group envelope around them ({@link envelopePos}). Nothing is transformed by the count.
+ * Every element of every segment the output carries is **decided**: acted on by a locus rule, kept
+ * because it has the shape its position expects, or removed and recorded. That covers the transaction
+ * bodies, the `ST` / `SE` control pair, the interchange and functional-group envelope, and any segment
+ * the parser found outside every transaction set (which is removed whole). The unexamined residual count
+ * is still taken over all of them, and it is a measured zero.
  *
  * @param interchange - The parsed X12 interchange (`parseX12(raw)`).
  * @returns The loci (for the engine), their index-aligned write-back coordinates, and the unexamined
- *   residual positions the pass hands through.
+ *   residual positions the pass hands through (none).
  * @throws {@link DeidError} `DEID_POSITIONS_UNENUMERABLE` when a segment's value-bearing elements
  *   cannot be enumerated: the pass fails rather than emit a zero or a partial count.
  * @example
@@ -561,10 +946,25 @@ function envelopePos(segId: string, occurrence: number): SegPos {
  * ```
  */
 export function extractX12Loci(interchange: X12Interchange): X12Extraction {
-  const out: X12LocusAccumulator = { loci: [], coords: [], named: new Map<string, Set<number>>() };
+  const out: X12LocusAccumulator = {
+    loci: [],
+    coords: [],
+    named: new Map<string, Set<number>>(),
+    delimiters: {
+      component: interchange.delimiters.component,
+      repetition: interchange.delimiters.repetition,
+    },
+  };
   const enumerated: { readonly seg: SegmentElements; readonly pos: SegPos }[] = [];
-  const envelope = (seg: SegmentElements | undefined, segId: string, occurrence: number): void => {
-    if (seg !== undefined) enumerated.push({ seg, pos: envelopePos(segId, occurrence) });
+  const envelope = (
+    seg: SegmentElements | undefined,
+    segId: X12EnvelopeAddress["segment"],
+    occurrence: number,
+  ): void => {
+    if (seg === undefined) return;
+    const pos = envelopePos(segId, occurrence);
+    closeSegment(out, seg, pos, true);
+    enumerated.push({ seg, pos });
   };
 
   // Document order, which is the order `serializeX12` re-emits these in and the order the inventory
@@ -578,33 +978,76 @@ export function extractX12Loci(interchange: X12Interchange): X12Extraction {
     envelope(group.gs, "GS", groupIndex);
     group.transactions.forEach((tx, txIndex) => {
       // `ST-01` is a data element the parser copies verbatim, and it is the ROOT of every path this
-      // transaction produces; `X12Segment.id` is the token before the first element separator on a
-      // line the parser may not have recognized at all. Both are bounded before they are interpolated,
-      // and the occurrence counter keys on the bounded id so refused segments stay distinguishable.
+      // transaction produces; it is bounded before it is interpolated. `X12Segment.id` is the token
+      // before the first element separator, which can be a value that landed there; it is printed
+      // only when it is an identifier the pass recognizes, and withheld otherwise, because a short
+      // value (a name suffix, a two-letter last name) passes the bare shape. The occurrence counter
+      // keys on the printed id so withheld segments stay distinguishable.
       const stId = safeLocusToken(tx.st.elements[1] ?? "", "x12TransactionSetId");
       const occ = new Map<string, number>();
       tx.segments.forEach((seg, segIndex) => {
-        const segId = safeLocusToken(seg.id, "x12SegmentId");
+        const recognized = X12_RECOGNIZED_SEGMENT_IDS.has(seg.id);
+        const segId = recognized ? safeLocusToken(seg.id, "x12SegmentId") : WITHHELD_LOCUS_TOKEN;
         const n = occ.get(segId) ?? 0;
         occ.set(segId, n + 1);
-        const pos: TxSegPos = {
+        const pos: SegPos = {
           key: `${String(groupIndex)}:${String(txIndex)}:${String(segIndex)}`,
-          groupIndex,
-          txIndex,
-          segIndex,
           stId,
           segId,
           segIdBracket: `${segId}[${String(n)}]`,
+          at: { groupIndex, txIndex, segIndex },
         };
-        // The envelope control pair carries no patient PHI and no rule looks at it, which is exactly
-        // why it is enumerated below rather than skipped: it is handed through, so it is measured.
-        if (seg.id !== "ST" && seg.id !== "SE") handleSegment(out, seg, pos);
+        // The control pair carries no rule of its own; the closing sweep decides it like any other.
+        // A segment whose identifier is not recognized gets no rule: the sweep removes it whole.
+        const start = out.loci.length;
+        if (recognized && seg.id !== "ST" && seg.id !== "SE") handleSegment(out, seg, pos);
+        closeSegment(out, seg, pos, recognized);
+        orderSegmentLoci(out, start);
         enumerated.push({ seg, pos });
       });
     });
     envelope(group.ge, "GE", groupIndex);
   });
   envelope(interchange.iea, "IEA", 0);
+
+  // A segment the parser found outside every transaction set belongs to no structure a rule knows, so
+  // it fails closed: removed whole, identifier included, and every value it carried recorded under
+  // `orphan`. Recorded after the interchange, in the order the parser kept them. Its identifier is
+  // printed only when the pass recognizes it, as inside a transaction set.
+  const orphanOcc = new Map<string, number>();
+  // A peer older than the orphan list carries none.
+  (interchange.orphanSegments ?? []).forEach((orphan, index) => {
+    const seg = orphan.segment;
+    const known = X12_RECOGNIZED_SEGMENT_IDS.has(seg.id) || X12_ENVELOPE_SEGMENT_IDS.has(seg.id);
+    const segId = known ? safeLocusToken(seg.id, "x12SegmentId") : WITHHELD_LOCUS_TOKEN;
+    const n = orphanOcc.get(segId) ?? 0;
+    orphanOcc.set(segId, n + 1);
+    const pos: SegPos = {
+      key: `orphan:${String(index)}`,
+      stId: "orphan",
+      segId,
+      segIdBracket: `${segId}[${String(n)}]`,
+      at: { groupIndex: -1, txIndex: -1, segIndex: -1, envelope: { segment: "orphan", index } },
+    };
+    closeSegment(out, seg, pos, false);
+    enumerated.push({ seg, pos });
+  });
+
+  // Bytes after the `IEA` are re-emitted as the parser kept them, and they commonly hold a whole second
+  // interchange the parser did not decode. Nothing here can decide them, so anything there that is not
+  // blank fails closed: removed and recorded at `trailingBytes`. Blank bytes (whitespace and segment
+  // terminators after the last segment) carry no value and stay.
+  const trailing = interchange.trailingBytes ?? "";
+  if (trailing.split(interchange.delimiters.segment).join("").trim().length > 0) {
+    out.loci.push({ path: "trailingBytes", kind: "identifier", value: trailing });
+    out.coords.push({
+      groupIndex: -1,
+      txIndex: -1,
+      segIndex: -1,
+      elements: [1],
+      envelope: { segment: "trailing", index: 0 },
+    });
+  }
 
   const residuals = new UnexaminedResidualBuilder();
   for (const { seg, pos } of enumerated) {
@@ -616,9 +1059,11 @@ export function extractX12Loci(interchange: X12Interchange): X12Extraction {
 }
 
 /**
- * Enumerate one segment's value-bearing elements and record the ones no locus rule named. A **position**
- * here is one element of one segment (`837/DTP[0]-2`), the unit every X12 locus already uses; element 0
- * is the segment identifier itself and is structure, not a value.
+ * Enumerate one segment's value-bearing elements and record the ones no rule decided. A **position**
+ * here is one element of one segment (`837/DTP[0]-2`), the unit every X12 locus already uses, and it
+ * starts at element `0`, the segment identifier: an identifier is structure only when the pass
+ * recognized it, and a value that landed there is a position like any other. The closing sweep decides
+ * every element, so this records nothing; it is the independent count that would show one it missed.
  */
 function recordUnexaminedX12Positions(
   residuals: UnexaminedResidualBuilder,
@@ -626,9 +1071,13 @@ function recordUnexaminedX12Positions(
   pos: SegPos,
   named: ReadonlySet<number> | undefined,
 ): void {
-  for (let n = 1; n < seg.elements.length; n += 1) {
+  for (let n = 0; n < seg.elements.length; n += 1) {
     if (named?.has(n) === true) continue;
+    // The closing sweep named every value-bearing element, so no input reaches the record below; it
+    // stays as the independent count that would show a position a future rule forgot to decide.
+    /* v8 ignore start -- every value-bearing element is decided before this count runs */
     if (!isValueBearing(seg, pos.segId, n)) continue;
     residuals.record(path(pos, n));
+    /* v8 ignore stop */
   }
 }

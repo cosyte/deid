@@ -118,14 +118,17 @@ Two things follow, and the second is the one that surprises people:
   and it is a separate list precisely so that a position nothing looked at can never be mistaken for a
   residual of a value the pass did examine. All six adapters produce it: the fields of a retained HL7 v2
   segment, the entry dates / entry ids / in-entry performers and family-history demographics inside a
-  retained C-CDA clinical body, the codes and statuses a FHIR walk descends past, the elements of a
-  retained X12 segment, the fields of a retained NCPDP segment and its fixed header, and every DICOM
-  attribute the delegated Annex E report does not account for, nested sequence items included.
+  retained C-CDA clinical body, the codes and statuses a FHIR walk descends past, the fields of a
+  retained NCPDP segment and its fixed header, and every DICOM attribute the delegated Annex E report
+  does not account for, nested sequence items included. **X12 leaves none:** every element it hands
+  through, envelope included, is kept only when it has the shape its position expects and is removed
+  and recorded otherwise, so its list is always a measured zero. The
+  [X12 guide](guides-x12#every-position-is-decided) says what each position expects.
 
 - **The envelope around a document is counted too, in every format that has one.** Retaining a
   _structure_ names no position inside it, so the positions of an HL7 v2 `MSH`, of a CDA document
-  envelope, of the X12 interchange and functional-group envelope (`ISA` / `TA1` / `GS` / `GE` / `IEA`),
-  and of the DICOM Part 10 File Meta group `(0002,xxxx)` are all enumerated and reported. Read those
+  envelope, and of the DICOM Part 10 File Meta group `(0002,xxxx)` are all enumerated and reported (the
+  X12 interchange and functional-group envelope is decided instead, like the rest of X12). Read those
   counts as the measurement they are: control numbers, trading-partner ids, timestamps, and transfer
   syntaxes sit there, and the number says only that no rule examined them.
 
@@ -162,16 +165,58 @@ Two things follow, and the second is the one that surprises people:
   naming the structure, rather than emitting a zero or a partial count that a reader would take for a
   clearance.
 
-- **Two stated edges of the count itself, so it is not read as finer than it is.** An **X12 element is
-  one position even when it carries a composite**: `HI-01` holding a qualifier and a diagnosis code is
-  counted once, not twice, which is the unit every X12 locus already uses. And **undecoded bytes after
-  an X12 interchange's `IEA` terminator contribute no position at all**: they are neither a segment nor
-  a loop, they commonly hold a whole second interchange, and any number reported for them would measure
-  nothing. Those bytes are re-emitted, and the count does not speak for them.
+- **An X12 segment the pass does not recognize is removed whole, not counted.** Its identifier may be a
+  value that an extra segment terminator or a missing separator put there, so it is removed with the
+  segment's other values, each recorded under a withheld segment id, and the transaction set's `SE-01`
+  counts it out. A real X12 segment the pass has no shape for (`PLB`, `TS3`, `TS2`, the 837 `CUR`,
+  `CR5` to `CR8`, `FRM`, `SV4` and `RDM`, the 834 member detail segments beyond `INS` / `HD`) is removed
+  the same way, which over-removes it rather than passing it through.
+
+- **An X12 code no rule routes on keeps its place, and the value behind it is removed.** A `REF`
+  qualifier on neither `REF` table, an entity code on no role table, and an `HI` qualifier with no code
+  shape the adapter knows are real 005010 codes, so they stay; the reference value, the party's name
+  and identifier, or the `HI` code they qualify is removed and recorded, because the code alone does
+  not say whose it is. That over-removes, for example, the 837 prescription number (`REF*XZ`) and the
+  837I other operating physician (`NM1*ZZ`).
+
+- **An X12 value shifted past an empty required position is removed with everything after it.** A
+  number shape cannot tell a shifted date or account number from an amount, so the adapter treats a
+  position the TR3 of the transaction set requires, or one a qualifier implies, left empty before a
+  later value as a shift, and removes and records every value after it. That over-removes a malformed
+  segment that only omits a required position (the x12 library's 837D sample omits `SV3-02`, so its
+  place of service and count go too), rather than keep a value it cannot place.
+- **An X12 value that fails the shape of a required or narrow position takes its neighbours with it.**
+  A value that is no code, no date or no valid composite at a required position, or at any code, date
+  or composite position, shows a separator was added or left out. Every value after it is removed, and
+  so is every value back to the last code, date or composite before it that held. That over-removes a
+  segment with one bad code: the x12 library's 837I samples write the three-digit bill type `111` in
+  `CLM-05-1`, which takes the claim's charge and its `Y` / `A` / `Y` / `Y` codes; an `HI` entry written
+  with a decimal point (`J45.50`) takes the entries after it; an unknown `CARC` or `HD-01` takes the
+  amounts after it; and an unknown claim status category takes the payment method and the status
+  composites after it. A weight in `PAT-07` / `08` after a relationship code with
+  no date of death between them is removed too, because two extra separators put a date of death there.
+- **An X12 `STC` keeps only its codes.** A claim status keeps its status composites (`STC-01`, `-10`,
+  `-11`) and its payment method (`STC-07`). Its dates, amounts, action code, check or EFT trace number
+  and message are removed and recorded wherever they sit, even in a well-formed 277 or 277CA, where a
+  Safe-Harbor-named policy would otherwise keep each date's year. A separator left out between an
+  amount and the adjudication date after it moves the date into the amount, where it passes as a
+  number, and when the date is the last element nothing after it can fail and show the shift, so no date
+  or amount in `STC` can be placed. The claim status category and status codes are checked against the
+  form of their external code sources, not the published lists themselves.
+- **Some X12 shifts are not detectable.** A shift that leaves no required or implied position empty and
+  puts no value where a narrow shape refuses it, such as a value code's amount where another number
+  belongs, is kept. So are two separator errors that cancel out, one left out and one added further
+  along, when every value between them still fits its position.
+
+- **X12 bytes after the `IEA` are not counted; they are removed.** They are neither a segment nor a
+  loop, and they commonly hold a whole second interchange the parser did not decode, so no rule can
+  decide them. Bytes there that are not blank are removed and recorded at `trailingBytes`; a blank
+  line after the last terminator stays.
 
 - **The employer is a Safe Harbor subject, and two employer surfaces still are not reached.**
   §164.514(b)(2)(i) removes the identifiers of the individual "or of relatives, **employers**, or
-  household members", so an X12 party whose entity-identifier code is `36` and the employer positions
+  household members", so an X12 party whose entity-identifier code is `36` (or `P5`, or `PR` in an
+  `820` premium payment, where the premium payer is the members' employer) and the employer positions
   the HL7 v2.5.1 financial segments type (GT1-16/17/18/19/29, IN1-10/11, IN2-3/49/50/64, and IN2-70 as
   an organization) are acted on and recorded. What that does **not** reach: **an employer named only in
   free text**, which is the consumer's redactor's business like any other prose; and **an employer

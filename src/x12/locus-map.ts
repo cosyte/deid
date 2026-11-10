@@ -24,6 +24,17 @@
  *   prior-authorization number → retained). An **unrecognized** qualifier **fails closed** (blocked):
  *   the direct implementation of Safe Harbor category (R) for the "unusual REF qualifier" attack.
  *
+ * Every **code position** these classifiers read (`NM1-01` / `N1-01`, `NM1-08` / `N1-03`, `REF-01`) and
+ * the `N4` state and country are kept only when they hold a recognized code, exactly as written (see
+ * {@link isRecognizedX12Code}): a code the complete 005010 code list of the position's data element
+ * holds (`./code-lists.js`). A classifier reads such a code only after it passed that check. A real code
+ * a classifier has no route for is kept, and the party's name and identifier, or the reference's value,
+ * fail closed, because the code alone does not say whose they are. Anything that is not a code for the
+ * element fails closed too, the code position included: a missing element separator shifts an
+ * identifier left by one position, and a code position must never carry it out in the clear. Every
+ * other position is decided by the shape it expects (see `./element-shapes.js`), and a position no rule
+ * or shape names is removed.
+ *
  * Address (`N3` / `N4`), telecom (`PER`), and demographic date (`DMG-02`) loci are handled **universally**
  * (regardless of which loop's entity they belong to): a street / city / phone / date-of-birth is removed
  * or generalized wherever it sits. This is the fail-closed choice: it cannot miss a patient address by
@@ -37,6 +48,8 @@
  */
 
 import { SAFE_HARBOR_CATEGORIES, type SafeHarborCategory } from "../categories.js";
+import { x12CodeList } from "./code-lists.js";
+import { COUNTRY_CODES, STATE_OR_PROVINCE_CODES } from "./element-shapes.js";
 import {
   classifyPartyRole,
   type PartyRoleClassification,
@@ -95,7 +108,10 @@ export type X12ElementRule =
  * **The employer (`36`) is deliberately NOT on this list.** §164.514(b)(2)(i) removes the identifiers
  * "of the individual **or of relatives, employers, or household members** of the individual", so an
  * employer party is a Safe Harbor subject however organisational it looks: see
- * {@link EMPLOYER_ENTITY_CODES}.
+ * {@link EMPLOYER_ENTITY_CODES}. Nor is any code a 005010 TR3 uses for a party that can be the
+ * individual or a person around them: the other insured (`GB`), the responsible persons of the 834, and
+ * the 834 drop-off location (`45`), whose name is a person's. Every code here names a provider, a
+ * payer, a facility, an administrator, a clearinghouse, a broker, a vendor or a transmitting party.
  *
  * @example
  * ```ts
@@ -121,7 +137,6 @@ export const PROVIDER_ENTITY_CODES: ReadonlySet<string> = new Set<string>([
   "DQ", // Supervising Provider
   "P3", // Primary Care Provider
   "1P", // Provider
-  "GB", // Other Provider (per-context provider role)
   "SJ", // Service Provider
   "DD", // Assistant Surgeon
   "PR", // Payer
@@ -129,10 +144,24 @@ export const PROVIDER_ENTITY_CODES: ReadonlySet<string> = new Set<string>([
   "2B", // Third-Party Administrator
   "40", // Receiver
   "41", // Submitter
-  "45", // Drop-off Location
   "TT", // Transfer To
   "GP", // Gateway Provider
   "AY", // Clearinghouse
+  "QB", // Purchase Service Provider (837P)
+  "X3", // Utilization Management Organization (278)
+  "AAJ", // Admitting Services (278)
+  "G3", // Clinic (278)
+  "QV", // Group Practice (278)
+  "13", // Contracted Service Provider (271)
+  "1I", // Preferred Provider Organization (271)
+  "PRP", // Primary Payer (271)
+  "SEP", // Secondary Payer (271)
+  "TTP", // Tertiary Payer (271)
+  "VN", // Vendor (271)
+  "IN", // Insurer (834)
+  "TV", // Third Party Administrator (834)
+  "BO", // Broker or Sales Office (834)
+  "Y2", // Managed Care Organization (834)
 ]);
 
 /**
@@ -140,6 +169,10 @@ export const PROVIDER_ENTITY_CODES: ReadonlySet<string> = new Set<string>([
  * **scrubbed**: the subscriber / insured, the patient, the dependent, and the responsible party are
  * the covered individual and their relatives. Grounded in the HIPAA 005010 TR3 entity-identifier
  * code list (X12 element 98).
+ *
+ * The list is every code a 005010 TR3 uses for a party that is the individual, a relative, a household
+ * member or another person standing for the individual (a guardian, a responsible person, the other
+ * insured), and the locations that can be the individual's own.
  *
  * @example
  * ```ts
@@ -155,8 +188,27 @@ export const PATIENT_ENTITY_CODES: ReadonlySet<string> = new Set<string>([
   "QD", // Responsible Party
   "GD", // Guardian
   "74", // Corrected Insured
-  "S1", // Insured (secondary)
-  "S3", // Legal Representative
+  "S1", // Insured (secondary); Parent (834)
+  "S3", // Legal Representative; Custodial Parent (834)
+  // The 834 and 271 member-side parties: the individual's prior name and mailing address, and the
+  // relatives, household members and representatives the TR3s name.
+  "70", // Prior Incorrect Insured
+  "31", // Postal Mailing Address
+  "E1", // Person or Other Entity Legally Responsible for a Child
+  "EI", // Executor of Estate
+  "EXS", // Ex-spouse
+  "J6", // Power of Attorney
+  "LR", // Legal Representative
+  "TZ", // Significant Other
+  "X4", // Spouse
+  "6Y", // Case Manager (834 responsible person)
+  "9K", // Key Person (834 responsible person)
+  // The other insured: the 835 Other Subscriber and the 834 responsible person.
+  "GB", // Other Insured
+  // The ambulance pick-up and drop-off locations (837) are commonly the individual's residence, and the
+  // 834 drop-off location names a person.
+  "45", // Drop-off Location
+  "PW", // Pickup Address
 ]);
 
 /**
@@ -175,7 +227,33 @@ export const PATIENT_ENTITY_CODES: ReadonlySet<string> = new Set<string>([
  */
 export const EMPLOYER_ENTITY_CODES: ReadonlySet<string> = new Set<string>([
   "36", // Employer (the individual's employer: §164.514(b)(2)(i) names it)
+  "P5", // Plan Sponsor (271, 834): in practice the individual's employer, so on the same footing
+  "M8", // Educational Institution (834): the school a dependent attends, removed like an employer
 ]);
+
+/**
+ * The entity-identifier codes whose **meaning changes by transaction set**: in the set named, the code
+ * is the individual's employer, whatever element 98 calls it elsewhere. Keyed by `ST-01`.
+ *
+ * - `820` (005010X218, the payroll-deducted and other group premium payment): `PR` is the premium payer
+ *   of 1000B, the employer of the individuals the payment lists in 2000B. Everywhere else a `PR` party
+ *   is a health plan, which the scope clause does not reach.
+ *
+ * The other sets were checked for the same: in the 837, 835, 270 / 271, 276 / 277, 277CA, 278, 834 and
+ * 999 TR3s, each code on {@link PROVIDER_ENTITY_CODES} names a provider, payer, facility, administrator,
+ * clearinghouse, broker, vendor or transmitting party in every set that uses it.
+ *
+ * @example
+ * ```ts
+ * import { EMPLOYER_ENTITY_CODES_BY_SET } from "@cosyte/deid/x12";
+ *
+ * EMPLOYER_ENTITY_CODES_BY_SET["820"]?.has("PR"); // => true (the premium payer: the employer)
+ * ```
+ */
+export const EMPLOYER_ENTITY_CODES_BY_SET: Readonly<Record<string, ReadonlySet<string>>> =
+  Object.freeze({
+    "820": new Set<string>(["PR"]),
+  });
 
 /**
  * The X12 **party-role table**: which side of §164.514(b)(2)(i)'s scope clause an `NM1-01` / `N1-01`
@@ -197,7 +275,11 @@ export type Nm1Disposition = "patient" | "employer" | "provider" | "unknown";
  * comes back with the code from this library's own table, which is what a retained party's manifest row
  * records; an unrecognized one comes back `unknown` and carries no code.
  *
+ * A code whose meaning changes by transaction set ({@link EMPLOYER_ENTITY_CODES_BY_SET}) is read in the
+ * set it sits in: given `"820"`, `PR` is the employer, a Safe Harbor subject.
+ *
  * @param entityCode - The `NM1-01` / `N1-01` entity-identifier code (e.g. `"IL"`, `"36"`, `"85"`).
+ * @param transactionSetId - The `ST-01` of the transaction set the party sits in, when known.
  * @returns Which side of the scope clause the role places the party on.
  * @example
  * ```ts
@@ -205,9 +287,20 @@ export type Nm1Disposition = "patient" | "employer" | "provider" | "unknown";
  *
  * classifyNm1Party("36"); // => { scope: "safe-harbor-subject", roleCode: "36" }
  * classifyNm1Party("85"); // => { scope: "outside-scope", roleCode: "85" }
+ * classifyNm1Party("PR", "820"); // => { scope: "safe-harbor-subject", roleCode: "PR" }
  * ```
  */
-export function classifyNm1Party(entityCode: string): PartyRoleClassification {
+export function classifyNm1Party(
+  entityCode: string,
+  transactionSetId?: string,
+): PartyRoleClassification {
+  const employer =
+    transactionSetId !== undefined && Object.hasOwn(EMPLOYER_ENTITY_CODES_BY_SET, transactionSetId)
+      ? EMPLOYER_ENTITY_CODES_BY_SET[transactionSetId]
+      : undefined;
+  if (employer?.has(entityCode) === true) {
+    return { scope: "safe-harbor-subject", roleCode: entityCode };
+  }
   return classifyPartyRole(entityCode, X12_PARTY_ROLES);
 }
 
@@ -220,6 +313,8 @@ export function classifyNm1Party(entityCode: string): PartyRoleClassification {
  * because the TR3 entity code says so, never because a string "looked like" a name.
  *
  * @param entityCode - The `NM1-01` entity-identifier code (e.g. `"IL"`, `"QC"`, `"36"`, `"85"`).
+ * @param transactionSetId - The `ST-01` of the transaction set the party sits in, when known: a code
+ *   whose meaning changes by set ({@link EMPLOYER_ENTITY_CODES_BY_SET}) is read in that set.
  * @returns The disposition governing how the name and id elements are handled.
  * @example
  * ```ts
@@ -229,13 +324,15 @@ export function classifyNm1Party(entityCode: string): PartyRoleClassification {
  * classifyNm1Entity("36"); // => "employer" (scrubbed like a patient-side party)
  * classifyNm1Entity("85"); // => "provider"
  * classifyNm1Entity("ZZ"); // => "unknown"  (fails closed)
+ * classifyNm1Entity("PR", "820"); // => "employer" (the 820 premium payer)
  * ```
  */
-export function classifyNm1Entity(entityCode: string): Nm1Disposition {
-  const party = classifyNm1Party(entityCode);
+export function classifyNm1Entity(entityCode: string, transactionSetId?: string): Nm1Disposition {
+  const party = classifyNm1Party(entityCode, transactionSetId);
   if (party.scope === "unknown") return "unknown";
   if (party.scope === "outside-scope") return "provider";
-  return EMPLOYER_ENTITY_CODES.has(party.roleCode) ? "employer" : "patient";
+  if (EMPLOYER_ENTITY_CODES.has(party.roleCode)) return "employer";
+  return PATIENT_ENTITY_CODES.has(party.roleCode) ? "patient" : "employer";
 }
 
 /**
@@ -293,6 +390,18 @@ const REF_PHI_QUALIFIERS: Readonly<Record<string, SafeHarborCategory>> = {
   "23": C.ACCOUNT, // Client Number
   "6P": C.HEALTH_PLAN_BENEFICIARY, // Group Number
   "1H": C.HEALTH_PLAN_BENEFICIARY, // CHAMPUS/TRICARE Identification Number, the individual's beneficiary id
+  EJ: C.ACCOUNT, // Patient Account Number (271, 276/277, 278)
+  F6: C.HEALTH_PLAN_BENEFICIARY, // Health Insurance Claim (HIC) Number (271, 834)
+  NQ: C.HEALTH_PLAN_BENEFICIARY, // Medicaid Recipient Identification Number (271)
+  Q4: C.HEALTH_PLAN_BENEFICIARY, // Prior Identifier Number (271, 834)
+  HJ: C.HEALTH_PLAN_BENEFICIARY, // Identity Card Number (271)
+  GH: C.HEALTH_PLAN_BENEFICIARY, // Identification Card Serial Number (271)
+  "49": C.HEALTH_PLAN_BENEFICIARY, // Family Unit Number (271)
+  "3H": C.HEALTH_PLAN_BENEFICIARY, // Case Number (271, 834)
+  "38": C.HEALTH_PLAN_BENEFICIARY, // Master Policy Number (834)
+  ABB: C.OTHER_UNIQUE_ID, // Personal ID Number (834)
+  "4A": C.OTHER_UNIQUE_ID, // Personal Identification Number (834)
+  "28": C.OTHER_UNIQUE_ID, // Employee Identification Number (835)
 };
 
 /**
@@ -328,6 +437,25 @@ const REF_RETAIN_QUALIFIERS: ReadonlySet<string> = new Set<string>([
   "RB", // Rate Code Number
   "EO", // Submitter Identification Number
   "4N", // Special Payment Reference Number
+  "1K", // Payer's Claim Number (276/277, 835)
+  "BLT", // Billing Type (276/277)
+  "FJ", // Line Item Control Number (276/277)
+  "9A", // Repriced Claim Reference Number (837, 835)
+  "9C", // Adjusted Repriced Claim Reference Number (837, 835)
+  "X4", // Clinical Laboratory Improvement Amendment Number (837P)
+  "EW", // Mammography Certification Number (837P)
+  "F5", // Medicare Version Code (837)
+  "P4", // Project Code (837)
+  "T4", // Signal Code (837)
+  "LX", // Qualified Products List (837)
+  "1A", // Blue Cross Provider Number (835)
+  "D3", // National Council for Prescription Drug Programs Pharmacy Number (835)
+  "HPI", // Centers for Medicare and Medicaid Services National Provider Identifier (835)
+  "NF", // National Association of Insurance Commissioners Code (835)
+  "EV", // Receiver Identification Number (835)
+  "0K", // Policy Form Identifying Number (835)
+  "APC", // Ambulatory Payment Classification (835)
+  "1S", // Ambulatory Patient Group Number (835)
 ]);
 
 /**
@@ -358,6 +486,46 @@ export function classifyRefQualifier(qualifier: string): RefDisposition {
 }
 
 /**
+ * The **code positions** the rules read and keep, each with the code list it is checked against: the
+ * complete 005010 code list of the entity identifier code (`NM1-01`, `N1-01`, element 98), the
+ * identification code qualifier (`NM1-08`, `N1-03`, element 66) and the reference identification
+ * qualifier (`REF-01`, element 128), and the state and country the geographic sweep keeps (`N4-02`,
+ * `N4-04`). Keyed `<segment id>-<element>`.
+ */
+const X12_CODE_LISTS: ReadonlyMap<string, ReadonlySet<string>> = new Map<
+  string,
+  ReadonlySet<string>
+>([
+  ["NM1-1", x12CodeList("98")],
+  ["NM1-8", x12CodeList("66")],
+  ["N1-1", x12CodeList("98")],
+  ["N1-3", x12CodeList("66")],
+  ["REF-1", x12CodeList("128")],
+  ["N4-2", STATE_OR_PROVINCE_CODES],
+  ["N4-4", COUNTRY_CODES],
+]);
+
+/**
+ * `true` when `value` is a code the position's list holds, **exactly as written**: no trimming and no
+ * case folding, because a qualifier the standard spells in upper case and a sender wrote some other
+ * way is a value we cannot vouch for. A position with no list recognizes nothing. The extractor keeps a
+ * recognized code where it is and removes and records anything else (fail closed), so an identifier
+ * shifted into a code position by a missing element separator never leaves in the clear. A recognized
+ * code is not a route: a real code no classifier routes on keeps its place, and what it qualifies fails
+ * closed.
+ *
+ * @param segId - The segment id, e.g. `NM1`.
+ * @param element - The 1-based element position, e.g. `8` for `NM1-08`.
+ * @param value - The element's value as the parser decoded it.
+ * @returns Whether the value is a recognized code for that position.
+ * @internal
+ */
+export function isRecognizedX12Code(segId: string, element: number, value: string): boolean {
+  const codes = X12_CODE_LISTS.get(`${segId}-${String(element)}`);
+  return codes !== undefined && codes.has(value);
+}
+
+/**
  * The universal (loop-independent) segment element rules: applied to every occurrence of these
  * segments regardless of which loop's entity they belong to. `NM1`, `REF`, `CLM`, and `CLP` are handled
  * by dedicated logic (entity / qualifier classification) in the extractor and are not listed here.
@@ -365,17 +533,22 @@ export function classifyRefQualifier(qualifier: string): RefDisposition {
  * - `N3`, Address Information: both address lines removed (street PHI, no clean generalization).
  * - `N4`, Geographic Location: city removed, ZIP generalized to 3 digits; state / country retained.
  * - `DMG`, Demographic Information: `DMG-02` date of birth generalized to year (only ever the
- *   individual's: `DMG` appears solely in member loops); `DMG-03` gender retained.
+ *   individual's: `DMG` appears solely in member loops), when it is a valid date in the `DMG-01` format;
+ *   `DMG-03` gender retained when it is a gender code.
  * - `PER`, Administrative Communications Contact: contact name and every communication number removed;
- *   the function and qualifier codes retained.
+ *   the function and qualifier codes retained when they are codes.
  * - `DTP`, Date or Time Period: `DTP-03` date value generalized to year (a date of the individual's
- *   care under §164.514(b)(2)(i)(C)); qualifier / format retained.
- * - `DTM`, Date/Time Reference (835): `DTM-02` date value generalized to year.
+ *   care under §164.514(b)(2)(i)(C)) when it is a valid date in the `DTP-02` format, removed otherwise
+ *   (a `TM` time of day included); qualifier / format retained when they are codes.
+ * - `DTM`, Date/Time Reference (835): `DTM-02` date value generalized to year when it is a valid date.
  * - `SBR`, Subscriber Information: `SBR-03` Insured Group or Policy Number **pseudonymized** (a health
  *   plan beneficiary number, the same identifier `REF*1L` / `REF*6P` / NCPDP `301-C1` carry; when
  *   `SBR-02 = 18` the subscriber *is* the patient), `SBR-04` Insured Group Name **removed** (an employer /
  *   group name: Safe Harbor removes the individual's employer). The relationship / filing codes
- *   (`SBR-01/02/05/09`) are retained.
+ *   (`SBR-01/02/05/09`) are retained when they are codes.
+ *
+ * Any other position of these segments, and any value of the wrong shape at a retained one, is removed
+ * and recorded.
  *
  * @example
  * ```ts
@@ -495,20 +668,22 @@ export const X12_GEO_RETAIN_ELEMENTS: Readonly<Record<string, ReadonlySet<number
 export const X12_ACCOUNT_SEGMENTS: ReadonlySet<string> = new Set<string>(["CLM", "CLP"]);
 
 /**
- * The recognized **clinical / financial / envelope** segments retained (passed through untouched): the
- * positive half of the fail-closed rule for X12 (the analogue of the HL7 adapter's `RETAIN_SEGMENTS`).
- * These carry diagnosis / procedure / revenue codes, monetary amounts, quantities, adjustments, and
- * control structure, **no direct patient or relative Safe Harbor identifier**, so their values must
- * survive the over-scrub test byte-identical. A segment that is neither mapped (`NM1` / `N3` / `N4` /
- * `DMG` / `PER` / `REF` / `DTP` / `DTM` / `CLM` / `CLP`) nor on this list **fails closed**: every one
- * of its elements is blocked, so an unknown segment can never ride a patient identifier through in the
- * clear.
+ * The recognized **clinical / financial / envelope** segments retained: the positive half of the
+ * fail-closed rule for X12 (the analogue of the HL7 adapter's `RETAIN_SEGMENTS`). These carry diagnosis
+ * / procedure / revenue codes, monetary amounts, quantities, adjustments, and control structure, **no
+ * direct patient or relative Safe Harbor identifier**, so their values must survive the over-scrub test
+ * byte-identical. A segment that is neither mapped (`NM1` / `N3` / `N4` / `DMG` / `PER` / `REF` / `DTP`
+ * / `DTM` / `CLM` / `CLP`) nor on this list **fails closed**: it is removed whole, its identifier
+ * included, and every value it carried is recorded, so an unknown segment, or a value that landed where
+ * a segment identifier belongs, can never ride a patient identifier through in the clear.
  *
- * **Documented limitation (mirrors the HL7 adapter).** Retained clinical segments may still
- * carry patient-related *dates* not surfaced as `DTP` / `DTM` (e.g. a `DTM` inside a retained 837 loop
- * the map does not descend, or a service-line date), and administrative per-claim references (a
- * prescription number, a prior-authorization number). Selective scrubbing of those residual loci is
- * **not** performed; forgetting a clinical segment here fails **safe**: it is blocked, not leaked.
+ * Retaining a segment keeps each element only when it has the shape its position expects (a code, a
+ * valid date, a number, a bounded administrative reference); a value of any other shape, a free-text
+ * component, and an element at a position the shape table does not name are removed and recorded (see
+ * `./element-shapes.js`). A date of the individual inside one (`PAT-06` date of death, `INS-12`, an `HI`
+ * occurrence or procedure date) is generalized like a `DTP` date. The transaction's creation date
+ * (`BHT-04`) and a payment's effective date (`BPR-16`) are kept when they are valid dates: they date the
+ * exchange, not the individual.
  *
  * @example
  * ```ts
@@ -570,10 +745,9 @@ export const X12_RETAIN_SEGMENTS: ReadonlySet<string> = new Set<string>([
   "REL", // Relationship
   // 835 payment order (bank routing / amounts, not the patient)
   "BPR", // Beginning Segment for Payment Order/Remittance
-  // NOTE: the 820-premium-specific segments (ENT / RMR / ADX) and the 834 enrollment segments are
-  // deliberately NOT retained. This slice scopes 837 / 835 / 270-271 (they never appear there), so if an
-  // out-of-scope 820 / 834 interchange is fed in, those individual-detail segments, which can carry a
-  // subscriber/member identifier, fail closed (blocked) rather than riding through wholesale.
+  // NOTE: the 820-premium-specific segments (ENT / RMR / ADX) and the 834 individual-detail segments
+  // other than INS / HD (EC / ICM / HLH / LUI / COB / IDC) are deliberately NOT retained: they
+  // can carry a subscriber or member identifier, so they are removed whole rather than riding through.
   // 999 / TA1 acknowledgements (structurally PHI-free)
   "AK1",
   "AK2",
@@ -582,4 +756,17 @@ export const X12_RETAIN_SEGMENTS: ReadonlySet<string> = new Set<string>([
   "IK4",
   "IK5",
   "CTX",
+  // Loop markers (271, 834): a loop identifier code and nothing else
+  "LS",
+  "LE",
+  // Institutional claim codes (837I), claim status (277), services review and decision (278)
+  "CL1",
+  "STC",
+  "UM",
+  "HCR",
+  // Provider taxonomy, other insurance indicators (837), orthodontic and tooth summary (837D)
+  "PRV",
+  "OI",
+  "DN1",
+  "DN2",
 ]);

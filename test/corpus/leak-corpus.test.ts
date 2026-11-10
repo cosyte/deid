@@ -79,6 +79,12 @@ interface CorpusCase {
    * manifest names, so a locus composed there is the widest interpolation this library performs.
    */
   readonly unexaminedResiduals: readonly UnexaminedResidual[];
+  /**
+   * `true` for an adapter that decides every position it hands through (X12): its inventory is a
+   * measured zero, so the pre-condition asserts that zero instead of a haystack. The tamper proof below
+   * still runs against it, so the sweep is shown to read the list either way.
+   */
+  readonly decidesEveryPosition?: true;
   /** The serialized ORIGINAL (un-de-identified) wire: used to prove the sentinels are really present. */
   readonly originalWire: string;
   /** Synthetic PHI sentinels that must be ABSENT from `deidWire` and PRESENT in `originalWire`. */
@@ -393,6 +399,7 @@ function x12Case(): CorpusCase {
     deidWire: x12,
     manifest,
     unexaminedResiduals,
+    decidesEveryPosition: true,
     originalWire: raw,
     sentinels: [
       "ZZSUBLAST",
@@ -415,6 +422,269 @@ function x12Case(): CorpusCase {
     ],
     // Distinctive clinical/financial survivors only (bare years like 2026/1985 recur in envelopes/OIDs).
     survivors: ["E1165", "99213", "100.00", "COMMERCIALPAYER", "PAYERID12345"],
+  };
+}
+
+// ── X12 EDI, values shifted into code positions ──────────────────────────────────────────────────
+// A sender who drops one element separator shifts the next value left by one position, so an identifier
+// lands in a qualifier, entity-code, state or country position that the rules read as a code. Each
+// segment below is one such shift; the recognized codes around them, and the clinical lines, survive.
+function x12ShiftedCase(): CorpusCase {
+  const ctx = createDeidContext({ key: "x12-corpus-synthetic-hmac-key", patientId: "p-x12" });
+  const raw = FIX("x12", "837p-shifted.edi");
+  const { x12, manifest, unexaminedResiduals } = deidentifyX12String(raw, { context: ctx });
+  return {
+    name: "x12-shifted",
+    deidWire: x12,
+    manifest,
+    unexaminedResiduals,
+    decidesEveryPosition: true,
+    originalWire: raw,
+    sentinels: [
+      "ZZSHIFTPATMEMBER", // NM1-08 of a patient party
+      "ZZSHIFTPROVID", // NM1-08 of a retained provider party
+      "ZZSHIFTN1MEMBER", // N1-03 of a subscriber party
+      "ZZSHIFTPAYERID", // N1-03 of a retained payer party
+      "ZZSHIFTENTITY", // NM1-01, no entity code
+      "ZZSHIFTREFID", // REF-01 with no REF-02
+      "ZZSHIFTJOINEDID", // REF-01 run together with its qualifier
+      "ZZSHIFTJOINEDVAL",
+      "44199", // a full ZIP shifted into N4-02, the state position
+      "ZZSHIFTCOUNTRY", // N4-04, no country code
+      "ZZSHIFTSUBMEMBER",
+      "ZZSHIFTSUBLAST",
+      "ZZSHIFTN1NAME",
+      "ZZSHIFTPARTYLAST",
+      "ZZSHIFTCITY",
+    ],
+    survivors: [
+      "E1165",
+      "99213",
+      "100.00",
+      "SHIFTPAYERORG",
+      "SHIFTBILLINGORG",
+      "SHIFTCLAIMCTRL",
+      "REF*F8*",
+      "N1*PR*",
+      "NM1*85*2*",
+      "NM1*IL*1*",
+      "*OH*441",
+    ],
+  };
+}
+
+// ── X12 EDI, values a rule's code check, shape check or unnamed position must catch ─────────────────
+// A refused code routes nothing (a lower-case or padded entity code or REF qualifier); a value shifted
+// into a position the rules keep must have that position's shape (a date of birth in DMG-01, a service
+// date in DTP-02, a phone in PER-03, a group number in SBR-02, a date in DTM-01); a value shifted right
+// past the last position a rule names is removed (NM1-02, NM1-10, N1-05, REF-03); and a segment
+// outside every transaction set is removed whole. The codes, dates and amounts around them survive.
+function x12FailClosedCase(): CorpusCase {
+  const ctx = createDeidContext({ key: "x12-corpus-synthetic-hmac-key", patientId: "p-x12" });
+  const raw = FIX("x12", "837p-fail-closed.edi");
+  const { x12, manifest, unexaminedResiduals } = deidentifyX12String(raw, { context: ctx });
+  return {
+    name: "x12-fail-closed",
+    deidWire: x12,
+    manifest,
+    unexaminedResiduals,
+    decidesEveryPosition: true,
+    originalWire: raw,
+    sentinels: [
+      "ZZORPHANLAST", // a segment between GS and ST
+      "ZZLOWERPAYERLAST", // NM1-01 in lower case
+      "ZZLOWERPAYERID",
+      "ZZPADPROVLAST", // NM1-01 padded with a space
+      "ZZPADPROVID",
+      "ZZLOWERN1NAME", // N1-01 in lower case
+      "ZZLOWERN1ID",
+      "ZZLOWERREFVAL", // REF-01 in lower case
+      "19800101", // a date of birth in DMG-01
+      "20260101", // a service date in DTP-02
+      "5559876543", // a phone in PER-03
+      "ZZGROUPNUM", // a group number in SBR-02
+      "20260102", // a date in DTM-01
+      "ZZNM102LAST", // a last name in NM1-02
+      "ZZNM102MEMBER",
+      "ZZNM110MEMBER", // a member id in NM1-10
+      "ZZN105MEMBER", // a member id in N1-05
+      "ZZREF03NAME", // a name in REF-03
+      "20260103", // an occurrence date, generalized at its own component
+      "ZZSV1DESC", // a free-text procedure description
+      "ZZHIMEMBER", // an identifier where a diagnosis code belongs
+      "ZZSEGIDMEMBER", // a member id after an extra segment terminator, where the segment id belongs
+      "ZZSEGIDRUNON", // a value run into the segment id by a missing element separator
+      "ZZSEGIDORPHAN", // a value alone between GE and IEA, where the segment id belongs
+    ],
+    survivors: [
+      "HI*ABK:E1165*BH:11:D8:2026~",
+      "SE*21*0005~", // SE-01 counts out the two segments removed whole
+      "SV1*HC:99213:25::::*100.00*UN*1***1:2~",
+      "REF*F8*ZZCLAIMCTRL*~",
+      "NM1*85*2*ZZKEPTPROVORG*****XX*1999999999~",
+      "DTP*472*D8*2026~",
+    ],
+  };
+}
+
+// ── X12 EDI, values shifted into amount, quantity and count positions ──────────────────────────────
+// A number shape cannot tell a shifted date or account number from an amount. An extra separator leaves
+// a position the TR3s require, or one a qualifier implies, empty while a later one holds a value: an
+// `HI` occurrence or procedure date past its component (C022-05 / -06), a numeric patient control number
+// in `CLM-02` or `CLP-03`, a date of death in `PAT-08`, an amount after an empty `CAS` reason, and a
+// status date in `STC-04`. Every value after the empty position is removed; the well-formed codes,
+// amounts and dates beside them survive.
+function x12ShiftedNumbersCase(): CorpusCase {
+  const ctx = createDeidContext({ key: "x12-corpus-synthetic-hmac-key", patientId: "p-x12" });
+  const raw = FIX("x12", "shifted-numbers.edi");
+  const { x12, manifest, unexaminedResiduals } = deidentifyX12String(raw, { context: ctx });
+  return {
+    name: "x12-shifted-numbers",
+    deidWire: x12,
+    manifest,
+    unexaminedResiduals,
+    decidesEveryPosition: true,
+    originalWire: raw,
+    sentinels: [
+      "4455667701", // a numeric patient control number in CLM-02 (CLM-01 empty)
+      "20260118", // an occurrence date in C022-05 (C022-04 empty after D8)
+      "20260119", // a principal procedure date in C022-05
+      "20260120", // an occurrence span start in C022-05 (after RD8)
+      "20260121", // a date in C022-05 after its format in C022-04 (C022-03 empty)
+      "20260122", // a date two separators late, in C022-06
+      "4455667704", // a value code amount's place taken by a number in C022-06
+      "20250117", // a date of death in PAT-08 (PAT-06 empty after D8)
+      "4455667702", // a numeric patient control number in CLP-03 (CLP-01 and -02 empty)
+      "4455667703", // a number in CAS-04 (CAS-03 empty)
+      "20260126", // a status date in STC-04 (STC-01 empty)
+      "20260127", // a status date in STC-04 (STC-02 empty)
+    ],
+    survivors: [
+      "HI*ABK:E1165*BE:80:::125.00*BH:11:D8:2026~",
+      "HI*BH:11:D8::~",
+      "SVC*HC:99213*150*100~",
+      "PAT*19****D8***~",
+    ],
+  };
+}
+
+// ── X12 EDI, dates shifted by a separator added or left out ─────────────────────────────────────────
+// A date of death two places late lands in the patient's weight (`PAT-08`), with a unit code before it
+// that is a real code but not the pound the TR3s allow there; it is removed with every value after the
+// place the shift shows. An adjudication or check date lands in an `STC` amount, the check number or the
+// last position after a separator is added or left out: `STC` keeps only its status composites and its
+// payment method, so every date and amount in it is removed wherever it sits, in a 277 and a 277CA
+// alike. The 270, 271 and 278 controls are well formed for their own set and keep every value: their
+// TR3s do not require `INS-03` / `-05` or the service line charge.
+function x12ShiftedDatesCase(): CorpusCase {
+  const ctx = createDeidContext({ key: "x12-corpus-synthetic-hmac-key", patientId: "p-x12" });
+  const raw = FIX("x12", "shifted-dates.edi");
+  const { x12, manifest, unexaminedResiduals } = deidentifyX12String(raw, { context: ctx });
+  return {
+    name: "x12-shifted-dates",
+    deidWire: x12,
+    manifest,
+    unexaminedResiduals,
+    decidesEveryPosition: true,
+    originalWire: raw,
+    sentinels: [
+      "20250117", // a date of death in PAT-08, after two extra separators (patient and subscriber)
+      "20260126", // the STC-02 status date, removed wherever it sits
+      "20260128", // an adjudication date in STC-05 (STC-03's empty slot left out)
+      "20260129", // a check issue date in STC-07
+      "20260130", // an adjudication date, removed in place too
+      "20260131", // a check issue date in STC-09 (one extra separator)
+      "ZZCHECK02", // a check number in STC-08
+      "20260202", // an adjudication date in STC-05, the last position (amounts run together)
+      "20260203", // the same date run into the payment amount in STC-05
+      "20260204", // two amounts run together, the date in STC-05 with no check after it
+      "20260205", // a well-formed STC that ends at its adjudication date
+      "20260206", // a 277CA status date
+      "20260207", // a 277CA status date in a status with STC-10 and -11
+      "ZZSTCMESSAGE", // a 277CA free-form message in STC-12
+    ],
+    survivors: [
+      "PAT*19****D8*2024*01*165~",
+      "STC*A1:20******CHK**~",
+      "STC*A1:19:PR***~",
+      "STC*A3:21*********A3:562:85*A3:128*~",
+      "INS*Y*18***************1~",
+      "INS*Y*18*001*25*************1~",
+      "INS*N*19***************2~",
+      "SV1*HC:99213**UN*1~",
+      "SV2*0300*HC:80053**UN*1~",
+      "SV3*AD:D2391*****1~",
+    ],
+  };
+}
+
+// ── X12 EDI, people who can be the individual or stand for the individual ────────────────────────────
+// The 835 Other Subscriber (`NM1*GB`) and the 834 responsible persons (`GB`, `6Y`, `9K`) and drop-off
+// person (`45`) name the individual, a relative or someone acting for them. Each one's name and
+// identifier are removed and recorded; the payer, the payee and the clinical lines survive.
+function x12PersonsCase(): CorpusCase {
+  const ctx = createDeidContext({ key: "x12-corpus-synthetic-hmac-key", patientId: "p-x12" });
+  const raw = FIX("x12", "other-insured-and-responsible.edi");
+  const { x12, manifest, unexaminedResiduals } = deidentifyX12String(raw, { context: ctx });
+  return {
+    name: "x12-persons",
+    deidWire: x12,
+    manifest,
+    unexaminedResiduals,
+    decidesEveryPosition: true,
+    originalWire: raw,
+    sentinels: [
+      "ZZOTHERSUBLAST", // 835 Other Subscriber (GB)
+      "ZZOTHERSUBFIRST",
+      "ZZOTHERSUBMEMBER",
+      "ZZRESPGBLAST", // 834 responsible person (GB)
+      "ZZRESPGBFIRST",
+      "ZZCASEMGRLAST", // 834 responsible person (6Y)
+      "ZZCASEMGRFIRST",
+      "ZZKEYPERSONLAST", // 834 responsible person (9K)
+      "ZZKEYPERSONFIRST",
+      "ZZDROPOFFLAST", // 834 drop-off person (45)
+      "ZZDROPOFFFIRST",
+      "ZZGBPATLAST",
+      "ZZGBPATMEMBER",
+      "ZZMEMBERLAST834",
+      "ZZSUBSCRIBER834",
+    ],
+    survivors: [
+      "N1*PR*COMMERCIALPAYER~",
+      "N1*PE*ZZKEPTPAYEEORG*XX*1999999999~",
+      "SVC*HC:99213*150*100~",
+      "NM1*GB*1******MI*~",
+      "NM1*6Y*1**~",
+    ],
+  };
+}
+
+// ── X12 EDI, an entity code whose meaning changes by transaction set ────────────────────────────────
+// In the 820 premium payment the premium payer (`N1*PR`) is the employer of the individuals the payment
+// lists, not a health plan: its name and identifier are removed and recorded, as the 834 sponsor's are.
+// The premium receiver, the amounts and the payment's own references survive. The shape is the x12
+// library's golden 820.
+function x12PremiumCase(): CorpusCase {
+  const ctx = createDeidContext({ key: "x12-corpus-synthetic-hmac-key", patientId: "p-x12" });
+  const raw = FIX("x12", "820-premium.edi");
+  const { x12, manifest, unexaminedResiduals } = deidentifyX12String(raw, { context: ctx });
+  return {
+    name: "x12-premium",
+    deidWire: x12,
+    manifest,
+    unexaminedResiduals,
+    decidesEveryPosition: true,
+    originalWire: raw,
+    sentinels: [
+      "ZZPREMPAYERX12", // the premium payer, the members' employer
+      "ZZPREMPAYEREIN",
+      "ZZPREMPAYERSTREET",
+      "ZZPREMPAYERCITY",
+      "ZZPREMLAST",
+      "ZZPREMMEMBER",
+    ],
+    survivors: ["N1*PE*MEDPAY INSURANCE*FI*111223333~", "N1*PR**FI*~", "BPR*C*12500.00*"],
   };
 }
 
@@ -472,6 +742,12 @@ const CASES: readonly CorpusCase[] = [
   fhirCase(),
   fhirNonPersonCase(),
   x12Case(),
+  x12ShiftedCase(),
+  x12FailClosedCase(),
+  x12ShiftedNumbersCase(),
+  x12ShiftedDatesCase(),
+  x12PersonsCase(),
+  x12PremiumCase(),
   ncpdpCase(),
   dicomCase(),
 ];
@@ -546,10 +822,17 @@ describe("corpus non-vacuity, the sweep and the corpus both have teeth", () => {
       expect(c.manifest.length).toBeGreaterThan(0);
     });
 
-    it(`${c.name}: the unexamined-residual sweep has a haystack (pre-condition)`, () => {
-      // Same reasoning: a zero-leak result over an empty inventory proves nothing about the inventory.
-      expect(c.unexaminedResiduals.length).toBeGreaterThan(0);
-    });
+    if (c.decidesEveryPosition === true) {
+      it(`${c.name}: the unexamined-residual inventory is a measured zero (pre-condition)`, () => {
+        // Every position is decided by a rule or by its shape, so nothing is left to count.
+        expect(c.unexaminedResiduals).toEqual([]);
+      });
+    } else {
+      it(`${c.name}: the unexamined-residual sweep has a haystack (pre-condition)`, () => {
+        // Same reasoning: a zero-leak result over an empty inventory proves nothing about the inventory.
+        expect(c.unexaminedResiduals.length).toBeGreaterThan(0);
+      });
+    }
 
     it(`${c.name}: a sentinel injected into the residual inventory IS caught (tamper)`, () => {
       const canary = c.sentinels[0];
