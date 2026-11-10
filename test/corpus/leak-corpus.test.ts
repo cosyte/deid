@@ -368,9 +368,13 @@ function fhirNonPersonCase(): CorpusCase {
       "ZZLOCCOUNTY",
       "ZZLOCADDRSTRING",
       "ZZAUDITHOST",
+      "ZZPLANCONTACTNAME",
+      "ZZVSCONTACTNAME",
     ],
     survivors: [
       "ZZORGOWNNAME",
+      "ZZPLANOWNNAME",
+      "ZZVSOWNNAME",
       "ZZORGTYPEDISPLAY",
       "ZZLOCNAME",
       "555-000-8881",

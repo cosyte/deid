@@ -656,6 +656,10 @@ describe("the committed non-person fixture, end to end", () => {
       "Bundle.entry[2].resource.address OTHER_UNIQUE_ID",
       // AuditEvent.agent.network.address: a machine name, an IP address or a phone number.
       "Bundle.entry[5].resource.agent[0].network.address OTHER_UNIQUE_ID",
+      // A plain string where InsurancePlan.contact.name, a HumanName, belongs: blocked as well.
+      "Bundle.entry[7].resource.contact[0].name OTHER_UNIQUE_ID",
+      // A ValueSet contact's name: a string in R4, and the name of the individual to contact.
+      "Bundle.entry[8].resource.contact[0].name NAMES",
     ]);
   });
 
@@ -674,6 +678,8 @@ describe("the committed non-person fixture, end to end", () => {
       "Patient/pat9",
       "https://example.org/fhir/endpoint",
       "mllp:interface.example.org:9234",
+      "ZZPLANOWNNAME",
+      "ZZVSOWNNAME",
     ]) {
       expect(json).toContain(survivor);
     }
@@ -693,6 +699,8 @@ describe("the committed non-person fixture, end to end", () => {
       "ZZLOCCOUNTY",
       "ZZLOCADDRSTRING",
       "ZZAUDITHOST",
+      "ZZPLANCONTACTNAME",
+      "ZZVSCONTACTNAME",
     ]) {
       expect(trail).not.toContain(sentinel);
     }

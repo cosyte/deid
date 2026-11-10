@@ -61,7 +61,9 @@
  * at any of these names is not a complex and is never a candidate here; the sweep in `./extract.js`
  * blocks one on its own terms, except at `name` and at the two `address` elements R4 types as a url,
  * so `Organization.name`, `Endpoint.address` and `CapabilityStatement.messaging.endpoint.address` are
- * left alone.
+ * left alone. The `name` exception stops at a contact's name, which the sweep reads by R4 element path:
+ * a string at `Organization.contact.name` or `InsurancePlan.contact.name` is blocked, and one at a
+ * `ContactDetail`'s `name` is removed as a person's name.
  *
  * That test is only meaningful at those positions, and its one caller consults it nowhere else. At an
  * arbitrary position `{ prefix, linkId, text, type }` is a conformant `Questionnaire.item`, not a name,

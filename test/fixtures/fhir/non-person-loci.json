@@ -133,6 +133,25 @@
         },
         "subject": { "reference": "Patient/pat9" }
       }
+    },
+    {
+      "fullUrl": "urn:uuid:insurance-plan-1",
+      "resource": {
+        "resourceType": "InsurancePlan",
+        "id": "plan1",
+        "name": "ZZPLANOWNNAME",
+        "contact": [{ "name": "ZZPLANCONTACTNAME" }]
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:value-set-1",
+      "resource": {
+        "resourceType": "ValueSet",
+        "id": "vs1",
+        "name": "ZZVSOWNNAME",
+        "status": "draft",
+        "contact": [{ "name": "ZZVSCONTACTNAME" }]
+      }
     }
   ]
 }

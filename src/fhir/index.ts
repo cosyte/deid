@@ -37,13 +37,17 @@
  * `Address` the pass cannot read faithfully (a `postalCode` that is not a whole zip code, an
  * unexpected JSON shape at a part Safe Harbor would let it keep) is removed **whole** rather than
  * partly retained. At an element name R4 **types** as one of the two datatypes (`name`, `address`, a
- * choice-type `locationAddress`, an open `valueAddress` / `valueHumanName`) **any** complex the
+ * choice-type `locationAddress`, an open `valueAddress` / `valueHumanName`, the `HumanName` arms of
+ * the `defaultValue[x]` / `fixed[x]` / `pattern[x]` choices) **any** complex the
  * classifier cannot pin down is blocked whole - a text-only representation with no part to key on, one
  * carrying a property R4 does not define beside a `family` or a `line`, and equally one whose every
  * property is foreign to both datatypes - because the standard promised a name or an address there and
  * the pass could not read the one it was given. Exactly two conformant R4 backbones share one of those
  * element names (`MedicinalProduct.name`, `SubstanceSpecification.name`) and both are excluded
- * positively, by the property R4 makes `1..1` on each plus that backbone's own closed property set. The
+ * positively, by the property R4 makes `1..1` on each plus that backbone's own closed property set. A
+ * contact's name is removed and recorded whatever shape it arrives in: a string where R4 types a
+ * `HumanName` (`Organization.contact.name`, `InsurancePlan.contact.name`) is blocked, and the string R4
+ * types at a `ContactDetail`'s `name` (the individual to contact) is removed as a name. The
  * honesty line is unchanged: the output is **"Safe-Harbor-transformed per the configured policy"**,
  * never "de-identified".
  *
