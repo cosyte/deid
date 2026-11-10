@@ -391,8 +391,11 @@ unrecognized sibling to an element that was already unreadable never unblocks it
 conformant R4 backbones share one of those element names, `MedicinalProduct.name` and `SubstanceSpecification.name`, and both are excluded positively, by the property R4 makes `1..1` on
 each together with that backbone's own closed property set. A plain string (or any other primitive)
 at one of those names is not the datatype either, and is blocked whole too, except where R4 itself
-types the element as a string: `name` (`Organization.name`, `Location.name`) and the `address` of an
-`Endpoint`, a url. Those two stay untouched. The disposition is recorded either way. That block is scoped to those
+types the element as a string that names no person: `name` (`Organization.name`, `Location.name`) and
+the two `address` elements R4 types as a url, an `Endpoint`'s own and a `CapabilityStatement` messaging
+endpoint's. Those stay untouched. The one other string R4 puts at `address`,
+`AuditEvent.agent.network.address`, holds a machine name, an IP address or a phone number, so it is
+blocked like any other. The disposition is recorded either way. That block is scoped to those
 positions on purpose; the residual it leaves is stated below.
 
 **Known limitations (this release).** Extension values are block-only (no profile-aware retention, a

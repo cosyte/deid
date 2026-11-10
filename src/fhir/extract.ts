@@ -361,25 +361,31 @@ function walkList(
   value: FhirNode,
   path: string,
   personCtx: boolean,
+  elementPath: string,
 ): void {
   /* v8 ignore next -- the only caller checks isList first; this guard narrows the type */
   if (!isList(value)) return;
-  value.items.forEach((item, i) => walkValue(out, item, idx(path, i), personCtx));
+  value.items.forEach((item, i) => walkValue(out, item, idx(path, i), personCtx, elementPath));
 }
 
-/** Recurse into a value node reached during descent (a list item or a non-mapped complex/primitive). */
+/**
+ * Recurse into a value node reached during descent (a list item or a non-mapped complex/primitive).
+ *
+ * @param elementPath - The R4 element path of the node, without list indexes (see {@link walkComplex}).
+ */
 function walkValue(
   out: FhirLocusAccumulator,
   node: FhirNode,
   path: string,
   personCtx: boolean,
+  elementPath: string,
 ): void {
   if (isComplex(node)) {
-    walkComplex(out, node, path, personCtx);
+    walkComplex(out, node, path, personCtx, elementPath);
     return;
   }
   if (isList(node)) {
-    walkList(out, node, path, personCtx);
+    walkList(out, node, path, personCtx, elementPath);
     return;
   }
   // a bare primitive reached during descent: generalize it only if it is a date (else retained).
@@ -394,14 +400,27 @@ function walkValue(
 type PersonalAction = "human-name" | "address" | "block";
 
 /**
- * Whether R4 itself puts a plain primitive at this typed element name, for a property of a complex
- * whose own `resourceType` is `parentResourceType`. Exactly two such elements exist: `name`, a string
- * on many resources (`Organization.name`, `Location.name`), and `Endpoint.address`, a url. At every
- * other typed element name, and at `address` anywhere but on an `Endpoint` itself, a primitive is not
- * the `HumanName` or `Address` the standard promised there.
+ * The two elements named `address` that R4 types as a url rather than an `Address`, by their R4 element
+ * path. Each holds the network address of a system, never a person's postal address, and R4 makes both
+ * `1..1`, so removing one would leave a resource the standard rejects.
  */
-function primitiveConformsAt(name: string, parentResourceType: string | undefined): boolean {
-  return name === "name" || (name === "address" && parentResourceType === "Endpoint");
+const URL_TYPED_ADDRESS_ELEMENTS: ReadonlySet<string> = new Set<string>([
+  "Endpoint.address",
+  "CapabilityStatement.messaging.endpoint.address",
+]);
+
+/**
+ * Whether a plain primitive at this typed element name is one this sweep leaves to the ordinary
+ * descent, for an element at the R4 path `elementPath`. Two cases: `name`, which R4 types as a string
+ * on many resources and backbones (`Organization.name`, `Location.name`), and the url-typed `address`
+ * elements in {@link URL_TYPED_ADDRESS_ELEMENTS}. R4 has one more string at `address`,
+ * `AuditEvent.agent.network.address`, and it is deliberately not here: it holds a machine name, an IP
+ * address or a telephone number, which identify a person when the agent is one, so it is blocked. At
+ * every other typed element name, and at every other `address`, a primitive is not the `HumanName` or
+ * `Address` the standard promised there.
+ */
+function primitiveConformsAt(name: string, elementPath: string): boolean {
+  return name === "name" || URL_TYPED_ADDRESS_ELEMENTS.has(elementPath);
 }
 
 /**
@@ -412,8 +431,8 @@ function primitiveConformsAt(name: string, parentResourceType: string | undefine
  * excludes). So is anything there that is not a complex at all (a bare string, a number, a `null`, a
  * list nested in the list a model built by hand can hold), unless it is a primitive at an element R4
  * itself types as a string ({@link primitiveConformsAt}): the pass cannot locate a value in it. Everything
- * else is left to the ordinary descent, which is what keeps an organisation's own `name` string,
- * `Endpoint.address`, a `Coding.display` and a clinical code, value, unit or status byte-identical.
+ * else is left to the ordinary descent, which is what keeps an organisation's own `name` string, a url
+ * at `Endpoint.address`, a `Coding.display` and a clinical code, value, unit or status byte-identical.
  *
  * @param typedElementName - The element name when R4 types it as one of the two datatypes, and
  *   `undefined` at every other position: the fail-closed arm exists only where the standard already
@@ -490,8 +509,8 @@ function emitSweptAddress(out: FhirLocusAccumulator, node: FhirComplex, path: st
  * unrelated one still walks the unrelated one exactly as before. When no item is claimed the sweep
  * reports so without walking anything, and the caller's ordinary dispatch continues untouched.
  *
- * @param parentResourceType - The `resourceType` of the complex this property sits on, or `undefined`
- *   when that complex is not a resource: it is what tells `Endpoint.address` from any other `address`.
+ * @param elementPath - The R4 element path of this property (see {@link walkComplex}): it is what tells
+ *   a url-typed `address` from any other `address`.
  * @returns `true` when the sweep took ownership of this property value.
  */
 function sweepPersonalDatatypes(
@@ -499,10 +518,10 @@ function sweepPersonalDatatypes(
   name: string,
   value: FhirNode,
   path: string,
-  parentResourceType: string | undefined,
+  elementPath: string,
 ): boolean {
   const typedElementName = TYPED_PERSONAL_ELEMENT_NAMES.has(name) ? name : undefined;
-  const primitiveConforms = primitiveConformsAt(name, parentResourceType);
+  const primitiveConforms = primitiveConformsAt(name, elementPath);
   const items = isList(value) ? value.items : [value];
   const actions = items.map((item) => personalAction(item, typedElementName, primitiveConforms));
   if (actions.every((action) => action === undefined)) return false;
@@ -511,7 +530,7 @@ function sweepPersonalDatatypes(
     const itemPath = multi ? idx(path, i) : path;
     const action = actions[i];
     if (action === undefined) {
-      walkValue(out, item, itemPath, false);
+      walkValue(out, item, itemPath, false, elementPath);
       return;
     }
     if (action === "human-name") {
@@ -536,7 +555,11 @@ function sweepPersonalDatatypes(
   return true;
 }
 
-/** Dispatch one property of a complex through the FHIR PHI rules. */
+/**
+ * Dispatch one property of a complex through the FHIR PHI rules.
+ *
+ * @param elementPath - The R4 element path of this property (see {@link walkComplex}).
+ */
 function handleProperty(
   out: FhirLocusAccumulator,
   name: string,
@@ -545,7 +568,7 @@ function handleProperty(
   personCtx: boolean,
   isPersonTop: boolean,
   parentIsCoding: boolean,
-  parentResourceType: string | undefined,
+  elementPath: string,
 ): void {
   if (name === "resourceType") {
     // Retained (structural), and NAMED: the walk reads it to derive the person/clinical role at every
@@ -592,7 +615,7 @@ function handleProperty(
   // Outside a person resource the DATATYPE decides: a `HumanName` or an `Address` is acted on wherever
   // the graph put it, so coverage stops depending on whether a producer shaped the document the way
   // the person map expected.
-  if (!personCtx && sweepPersonalDatatypes(out, name, value, path, parentResourceType)) return;
+  if (!personCtx && sweepPersonalDatatypes(out, name, value, path, elementPath)) return;
   // A date-shaped primitive anywhere is a PHI date → generalized (fail closed on dates).
   if (isPrimitive(value) && dateEmit(out, value, path)) return;
   // Fail-closed person sweep: a bare unrecognized string at a person resource's top level is blocked.
@@ -606,17 +629,26 @@ function handleProperty(
     out.ruleReached.add(value);
   }
   // Otherwise descend (universal rules apply within); a retained scalar code/boolean is left untouched.
-  walkValue(out, value, path, personCtx);
+  walkValue(out, value, path, personCtx, elementPath);
 }
 
-/** Walk a complex, re-deriving the person/clinical role at a `resourceType` boundary. */
+/**
+ * Walk a complex, re-deriving the person/clinical role at a `resourceType` boundary.
+ *
+ * @param elementPath - The R4 element path of this complex, built from the raw element names with no
+ *   list index (`CapabilityStatement.messaging.endpoint`). It starts again at every `resourceType`
+ *   boundary, so a contained resource or a Bundle entry has its own. It is only ever compared with a
+ *   fixed set and never reaches the manifest, which takes `path`.
+ */
 function walkComplex(
   out: FhirLocusAccumulator,
   complex: FhirComplex,
   path: string,
   personCtx: boolean,
+  elementPath: string,
 ): void {
   const rt = resourceType(complex);
+  const ownPath = rt ?? elementPath;
   const ctx = rt !== undefined ? PERSON_RESOURCE_TYPES.has(rt) : personCtx;
   const isPersonTop = rt !== undefined && ctx; // fail-closed scalar block only at a person resource root
   const parentIsCoding = isCodingComplex(complex);
@@ -631,7 +663,7 @@ function walkComplex(
       ctx,
       isPersonTop,
       parentIsCoding,
-      rt,
+      `${ownPath}.${prop.name}`,
     );
   });
 }
@@ -666,7 +698,7 @@ export function extractFhirLoci(resource: FhirComplex): FhirExtraction {
   // `resourceType` is a JSON string VALUE, not a checked identifier, and it is the ROOT of every path
   // in the manifest, so an unbounded one prefixes the whole audit with document content.
   const rt = safeLocusToken(resourceType(resource) ?? "", "fhirElementName");
-  walkComplex(out, resource, rt, false);
+  walkComplex(out, resource, rt, false, "");
 
   const residuals = new UnexaminedResidualBuilder();
   enumerateOrFail(rt, () => {

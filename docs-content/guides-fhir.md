@@ -132,8 +132,11 @@ not mistaken for a date, so it survives.
   `SubstanceSpecification.name`, and each is excluded positively by the property R4 makes `1..1` on it
   plus its own closed property set. A plain string (or any other primitive) at one of those names is
   not the datatype either and is blocked whole too, except where R4 itself types the element as a
-  string: `name` (`Organization.name`, `Location.name`) and an `Endpoint`'s own `address`, a url,
-  which stay untouched. The disposition is recorded either way. That block is scoped to those element
+  string that names no person: `name` (`Organization.name`, `Location.name`) and the two `address`
+  elements R4 types as a url, an `Endpoint`'s own and a `CapabilityStatement` messaging endpoint's,
+  which stay untouched. The one other string R4 puts at `address`, `AuditEvent.agent.network.address`,
+  holds a machine name, an IP address or a phone number, so it is blocked like any other. The
+  disposition is recorded either way. That block is scoped to those element
   names deliberately, and the residual it leaves is stated below.
 - **Free-text prose** is blocked by default: the `note` element (`Annotation.text` + author), a
   `Communication`/message `contentString`, and an **uncoded `valueString`** (the FHIR analogue of an

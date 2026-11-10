@@ -126,9 +126,11 @@ export const FHIR_DEMOGRAPHIC_ELEMENTS: Readonly<Record<string, FhirDemographicM
  * `docs-content/limitations.md` rather than left implicit.
  *
  * A plain primitive at one of these names (a bare string, a number, a `null`) is not the datatype
- * either, so it is blocked whole too, with two exceptions where R4 itself puts a string at the name:
- * `name` (`Organization.name`, `Location.name`) and the `address` of an `Endpoint` resource, a url.
- * Neither is a person's name or a postal address, so both are left untouched.
+ * either, so it is blocked whole too, except where R4 itself puts a string that names no person at the
+ * name: `name` (`Organization.name`, `Location.name`) and the two `address` elements R4 types as a url,
+ * `Endpoint.address` and `CapabilityStatement.messaging.endpoint.address`. Those are left untouched.
+ * The one other string R4 puts at `address`, `AuditEvent.agent.network.address`, is a machine name, an
+ * IP address or a phone number, so it is blocked like any other.
  *
  * @internal
  */

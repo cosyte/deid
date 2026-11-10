@@ -2,8 +2,9 @@
  * FHIR adapter on a bare string sent where an `Identifier`, an `Address` or a `HumanName` belongs: in
  * a list or on its own, at a person resource, at a contact, at a resource that is not a person, and in
  * a model built by hand. It is a shape the pass cannot locate a value in, so it is removed whole and
- * recorded, never handed through to the output. The two elements R4 itself types as a string at one of
- * those names, an organisation's own `name` and an `Endpoint`'s `address` (a url), are kept.
+ * recorded, never handed through to the output. Where R4 itself types one of those names as a string
+ * that names no person, an organisation's own `name` and the two url-typed `address` elements (an
+ * `Endpoint`'s own and a `CapabilityStatement` messaging endpoint's), the string is kept.
  *
  * All values are synthetic `ZZ` sentinels.
  */
@@ -168,8 +169,8 @@ describe("a bare string where an Address or a HumanName is expected, outside a p
   });
 
   it("removes a string at `address` on anything but the Endpoint itself", () => {
-    // An Endpoint's own `address` is the one plain string R4 puts at that name. A backbone inside
-    // some other resource that carries one is not that element, wherever the resource points.
+    // An Endpoint's own `address` is a url R4 puts at that name. A backbone inside some other
+    // resource that carries one is not that element, wherever the resource points.
     const out = run({
       resourceType: "Organization",
       endpoint: [{ reference: "Endpoint/ep1", address: "ZZREFADDR" }],
@@ -178,6 +179,80 @@ describe("a bare string where an Address or a HumanName is expected, outside a p
       '{"resourceType":"Organization","endpoint":[{"reference":"Endpoint/ep1"}]}',
     );
     expect(rows(out)).toEqual(["Organization.endpoint[0].address blocked"]);
+  });
+
+  it("keeps a CapabilityStatement messaging endpoint's address, the other url R4 puts at `address`", () => {
+    // R4 makes `CapabilityStatement.messaging.endpoint.address` a required url. It sits on a backbone
+    // with no resourceType of its own, so it is told apart by where it is inside the statement.
+    const url = "mllp:10.1.1.10:9234";
+    const statement = {
+      resourceType: "CapabilityStatement",
+      status: "active",
+      messaging: [{ endpoint: [{ protocol: { code: "mllp" }, address: url }] }],
+    };
+    const flat = run(statement);
+    expect(flat.json).toBe(JSON.stringify(statement));
+    expect(flat.manifest).toEqual([]);
+    expect(loci(flat)).toEqual([
+      "CapabilityStatement.status",
+      "CapabilityStatement.messaging[0].endpoint[0].protocol.code",
+      "CapabilityStatement.messaging[0].endpoint[0].address",
+    ]);
+
+    const bundle = run({
+      resourceType: "Bundle",
+      type: "collection",
+      entry: [{ resource: statement }],
+    });
+    expect(bundle.json).toContain(url);
+    expect(bundle.manifest).toEqual([]);
+
+    const contained = run({ resourceType: "Organization", contained: [statement] });
+    expect(contained.json).toContain(url);
+    expect(contained.manifest).toEqual([]);
+  });
+
+  it("removes a string at `address` anywhere else in a CapabilityStatement, or on a look-alike", () => {
+    const elsewhere = run({
+      resourceType: "CapabilityStatement",
+      messaging: [{ address: "ZZMSGADDR", endpoint: [{ address: "mllp:10.1.1.10:9234" }] }],
+      rest: [{ mode: "server", address: "ZZRESTADDR" }],
+    });
+    expect(elsewhere.json).toBe(
+      '{"resourceType":"CapabilityStatement","messaging":[{"endpoint":[{"address":"mllp:10.1.1.10:9234"}]}],"rest":[{"mode":"server"}]}',
+    );
+    expect(rows(elsewhere)).toEqual([
+      "CapabilityStatement.messaging[0].address blocked",
+      "CapabilityStatement.rest[0].address blocked",
+    ]);
+
+    // The same backbone path on a resource that is not a CapabilityStatement is not that element.
+    const lookalike = run({
+      resourceType: "Organization",
+      messaging: [{ endpoint: [{ address: "ZZLOOKALIKE" }] }],
+    });
+    expect(lookalike.json).not.toContain("ZZLOOKALIKE");
+    expect(rows(lookalike)).toEqual(["Organization.messaging[0].endpoint[0].address blocked"]);
+  });
+
+  it("removes AuditEvent.agent.network.address, a string that can be a person's IP address or phone", () => {
+    // R4 types this `address` as a string holding a machine name, an IP address or a telephone
+    // number for the device an agent used. When the agent is the patient, that identifies them, so
+    // the pass removes it and records it rather than handing it through.
+    const out = run({
+      resourceType: "AuditEvent",
+      agent: [{ requestor: true, network: { address: "203.0.113.7", type: "2" } }],
+    });
+    expect(out.json).toBe(
+      '{"resourceType":"AuditEvent","agent":[{"requestor":true,"network":{"type":"2"}}]}',
+    );
+    expect(out.manifest).toEqual([
+      expect.objectContaining({
+        locus: "AuditEvent.agent[0].network.address",
+        disposition: "blocked",
+        category: C.OTHER_UNIQUE_ID,
+      }),
+    ]);
   });
 
   it("removes a list nested in a list, which only a model built by hand can hold", () => {
