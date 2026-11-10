@@ -246,26 +246,42 @@ function handleIdentifier(out: FhirLocusAccumulator, id: FhirComplex, path: stri
   );
 }
 
-/** Handle an `identifier` property: one locus per `Identifier` in the list (or a single complex). */
+/**
+ * Handle an `identifier` property: one locus per `Identifier` in the list (or a single complex). An
+ * item that is not an object (a bare string where an `Identifier` belongs) is a shape the pass cannot
+ * locate a value in, so it is blocked whole rather than handed through.
+ */
 function handleIdentifiers(out: FhirLocusAccumulator, value: FhirNode, path: string): void {
   const items = isList(value) ? value.items : [value];
   items.forEach((item, i) => {
-    if (!isComplex(item)) return;
-    handleIdentifier(out, item, items.length > 1 ? idx(path, i) : path);
+    const itemPath = items.length > 1 ? idx(path, i) : path;
+    if (!isComplex(item)) {
+      blockNode(out, item, itemPath);
+      return;
+    }
+    handleIdentifier(out, item, itemPath);
   });
 }
 
-/** Handle an `address` property: one generalize locus per `Address` complex (ZIP → safe 3-digit form). */
+/**
+ * Handle an `address` property: one generalize locus per `Address` complex (ZIP → safe 3-digit form).
+ * An item that is not an object (a bare string where an `Address` belongs) cannot be reduced to its
+ * Safe Harbor parts, so it is blocked whole rather than handed through.
+ */
 function handleAddresses(out: FhirLocusAccumulator, value: FhirNode, path: string): void {
   const items = isList(value) ? value.items : [value];
   items.forEach((item, i) => {
-    if (!isComplex(item)) return;
+    const itemPath = items.length > 1 ? idx(path, i) : path;
+    if (!isComplex(item)) {
+      blockNode(out, item, itemPath);
+      return;
+    }
     const postal = getProperty(item, "postalCode");
     const zip = postal !== undefined && isPrimitive(postal) ? primitiveString(postal) : "";
     push(
       out,
       {
-        path: items.length > 1 ? idx(path, i) : path,
+        path: itemPath,
         kind: "zip",
         category: SAFE_HARBOR_CATEGORIES.GEOGRAPHIC,
         value: zip,
