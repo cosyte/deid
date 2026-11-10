@@ -63,7 +63,7 @@ const CASES: readonly (readonly [string, string, string])[] = [
   // Procedure composites: the code is shaped by the qualifier in front of it.
   ["SV1*HC:99213*100.00~", "SV1*HC:ZZPATID*100.00~", "SV1[0]-1"],
   ["SV3*AD:D0120*50.00~", "SV3*AD:0120*50.00~", "SV3[0]-1"],
-  ["SV5*HC:E0100*DA*1~", "SV5*HC:E0100*ZZ*1~", "SV5[0]-2"],
+  ["SV5*HC:E0100*DA*1~", "SV5*HC:E0100*A0*1~", "SV5[0]-2"],
   ["SVC*N4:12345678901*10.00*8.00~", "SVC*N4:1234*10.00*8.00~", "SVC[0]-1"],
   ["SV2*0450*NU:0450*10.00~", "SV2*0450*NU:045*10.00~", "SV2[0]-2"],
   ["SV2*0023*HP:ABC12*10.00~", "SV2*0023*HP:ABC1*10.00~", "SV2[0]-2"],
@@ -94,10 +94,12 @@ const CASES: readonly (readonly [string, string, string])[] = [
   ["MOA***MA01*N123~", "MOA***ZZREMARK~", "MOA[0]-3"],
   ["MIA*1*10.00****5.00~", "MIA*1*10.00***ZZRARC~", "MIA[0]-5"],
   ["TOO*JP*3*M:O~", "TOO*JP*ZZTOOTH~", "TOO[0]-2"],
-  ["CTP****2*UN~", "CTP****2*ZZ~", "CTP[0]-5"],
+  ["CTP****2*UN~", "CTP****2*A0~", "CTP[0]-5"],
   ["LIN**N4*12345678901~", "LIN**N4*ZZ NDC~", "LIN[0]-3"],
   ["INS*Y*18*001*25~", "INS*Y*18*ZZINS~", "INS[0]-3"],
   ["AK9*A*1*1*1~", "AK9*A*1*ZZ*1~", "AK9[0]-3"],
+  // A 999 loop id: four characters, or a TR3 loop id with its letters, as `@cosyte/x12` emits it.
+  ["IK3*NM1*8*2010BA*8~", "IK3*NM1*8*ZZ2010BAX*8~", "IK3[0]-3"],
   ["IK5*A~", "IK5*ZZ~", "IK5[0]-1"],
 ];
 

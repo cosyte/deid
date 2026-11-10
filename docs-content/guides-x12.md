@@ -54,14 +54,15 @@ implicit, so the map keys off each **segment id** plus two **qualifier classifie
 | **`NM1`**: subscriber / patient / dependent (`IL` / `QC` / `03`) | name (`NM1-03..07`) **removed**; id (`NM1-09`) routed by the `NM1-08` qualifier: SSN **removed**, member **removed** under Safe Harbor |
 | **`NM1`** / **`N1`**: the individual's employer (`36`)          | name and id **removed**, on the same footing as a patient-side party: §164.514(b)(2)(i) removes the identifiers of the individual's **employers**, so an employer is not an unrelated organization |
 | **`NM1`**: recognized provider / organization (`85` / `82` / …)  | **retained**: provider identity is not the individual's PHI (mirrors the HL7 adapter's provider retention), and the **entity-identifier code** it was classified on is recorded, value-free, at the party's locus |
-| **`NM1`**: unknown entity code                                  | **fails closed**: name and id blocked (an unrecognized entity could be the patient)                                |
+| **`NM1`**: the Other Insured (`GB`), an 834 responsible person, an ambulance pick-up or drop-off location | name and id **removed** like the individual's: the 005010 TR3s use these codes for people around the individual and for places that can be the individual's own |
+| **`NM1`**: unknown entity code                                  | **fails closed**: name and id blocked (an unrecognized entity could be the patient); a real entity code no role table names is kept, its party's name and id are not |
 | **`N1`** (payer / provider org)                                 | **retained**; a patient-side or **unknown** party's name + id scrubbed / **fail closed** (same classification as `NM1`) |
 | **`SBR`** (subscriber)                                          | `SBR-03` group / policy number **removed** under Safe Harbor, `SBR-04` group name **removed**; relationship codes retained |
 | **`N3` / `N4`**                                                 | street + city **removed**; ZIP → safe 3-digit; state retained; an unmapped element (`N4-06` location id) **fails closed** |
 | **`DMG-02`**, **`DTP-03`**, **`DTM-02`**                        | dates → **year**                                                                                                    |
 | **`PER`**                                                       | contact name + communication numbers **removed**                                                                   |
 | **`REF`**                                                       | patient / member / group / SSN identifier **removed** under Safe Harbor; recognized admin/provider reference retained; **unknown qualifier fails closed** |
-| **Code positions** (`NM1-01` / `08`, `N1-01` / `03`, `REF-01`, `N4-02` / `04`) | a recognized code (entity code, identification code qualifier, `REF` qualifier, state or province, ISO country) is kept as written; any other value **fails closed**: removed and recorded at its own position |
+| **Code positions** (`NM1-01` / `08`, `N1-01` / `03`, `REF-01`, `N4-02` / `04`) | a code of the element's complete 005010 list (entity code, identification code qualifier, `REF` qualifier, country), or a state or province, is kept as written; any other value **fails closed**: removed and recorded at its own position |
 | **`CLM-01` / `CLP-01`**                                         | patient account number **removed** under Safe Harbor (a consistent surrogate only under a preset that does not claim the label) |
 | **Free text** (`MSG-01`, `III-04`, `K3-01`, `NTE-02`)           | **fails closed**: blocked (coded siblings retained), never scrubbed by a naive pass                                |
 | **Clinical / financial** (`HI`, `SV*`, `SVC`, `AMT`, `CAS`, …)   | **retained**: diagnosis / procedure / revenue codes, amounts, quantities of their expected shape survive byte-identical |
@@ -77,11 +78,13 @@ claim control, `EI` EIN, `TJ` tax id, `G1` prior authorization, provider ids) ar
 **unrecognized qualifier fails closed**: the direct implementation of Safe Harbor category (R) for the
 "unusual REF qualifier" that a shape guess would miss.
 
-The qualifier itself is kept only when it is a code one of those lists names, exactly as written. A
-sender who drops one element separator shifts the identifier left into `REF-01` (or into `NM1-08`,
-`N1-03`, or the `N4` state), so a value there that is not a recognized code is removed and recorded
-at its own position, never kept on the strength of where it sits. The same holds for an unrecognized
-`REF-01` code such as `ZZ`: it goes with the value it routes.
+The qualifier itself is kept when it is a code of element 128's complete 005010 list, exactly as
+written. A real qualifier on neither list (the 837 `XZ` prescription number, the 271 `18` plan number)
+keeps its place, and the value it qualifies fails closed, because the code alone does not say whose it
+is. A sender who drops one element separator shifts the identifier left into `REF-01` (or into
+`NM1-08`, `N1-03`, or the `N4` state), so a value there that is no code at all is removed and recorded
+at its own position, never kept on the strength of where it sits, and it goes with the value it would
+route.
 
 ## Every position is decided
 
@@ -89,11 +92,17 @@ A missing element separator shifts every value after it one position left, and a
 right, so an identifier can land in a code position, a date position, or a position past the last one a
 rule names. The adapter decides every element it hands through, so none of those leaves in the clear:
 
-- **A code position keeps only a code it knows, exactly as written.** The entity code, the
+- **A code position keeps only a real code, exactly as written.** The entity code, the
   identification code qualifier, the `REF` qualifier, the `N4` state and country, and every qualifier
   and code of `DMG`, `PER`, `DTP`, `DTM`, `SBR`, `CLM`, `HI` and the retained segments are checked
-  against the position's code list, or against the exact shape of a published code set (ICD-10-CM,
-  ICD-10-PCS, HCPCS, CARC, RARC). A lower-case or space-padded code is not the code.
+  against the complete 005010 code list of the position's data element (the 277CA `AMT*YU` and
+  `QTY*AA` among them), or, where the codes come from outside X12, against the exact shape of the
+  published code set (ICD-10-CM, ICD-10-PCS, HCPCS, CARC, RARC, the NUBC codes, the provider
+  taxonomy). A lower-case or space-padded code is not the code.
+- **A real code with no route keeps its place; what it qualifies does not.** A `REF` qualifier on
+  neither `REF` table, an entity code on no role table (the 837I `ZZ` other operating physician), or
+  an `HI` qualifier whose code shape the adapter does not know is kept, and the reference value, the
+  party's name and identifier, or the `HI` code is removed and recorded.
 - **A refused code routes nothing.** The party and reference classifiers read a code only after it
   passed that check. `NM1*pr*...` places no party outside the scope clause, so its name and
   identifier are removed; `REF*f8*...` is no administrative reference, so `REF-02` is removed.
@@ -136,9 +145,11 @@ Provider / organization identity is **retained** as non-patient identity, and th
 suppress it: the retention is structural, in the extractor, not a per-category policy choice. It is not
 silent, though: every retained party emits a value-free manifest row naming the entity-identifier code
 that placed it outside the scope clause, so a reader can check the classification rather than infer it
-from an absence. Code lists cover what the HIPAA 005010 TR3s use for 837, 835, 270 / 271, 276 / 277,
-278, 834, 999 and TA1, checked against a well-formed transaction set of each kind; a real but rarer code
-outside them is removed and recorded, which over-removes a code rather than passing an unchecked value.
-The same holds for a segment: one the pass has no rule or shape for is removed whole even when it is a
-real X12 segment. That includes the 835 provider adjustment and summary segments (`PLB`, `TS3`) and the
+from an absence. Each code position is checked against the complete 005010 code list of its data
+element, and a well-formed transaction set of each kind (837P, 837I, 837D, 835, 270, 271, 276, 277,
+277CA, 278, 834, 999) keeps every code it carries. A segment the pass has no rule or shape for is
+removed whole even when it is a real X12 segment. That includes the 835 provider adjustment and summary
+segments (`PLB`, `TS3`, `TS2`), the 837 segments `CUR`, `CR5` to `CR8`, `FRM`, `SV4` and `RDM`, and the
 834 segments beyond `INS` / `HD` that carry member detail (`EC`, `ICM`, `HLH`, `LUI`, `COB`, `IDC`).
+The 837 provider taxonomy (`PRV`), other insurance indicators (`OI`) and dental `DN1` / `DN2` segments
+are kept by shape.

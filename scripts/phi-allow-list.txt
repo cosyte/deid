@@ -433,6 +433,7 @@ ID ZZSUBNUM834
 ID ZZGROUP834
 ID ZZMEMBER834
 ID ZZMEMBER835
+ID ZZMEMBER277CA
 
 # --- Synthetic NCPDP Telecom identifiers (test/fixtures/ncpdp) ---
 ID 5550000301

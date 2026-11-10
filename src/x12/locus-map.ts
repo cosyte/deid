@@ -26,11 +26,14 @@
  *
  * Every **code position** these classifiers read (`NM1-01` / `N1-01`, `NM1-08` / `N1-03`, `REF-01`) and
  * the `N4` state and country are kept only when they hold a recognized code, exactly as written (see
- * {@link isRecognizedX12Code}), and a classifier reads such a code only after it passed that check: a
- * refused code routes its party or reference as unknown, which fails closed. Anything else at a code
- * position fails closed too: a missing element separator shifts an identifier left by one position,
- * and a code position must never carry it out in the clear. Every other position is decided by the
- * shape it expects (see `./element-shapes.js`), and a position no rule or shape names is removed.
+ * {@link isRecognizedX12Code}): a code the complete 005010 code list of the position's data element
+ * holds (`./code-lists.js`). A classifier reads such a code only after it passed that check. A real code
+ * a classifier has no route for is kept, and the party's name and identifier, or the reference's value,
+ * fail closed, because the code alone does not say whose they are. Anything that is not a code for the
+ * element fails closed too, the code position included: a missing element separator shifts an
+ * identifier left by one position, and a code position must never carry it out in the clear. Every
+ * other position is decided by the shape it expects (see `./element-shapes.js`), and a position no rule
+ * or shape names is removed.
  *
  * Address (`N3` / `N4`), telecom (`PER`), and demographic date (`DMG-02`) loci are handled **universally**
  * (regardless of which loop's entity they belong to): a street / city / phone / date-of-birth is removed
@@ -45,6 +48,7 @@
  */
 
 import { SAFE_HARBOR_CATEGORIES, type SafeHarborCategory } from "../categories.js";
+import { x12CodeList } from "./code-lists.js";
 import { COUNTRY_CODES, STATE_OR_PROVINCE_CODES } from "./element-shapes.js";
 import {
   classifyPartyRole,
@@ -104,7 +108,10 @@ export type X12ElementRule =
  * **The employer (`36`) is deliberately NOT on this list.** §164.514(b)(2)(i) removes the identifiers
  * "of the individual **or of relatives, employers, or household members** of the individual", so an
  * employer party is a Safe Harbor subject however organisational it looks: see
- * {@link EMPLOYER_ENTITY_CODES}.
+ * {@link EMPLOYER_ENTITY_CODES}. Nor is any code a 005010 TR3 uses for a party that can be the
+ * individual or a person around them: the other insured (`GB`), the responsible persons of the 834, and
+ * the 834 drop-off location (`45`), whose name is a person's. Every code here names a provider, a
+ * payer, a facility, an administrator, a clearinghouse, a broker, a vendor or a transmitting party.
  *
  * @example
  * ```ts
@@ -130,7 +137,6 @@ export const PROVIDER_ENTITY_CODES: ReadonlySet<string> = new Set<string>([
   "DQ", // Supervising Provider
   "P3", // Primary Care Provider
   "1P", // Provider
-  "GB", // Other Provider (per-context provider role)
   "SJ", // Service Provider
   "DD", // Assistant Surgeon
   "PR", // Payer
@@ -138,7 +144,6 @@ export const PROVIDER_ENTITY_CODES: ReadonlySet<string> = new Set<string>([
   "2B", // Third-Party Administrator
   "40", // Receiver
   "41", // Submitter
-  "45", // Drop-off Location
   "TT", // Transfer To
   "GP", // Gateway Provider
   "AY", // Clearinghouse
@@ -164,6 +169,10 @@ export const PROVIDER_ENTITY_CODES: ReadonlySet<string> = new Set<string>([
  * **scrubbed**: the subscriber / insured, the patient, the dependent, and the responsible party are
  * the covered individual and their relatives. Grounded in the HIPAA 005010 TR3 entity-identifier
  * code list (X12 element 98).
+ *
+ * The list is every code a 005010 TR3 uses for a party that is the individual, a relative, a household
+ * member or another person standing for the individual (a guardian, a responsible person, the other
+ * insured), and the locations that can be the individual's own.
  *
  * @example
  * ```ts
@@ -192,6 +201,14 @@ export const PATIENT_ENTITY_CODES: ReadonlySet<string> = new Set<string>([
   "LR", // Legal Representative
   "TZ", // Significant Other
   "X4", // Spouse
+  "6Y", // Case Manager (834 responsible person)
+  "9K", // Key Person (834 responsible person)
+  // The other insured: the 835 Other Subscriber and the 834 responsible person.
+  "GB", // Other Insured
+  // The ambulance pick-up and drop-off locations (837) are commonly the individual's residence, and the
+  // 834 drop-off location names a person.
+  "45", // Drop-off Location
+  "PW", // Pickup Address
 ]);
 
 /**
@@ -426,57 +443,21 @@ export function classifyRefQualifier(qualifier: string): RefDisposition {
 }
 
 /**
- * The X12 element 66 **identification code qualifiers** an `NM1-08` or `N1-03` may carry and keep: the
- * codes the HIPAA 005010 TR3s use at those positions for a provider, payer, submitter, receiver, or
- * member party, plus every code {@link categoryForNm1IdQualifier} routes on. A value at either position
- * that is not one of these, exactly as written, is not trusted as a qualifier: it is removed and
- * recorded, because an identifier shifted left by a missing element separator lands there.
- */
-const ID_CODE_QUALIFIERS: ReadonlySet<string> = new Set<string>([
-  "24", // Employer's Identification Number
-  "34", // Social Security Number
-  "46", // Electronic Transmitter Identification Number
-  "94", // Code assigned by the organization that is the ultimate destination
-  "AD", // Blue Cross Blue Shield Association Plan Code
-  "BD", // Blue Cross Provider Number
-  "BS", // Blue Shield Provider Number
-  "C", // Insured's Changed Unique Identification Number
-  "FA", // Facility Identification (271)
-  "FI", // Federal Taxpayer's Identification Number
-  "HN", // Health Insurance Claim Number
-  "II", // Standard Unique Health Identifier for each Individual
-  "MA", // Medicare (routed as a member id)
-  "MB", // Member (routed as a member id)
-  "MC", // Medicaid
-  "MI", // Member Identification Number
-  "MR", // Medicaid Recipient Identification Number
-  "NI", // National Association of Insurance Commissioners Identification
-  "PC", // Provider Commercial Number
-  "PI", // Payor Identification
-  "PP", // Pharmacy Processor Number
-  "SL", // State License Number
-  "SV", // Service Provider Number
-  "UP", // Unique Physician Identification Number
-  "XV", // Centers for Medicare and Medicaid Services PlanID
-  "XX", // Centers for Medicare and Medicaid Services National Provider Identifier
-  "ZZ", // Mutually Defined
-]);
-
-/**
  * The **code positions** the rules read and keep, each with the code list it is checked against: the
- * entity identifier code (`NM1-01`, `N1-01`), the identification code qualifier (`NM1-08`, `N1-03`), the
- * reference identification qualifier (`REF-01`, every code either `REF` table names), and the state and
- * country the geographic sweep keeps (`N4-02`, `N4-04`). Keyed `<segment id>-<element>`.
+ * complete 005010 code list of the entity identifier code (`NM1-01`, `N1-01`, element 98), the
+ * identification code qualifier (`NM1-08`, `N1-03`, element 66) and the reference identification
+ * qualifier (`REF-01`, element 128), and the state and country the geographic sweep keeps (`N4-02`,
+ * `N4-04`). Keyed `<segment id>-<element>`.
  */
 const X12_CODE_LISTS: ReadonlyMap<string, ReadonlySet<string>> = new Map<
   string,
   ReadonlySet<string>
 >([
-  ["NM1-1", new Set<string>([...X12_PARTY_ROLES.subject, ...X12_PARTY_ROLES.outside])],
-  ["NM1-8", ID_CODE_QUALIFIERS],
-  ["N1-1", new Set<string>([...X12_PARTY_ROLES.subject, ...X12_PARTY_ROLES.outside])],
-  ["N1-3", ID_CODE_QUALIFIERS],
-  ["REF-1", new Set<string>([...Object.keys(REF_PHI_QUALIFIERS), ...REF_RETAIN_QUALIFIERS])],
+  ["NM1-1", x12CodeList("98")],
+  ["NM1-8", x12CodeList("66")],
+  ["N1-1", x12CodeList("98")],
+  ["N1-3", x12CodeList("66")],
+  ["REF-1", x12CodeList("128")],
   ["N4-2", STATE_OR_PROVINCE_CODES],
   ["N4-4", COUNTRY_CODES],
 ]);
@@ -486,7 +467,9 @@ const X12_CODE_LISTS: ReadonlyMap<string, ReadonlySet<string>> = new Map<
  * case folding, because a qualifier the standard spells in upper case and a sender wrote some other
  * way is a value we cannot vouch for. A position with no list recognizes nothing. The extractor keeps a
  * recognized code where it is and removes and records anything else (fail closed), so an identifier
- * shifted into a code position by a missing element separator never leaves in the clear.
+ * shifted into a code position by a missing element separator never leaves in the clear. A recognized
+ * code is not a route: a real code no classifier routes on keeps its place, and what it qualifies fails
+ * closed.
  *
  * @param segId - The segment id, e.g. `NM1`.
  * @param element - The 1-based element position, e.g. `8` for `NM1-08`.
@@ -738,4 +721,9 @@ export const X12_RETAIN_SEGMENTS: ReadonlySet<string> = new Set<string>([
   "STC",
   "UM",
   "HCR",
+  // Provider taxonomy, other insurance indicators (837), orthodontic and tooth summary (837D)
+  "PRV",
+  "OI",
+  "DN1",
+  "DN2",
 ]);

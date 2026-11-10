@@ -660,8 +660,9 @@ function handleSegment(out: X12LocusAccumulator, seg: X12Segment, pos: SegPos): 
 /**
  * Decide one composite element component by component against its shape. A composite with more
  * components than the shape names, or a kept component that fails its test, is not trusted at all and
- * is removed whole. Otherwise the element is kept, except that a free-text component is removed and a
- * date component is transformed as a date (or removed, when it is no date in its declared format), each
+ * is removed whole. Otherwise the element is kept, except that a free-text component is removed, a
+ * date component is transformed as a date (or removed, when it is no date in its declared format), and
+ * a value whose qualifier is a real code with no shape the pass knows is removed on its own, each
  * recorded at its own component position (`837/HI[0]-1-4`).
  */
 function decideComposite(
@@ -686,10 +687,14 @@ function decideComposite(
     // `i` is in range: the length check above bounds it by the shape's own component list.
     const spec = shape.components[i] as (typeof shape.components)[number];
     if (spec.kind === "keep") {
-      if (!spec.test(value, { ...ctx, components })) {
-        whole();
-        return;
+      const at = { ...ctx, components };
+      if (spec.test(value, at)) continue;
+      if (spec.alone?.(value, at) === true) {
+        decisions.push({ component: i + 1, date: false });
+        continue;
       }
+      whole();
+      return;
     } else if (spec.kind === "free") {
       decisions.push({ component: i + 1, date: false });
     } else {

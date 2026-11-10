@@ -36,17 +36,27 @@ and amounts on well-formed input keep their output. Because every element is dec
 reads to rewrite one component or an envelope segment, or to drop a segment. No option passes an
 unexamined value through.
 
-The code lists are checked against the 005010 TR3s for 270 / 271, 276 / 277, 278, 834, 835, 837 and
-999, with a well-formed control of each that keeps every code it carries. That adds, among others, the
-276 `AMT*T3` and 277 `BHT-06` `DG`, the 834 dates, relationships, phone qualifiers and `DMG` marital
-status, race and citizenship, the 837D `CLM-19` and oral cavity sides, and the shapes of `CL1`, `STC`,
-`UM`, `HCR`, `LS` and `LE`. The `STC` dates are generalized like a `DTP` date. New entity codes are
-classified too: the 278 utilization management organization, the 834 insurer, administrator and broker,
-and the 271 payers and vendors are kept as organizations; the 834 and 271 family members and
-representatives are removed like the individual; the plan sponsor (`P5`) and a dependent's school (`M8`)
-are removed like an employer. New `REF` qualifiers route the 271, 276 / 277 and 834 member, account and
-case numbers to removal and keep the payer, line and provider references.
+Each code position is checked against the complete 005010 code list of its data element, never a
+hand-picked part of it: a real code is kept, and anything else is removed. A real code no rule routes
+on keeps its place, and the value it qualifies is removed and recorded: a `REF-01` qualifier on neither
+`REF` table (the 837 `XZ`, the 271 `18`), an entity code on no role table (the 837I `ZZ`), or an `HI`
+qualifier with no code shape the adapter knows. Positions whose codes come from outside X12 (CARC, RARC,
+claim status, NUBC, procedure and diagnosis codes, provider taxonomy) are checked against the published
+shape. A well-formed control of each transaction set (837P, 837I, 837D, 835, 270, 271, 276, 277, 277CA,
+278, 834, 999) keeps every code it carries. The shapes of `CL1`, `STC`, `UM`, `HCR`, `LS`, `LE`, `PRV`,
+`OI`, `DN1` and `DN2` are new, and the `STC` dates are generalized like a `DTP` date.
 
-Visible changes on well-formed input: a `REF-01` code on neither `REF` table, such as `ZZ`, is removed
-along with the value it routes, and a segment the pass has no shape for leaves the output instead of
-staying as an empty shell, with its manifest rows under `<withheld>` rather than its segment id.
+New entity codes are classified too: the 278 utilization management organization, the 834 insurer,
+administrator and broker, and the 271 payers and vendors are kept as organizations; the 834 and 271
+family members and representatives are removed like the individual; the plan sponsor (`P5`) and a
+dependent's school (`M8`) are removed like an employer. `GB` is the Other Insured, not a provider: the
+835 Other Subscriber and the 834 responsible person had their name and member id kept, and now they are
+removed and recorded. The 834 case manager and key person (`6Y`, `9K`), the drop-off location (`45`),
+whose 834 name is a person's, and the 837 pick-up location (`PW`) are removed the same way. New `REF`
+qualifiers route the 271, 276 / 277 and 834 member, account and case numbers to removal and keep the
+payer, line and provider references.
+
+Visible changes on well-formed input: the Other Insured's and the drop-off location's names and
+identifiers are removed, a 999 loop id such as `2010BA` is kept, and a segment the pass has no shape for
+leaves the output instead of staying as an empty shell, with its manifest rows under `<withheld>`
+rather than its segment id.

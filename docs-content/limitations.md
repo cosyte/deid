@@ -168,9 +168,16 @@ Two things follow, and the second is the one that surprises people:
 - **An X12 segment the pass does not recognize is removed whole, not counted.** Its identifier may be a
   value that an extra segment terminator or a missing separator put there, so it is removed with the
   segment's other values, each recorded under a withheld segment id, and the transaction set's `SE-01`
-  counts it out. A real X12 segment the pass has no shape for (`PLB`, `TS3`, the 834 member detail
-  segments beyond `INS` / `HD`) is removed the same way, which over-removes it rather than passing it
-  through.
+  counts it out. A real X12 segment the pass has no shape for (`PLB`, `TS3`, `TS2`, the 837 `CUR`,
+  `CR5` to `CR8`, `FRM`, `SV4` and `RDM`, the 834 member detail segments beyond `INS` / `HD`) is removed
+  the same way, which over-removes it rather than passing it through.
+
+- **An X12 code no rule routes on keeps its place, and the value behind it is removed.** A `REF`
+  qualifier on neither `REF` table, an entity code on no role table, and an `HI` qualifier with no code
+  shape the adapter knows are real 005010 codes, so they stay; the reference value, the party's name
+  and identifier, or the `HI` code they qualify is removed and recorded, because the code alone does
+  not say whose it is. That over-removes, for example, the 837 prescription number (`REF*XZ`) and the
+  837I other operating physician (`NM1*ZZ`).
 
 - **X12 bytes after the `IEA` are not counted; they are removed.** They are neither a segment nor a
   loop, and they commonly hold a whole second interchange the parser did not decode, so no rule can

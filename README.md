@@ -449,24 +449,26 @@ const { x12, manifest } = deidentifyX12(parseX12(raw), { context });
 // `x12` is the de-identified interchange; `manifest` is the value-free audit.
 ```
 
-| Locus                                                        | Handling                                                                                                                                                     |
-| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **`NM1`** (subscriber / patient / dependent)                 | name (`03` to `07`) **removed**; id (`09`) routed by the `08` qualifier: SSN **removed**, member **removed** under Safe Harbor                               |
-| **`NM1` / `N1`** (employer, entity code `36`)                | name + id **removed** on the same footing as a patient-side party: §164.514(b)(2)(i) names the individual's **employers**                                    |
-| **`NM1`** (recognized provider / organization)               | **retained** (provider identity is not the individual's PHI, mirroring the HL7 adapter), and the **role code** it was classified on is recorded at its locus |
-| **`NM1`** (unknown entity code)                              | **fails closed**: name + id blocked                                                                                                                          |
-| **`N1` / `SBR`**                                             | `N1` payer/provider org retained (patient-side/unknown party fails closed); `SBR-03` group/policy **removed** under Safe Harbor, `SBR-04` group name removed |
-| **`N3` / `N4`**                                              | street + city **removed**, ZIP → safe 3-digit, state retained (unmapped `N4-06` location id fails closed)                                                    |
-| **`DMG-02`**, **`DTP-03`**, **`DTM-02`**                     | dates → **year**                                                                                                                                             |
-| **`PER`**                                                    | contact name + communication numbers **removed**                                                                                                             |
-| **`REF`**                                                    | patient / member / group / SSN identifier **removed** under Safe Harbor; admin/provider reference retained; **unknown qualifier fails closed**               |
-| **Code positions**                                           | `NM1-01`/`08`, `N1-01`/`03`, `REF-01`, `N4-02`/`04`: a recognized code is kept; anything else **fails closed** (removed and recorded), and routes nothing    |
-| **`CLM-01` / `CLP-01`**                                      | patient account number **removed** under Safe Harbor (pseudonymized only under a preset that does not claim it)                                              |
-| **Clinical / financial** (`HI`, `SV*`, `SVC`, `AMT`, `CAS`…) | **retained**: diagnosis / procedure codes, amounts, quantities of their expected shape survive byte-identical                                                |
-| **Every other position**                                     | kept only when it has its position's shape (a code, a valid date, a number); anything else, and any position no rule names, **fails closed**                 |
+| Locus                                                                               | Handling                                                                                                                                                     |
+| ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **`NM1`** (subscriber / patient / dependent)                                        | name (`03` to `07`) **removed**; id (`09`) routed by the `08` qualifier: SSN **removed**, member **removed** under Safe Harbor                               |
+| **`NM1`** (other insured `GB`, 834 responsible person, pick-up / drop-off location) | name + id **removed** like the individual's                                                                                                                  |
+| **`NM1` / `N1`** (employer, entity code `36`)                                       | name + id **removed** on the same footing as a patient-side party: §164.514(b)(2)(i) names the individual's **employers**                                    |
+| **`NM1`** (recognized provider / organization)                                      | **retained** (provider identity is not the individual's PHI, mirroring the HL7 adapter), and the **role code** it was classified on is recorded at its locus |
+| **`NM1`** (unknown entity code)                                                     | **fails closed**: name + id blocked                                                                                                                          |
+| **`N1` / `SBR`**                                                                    | `N1` payer/provider org retained (patient-side/unknown party fails closed); `SBR-03` group/policy **removed** under Safe Harbor, `SBR-04` group name removed |
+| **`N3` / `N4`**                                                                     | street + city **removed**, ZIP → safe 3-digit, state retained (unmapped `N4-06` location id fails closed)                                                    |
+| **`DMG-02`**, **`DTP-03`**, **`DTM-02`**                                            | dates → **year**                                                                                                                                             |
+| **`PER`**                                                                           | contact name + communication numbers **removed**                                                                                                             |
+| **`REF`**                                                                           | patient / member / group / SSN identifier **removed** under Safe Harbor; admin/provider reference retained; **unknown qualifier fails closed**               |
+| **Code positions**                                                                  | `NM1-01`/`08`, `N1-01`/`03`, `REF-01`, `N4-02`/`04`: a code of the element's complete 005010 list is kept; anything else **fails closed**, routing nothing   |
+| **`CLM-01` / `CLP-01`**                                                             | patient account number **removed** under Safe Harbor (pseudonymized only under a preset that does not claim it)                                              |
+| **Clinical / financial** (`HI`, `SV*`, `SVC`, `AMT`, `CAS`…)                        | **retained**: diagnosis / procedure codes, amounts, quantities of their expected shape survive byte-identical                                                |
+| **Every other position**                                                            | kept only when it has its position's shape (a code, a valid date, a number); anything else, and any position no rule names, **fails closed**                 |
 
 The X12 pass decides every element it hands through, the envelope included. A value has to have the
-shape its position expects to stay: a code the position knows, exactly as written; a valid date in the
+shape its position expects to stay: a code of the complete 005010 list of its data element, exactly as
+written (a real code no rule routes on is kept, and the value it qualifies is removed); a valid date in the
 format the segment declares; a number; or, at a trace or control number, a bounded reference. A value of
 any other shape, a value at a position no rule names (`NM1-02` holding a name, `NM1-10` onward, `N1-05`
 onward, `REF-03` onward), a segment outside every transaction set, and bytes after the `IEA` are

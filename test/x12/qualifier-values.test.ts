@@ -131,9 +131,9 @@ describe("an identifier shifted into a qualifier position is removed and recorde
     expect(blockedAt(joined.manifest, "837/REF[0]-2")).toBe(true);
   });
 
-  it("REF-01: `ZZ` is on neither REF table, so the qualifier goes with the value it routes", () => {
-    // `ZZ` is not on either REF table, so the value fails closed and so does the qualifier.
-    const { x12, manifest } = run(wrap("REF*ZZ*ZZUNKNOWNREF~", 3));
+  it("REF-01: `Q0` is no reference qualifier, so the qualifier goes with the value it routes", () => {
+    // `Q0` is not a code of element 128, so the value fails closed and so does the qualifier.
+    const { x12, manifest } = run(wrap("REF*Q0*ZZUNKNOWNREF~", 3));
     expect(x12).not.toContain("ZZUNKNOWNREF");
     expect(body(x12)).toEqual(["REF**~"]);
     expect(blockedAt(manifest, "837/REF[0]-1")).toBe(true);
