@@ -147,6 +147,22 @@ describe("fail closed: what the vocabulary cannot name is refused, never approxi
     expect((thrown as DeidError).message).toContain("RetainLongitudinalTemporal");
   });
 
+  it("refuses an option named after an inherited property, which is not a row of the table", () => {
+    // `constructor` resolves on any object to a function whose `length` is 1, the same count a
+    // single-row option has. It names no term, so it is refused like any other unknown option.
+    let thrown: unknown;
+    try {
+      resolveMethodDeclaration(BASIC_PROFILE_CODE_VALUE, ["constructor"]);
+    } catch (err) {
+      thrown = err;
+    }
+    expect(thrown).toBeInstanceOf(DeidError);
+    expect((thrown as DeidError).code).toBe(FATAL_CODES.DEID_DECLARATION_UNNAMEABLE);
+    expect((thrown as DeidError).message).toBe(
+      'No single CID 7050 term names Annex E option "constructor"; refusing to write a coded de-identification method rather than declare an approximate one.',
+    );
+  });
+
   it("NEGATIVE CONTROL: an option the table does name resolves, so the refusal is not blanket", () => {
     const declaration = resolveMethodDeclaration(BASIC_PROFILE_CODE_VALUE, ["RetainUIDs"]);
     expect(declaration.appliedTerms.map((t) => t.codeValue)).toEqual([
