@@ -65,6 +65,17 @@ describe("deidentifyX12String, an N1 party missing its name or its identifier", 
   });
 });
 
+describe("deidentifyX12String, an NM1 subject with no name", () => {
+  it("acts on its identifier alone", () => {
+    const { x12, manifest } = deidentifyX12String(
+      interchange(["ST*837*0004~NM1*QC*1******MI*ZZPATMEMBER~SE*3*0004~"]),
+      { context: ctx },
+    );
+    expect(x12).not.toContain("ZZPATMEMBER");
+    expect(manifest.map((m) => m.locus)).toEqual(["837/NM1[0]-9"]);
+  });
+});
+
 describe("applyX12, hand-built coordinates", () => {
   it("skips a coordinate with no transformed locus beside it, and a hole in the coordinate list", () => {
     const raw = interchange([SUBSCRIBER]);

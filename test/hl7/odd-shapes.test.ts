@@ -86,6 +86,12 @@ describe("deidentifyHl7, partial values on the wire", () => {
     expect(out.get("OBX.5.1")).toBe("2020");
   });
 
+  it("hands a passed-through escape back byte for byte, not as its decoded text", () => {
+    // A hex escape decodes to an ordinary character, so only the parser's raw overlay can re-emit it.
+    const out = run(message(segment("AL1", { 1: "1", 2: "DA", 3: "^PEANUT\\X41\\" })));
+    expect(out.wire).toContain("AL1|1|DA|^PEANUT\\X41\\");
+  });
+
   it("locates an unexamined position in a repeating field by its repetition", () => {
     const out = run(
       message(segment("AL1", { 1: "1", 2: "DA", 3: "^ZZALLERGEN", 5: "HIVES~RASH" })),
