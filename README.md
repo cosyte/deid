@@ -456,6 +456,7 @@ const { x12, manifest } = deidentifyX12(parseX12(raw), { context });
 | **`DMG-02`**, **`DTP-03`**, **`DTM-02`**                     | dates → **year**                                                                                                                                             |
 | **`PER`**                                                    | contact name + communication numbers **removed**                                                                                                             |
 | **`REF`**                                                    | patient / member / group / SSN identifier **removed** under Safe Harbor; admin/provider reference retained; **unknown qualifier fails closed**               |
+| **Code positions**                                           | `NM1-01`/`08`, `N1-01`/`03`, `REF-01`, `N4-02`/`04`: a recognized code is kept; anything else **fails closed** (removed and recorded)                        |
 | **`CLM-01` / `CLP-01`**                                      | patient account number **removed** under Safe Harbor (pseudonymized only under a preset that does not claim it)                                              |
 | **Clinical / financial** (`HI`, `SV*`, `SVC`, `AMT`, `CAS`…) | **retained untouched**: diagnosis / procedure codes, amounts, quantities survive byte-identical                                                              |
 

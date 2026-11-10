@@ -38,6 +38,7 @@ import {
   categoryForNm1IdQualifier,
   classifyNm1Party,
   classifyRefQualifier,
+  isRecognizedX12Code,
   type X12ElementRule,
 } from "./locus-map.js";
 
@@ -265,6 +266,26 @@ function emitId(
 }
 
 /**
+ * Decide a **code position** the rules read and keep (an entity code, an identification code qualifier, a
+ * `REF` qualifier, an `N4` state or country). A recognized code stays where it is: the position is named
+ * and nothing is written. Anything else is not trusted as a code. The usual way an identifier gets there
+ * is a missing element separator that shifts it left by one position, and a kept value would leave with
+ * no manifest row and no unexamined residual, because the position counts as examined. So it fails
+ * closed exactly as an unrecognized structure does: removed, and recorded at its own position.
+ */
+function keepCodeOrBlock(
+  out: X12LocusAccumulator,
+  seg: X12Segment,
+  pos: TxSegPos,
+  element: number,
+): void {
+  name(out, pos, [element]);
+  if (!has(seg, element)) return;
+  if (isRecognizedX12Code(pos.segId, element, el(seg, element))) return;
+  blockElement(out, seg, pos, element);
+}
+
+/**
  * Record a party the pass is leaving in place because the role its `-01` entity-identifier code names
  * puts it outside §164.514(b)(2)(i)'s scope clause. The record sits at the party's own structural locus
  * (the `-01` element, where the role code lives), carries the role code and **no value at all**, and is
@@ -297,11 +318,14 @@ function handleNm1(out: X12LocusAccumulator, seg: X12Segment, pos: TxSegPos): vo
   // The `NM1` rules name the entity code the classification reads, the five name components, the
   // identifier and the qualifier that routes it, whichever branch the party classification then takes.
   name(out, pos, [1, 3, 4, 5, 6, 7, 8, 9]);
+  keepCodeOrBlock(out, seg, pos, 1);
   const party = classifyNm1Party(el(seg, 1));
   if (party.scope === "outside-scope") {
     // Recognized provider / organization: retained, and the role code that placed it outside the scope
-    // clause is recorded at its locus rather than left to be inferred from an absence.
+    // clause is recorded at its locus rather than left to be inferred from an absence. Its qualifier is
+    // still only kept when it is a qualifier.
     emitRetainedParty(out, seg, pos, party.roleCode, [3, 4, 5, 6, 7, 9]);
+    keepCodeOrBlock(out, seg, pos, 8);
     return;
   }
   // A party the clause reaches: the individual, a relative, or the individual's EMPLOYER, all on the
@@ -339,7 +363,9 @@ function handleNm1(out: X12LocusAccumulator, seg: X12Segment, pos: TxSegPos): vo
     }
   }
 
-  // Identifier NM1-09, routed by the NM1-08 qualifier. An unknown/absent qualifier fails closed.
+  // Identifier NM1-09, routed by the NM1-08 qualifier. An unknown/absent qualifier fails closed, and a
+  // qualifier position holding something that is no qualifier is itself removed.
+  keepCodeOrBlock(out, seg, pos, 8);
   if (has(seg, 9)) {
     const category = subject ? categoryForNm1IdQualifier(el(seg, 8)) : undefined;
     emitId(out, seg, pos, 9, category);
@@ -359,10 +385,12 @@ function handleN1(out: X12LocusAccumulator, seg: X12Segment, pos: TxSegPos): voi
   // The `N1` rules name the same four positions: the entity code, the organisation name, the
   // identification-code qualifier and the identifier it routes.
   name(out, pos, [1, 2, 3, 4]);
+  keepCodeOrBlock(out, seg, pos, 1);
   const party = classifyNm1Party(el(seg, 1));
   if (party.scope === "outside-scope") {
     // Recognized org / payer / provider party: retained, with the role code recorded at its locus.
     emitRetainedParty(out, seg, pos, party.roleCode, [2, 4]);
+    keepCodeOrBlock(out, seg, pos, 3);
     return;
   }
   const subject = party.scope === "safe-harbor-subject";
@@ -384,6 +412,7 @@ function handleN1(out: X12LocusAccumulator, seg: X12Segment, pos: TxSegPos): voi
       blockElement(out, seg, pos, 2); // unknown entity → fail closed
     }
   }
+  keepCodeOrBlock(out, seg, pos, 3);
   if (has(seg, 4)) {
     const category = subject ? categoryForNm1IdQualifier(el(seg, 3)) : undefined;
     emitId(out, seg, pos, 4, category);
@@ -395,6 +424,7 @@ function handleRef(out: X12LocusAccumulator, seg: X12Segment, pos: TxSegPos): vo
   // The qualifier table names both elements on every branch: the qualifier the routing reads and the
   // value it routes. A `retain` outcome is a decision about that value, not a position nothing reached.
   name(out, pos, [1, 2]);
+  keepCodeOrBlock(out, seg, pos, 1);
   if (!has(seg, 2)) return;
   const disposition = classifyRefQualifier(el(seg, 1));
   if (disposition.kind === "retain") return; // recognized administrative / provider reference
@@ -426,7 +456,8 @@ function handleGeoSegment(
   for (const rule of rules) ruleByElement.set(rule.element, rule);
   const retain = X12_GEO_RETAIN_ELEMENTS[pos.segId] ?? new Set<number>();
   // The sweep is exhaustive over the segment, so every element of it is named: acted on by its mapped
-  // rule, kept because the safe list says it is not an identifier, or blocked. None goes unexamined.
+  // rule, kept because the safe list says it is not an identifier and it holds a recognized state or
+  // country code, or blocked. None goes unexamined.
   name(out, pos, [...retain]);
   for (let n = 1; n < seg.elements.length; n += 1) {
     if (!has(seg, n)) continue;
@@ -434,7 +465,9 @@ function handleGeoSegment(
     const rule = ruleByElement.get(n);
     if (rule !== undefined) {
       emitRule(out, seg, pos, rule);
-    } else if (!retain.has(n)) {
+    } else if (retain.has(n)) {
+      keepCodeOrBlock(out, seg, pos, n); // a state or country is kept only when it is one
+    } else {
       blockElement(out, seg, pos, n); // unmapped geographic element → fail closed
     }
   }

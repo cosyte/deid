@@ -410,6 +410,53 @@ function x12Case(): CorpusCase {
   };
 }
 
+// ── X12 EDI, values shifted into code positions ──────────────────────────────────────────────────
+// A sender who drops one element separator shifts the next value left by one position, so an identifier
+// lands in a qualifier, entity-code, state or country position that the rules read as a code. Each
+// segment below is one such shift; the recognized codes around them, and the clinical lines, survive.
+function x12ShiftedCase(): CorpusCase {
+  const ctx = createDeidContext({ key: "x12-corpus-synthetic-hmac-key", patientId: "p-x12" });
+  const raw = FIX("x12", "837p-shifted.edi");
+  const { x12, manifest, unexaminedResiduals } = deidentifyX12String(raw, { context: ctx });
+  return {
+    name: "x12-shifted",
+    deidWire: x12,
+    manifest,
+    unexaminedResiduals,
+    originalWire: raw,
+    sentinels: [
+      "ZZSHIFTPATMEMBER", // NM1-08 of a patient party
+      "ZZSHIFTPROVID", // NM1-08 of a retained provider party
+      "ZZSHIFTN1MEMBER", // N1-03 of a subscriber party
+      "ZZSHIFTPAYERID", // N1-03 of a retained payer party
+      "ZZSHIFTENTITY", // NM1-01, no entity code
+      "ZZSHIFTREFID", // REF-01 with no REF-02
+      "ZZSHIFTJOINEDID", // REF-01 run together with its qualifier
+      "ZZSHIFTJOINEDVAL",
+      "44199", // a full ZIP shifted into N4-02, the state position
+      "ZZSHIFTCOUNTRY", // N4-04, no country code
+      "ZZSHIFTSUBMEMBER",
+      "ZZSHIFTSUBLAST",
+      "ZZSHIFTN1NAME",
+      "ZZSHIFTPARTYLAST",
+      "ZZSHIFTCITY",
+    ],
+    survivors: [
+      "E1165",
+      "99213",
+      "100.00",
+      "SHIFTPAYERORG",
+      "SHIFTBILLINGORG",
+      "SHIFTCLAIMCTRL",
+      "REF*F8*",
+      "N1*PR*",
+      "NM1*85*2*",
+      "NM1*IL*1*",
+      "*OH*441",
+    ],
+  };
+}
+
 // ── NCPDP Telecom ─────────────────────────────────────────────────────────────────────────────────
 function ncpdpCase(): CorpusCase {
   const ctx = createDeidContext({ key: "ncpdp-corpus-synthetic-hmac-key", patientId: "p-ncpdp" });
@@ -464,6 +511,7 @@ const CASES: readonly CorpusCase[] = [
   fhirCase(),
   fhirNonPersonCase(),
   x12Case(),
+  x12ShiftedCase(),
   ncpdpCase(),
   dicomCase(),
 ];

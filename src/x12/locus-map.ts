@@ -24,6 +24,11 @@
  *   prior-authorization number → retained). An **unrecognized** qualifier **fails closed** (blocked):
  *   the direct implementation of Safe Harbor category (R) for the "unusual REF qualifier" attack.
  *
+ * Every **code position** these classifiers read (`NM1-01` / `N1-01`, `NM1-08` / `N1-03`, `REF-01`) and
+ * the `N4` state and country are kept only when they hold a recognized code, exactly as written (see
+ * {@link isRecognizedX12Code}). Anything else there fails closed: a missing element separator shifts an
+ * identifier left by one position, and a code position must never carry it out in the clear.
+ *
  * Address (`N3` / `N4`), telecom (`PER`), and demographic date (`DMG-02`) loci are handled **universally**
  * (regardless of which loop's entity they belong to): a street / city / phone / date-of-birth is removed
  * or generalized wherever it sits. This is the fail-closed choice: it cannot miss a patient address by
@@ -355,6 +360,103 @@ export function classifyRefQualifier(qualifier: string): RefDisposition {
   if (phi !== undefined) return { kind: "phi", category: phi };
   if (REF_RETAIN_QUALIFIERS.has(q)) return { kind: "retain" };
   return { kind: "block" };
+}
+
+/**
+ * The X12 element 66 **identification code qualifiers** an `NM1-08` or `N1-03` may carry and keep: the
+ * codes the HIPAA 005010 TR3s use at those positions for a provider, payer, submitter, receiver, or
+ * member party, plus every code {@link categoryForNm1IdQualifier} routes on. A value at either position
+ * that is not one of these, exactly as written, is not trusted as a qualifier: it is removed and
+ * recorded, because an identifier shifted left by a missing element separator lands there.
+ */
+const ID_CODE_QUALIFIERS: ReadonlySet<string> = new Set<string>([
+  "24", // Employer's Identification Number
+  "34", // Social Security Number
+  "46", // Electronic Transmitter Identification Number
+  "94", // Code assigned by the organization that is the ultimate destination
+  "AD", // Blue Cross Blue Shield Association Plan Code
+  "BD", // Blue Cross Provider Number
+  "BS", // Blue Shield Provider Number
+  "C", // Insured's Changed Unique Identification Number
+  "FI", // Federal Taxpayer's Identification Number
+  "HN", // Health Insurance Claim Number
+  "II", // Standard Unique Health Identifier for each Individual
+  "MA", // Medicare (routed as a member id)
+  "MB", // Member (routed as a member id)
+  "MC", // Medicaid
+  "MI", // Member Identification Number
+  "MR", // Medicaid Recipient Identification Number
+  "NI", // National Association of Insurance Commissioners Identification
+  "PC", // Provider Commercial Number
+  "PI", // Payor Identification
+  "PP", // Pharmacy Processor Number
+  "SL", // State License Number
+  "SV", // Service Provider Number
+  "UP", // Unique Physician Identification Number
+  "XV", // Centers for Medicare and Medicaid Services PlanID
+  "XX", // Centers for Medicare and Medicaid Services National Provider Identifier
+  "ZZ", // Mutually Defined
+]);
+
+/** The `N4-02` state and province codes: the United States, its territories and military posts, Canada. */
+const STATE_OR_PROVINCE_CODES: ReadonlySet<string> = new Set<string>(
+  (
+    "AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM " +
+    "NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY " +
+    "AS GU MP PR VI UM FM MH PW AA AE AP " +
+    "AB BC MB NB NL NS NT NU ON PE QC SK YT"
+  ).split(" "),
+);
+
+/** The `N4-04` country codes: ISO 3166-1 alpha-2, the code source the TR3s name for that element. */
+const COUNTRY_CODES: ReadonlySet<string> = new Set<string>(
+  (
+    "AD AE AF AG AI AL AM AO AQ AR AS AT AU AW AX AZ BA BB BD BE BF BG BH BI BJ BL BM BN BO BQ BR BS " +
+    "BT BV BW BY BZ CA CC CD CF CG CH CI CK CL CM CN CO CR CU CV CW CX CY CZ DE DJ DK DM DO DZ EC EE " +
+    "EG EH ER ES ET FI FJ FK FM FO FR GA GB GD GE GF GG GH GI GL GM GN GP GQ GR GS GT GU GW GY HK HM " +
+    "HN HR HT HU ID IE IL IM IN IO IQ IR IS IT JE JM JO JP KE KG KH KI KM KN KP KR KW KY KZ LA LB LC " +
+    "LI LK LR LS LT LU LV LY MA MC MD ME MF MG MH MK ML MM MN MO MP MQ MR MS MT MU MV MW MX MY MZ NA " +
+    "NC NE NF NG NI NL NO NP NR NU NZ OM PA PE PF PG PH PK PL PM PN PR PS PT PW PY QA RE RO RS RU RW " +
+    "SA SB SC SD SE SG SH SI SJ SK SL SM SN SO SR SS ST SV SX SY SZ TC TD TF TG TH TJ TK TL TM TN TO " +
+    "TR TT TV TW TZ UA UG UM US UY UZ VA VC VE VG VI VN VU WF WS YE YT ZA ZM ZW"
+  ).split(" "),
+);
+
+/**
+ * The **code positions** the rules read and keep, each with the code list it is checked against: the
+ * entity identifier code (`NM1-01`, `N1-01`), the identification code qualifier (`NM1-08`, `N1-03`), the
+ * reference identification qualifier (`REF-01`, every code either `REF` table names), and the state and
+ * country the geographic sweep keeps (`N4-02`, `N4-04`). Keyed `<segment id>-<element>`.
+ */
+const X12_CODE_LISTS: ReadonlyMap<string, ReadonlySet<string>> = new Map<
+  string,
+  ReadonlySet<string>
+>([
+  ["NM1-1", new Set<string>([...X12_PARTY_ROLES.subject, ...X12_PARTY_ROLES.outside])],
+  ["NM1-8", ID_CODE_QUALIFIERS],
+  ["N1-1", new Set<string>([...X12_PARTY_ROLES.subject, ...X12_PARTY_ROLES.outside])],
+  ["N1-3", ID_CODE_QUALIFIERS],
+  ["REF-1", new Set<string>([...Object.keys(REF_PHI_QUALIFIERS), ...REF_RETAIN_QUALIFIERS])],
+  ["N4-2", STATE_OR_PROVINCE_CODES],
+  ["N4-4", COUNTRY_CODES],
+]);
+
+/**
+ * `true` when `value` is a code the position's list holds, **exactly as written**: no trimming and no
+ * case folding, because a qualifier the standard spells in upper case and a sender wrote some other
+ * way is a value we cannot vouch for. A position with no list recognizes nothing. The extractor keeps a
+ * recognized code where it is and removes and records anything else (fail closed), so an identifier
+ * shifted into a code position by a missing element separator never leaves in the clear.
+ *
+ * @param segId - The segment id, e.g. `NM1`.
+ * @param element - The 1-based element position, e.g. `8` for `NM1-08`.
+ * @param value - The element's value as the parser decoded it.
+ * @returns Whether the value is a recognized code for that position.
+ * @internal
+ */
+export function isRecognizedX12Code(segId: string, element: number, value: string): boolean {
+  const codes = X12_CODE_LISTS.get(`${segId}-${String(element)}`);
+  return codes !== undefined && codes.has(value);
 }
 
 /**

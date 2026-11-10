@@ -61,6 +61,7 @@ implicit, so the map keys off each **segment id** plus two **qualifier classifie
 | **`DMG-02`**, **`DTP-03`**, **`DTM-02`**                        | dates → **year**                                                                                                    |
 | **`PER`**                                                       | contact name + communication numbers **removed**                                                                   |
 | **`REF`**                                                       | patient / member / group / SSN identifier **removed** under Safe Harbor; recognized admin/provider reference retained; **unknown qualifier fails closed** |
+| **Code positions** (`NM1-01` / `08`, `N1-01` / `03`, `REF-01`, `N4-02` / `04`) | a recognized code (entity code, identification code qualifier, `REF` qualifier, state or province, ISO country) is kept as written; any other value **fails closed**: removed and recorded at its own position |
 | **`CLM-01` / `CLP-01`**                                         | patient account number **removed** under Safe Harbor (a consistent surrogate only under a preset that does not claim the label) |
 | **Free text** (`MSG-01`, `III-04`, `K3-01`, `NTE-02`)           | **fails closed**: blocked (coded siblings retained), never scrubbed by a naive pass                                |
 | **Clinical / financial** (`HI`, `SV*`, `SVC`, `AMT`, `CAS`, …)   | **retained untouched**: diagnosis / procedure / revenue codes, amounts, quantities survive byte-identical          |
@@ -74,6 +75,12 @@ group, `EA` medical-record) are acted on under the configured policy; recognized
 claim control, `EI` EIN, `TJ` tax id, `G1` prior authorization, provider ids) are retained; and an
 **unrecognized qualifier fails closed**: the direct implementation of Safe Harbor category (R) for the
 "unusual REF qualifier" that a shape guess would miss.
+
+The qualifier itself is kept only when it is a code one of those lists names, exactly as written. A
+sender who drops one element separator shifts the identifier left into `REF-01` (or into `NM1-08`,
+`N1-03`, or the `N4` state), so a value there that is not a recognized code is removed and recorded
+at its own position, never kept on the strength of where it sits. The same holds for an unrecognized
+`REF-01` code such as `ZZ`: it goes with the value it routes.
 
 ## Known limitations
 
