@@ -32,7 +32,10 @@ export interface ResolvedDicomOptions {
   readonly uidRoot?: string;
   /** Caller-owned source→replacement UID cache for cross-file consistency. */
   readonly uidMap?: Map<string, string>;
-  /** The de-identification method text written to `(0012,0063)`. */
+  /**
+   * The de-identification method text written to `(0012,0063)`: several `LO` Values joined by the
+   * DICOM value delimiter `\`, each at most 64 characters. See {@link deidentificationMethodText}.
+   */
   readonly deidentificationMethod: string;
 }
 
@@ -51,11 +54,88 @@ export function resolveDicomOptions(options: DicomDeidOptions): ResolvedDicomOpt
   const policy = resolvePolicy(options.policy);
   const base: ResolvedDicomOptions = {
     retain: [],
-    deidentificationMethod: `Cosyte @cosyte/deid, PS3.15 Basic Application Level Confidentiality Profile (metadata only); policy "${policy.name}"`,
+    deidentificationMethod: deidentificationMethodText(policy.name),
   };
   return {
     ...base,
     ...(options.uidRoot !== undefined ? { uidRoot: options.uidRoot } : {}),
     ...(options.uidMap !== undefined ? { uidMap: options.uidMap } : {}),
   };
+}
+
+/** PS3.5 Table 6.2-1, `LO` row: 64 characters maximum, per Value. */
+const LO_VALUE_MAX_CHARS = 64;
+
+/** The DICOM value delimiter (5CH) between the Values of a multi-valued string VR. */
+const VALUE_DELIMITER = "\\";
+
+/** What a policy name too long for one Value is cut to end with, inside its closing quote. */
+const ELLIPSIS = "...";
+
+/** What a backslash in a policy name is written as, since 5CH is the delimiter. */
+const DELIMITER_STAND_IN = "/";
+
+/** What any other character an `LO` Value cannot carry is written as. */
+const UNWRITABLE_STAND_IN = "?";
+
+/** The first and last printable ASCII characters, SPACE (20H) and TILDE (7EH). */
+const FIRST_PRINTABLE_ASCII = 0x20;
+const LAST_PRINTABLE_ASCII = 0x7e;
+
+/**
+ * Map one character of a policy name to what its `LO` Value can carry.
+ *
+ * Only printable ASCII (U+0020 to U+007E) is kept. The method text reaches the wire one byte per
+ * UTF-16 code unit (latin1), so a character above U+00FF would land as its low byte: U+015C as 5CH,
+ * the delimiter, and U+0100 as NUL. PS3.5 6.2 allows no control character in an `LO` Value. And a
+ * byte from A0H to FFH is a letter only under a Specific Character Set (0008,0005) that declares it,
+ * which this pass neither checks nor sets: in the default repertoire (PS3.5 6.1.2.1) it is invalid.
+ * So every character outside printable ASCII, a character outside the BMP as one, becomes `?`; a
+ * backslash becomes `/`.
+ */
+function loCharacter(character: string): string {
+  if (character === VALUE_DELIMITER) return DELIMITER_STAND_IN;
+  // The first UTF-16 code unit decides: a character outside the BMP starts with a surrogate.
+  const unit = character.charCodeAt(0);
+  return unit >= FIRST_PRINTABLE_ASCII && unit <= LAST_PRINTABLE_ASCII
+    ? character
+    : UNWRITABLE_STAND_IN;
+}
+
+/**
+ * The fixed Values of the method text: the library, the profile it applies, and that only metadata is
+ * touched. Each is inside the `LO` maximum on its own.
+ */
+const FIXED_METHOD_VALUES: readonly string[] = [
+  "Cosyte @cosyte/deid",
+  "PS3.15 Basic Application Level Confidentiality Profile",
+  "metadata only",
+];
+
+/**
+ * Compose the De-identification Method `(0012,0063)` text for a run under the named policy.
+ *
+ * PS3.6 gives `(0012,0063)` the VR `LO` with value multiplicity `1-n`, and PS3.5 Table 6.2-1 caps an
+ * `LO` at 64 characters per Value, so the method is written as several Values rather than one long
+ * one: the library, the profile, "metadata only", and `policy "<name>"`. PS3.15 E.1.1 asks for "a
+ * text string describing the method used", and the Values together still say exactly that.
+ *
+ * The policy name is the caller's, so its Value is the only one that can be long or hold a character
+ * an `LO` Value cannot. A backslash in it is written as `/`, because 5CH is the delimiter and is never
+ * part of an `LO` Value; any other character outside printable ASCII is written as `?`. The
+ * length is measured after that mapping, and a name that would take its Value past 64 characters is
+ * cut to fit and ends in `...` inside the quotes.
+ *
+ * @param policyName - The resolved policy's name.
+ * @returns The Values joined by `\`, each at most 64 characters.
+ * @internal
+ */
+export function deidentificationMethodText(policyName: string): string {
+  const name = Array.from(policyName, loCharacter).join("");
+  const whole = `policy "${name}"`;
+  const policyValue =
+    whole.length <= LO_VALUE_MAX_CHARS
+      ? whole
+      : `policy "${name.slice(0, LO_VALUE_MAX_CHARS - 'policy ""'.length - ELLIPSIS.length)}${ELLIPSIS}"`;
+  return [...FIXED_METHOD_VALUES, policyValue].join(VALUE_DELIMITER);
 }
