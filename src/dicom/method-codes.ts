@@ -288,6 +288,7 @@ export function resolveMethodDeclaration(
     }
     // Unreachable via a table row that is not in the closed set, but the lookup goes through the same
     // gate anyway: nothing composes a term, everything looks one up.
+    /* v8 ignore next -- `rows.length` is 1 here, so `rows[0]` is defined and `?? ""` never runs */
     appliedCodeValues.add(requireTerm(rows[0] ?? "", `Annex E option "${option}"`).codeValue);
   }
 

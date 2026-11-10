@@ -151,6 +151,26 @@ describe("DeidRegistry.forPatient, cross-document date-shift consistency", () =>
   });
 });
 
+describe("createDeidRegistry, the date-shift bound", () => {
+  it("passes maxShiftDays to every patient context it hands out", () => {
+    const registry = createDeidRegistry({ key: "secret-synthetic-hmac-key", maxShiftDays: 1 });
+    for (const patient of ["p1", "p2", "p3", "p4", "p5"]) {
+      const { document } = deidentify(datedDoc("2020-06-15", "2020-06-15"), {
+        policy: RESEARCH,
+        context: registry.forPatient(patient),
+      });
+      const shifted = document.loci[0]?.value ?? "";
+      expect(Math.abs(daysBetween("2020-06-15", shifted))).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it("refuses a bound that floors to zero, as the context it delegates to does", () => {
+    expect(() =>
+      createDeidRegistry({ key: "secret-synthetic-hmac-key", maxShiftDays: 0 }),
+    ).toThrowError(expect.objectContaining({ code: FATAL_CODES.DEID_CONTEXT_INVALID }));
+  });
+});
+
 describe("DeidRegistry.pseudonym / remapUid, corpus-wide identifier consistency", () => {
   it("same identifier → same pseudonym; different identifiers → different pseudonyms", () => {
     const registry = createDeidRegistry({ key: "secret-synthetic-hmac-key" });

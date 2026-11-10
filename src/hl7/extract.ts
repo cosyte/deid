@@ -409,6 +409,7 @@ function extractOrganisationParties(
     examined.field(rule.field);
     if (!hasContent(seg, rule.field)) continue;
     const party = classifyPartyRole(rule.role, HL7_PARTY_ROLE_TABLE);
+    /* v8 ignore if -- HL7_PARTY_ROLE_TABLE places no role outside the clause, and IN2-70, the only rule here, types the insured's employer, a subject */
     if (party.scope === "outside-scope") {
       // The party is not the individual, a relative, an employer or a household member: its name and
       // identifier stay, and the role code that placed it outside the clause is recorded instead of
@@ -588,6 +589,7 @@ function collectDateLoci(
   examined: Hl7ExaminedPositions,
 ): void {
   const table = HL7_DATE_LOCI[type];
+  /* v8 ignore next -- only MSH, OBX and the RETAIN_SEGMENTS types reach here, and HL7_DATE_LOCI has a table for each */
   if (table === undefined) return;
   const carved = carvedFields(type);
 

@@ -122,7 +122,9 @@ function push(out: FhirLocusAccumulator, locus: GenericLocus, coord: FhirCoord):
 
 /** Join a running value-free path with a child segment. */
 function join(base: string, seg: string): string {
-  return base === "" ? seg : `${base}.${seg}`;
+  return base === ""
+    ? /* v8 ignore next -- every path starts at the resource type token, which safeLocusToken never returns empty */ seg
+    : `${base}.${seg}`;
 }
 
 /** Append a list-index segment to a value-free path (`entry` + `0` → `entry[0]`). */
@@ -331,6 +333,7 @@ function blockExtension(out: FhirLocusAccumulator, value: FhirNode, path: string
 /** Block the `div` of a `Narrative` (rendered PHI): at any depth (resource-, section-, entry-level). */
 function blockNarrativeDiv(out: FhirLocusAccumulator, narrative: FhirComplex, path: string): void {
   const div = getProperty(narrative, "div");
+  /* v8 ignore else -- the only caller passes a node isNarrative accepted, so its div is a primitive */
   if (div !== undefined && isPrimitive(div)) {
     blockNode(out, div, join(path, "div"));
   }
@@ -343,6 +346,7 @@ function walkList(
   path: string,
   personCtx: boolean,
 ): void {
+  /* v8 ignore next -- the only caller checks isList first; this guard narrows the type */
   if (!isList(value)) return;
   value.items.forEach((item, i) => walkValue(out, item, idx(path, i), personCtx));
 }
