@@ -1,11 +1,11 @@
 ---
 id: guides-ncpdp
-title: De-identifying NCPDP
-sidebar_position: 9
-description: "What the NCPDP Telecom adapter locates, why NCPDP SCRIPT is refused, and its one-transaction limit."
+title: De-identify an NCPDP Telecom transaction
+sidebar_label: NCPDP Telecom
+description: "Run an NCPDP Telecom transaction through the Safe Harbor policy, read what is located, why NCPDP SCRIPT is refused, and the one-transaction limit."
 ---
 
-# De-identifying NCPDP
+# De-identify an NCPDP Telecom transaction
 
 The `@cosyte/deid/ncpdp` adapter is the NCPDP **Telecommunication (vD.0)** binding of the
 de-identification core. It locates PHI **structurally** in a parsed Telecom transaction (a value is the
@@ -22,26 +22,40 @@ applies the configured policy, and returns the de-identified Telecom byte stream
 npm install @cosyte/deid @cosyte/ncpdp
 ```
 
-## Quickstart
+## De-identify a transaction
 
-```ts
+Parse the transaction with `@cosyte/ncpdp/telecom` and hand it to `deidentifyTelecom`, or pass the raw
+text to `deidentifyTelecomString`, which parses and de-identifies in one call. The billing request
+below is synthetic; `FS` and `RS` are the field and segment separators.
+
+```ts runnable
 import { parseTelecom } from "@cosyte/ncpdp/telecom";
 import { deidentifyTelecom, deidentifyTelecomString } from "@cosyte/deid/ncpdp";
-import { createDeidContext } from "@cosyte/deid";
 
-const context = createDeidContext({ key: process.env.DEID_KEY! });
+const FS = "\x1c";
+const RS = "\x1e";
+const raw = [
+  "999999D0B1PCN01     101PHARM123       20260115          AM01",
+  `${FS}CAZZPATFIRST${FS}CBZZPATLAST${FS}C419850302${FS}C5M${FS}COOH${FS}CP44101`,
+  `${RS}AM04${FS}C2ZZCARDHOLDER${FS}C1ZZGROUP01${FS}C301`,
+  `${RS}AM07${FS}D2RX0000001${FS}E103${FS}D700071015527${FS}E730000`,
+].join("");
 
-const { telecom, manifest } = deidentifyTelecom(parseTelecom(raw), { context });
+const { telecom, manifest } = deidentifyTelecom(parseTelecom(raw));
 // or, parse + de-identify in one call:
-const out = deidentifyTelecomString(raw, { context });
+deidentifyTelecomString(raw).telecom === telecom; // => true
 
-telecom; // the de-identified Telecom transaction
-manifest; // value-free audit: category + locus + disposition, never a value
+telecom.includes("ZZPATLAST"); // => false
+telecom.includes(`${FS}C41985${FS}`); // => true
+telecom.includes(`${FS}CP441`); // => true
+telecom.includes(`${FS}D700071015527${FS}`); // => true
+manifest.map((entry) => entry.locus); // => ["header/dateOfService", "01/CA", "01/CB", "01/C4", "01/CP", "04/C2", "04/C1"]
 ```
 
 The built-in Safe Harbor policy uses **no keyed transform**, so a Safe Harbor pass over a transaction
 needs no `context` at all. Under a preset that keeps consistent keyed surrogates instead, a `context`
 is required and calling without one when the transaction needs it is a fatal `DEID_NO_KEY`.
+[Choose a policy](./choose-a-policy.md#use-a-profile) shows how to pass one.
 
 ## What is located, and how it is transformed
 
@@ -75,18 +89,22 @@ document.
 **That is a behavior, not a note.** Hand a SCRIPT document to either entry point and it is **refused**,
 before anything is parsed:
 
-```ts
+```ts runnable
 import { deidentifyTelecomString } from "@cosyte/deid/ncpdp";
 import { DeidError, FATAL_CODES } from "@cosyte/deid";
 
+let refusal: unknown;
 try {
   // An XML document on an NCPDP surface is SCRIPT, and it is declined outright.
   deidentifyTelecomString('<?xml version="1.0"?><Message><Body><NewRx/></Body></Message>');
 } catch (err) {
-  if (err instanceof DeidError && err.code === FATAL_CODES.DEID_FORMAT_UNSUPPORTED) {
-    // err.message names SCRIPT and the parser-surface reason, and carries no document content.
-  }
+  refusal = err;
 }
+
+refusal instanceof DeidError && refusal.code === FATAL_CODES.DEID_FORMAT_UNSUPPORTED; // => true
+// The message names SCRIPT and the parser-surface reason, and carries no document content.
+refusal instanceof DeidError && refusal.message.includes("SCRIPT"); // => true
+refusal instanceof DeidError && refusal.message.includes("NewRx"); // => false
 ```
 
 The error is a typed `DeidError` carrying `DEID_FORMAT_UNSUPPORTED`, and its message names the format
@@ -103,3 +121,17 @@ previous date of fill): a documented limitation mirroring the HL7 and X12 adapte
 A Telecom message that carries more than one transaction is **refused** with a typed `DeidError`
 carrying `DEID_FORMAT_UNSUPPORTED`, with no partial output. Split it and de-identify each transaction on
 its own.
+
+## Reference
+
+- [`deidentifyTelecom`](./api/@cosyte/deid/ncpdp.md#deidentifytelecom),
+  [`deidentifyTelecomString`](./api/@cosyte/deid/ncpdp.md#deidentifytelecomstring) and
+  [`TelecomDeidResult`](./api/@cosyte/deid/ncpdp.md#telecomdeidresult)
+- [`TELECOM_LOCUS_MAP`](./api/@cosyte/deid/ncpdp.md#telecom_locus_map),
+  [`TELECOM_FREE_TEXT_FIELDS`](./api/@cosyte/deid/ncpdp.md#telecom_free_text_fields) and
+  [`TELECOM_RETAIN_SEGMENTS`](./api/@cosyte/deid/ncpdp.md#telecom_retain_segments): the map this page
+  describes
+- [`NCPDP_SCRIPT_REFUSAL_MESSAGE`](./api/@cosyte/deid/ncpdp.md#ncpdp_script_refusal_message) and
+  [`NCPDP_MULTI_TRANSACTION_REFUSAL_MESSAGE`](./api/@cosyte/deid/ncpdp.md#ncpdp_multi_transaction_refusal_message)
+- [`DeidError`](./api/@cosyte/deid.md#deiderror) and
+  [`FATAL_CODES`](./api/@cosyte/deid.md#fatal_codes)

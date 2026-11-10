@@ -1,8 +1,8 @@
 ---
 id: intro
 title: Getting started
-sidebar_position: 1
-description: "What @cosyte/deid does: it applies a de-identification policy (HIPAA Safe Harbor by default) to a parsed healthcare document and returns the transformed copy with a value-free manifest."
+sidebar_label: Overview
+description: "What @cosyte/deid does: it applies a de-identification policy to a parsed healthcare document and returns the copy with a value-free manifest."
 ---
 
 # @cosyte/deid
@@ -19,8 +19,16 @@ unrecognized structure or an un-locatable identifier is **blocked**, never passe
 > **The honesty line that governs the whole library.** Results are **"Safe-Harbor-transformed per the
 > configured policy"**, never "de-identified" and never "HIPAA-compliant". Safe Harbor is implemented
 > mechanically; the §164.514(b)(2)(ii) actual-knowledge condition is the consumer's; Expert
-> Determination (§164.514(b)(1)) is *supported*, never *rendered* or certified. The
+> Determination (§164.514(b)(1)) is _supported_, never _rendered_ or certified. The
 > certification is always the consumer's.
+
+## Who it is for
+
+Teams that hold healthcare documents in one of the six formats and need a copy transformed under a
+stated policy, with a value-free record of what was done where. It is not a detector of identifiers
+in prose (free text is blocked unless you bring your own redactor), and it is not a certification:
+the actual-knowledge condition and any Expert Determination stay with the organization that
+releases the data.
 
 > **Status:** `0.1`, published to npm. Below 1.0, a breaking change raises the minor version and
 > the changelog says what broke. This release ships the **format-agnostic core** (policy engine,
@@ -38,18 +46,37 @@ npm install @cosyte/deid
 
 ## The 30-second version
 
-```ts
+```ts runnable
 import { deidentify, SAFE_HARBOR_CATEGORIES } from "@cosyte/deid";
 
 const { document, manifest } = deidentify(
-  { loci: [{ path: "PID-19", kind: "identifier", category: SAFE_HARBOR_CATEGORIES.SSN, value: ssn }] },
+  {
+    loci: [
+      {
+        path: "PID-19",
+        kind: "identifier",
+        category: SAFE_HARBOR_CATEGORIES.SSN,
+        value: "900-00-0001",
+      },
+    ],
+  },
   {},
 );
-// document.loci[0].value === null (removed); manifest records the category + locus, never the value.
+
+document.loci[0]?.value; // => null
+manifest[0]?.category; // => "SSN"
+manifest[0]?.locus; // => "PID-19"
+JSON.stringify(manifest).includes("900-00-0001"); // => false
 ```
+
+The value is removed, and the manifest records the category and the locus, never the value.
 
 ## Next
 
-- [Quickstart](./quickstart): de-identify a model and read the manifest.
-- [De-identifying HL7 v2](./guides-hl7): the first end-to-end format adapter (`@cosyte/deid/hl7`).
-- [Core Concepts](./concepts-archetype): the policy engine, the transforms, and fail-closed.
+- [Installation](./installation.md): the package, the parsers for your formats, and a smoke test.
+- [Quickstart](./quickstart.md): de-identify a model and read the manifest.
+- [De-identify an HL7 v2 message](./guides-hl7.md): the first end-to-end format adapter
+  (`@cosyte/deid/hl7`), and the [other format guides](./choose-a-policy.md#find-the-guide-for-your-format).
+- [How the library works](./concepts-archetype.md): the policy engine, the transforms, and fail-closed.
+- [Known limitations and honesty](./limitations.md): read it before you rely on the library for
+  anything that leaves your control.

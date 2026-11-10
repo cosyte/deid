@@ -1,11 +1,11 @@
 ---
 id: guides-longitudinal
-title: Longitudinal de-identification
-sidebar_position: 8
+title: Keep a patient linkable across documents
+sidebar_label: Linkable records
 description: "Keep one patient linkable across documents with a keyed registry, the key contract, and what the limited-data-set preset keeps."
 ---
 
-# Longitudinal de-identification
+# Keep a patient linkable across documents
 
 Research and analytics need a de-identified record that stays **linkable**: the same patient across a
 whole corpus of documents must map to the same pseudonyms and the same shifted dates, so a longitudinal
@@ -52,7 +52,7 @@ const shift = (date: string) =>
       loci: [{ path: "PID-7", kind: "date", category: SAFE_HARBOR_CATEGORIES.DATES, value: date }],
     },
     { policy: research, context: ctx },
-  ).document.loci[0].value;
+  ).document.loci[0]?.value;
 
 // The same input date de-identifies to the same shifted value in every document (linkage preserved).
 shift("2020-03-01") === shift("2020-03-01"); // => true
@@ -173,3 +173,16 @@ described.includes("neither holds nor checks one"); // => true
 described.includes("WHOLE zip code"); // => true
 described.includes("HL7 v2 pass ALONE"); // => true
 ```
+
+## Reference
+
+- [`createDeidRegistry`](./api/@cosyte/deid.md#createdeidregistry),
+  [`DeidRegistry`](./api/@cosyte/deid.md#deidregistry) and
+  [`DeidRegistrySpec`](./api/@cosyte/deid.md#deidregistryspec)
+- [`createDeidContext`](./api/@cosyte/deid.md#createdeidcontext) and
+  [`DeidContextSpec`](./api/@cosyte/deid.md#deidcontextspec)
+- [`deidentify`](./api/@cosyte/deid.md#deidentify),
+  [`defineDeidPolicy`](./api/@cosyte/deid.md#definedeidpolicy) and
+  [`LIMITED_DATA_SET_PROFILE`](./api/@cosyte/deid.md#limited_data_set_profile)
+- [Codes and categories](./codes-and-categories.md#fatal-codes): `DEID_NO_KEY`,
+  `DEID_KEY_TOO_SHORT` and `DEID_POLICY_INVALID`

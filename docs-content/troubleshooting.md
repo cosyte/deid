@@ -1,11 +1,11 @@
 ---
 id: troubleshooting
 title: Troubleshooting and limits
-sidebar_position: 1
+sidebar_label: Troubleshooting
 description: "Why a value was blocked, why a keyed transform needs a key, why a policy is refused, and what the manifest is safe to log."
 ---
 
-# Troubleshooting and known limitations
+# Troubleshooting and limits
 
 ## A value I expected to be transformed was `blocked`
 
@@ -13,11 +13,11 @@ That is the **fail-closed rule** working. The engine blocks (withholds the value
 `blocked`) when it cannot confidently handle a locus: an unclassified PHI-bearing locus, an
 `unknown`-kind locus, a free-text locus, a date/ZIP whose value it cannot generalize, or a policy
 transform it cannot apply to that locus. The block is recorded in the manifest with
-`DEID_LOCUS_BLOCKED` or `DEID_FREETEXT_BLOCKED`. It is never a silent pass-through of the value.
+[`DEID_LOCUS_BLOCKED`](./codes-and-categories.md#disposition-codes) or [`DEID_FREETEXT_BLOCKED`](./codes-and-categories.md#disposition-codes). It is never a silent pass-through of the value.
 
 ## A keyed transform threw `DEID_NO_KEY`
 
-Pseudonymize, keyed-hash, and date-shift are **keyed**. Supply a `context`
+Pseudonymize, keyed-hash, and date-shift are **keyed**, and [`DEID_NO_KEY`](./codes-and-categories.md#fatal-codes) means a category needed one and no key was supplied. Supply a `context`
 (`createDeidContext({ key })`): the engine **never** falls back to an unkeyed transform, because an
 unkeyed hash of an identifier is re-identifiable. Date-shift additionally needs a `patientId` scope.
 The **built-in Safe Harbor policy uses none of the three**, so it never raises this: if a Safe Harbor
@@ -25,7 +25,7 @@ pass asks you for a key, a custom policy or profile put a keyed transform in it.
 
 ## Creating a context threw `DEID_KEY_TOO_SHORT`
 
-`createDeidContext` and `createDeidRegistry` refuse a key, or an explicit `dateShiftSeed`, shorter
+`createDeidContext` and `createDeidRegistry` refuse ([`DEID_KEY_TOO_SHORT`](./codes-and-categories.md#fatal-codes)) a key, or an explicit `dateShiftSeed`, shorter
 than **16 bytes (128 bits)**. A short key can be guessed, and a guessed key reverses every surrogate
 and date-shift offset made under it. The length is counted on the bytes the HMAC uses: a `Uint8Array`
 as given, a string as its UTF-8 bytes. Use 32 random bytes: `crypto.randomBytes(32)`, or the output of
@@ -39,14 +39,14 @@ A policy claiming the `safe-harbor` label, either by its own name or through a p
 the `safe-harbor` standard, assigned a category a transform whose output is **derived from that
 category's own value**: `pseudonymize`, `hash`, or `date-shift` on any category, or `generalize` on any
 category other than (B) geography and (C) dates and ages over 89. The message names the offending
-category and transform. Those are Expert-Determination techniques rather than Safe Harbor ones, so
+category and transform ([`DEID_POLICY_INVALID`](./codes-and-categories.md#fatal-codes)). Those are Expert-Determination techniques rather than Safe Harbor ones, so
 either withhold the value (`redact` or `block`) or name the policy distinctly. The library never silently strengthens a transform, and never renames a policy, behind your back. An assignment that is
 not one of the eight published transform names draws the same refusal: a pair whose derivation cannot
 be established is refused, never permitted.
 
 ## `deidentify` threw `EMPTY_INPUT`
 
-The model was null/undefined or carried no `loci` array. Pass `{ loci: [...] }`.
+The model was null/undefined or carried no `loci` array ([`EMPTY_INPUT`](./codes-and-categories.md#fatal-codes)). Pass `{ loci: [...] }`.
 
 ## What the manifest is safe to log, and the one thing to know about the locus
 
@@ -94,7 +94,7 @@ The library's promise is **narrow and honest**. Do **not** over-trust it:
   The per-format locus maps (HL7 v2, C-CDA, FHIR, X12, NCPDP, DICOM), which is where "the parser knows
   where the name is" becomes automatic, live behind the matching subpath exports.
 - **DOB vs. age is not linked in the core.** Under the default policy a date generalizes to its
-  **year**, and a year is retained as a `DEID_RESIDUAL_RETAINED` residual. A birth-date _indicative of
+  **year**, and a year is retained as a [`DEID_RESIDUAL_RETAINED`](./codes-and-categories.md#disposition-codes) residual. A birth-date _indicative of
   an age over 89_ is **not** aggregated to `90+` by the generic core, because resolving DOB→age needs a
   reference date the core does not have. Surface the residual and apply the age-90 rule at the format
   layer (or via a profile) when a DOB is known to indicate age > 89.
@@ -108,4 +108,7 @@ The library's promise is **narrow and honest**. Do **not** over-trust it:
 - **Date-shift is not Safe Harbor.** It is an Expert-Determination-supporting mode; a shifted real date
   is still a date. The `safe-harbor` policy generalizes dates to year instead.
 
-The **API Reference** always reflects exactly what this release ships: treat it as the source of truth.
+The [API reference](./api/README.md) always reflects exactly what this release ships: treat it as the
+source of truth. [Codes and categories](./codes-and-categories.md) lists every fatal and disposition
+code named on this page, and [Known limitations](./limitations.md) states the rest of the library's
+limits.

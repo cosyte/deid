@@ -340,8 +340,8 @@ function handleLocus(
   if (locus.kind === "clinical") {
     return { value: locus.value, disposition: "retained" };
   }
-  // Free text can carry any of the 18 categories in prose. Block by default; a BYO redactor (§Phase 8)
-  // may redact it in place, consumer-asserted, but a redactor failure still fails closed.
+  // Free text can carry any of the 18 categories in prose. Block by default; a bring-your-own
+  // redactor may redact it in place, consumer-asserted, but a redactor failure still fails closed.
   if (locus.kind === "freetext") {
     return handleFreeText(locus, redactor);
   }

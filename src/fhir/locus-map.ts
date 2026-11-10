@@ -355,7 +355,7 @@ export const RECOGNIZED_PERSON_ELEMENTS: ReadonlySet<string> = new Set<string>([
   "link",
   "relationship",
   "patient",
-  "contact", // BackboneElement: descended (its name/telecom/address are person PHI, §4.6)
+  "contact", // BackboneElement: descended (a contact person's name, telecom and address)
   "qualification", // Practitioner
 ]);
 

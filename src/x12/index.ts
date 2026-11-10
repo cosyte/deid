@@ -52,6 +52,7 @@
  * de-identification is deferred; NCPDP Telecom ships alongside this adapter at `@cosyte/deid/ncpdp`.
  *
  * @packageDocumentation
+ * @module @cosyte/deid/x12
  */
 
 import { parseX12, type X12Interchange } from "@cosyte/x12";

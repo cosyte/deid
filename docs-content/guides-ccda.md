@@ -1,11 +1,11 @@
 ---
 id: guides-ccda
-title: De-identifying C-CDA
-sidebar_position: 6
-description: "What the C-CDA adapter locates, how to read a C-CDA locus path, and its known limitations."
+title: De-identify a C-CDA document
+sidebar_label: C-CDA
+description: "Run a parsed C-CDA document through the Safe Harbor policy, read what the adapter locates, how to read a C-CDA locus path, and its limits."
 ---
 
-# De-identifying C-CDA
+# De-identify a C-CDA document
 
 The `@cosyte/deid/ccda` adapter is the C-CDA binding of the de-identification core. It locates PHI
 **structurally** in an HL7 CDA R2.1 document (a `<name>` under `recordTarget/patientRole/patient` is
@@ -23,24 +23,54 @@ manifest**.
 npm install @cosyte/deid @cosyte/ccda
 ```
 
-## Quickstart
+## De-identify a document
 
-```ts
+Parse the XML with `@cosyte/ccda`, hand the document to `deidentifyCcda`, and serialize the result.
+The document below is synthetic and cut down to a header and one narrative section.
+
+```ts runnable
 import { parseCcda } from "@cosyte/ccda";
 import { deidentifyCcda } from "@cosyte/deid/ccda";
-import { createDeidContext } from "@cosyte/deid";
 
-const context = createDeidContext({ key: process.env.DEID_KEY! });
-const { document, manifest } = deidentifyCcda(parseCcda(xml), { context });
+const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<ClinicalDocument xmlns="urn:hl7-org:v3">
+  <typeId root="2.16.840.1.113883.1.3" extension="POCD_HD000040"/>
+  <id root="2.16.840.1.113883.19.5.99999.1" extension="DOC-0001"/>
+  <code code="34133-9" codeSystem="2.16.840.1.113883.6.1"/>
+  <title>Synthetic summary</title>
+  <effectiveTime value="20200102103000"/>
+  <recordTarget>
+    <patientRole>
+      <id root="2.16.840.1.113883.19.5" extension="ZZMRNCCDA1"/>
+      <addr><streetAddressLine>ZZSTREET</streetAddressLine><city>ZZCITY</city><state>MA</state><postalCode>90210</postalCode></addr>
+      <telecom value="tel:+1-555-000-1111"/>
+      <patient>
+        <name><given>ZZGIVEN</given><family>ZZFAMILY</family></name>
+        <birthTime value="19900215"/>
+      </patient>
+    </patientRole>
+  </recordTarget>
+  <component><structuredBody><component><section>
+    <code code="30954-2" codeSystem="2.16.840.1.113883.6.1"/>
+    <text>Seen with ZZFAMILY today.</text>
+  </section></component></structuredBody></component>
+</ClinicalDocument>`;
 
-document.toString();  // spec-clean, de-identified C-CDA XML
-manifest;             // value-free audit: category + locus + disposition, never a value
+const { document, manifest } = deidentifyCcda(parseCcda(xml));
+const out = document.toString();
+
+out.includes("ZZFAMILY"); // => false
+out.includes("ZZMRNCCDA1"); // => false
+out.includes('<birthTime value="1990"/>'); // => true
+out.includes("<postalCode>902</postalCode>"); // => true
+manifest.find((entry) => entry.locus.endsWith("section/text"))?.code; // => "DEID_FREETEXT_BLOCKED"
 ```
 
 The built-in Safe Harbor policy uses **no keyed transform**, so a Safe Harbor pass over a C-CDA needs
 no `context` at all. Under a preset that keeps consistent keyed surrogates instead, a `context` is
 required and calling without one when the document needs it is a fatal `DEID_NO_KEY`: the engine
-never falls back to an unkeyed surrogate.
+never falls back to an unkeyed surrogate. [Choose a policy](./choose-a-policy.md#use-a-profile) shows
+how to pass one.
 
 ## What is located, and how it is transformed
 
@@ -74,7 +104,7 @@ one meaning:
 > `[n]` is the position's index **among its document siblings that print the same segment name**. It
 > appears when more than one sibling prints that name, and always when the name was refused.
 
-```
+```text
 component/structuredBody/component[0]/section/text   ← the first section's narrative
 component/structuredBody/component[1]/section/text   ← the second section's, its own row
 recordTarget/patientRole/id[0]                       ← two <id> siblings, one row each
@@ -121,3 +151,14 @@ Three scoping notes, because each is easy to over-read:
 
 The honesty line is unchanged: the output is **"Safe-Harbor-transformed per the configured policy,"**
 never "de-identified" and never "HIPAA-compliant."
+
+## Reference
+
+- [`deidentifyCcda`](./api/@cosyte/deid/ccda.md#deidentifyccda) and
+  [`CcdaDeidResult`](./api/@cosyte/deid/ccda.md#ccdadeidresult)
+- [`CCDA_LOCUS_MAP`](./api/@cosyte/deid/ccda.md#ccda_locus_map) and
+  [`categoryForIdRoot`](./api/@cosyte/deid/ccda.md#categoryforidroot): the participations and the
+  `root` routing this page describes
+- [`DeidOptions`](./api/@cosyte/deid.md#deidoptions) and
+  [`WITHHELD_LOCUS_TOKEN`](./api/@cosyte/deid.md#withheld_locus_token)
+- [Codes and categories](./codes-and-categories.md): every disposition and fatal code

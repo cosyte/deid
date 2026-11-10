@@ -1,11 +1,11 @@
 ---
 id: guides-fhir
-title: De-identifying FHIR
-sidebar_position: 7
-description: "What the FHIR R4 adapter locates, how it classifies names and addresses by datatype, where it fails closed, and its known limitations."
+title: De-identify a FHIR resource
+sidebar_label: FHIR R4
+description: "Run a FHIR R4 resource through the Safe Harbor policy, read how names and addresses are classified by datatype, where it fails closed, and its limits."
 ---
 
-# De-identifying FHIR
+# De-identify a FHIR resource
 
 The `@cosyte/deid/fhir` adapter is the FHIR R4 binding of the de-identification core. It locates PHI
 **structurally** in a parsed FHIR resource (a `name` under a `Patient` is the patient's name because
@@ -22,36 +22,54 @@ returns a transformed resource model plus the core's **value-free manifest**.
 npm install @cosyte/deid @cosyte/fhir
 ```
 
-## Quickstart
+## De-identify a resource
 
-```ts
+Parse the JSON with `@cosyte/fhir`, hand the resource to `deidentifyFhir`, and serialize the result.
+The resource below is synthetic.
+
+```ts runnable
 import { parseResource, serializeResource } from "@cosyte/fhir";
 import { deidentifyFhir } from "@cosyte/deid/fhir";
-import { createDeidContext } from "@cosyte/deid";
 
-const context = createDeidContext({ key: process.env.DEID_KEY! });
+const json = JSON.stringify({
+  resourceType: "Patient",
+  id: "example",
+  identifier: [{ system: "urn:oid:2.16.840.1.113883.19.5", value: "ZZMRNFHIR01" }],
+  name: [{ family: "ZZFAMILY", given: ["ZZGIVEN"] }],
+  telecom: [{ system: "phone", value: "555-000-1234" }],
+  gender: "female",
+  birthDate: "1985-03-02",
+  address: [{ line: ["ZZSTREET"], city: "ZZCITY", state: "MA", postalCode: "90210" }],
+});
+
 const { resource } = parseResource(json);
-const { document, manifest } = deidentifyFhir(resource, { context });
+const { document, manifest } = deidentifyFhir(resource);
 
-serializeResource(document); // spec-clean, de-identified FHIR JSON
-manifest; // value-free audit: category + locus + disposition, never a value
+serializeResource(document); // => '{"resourceType":"Patient","id":"example","identifier":[{"system":"urn:oid:2.16.840.1.113883.19.5"}],"gender":"female","birthDate":"1985","address":[{"state":"MA","postalCode":"902"}]}'
+manifest.map((entry) => entry.locus); // => ["Patient.identifier.value", "Patient.name", "Patient.telecom", "Patient.birthDate", "Patient.address"]
 ```
 
 A convenience wrapper parses, de-identifies, and re-serializes in one call:
 
-```ts
+```ts runnable
 import { deidentifyFhirJson } from "@cosyte/deid/fhir";
-import { createDeidContext } from "@cosyte/deid";
 
-const { json, manifest } = deidentifyFhirJson(input, {
-  context: createDeidContext({ key: process.env.DEID_KEY! }),
+const input = JSON.stringify({
+  resourceType: "Patient",
+  name: [{ family: "ZZFAMILY" }],
+  birthDate: "1985-03-02",
 });
+
+const { json, manifest } = deidentifyFhirJson(input);
+json; // => '{"resourceType":"Patient","birthDate":"1985"}'
+manifest.length; // => 2
 ```
 
 The built-in Safe Harbor policy uses **no keyed transform**, so a Safe Harbor pass over a resource
 needs no `context` at all. Under a preset that keeps consistent keyed surrogates instead, a `context`
 is required and calling without one when the resource needs it is a fatal `DEID_NO_KEY`: the engine
-never falls back to an unkeyed surrogate.
+never falls back to an unkeyed surrogate. [Choose a policy](./choose-a-policy.md#use-a-profile) shows
+how to pass one.
 
 ## What is located, and how it is transformed
 
@@ -192,3 +210,15 @@ not mistaken for a date, so it survives.
 
 The honesty line is unchanged: the output is **"Safe-Harbor-transformed per the configured policy,"**
 never "de-identified" and never "HIPAA-compliant."
+
+## Reference
+
+- [`deidentifyFhir`](./api/@cosyte/deid/fhir.md#deidentifyfhir),
+  [`deidentifyFhirJson`](./api/@cosyte/deid/fhir.md#deidentifyfhirjson) and
+  [`FhirDeidResult`](./api/@cosyte/deid/fhir.md#fhirdeidresult)
+- [`classifyFhirPersonalDatatype`](./api/@cosyte/deid/fhir.md#classifyfhirpersonaldatatype),
+  [`categoryForIdentifierSystem`](./api/@cosyte/deid/fhir.md#categoryforidentifiersystem),
+  [`PERSON_RESOURCE_TYPES`](./api/@cosyte/deid/fhir.md#person_resource_types) and
+  [`isFhirDateValue`](./api/@cosyte/deid/fhir.md#isfhirdatevalue): the rules this page describes
+- [`DeidOptions`](./api/@cosyte/deid.md#deidoptions)
+- [Codes and categories](./codes-and-categories.md): every disposition and fatal code

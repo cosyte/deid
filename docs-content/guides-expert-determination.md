@@ -1,11 +1,11 @@
 ---
 id: guides-expert-determination
-title: Expert-Determination support (never certification)
-sidebar_position: 10
-description: "The Expert Determination support report: what it gives a qualified expert, and why the library never makes a determination itself."
+title: Build an Expert Determination support report
+sidebar_label: Expert Determination support
+description: "Build the support report a qualified expert reads, with its three residual inventories, and see why the library never makes a determination itself."
 ---
 
-# Expert-Determination support (never certification)
+# Build an Expert Determination support report
 
 HIPAA gives two routes to de-identification (45 CFR §164.514(b)). `@cosyte/deid` **implements** Safe
 Harbor (the mechanical 18-category method) and **supports**, but can **never render**, the other one:
@@ -81,7 +81,7 @@ const report = buildExpertDeterminationSupportReport([
 
 report.categoryCoverage.length; // => 18
 report.totals.categoriesActedOn; // => 2
-report.retainedQuasiIdentifiers[0].locus; // => "PID-7"
+report.retainedQuasiIdentifiers[0]?.locus; // => "PID-7"
 ```
 
 The **retained-quasi-identifier inventory** is the residual an expert cares about most: the identifying
@@ -150,7 +150,9 @@ quasi-identifier is a piece of the original value that survived; a keyed surroga
 **derived** from the value under your key (`pseudonymize`, `hash`, `date-shift`). No plaintext
 survives, but the **linkage** does: anyone holding the key can re-link the records, which is why
 §164.514(c)(1) does not permit such a code under Safe Harbor and why the built-in Safe Harbor policy
-emits none. Folding the two together would tell a determiner that a re-identification code is the
+emits none. The one row a Safe Harbor pass does flag is a DICOM replacement UID: the DICOM adapter
+records it as `pseudonymize` with `reidentificationCode: true`, although it is derived from the UID
+and no key of yours ([De-identify a DICOM file](./guides-dicom.md#de-identify-a-file)). Folding the two together would tell a determiner that a re-identification code is the
 same kind of residual as a kept year, so each has its own section.
 
 Every locus the pass surrogated carries `reidentificationCode: true` in the manifest, and
@@ -173,8 +175,8 @@ const report = buildExpertDeterminationSupportReport([
   },
 ]);
 
-report.keyedSurrogateResiduals[0].transform; // => "pseudonymize"
-report.keyedSurrogateResiduals[0].locus; // => "PID-3"
+report.keyedSurrogateResiduals[0]?.transform; // => "pseudonymize"
+report.keyedSurrogateResiduals[0]?.locus; // => "PID-3"
 report.retainedQuasiIdentifiers.length; // => 0
 ```
 
@@ -229,3 +231,16 @@ md.includes("NOT A DETERMINATION"); // => true
 The library's promise stays narrow and honest: it **transforms per a policy** and **evidences what it
 did and what remains** in a value-free report, so a qualified expert can make the determination the
 library cannot.
+
+## Reference
+
+- [`buildExpertDeterminationSupportReport`](./api/@cosyte/deid.md#buildexpertdeterminationsupportreport)
+  and [`ExpertDeterminationReportOptions`](./api/@cosyte/deid.md#expertdeterminationreportoptions)
+- [`ExpertDeterminationSupportReport`](./api/@cosyte/deid.md#expertdeterminationsupportreport),
+  [`RetainedQuasiIdentifier`](./api/@cosyte/deid.md#retainedquasiidentifier),
+  [`KeyedSurrogateResidual`](./api/@cosyte/deid.md#keyedsurrogateresidual) and
+  [`UnexaminedResidual`](./api/@cosyte/deid.md#unexaminedresidual)
+- [`SAFE_HARBOR_CATEGORIES`](./api/@cosyte/deid.md#safe_harbor_categories) and
+  [`DeidManifestEntry`](./api/@cosyte/deid.md#deidmanifestentry): what the report reads
+- [`formatExpertDeterminationSupportReport`](./api/@cosyte/deid.md#formatexpertdeterminationsupportreport)
+  and [`EXPERT_DETERMINATION_DISCLAIMER`](./api/@cosyte/deid.md#expert_determination_disclaimer)

@@ -127,7 +127,7 @@ export const RETAIN_SEGMENTS: ReadonlySet<string> = new Set<string>([
   "LOC",
   "LRL",
   "LCC",
-  // Roles / staff / organizations (provider PII, out of Phase-2 scope, retained)
+  // Roles / staff / organizations (provider and staff identity, not the individual's, retained)
   "ROL",
   "STF",
   "PRA",

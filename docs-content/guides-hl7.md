@@ -1,14 +1,14 @@
 ---
 id: guides-hl7
-title: De-identifying HL7 v2
-sidebar_position: 5
-description: "What the HL7 v2 adapter locates, how each position is transformed under the configured policy, and its known limitations."
+title: De-identify an HL7 v2 message
+sidebar_label: HL7 v2
+description: "Run a parsed HL7 v2 message through the Safe Harbor policy, read what the adapter locates and how each position is transformed, and its limits."
 ---
 
-# De-identifying HL7 v2
+# De-identify an HL7 v2 message
 
 The `@cosyte/deid/hl7` adapter is the first end-to-end format binding of the de-identification core. It
-locates PHI **structurally** in the parsed [`@cosyte/hl7`](https://github.com/cosyte/hl7) model (a name
+locates PHI **structurally** in the parsed [`@cosyte/hl7`](https://docs.cosyte.com/hl7) model (a name
 is at PID-5 because the HL7 v2 standard says PID-5 is the patient name, never because a string "looked
 like" a name), applies the configured policy, and returns a transformed `Hl7Message` plus the core's
 **value-free manifest**.
@@ -21,25 +21,71 @@ like" a name), applies the configured policy, and returns a transformed `Hl7Mess
 npm install @cosyte/deid @cosyte/hl7
 ```
 
-## Quickstart
+## De-identify a message
 
-```ts
+Parse the message with `@cosyte/hl7`, hand the parsed model to `deidentifyHl7`, and serialize the
+result. The message below is synthetic: every identifier is a `ZZ` placeholder, a 555 telephone
+number, or a number that is never issued.
+
+```ts runnable
 import { parseHL7 } from "@cosyte/hl7";
 import { deidentifyHl7 } from "@cosyte/deid/hl7";
-import { createDeidContext } from "@cosyte/deid";
 
-const context = createDeidContext({ key: process.env.DEID_KEY! });
-const { document, manifest } = deidentifyHl7(parseHL7(rawMessage), { context });
+const raw = [
+  "MSH|^~\\&|LABAPP|LABFAC|EHRAPP|EHRFAC|20200102080000||ORU^R01|SYNTHMSG002|P|2.5",
+  "PID|1||ZZMRN002^^^HOSP^MR||ZZLABFAMILY^ZZLABGIVEN||19850302|F|||ZZLABSTREET^^ZZLABCITY^MA^90210|049|5550000010|||||ZZACCT200|900000010",
+  "OBR|1|PLACER001|FILLER001|2951-2^Sodium^LN|||20200102080000",
+  "OBX|1|NM|2951-2^Sodium^LN|1|140|mmol/L|135-145|N|||F",
+  "OBX|2|TX|1234-5^Pathology note^LN|1|Specimen from ZZLABFAMILY reviewed|||||F",
+].join("\r");
 
-document.toString(); // spec-clean, de-identified HL7 wire
-manifest; // value-free audit: category + locus + disposition, never a value
+const { document, manifest } = deidentifyHl7(parseHL7(raw));
+const pid = document.toString().split("\r")[1]?.split("|") ?? [];
+
+pid[5]; // => ""
+pid[7]; // => "1985"
+pid[11]; // => "^^^^902"
+document.toString().includes("|140|mmol/L|135-145|"); // => true
+document.toString().includes("ZZLABFAMILY"); // => false
+manifest.some((entry) => entry.locus === "PID-5" && entry.disposition === "removed"); // => true
+manifest.find((entry) => entry.locus === "OBX[1]-5")?.code; // => "DEID_FREETEXT_BLOCKED"
 ```
+
+The name is removed, the date of birth keeps its year, the address keeps only a safe three-digit ZIP,
+the numeric result survives byte-identical, and the narrative `TX` result is blocked. The manifest
+names each position and what was done there, never the value.
+
+## Use a keyed preset
 
 The built-in Safe Harbor policy uses **no keyed transform**: MRN, account, and beneficiary numbers are
 **removed**, so a Safe Harbor pass over a v2 message needs no `context` at all. Under a preset that
 keeps consistent keyed surrogates instead, such as `LIMITED_DATA_SET_PROFILE`, a `context` is
 required and calling without one when the message needs it is a fatal `DEID_NO_KEY`: the engine never
 falls back to an unkeyed surrogate.
+
+```ts runnable
+import { parseHL7 } from "@cosyte/hl7";
+import { createDeidContext, profileOptions, LIMITED_DATA_SET_PROFILE } from "@cosyte/deid";
+import { deidentifyHl7 } from "@cosyte/deid/hl7";
+
+const raw = [
+  "MSH|^~\\&|ADT|HOSP|EHR|HOSP|20200102080000||ADT^A01|SYNTHMSG003|P|2.5",
+  "PID|1||ZZMRN003^^^HOSP^MR||ZZFAMILY^ZZGIVEN||19850302|F",
+].join("\r");
+
+// In your code the key comes from your secret store, for example process.env.DEID_KEY.
+const context = createDeidContext({
+  key: "synthetic-example-key-32-bytes!!",
+  patientId: "patient-3",
+});
+const { document, manifest } = deidentifyHl7(
+  parseHL7(raw),
+  profileOptions(LIMITED_DATA_SET_PROFILE, context),
+);
+
+document.toString().includes("ZZMRN003"); // => false
+manifest.some((entry) => entry.locus.startsWith("PID-3") && entry.reidentificationCode); // => true
+```
 
 ## What is located, and how it is transformed
 
@@ -138,3 +184,16 @@ category each entry lands in and therefore which transform the configured policy
 
 The honesty line is unchanged: the output is **"Safe-Harbor-transformed per the configured policy,"**
 never "de-identified" and never "HIPAA-compliant."
+
+## Reference
+
+- [`deidentifyHl7`](./api/@cosyte/deid/hl7.md#deidentifyhl7) and
+  [`Hl7DeidResult`](./api/@cosyte/deid/hl7.md#hl7deidresult)
+- [`HL7_LOCUS_MAP`](./api/@cosyte/deid/hl7.md#hl7_locus_map),
+  [`RETAIN_SEGMENTS`](./api/@cosyte/deid/hl7.md#retain_segments),
+  [`RETAINED_LOCUS_RULES`](./api/@cosyte/deid/hl7.md#retained_locus_rules) and
+  [`HL7_DATE_LOCI`](./api/@cosyte/deid/hl7.md#hl7_date_loci): the tables this page describes
+- [`DeidOptions`](./api/@cosyte/deid.md#deidoptions),
+  [`profileOptions`](./api/@cosyte/deid.md#profileoptions) and
+  [`createDeidContext`](./api/@cosyte/deid.md#createdeidcontext)
+- [Codes and categories](./codes-and-categories.md): every disposition and fatal code

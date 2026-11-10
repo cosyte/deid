@@ -81,6 +81,7 @@
  * Harbor geography.
  *
  * @packageDocumentation
+ * @module @cosyte/deid/hl7
  */
 
 import { parseHL7, type Hl7Message } from "@cosyte/hl7";

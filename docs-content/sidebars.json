@@ -13,15 +13,9 @@
     },
     {
       "type": "category",
-      "label": "Core concepts",
-      "collapsed": false,
-      "items": ["concepts-archetype"]
-    },
-    {
-      "type": "category",
-      "label": "Guides",
+      "label": "How-to guides",
       "items": [
-        "guides-overview",
+        "choose-a-policy",
         "guides-hl7",
         "guides-ccda",
         "guides-fhir",
@@ -35,9 +29,20 @@
     },
     {
       "type": "category",
+      "label": "Explanation",
+      "items": ["concepts-archetype", "limitations"]
+    },
+    {
+      "type": "category",
+      "label": "Reference",
+      "items": ["codes-and-categories"]
+    },
+    {
+      "type": "category",
       "label": "Troubleshooting",
-      "collapsed": false,
-      "items": ["troubleshooting", "limitations"]
-    }
+      "items": ["troubleshooting"]
+    },
+    "testing-and-quality",
+    "performance"
   ]
 }

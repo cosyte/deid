@@ -42,6 +42,7 @@
  * `./script-refusal.js`). Telecom callers are untouched by the guard.
  *
  * @packageDocumentation
+ * @module @cosyte/deid/ncpdp
  */
 
 import { parseTelecom, type TelecomTransaction } from "@cosyte/ncpdp/telecom";

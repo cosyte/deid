@@ -1,11 +1,11 @@
 ---
 id: guides-dicom
-title: De-identifying DICOM
-sidebar_position: 10
-description: "What the DICOM adapter changes through @cosyte/dicom's metadata pass, how UIDs are remapped, and why burned-in pixels are flagged, never cleaned."
+title: De-identify a DICOM file
+sidebar_label: DICOM
+description: "Run a DICOM file through @cosyte/dicom's metadata pass, keep UIDs consistent across a study, and see why burned-in pixels are flagged, never cleaned."
 ---
 
-# De-identifying DICOM
+# De-identify a DICOM file
 
 The `@cosyte/deid/dicom` adapter is the DICOM binding of the de-identification core, and the one adapter
 that **delegates rather than reimplements**. `@cosyte/dicom` already ships the **PS3.15 Annex E**
@@ -21,25 +21,69 @@ re-does Annex E.
 npm install @cosyte/deid @cosyte/dicom
 ```
 
-## Quickstart
+## De-identify a file
 
-```ts
+Parse the Part 10 bytes with `@cosyte/dicom` and hand the dataset to `deidentifyDicom`, or pass the
+bytes to `deidentifyDicomBuffer`, which parses, de-identifies and re-serializes in one call. You read
+the bytes from your own file; so that each sample on this page runs on its own, it starts by building
+a small synthetic file.
+
+```ts runnable
 import { parseDicom } from "@cosyte/dicom";
 import { deidentifyDicom, deidentifyDicomBuffer } from "@cosyte/deid/dicom";
+
+// A small synthetic Part 10 file in Explicit VR Little Endian, built here so the sample runs.
+type El = [group: number, element: number, vr: string, value: string];
+function part10(elements: El[]): Buffer {
+  const encode = ([group, element, vr, text]: El): Buffer => {
+    const pad = text.length % 2 === 0 ? "" : vr === "UI" ? "\0" : " ";
+    const value = Buffer.from(text + pad, "latin1");
+    const head = Buffer.alloc(vr === "OB" ? 12 : 8);
+    head.writeUInt16LE(group, 0);
+    head.writeUInt16LE(element, 2);
+    head.write(vr, 4, "latin1");
+    if (vr === "OB") head.writeUInt32LE(value.length, 8);
+    else head.writeUInt16LE(value.length, 6);
+    return Buffer.concat([head, value]);
+  };
+  const syntax: El = [0x0002, 0x0010, "UI", "1.2.840.10008.1.2.1"];
+  return Buffer.concat([Buffer.alloc(128), Buffer.from("DICM"), ...[syntax, ...elements].map(encode)]);
+}
+
+const part10Bytes = part10([
+  [0x0008, 0x0060, "CS", "CT"],
+  [0x0010, 0x0010, "PN", "ZZFAMILY^ZZGIVEN"],
+  [0x0010, 0x0020, "LO", "ZZ-MRN-0001"],
+  [0x0020, 0x000d, "UI", "1.2.826.0.1.3680043.10.999.1"],
+]);
 
 const { dataset, manifest, burnedInAnnotationHazard, metadataOnly } = deidentifyDicom(
   parseDicom(part10Bytes),
 );
 
-// or, parse → de-identify → re-serialize in one call:
+// or, parse, de-identify and re-serialize in one call:
 const { bytes } = deidentifyDicomBuffer(part10Bytes);
+bytes.includes("ZZFAMILY"); // => false
 
-manifest; // value-free audit: category + "(gggg,eeee) Keyword" + disposition, never a value
-metadataOnly; // => true: always (see the pixel hazard below)
+// value-free audit: category + "(gggg,eeee) Keyword" + disposition, never a value
+manifest.map((entry) => `${entry.locus} ${entry.disposition}`); // => ["(0010,0010) Patient's Name removed", "(0010,0020) Patient ID removed", "(0020,000d) Study Instance UID transformed"]
+dataset.get("00080060")?.value; // => { kind: "strings", values: ["CT"] }
+dataset.get("00120062")?.value; // => { kind: "strings", values: ["YES"] }
+manifest[2]?.reidentificationCode; // => true
+metadataOnly; // => true
+burnedInAnnotationHazard; // => false
 ```
 
+The modality is kept, the name and the patient ID are removed, the study UID is replaced, and the
+output carries `Patient Identity Removed = YES`. This file has no Pixel Data, so there is no
+burned-in-annotation hazard to flag; [the section below](#the-burned-in-pixel-hazard-flagged-never-cleaned)
+shows one that does.
+
 No key context is required: Annex E dummying and content-derived UID remapping do not use the
-pseudonymization key. Pass a `context` for API uniformity if you like; the DICOM adapter ignores it.
+pseudonymization key, so `deidentifyDicom` takes no `context` option. The manifest still records a
+replaced UID with the `pseudonymize` transform and `reidentificationCode: true`, so the
+[support report](./guides-expert-determination.md) lists it among the keyed-surrogate residuals,
+although no key of yours derived it.
 
 ## What is located, and how it is transformed
 
@@ -68,24 +112,42 @@ used" in **De-identification Method `(0012,0063)`**. This adapter writes **both*
 stays exactly as it was, and the coded terms are added beside it, so a receiving archive can branch on a
 code instead of parsing prose.
 
-```ts
+```ts runnable
 import { parseDicom } from "@cosyte/dicom";
 import { deidentifyDicom } from "@cosyte/deid/dicom";
 
+// A small synthetic Part 10 file in Explicit VR Little Endian, built here so the sample runs.
+type El = [group: number, element: number, vr: string, value: string];
+function part10(elements: El[]): Buffer {
+  const encode = ([group, element, vr, text]: El): Buffer => {
+    const pad = text.length % 2 === 0 ? "" : vr === "UI" ? "\0" : " ";
+    const value = Buffer.from(text + pad, "latin1");
+    const head = Buffer.alloc(vr === "OB" ? 12 : 8);
+    head.writeUInt16LE(group, 0);
+    head.writeUInt16LE(element, 2);
+    head.write(vr, 4, "latin1");
+    if (vr === "OB") head.writeUInt32LE(value.length, 8);
+    else head.writeUInt16LE(value.length, 6);
+    return Buffer.concat([head, value]);
+  };
+  const syntax: El = [0x0002, 0x0010, "UI", "1.2.840.10008.1.2.1"];
+  return Buffer.concat([Buffer.alloc(128), Buffer.from("DICM"), ...[syntax, ...elements].map(encode)]);
+}
+
+const part10Bytes = part10([[0x0010, 0x0010, "PN", "ZZFAMILY^ZZGIVEN"]]);
 const { dataset, deidentificationMethodCodes, optionDeclarations } = deidentifyDicom(
   parseDicom(part10Bytes),
 );
 
 // What went INTO (0012,0064): the profile, then every option the run applied.
-deidentificationMethodCodes;
-// => [{ codeValue: "113100", codingSchemeDesignator: "DCM",
-//       codeMeaning: "Basic Application Confidentiality Profile" }]
+deidentificationMethodCodes; // => [{ codeValue: "113100", codingSchemeDesignator: "DCM", codeMeaning: "Basic Application Confidentiality Profile" }]
 
 // Every option, applied or withheld, by its coded term. Under the default policy all twelve are
 // withheld, because the full Basic Profile applies with no Retain/Clean deviations.
 optionDeclarations.filter((d) => d.status === "withheld").length; // => 12
 
-dataset.get("00120064"); // the same terms, on the dataset and in the re-serialized bytes
+// The same terms, on the dataset and in the re-serialized bytes.
+dataset.get("00120064")?.value.kind; // => "sequence"
 ```
 
 Three rules govern it, and the second is the one to read twice:
@@ -118,15 +180,44 @@ always maps to the **same** replacement, so images still group into series and s
 mapping is content-derived, so it is consistent across runs even without shared state; pass one `Map` as
 `uidMap` across a whole archive to make it consistent by construction (and O(1) on repeats):
 
-```ts
+```ts runnable
 import { parseDicom } from "@cosyte/dicom";
 import { deidentifyDicom } from "@cosyte/deid/dicom";
 
-const uidMap = new Map<string, string>();
-for (const file of studyFiles) {
-  const { dataset } = deidentifyDicom(parseDicom(file), { uidMap });
-  // every object in the study now shares consistently-remapped Study/Series UIDs
+// A small synthetic Part 10 file in Explicit VR Little Endian, built here so the sample runs.
+type El = [group: number, element: number, vr: string, value: string];
+function part10(elements: El[]): Buffer {
+  const encode = ([group, element, vr, text]: El): Buffer => {
+    const pad = text.length % 2 === 0 ? "" : vr === "UI" ? "\0" : " ";
+    const value = Buffer.from(text + pad, "latin1");
+    const head = Buffer.alloc(vr === "OB" ? 12 : 8);
+    head.writeUInt16LE(group, 0);
+    head.writeUInt16LE(element, 2);
+    head.write(vr, 4, "latin1");
+    if (vr === "OB") head.writeUInt32LE(value.length, 8);
+    else head.writeUInt16LE(value.length, 6);
+    return Buffer.concat([head, value]);
+  };
+  const syntax: El = [0x0002, 0x0010, "UI", "1.2.840.10008.1.2.1"];
+  return Buffer.concat([Buffer.alloc(128), Buffer.from("DICM"), ...[syntax, ...elements].map(encode)]);
 }
+
+// Two objects of one synthetic study, as you would read them from the study's files.
+const study = "1.2.826.0.1.3680043.10.999.1";
+const studyFiles = [
+  part10([[0x0020, 0x000d, "UI", study], [0x0020, 0x0013, "IS", "1"]]),
+  part10([[0x0020, 0x000d, "UI", study], [0x0020, 0x0013, "IS", "2"]]),
+];
+
+const uidMap = new Map<string, string>();
+const replaced = studyFiles.map((file) => {
+  const { dataset } = deidentifyDicom(parseDicom(file), { uidMap });
+  return JSON.stringify(dataset.get("0020000D")?.value);
+});
+
+// every object in the study now shares consistently-remapped Study UIDs
+replaced[0] === replaced[1]; // => true
+replaced[0]?.includes(study); // => false
 ```
 
 The source→replacement map is **never** surfaced in the value-free result (a source UID is a re-linking
@@ -139,8 +230,29 @@ depend on inputs you control (a differing `uidRoot`, most obviously). Supply a s
 guarantee reaches every call that shares it, and you own its lifetime and extent. The two cases are told
 apart by reading a value rather than by remembering which arguments were passed:
 
-```ts
+```ts runnable
+import { parseDicom } from "@cosyte/dicom";
 import { deidentifyDicom } from "@cosyte/deid/dicom";
+
+// A small synthetic Part 10 file in Explicit VR Little Endian, built here so the sample runs.
+type El = [group: number, element: number, vr: string, value: string];
+function part10(elements: El[]): Buffer {
+  const encode = ([group, element, vr, text]: El): Buffer => {
+    const pad = text.length % 2 === 0 ? "" : vr === "UI" ? "\0" : " ";
+    const value = Buffer.from(text + pad, "latin1");
+    const head = Buffer.alloc(vr === "OB" ? 12 : 8);
+    head.writeUInt16LE(group, 0);
+    head.writeUInt16LE(element, 2);
+    head.write(vr, 4, "latin1");
+    if (vr === "OB") head.writeUInt32LE(value.length, 8);
+    else head.writeUInt16LE(value.length, 6);
+    return Buffer.concat([head, value]);
+  };
+  const syntax: El = [0x0002, 0x0010, "UI", "1.2.840.10008.1.2.1"];
+  return Buffer.concat([Buffer.alloc(128), Buffer.from("DICM"), ...[syntax, ...elements].map(encode)]);
+}
+
+const dataset = parseDicom(part10([[0x0020, 0x000d, "UI", "1.2.826.0.1.3680043.10.999.1"]]));
 
 deidentifyDicom(dataset).uidReferentialIntegrity.scope; // => "single-call"
 
@@ -148,7 +260,7 @@ const uidMap = new Map<string, string>();
 deidentifyDicom(dataset, { uidMap }).uidReferentialIntegrity.scope; // => "caller-supplied-cache"
 
 // The same fact in one PHI-free sentence, safe to log or to file in a disclosure record:
-deidentifyDicom(dataset).uidReferentialIntegrity.statement;
+deidentifyDicom(dataset).uidReferentialIntegrity.statement.startsWith("Referential integrity"); // => true
 ```
 
 ## The burned-in-pixel hazard: flagged, never cleaned
@@ -158,14 +270,35 @@ pixels, so recognizable text **burned into the image** (Safe Harbor category Q, 
 comparable images) is **not** removed. When Pixel Data is present and not affirmatively marked free of
 burned-in annotation, the result flags it:
 
-```ts
+```ts runnable
+import { parseDicom } from "@cosyte/dicom";
 import { deidentifyDicom, BURNED_IN_ANNOTATION_CODE } from "@cosyte/deid/dicom";
 
-const { burnedInAnnotationHazard, warnings } = deidentifyDicom(dataset);
-if (burnedInAnnotationHazard) {
-  // do NOT release the image on metadata alone: pixels may carry burned-in PHI.
-  warnings.some((w) => w.code === BURNED_IN_ANNOTATION_CODE); // true
+// A small synthetic Part 10 file in Explicit VR Little Endian, built here so the sample runs.
+type El = [group: number, element: number, vr: string, value: string];
+function part10(elements: El[]): Buffer {
+  const encode = ([group, element, vr, text]: El): Buffer => {
+    const pad = text.length % 2 === 0 ? "" : vr === "UI" ? "\0" : " ";
+    const value = Buffer.from(text + pad, "latin1");
+    const head = Buffer.alloc(vr === "OB" ? 12 : 8);
+    head.writeUInt16LE(group, 0);
+    head.writeUInt16LE(element, 2);
+    head.write(vr, 4, "latin1");
+    if (vr === "OB") head.writeUInt32LE(value.length, 8);
+    else head.writeUInt16LE(value.length, 6);
+    return Buffer.concat([head, value]);
+  };
+  const syntax: El = [0x0002, 0x0010, "UI", "1.2.840.10008.1.2.1"];
+  return Buffer.concat([Buffer.alloc(128), Buffer.from("DICM"), ...[syntax, ...elements].map(encode)]);
 }
+
+// A synthetic file with Pixel Data and no Burned In Annotation (0028,0301) element marking it free.
+const dataset = parseDicom(part10([[0x7fe0, 0x0010, "OB", "\0\0\0\0"]]));
+
+const { burnedInAnnotationHazard, warnings } = deidentifyDicom(dataset);
+burnedInAnnotationHazard; // => true
+// do NOT release the image on metadata alone: pixels may carry burned-in PHI.
+warnings.some((w) => w.code === BURNED_IN_ANNOTATION_CODE); // => true
 ```
 
 Pixel-level cleaning needs pixel decode and is out of scope (a future `@cosyte/dicom-pixel`). The adapter
@@ -181,3 +314,15 @@ warns rather than giving a false sense of safety.
   withheld.
 - **Replacement-UID referential integrity is guaranteed within one call** unless you supply a shared
   `uidMap`, in which case it reaches every call that shares it. The declared scope is on the result.
+
+## Reference
+
+- [`deidentifyDicom`](./api/@cosyte/deid/dicom.md#deidentifydicom),
+  [`deidentifyDicomBuffer`](./api/@cosyte/deid/dicom.md#deidentifydicombuffer),
+  [`DicomDeidOptions`](./api/@cosyte/deid/dicom.md#dicomdeidoptions) and
+  [`DicomDeidResult`](./api/@cosyte/deid/dicom.md#dicomdeidresult)
+- [`DicomOptionDeclaration`](./api/@cosyte/deid/dicom.md#dicomoptiondeclaration),
+  [`CID_7050`](./api/@cosyte/deid/dicom.md#cid_7050) and
+  [`DicomUidReferentialIntegrity`](./api/@cosyte/deid/dicom.md#dicomuidreferentialintegrity)
+- [`BURNED_IN_ANNOTATION_CODE`](./api/@cosyte/deid/dicom.md#burned_in_annotation_code) and
+  [`INPUT_METHOD_CODE_SEQUENCE_DROPPED_CODE`](./api/@cosyte/deid/dicom.md#input_method_code_sequence_dropped_code)

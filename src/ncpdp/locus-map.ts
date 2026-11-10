@@ -84,7 +84,7 @@ const INSURANCE_04: Readonly<Record<string, TelecomFieldRule>> = {
  * asymmetry between the two EDI adapters.
  */
 const PRESCRIBER_03: Readonly<Record<string, TelecomFieldRule>> = {
-  DB: { mode: "block" }, // 411-DB Prescriber ID → removed (roadmap-scoped prescriber identifier)
+  DB: { mode: "block" }, // 411-DB Prescriber ID → removed (a prescriber identifier)
 };
 
 /**
