@@ -57,6 +57,7 @@ function parseDate(value: string): ParsedDate | null {
       value,
     );
   if (dt !== null) {
+    /* v8 ignore next -- group 4 is not optional in the pattern, so it always matched and `?? ""` never runs */
     return fromParts(Number(dt[1]), Number(dt[2]), Number(dt[3]), "iso", dt[4] ?? "");
   }
   return null;

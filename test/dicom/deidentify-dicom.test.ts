@@ -219,6 +219,11 @@ describe("the category classifier (coarse audit label, fail-closed to (R))", () 
     );
   });
 
+  it("labels an e-mail address and a URL by their own categories", () => {
+    expect(classifyDicomCategory("E-mail Address", "removed")).toBe(SAFE_HARBOR_CATEGORIES.EMAIL);
+    expect(classifyDicomCategory("Retrieve URL", "removed")).toBe(SAFE_HARBOR_CATEGORIES.URL);
+  });
+
   it("does not mistake equipment '…Name' elements for person names", () => {
     expect(classifyDicomCategory("Station Name", "removed")).not.toBe(SAFE_HARBOR_CATEGORIES.NAMES);
     expect(classifyDicomCategory("Manufacturer's Model Name", "removed")).not.toBe(

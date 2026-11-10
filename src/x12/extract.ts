@@ -424,6 +424,7 @@ function handleGeoSegment(
 ): void {
   const ruleByElement = new Map<number, X12ElementRule>();
   for (const rule of rules) ruleByElement.set(rule.element, rule);
+  /* v8 ignore next -- only an X12_GEO_SEGMENTS id (N3, N4) reaches here, and the table has a row for each */
   const retain = X12_GEO_RETAIN_ELEMENTS[pos.segId] ?? new Set<number>();
   // The sweep is exhaustive over the segment, so every element of it is named: acted on by its mapped
   // rule, kept because the safe list says it is not an identifier, or blocked. None goes unexamined.

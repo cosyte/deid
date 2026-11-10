@@ -70,6 +70,47 @@
       }
     },
     {
+      "fullUrl": "urn:uuid:location-2",
+      "resource": {
+        "resourceType": "Location",
+        "id": "loc2",
+        "status": "active",
+        "address": "ZZLOCADDRSTRING"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:endpoint-1",
+      "resource": {
+        "resourceType": "Endpoint",
+        "id": "ep1",
+        "status": "active",
+        "address": "https://example.org/fhir/endpoint"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:capability-1",
+      "resource": {
+        "resourceType": "CapabilityStatement",
+        "id": "cap1",
+        "status": "active",
+        "messaging": [
+          {
+            "endpoint": [
+              { "protocol": { "code": "mllp" }, "address": "mllp:interface.example.org:9234" }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:auditevent-1",
+      "resource": {
+        "resourceType": "AuditEvent",
+        "id": "audit1",
+        "agent": [{ "requestor": true, "network": { "address": "ZZAUDITHOST", "type": "1" } }]
+      }
+    },
+    {
       "fullUrl": "urn:uuid:observation-2",
       "resource": {
         "resourceType": "Observation",

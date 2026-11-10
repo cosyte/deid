@@ -125,9 +125,12 @@ export const FHIR_DEMOGRAPHIC_ELEMENTS: Readonly<Record<string, FhirDemographicM
  * which is the mirror defect and the one no re-run undoes. That residual is stated in
  * `docs-content/limitations.md` rather than left implicit.
  *
- * A plain string at one of these names is untouched either way, and deliberately: `Organization.name`
- * and `Endpoint.address` are both R4 string elements, and neither is a person's name or a postal
- * address.
+ * A plain primitive at one of these names (a bare string, a number, a `null`) is not the datatype
+ * either, so it is blocked whole too, except where R4 itself puts a string that names no person at the
+ * name: `name` (`Organization.name`, `Location.name`) and the two `address` elements R4 types as a url,
+ * `Endpoint.address` and `CapabilityStatement.messaging.endpoint.address`. Those are left untouched.
+ * The one other string R4 puts at `address`, `AuditEvent.agent.network.address`, is a machine name, an
+ * IP address or a phone number, so it is blocked like any other.
  *
  * @internal
  */

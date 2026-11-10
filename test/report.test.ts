@@ -382,6 +382,32 @@ describe("buildExpertDeterminationSupportReport, determinism, immutability, valu
   });
 });
 
+describe("buildExpertDeterminationSupportReport, the per-locus order past category, locus and transform", () => {
+  it("orders rows that share category, locus and transform by disposition, then by code", () => {
+    const shared = {
+      category: C.OTHER_UNIQUE_ID,
+      locus: "OBX-5",
+      transform: "byo-redact" as const,
+    };
+    const report = buildExpertDeterminationSupportReport([
+      [
+        entry({
+          ...shared,
+          disposition: "transformed",
+          code: CODES.DEID_FREETEXT_CONSUMER_REDACTED,
+        }),
+      ],
+      [entry({ ...shared, disposition: "blocked", code: CODES.DEID_LOCUS_BLOCKED })],
+      [entry({ ...shared, disposition: "blocked", code: CODES.DEID_FREETEXT_BLOCKED })],
+    ]);
+    expect(report.perLocus.map((e) => `${e.disposition} ${e.code}`)).toEqual([
+      `blocked ${CODES.DEID_FREETEXT_BLOCKED}`,
+      `blocked ${CODES.DEID_LOCUS_BLOCKED}`,
+      `transformed ${CODES.DEID_FREETEXT_CONSUMER_REDACTED}`,
+    ]);
+  });
+});
+
 describe("formatExpertDeterminationSupportReport, human-readable rendering", () => {
   it("leads with the NOT-A-DETERMINATION banner and lists the category table", () => {
     const md = formatExpertDeterminationSupportReport(
@@ -414,6 +440,15 @@ describe("formatExpertDeterminationSupportReport, human-readable rendering", () 
     expect(md).toContain("PID-7: DATES");
     expect(md).toContain("k-anonymity indicator): 1");
     expect(md).toContain("descriptive, not a verdict");
+  });
+
+  it("prints an unlabelled quasi-identifier set as unlabelled", () => {
+    const md = formatExpertDeterminationSupportReport(
+      buildExpertDeterminationSupportReport([], {
+        quasiIdentifiers: { equivalenceClassSizes: [3, 3] },
+      }),
+    );
+    expect(md).toContain("- Quasi-identifier set: (unlabelled)");
   });
 
   it("notes when no residuals were recorded", () => {

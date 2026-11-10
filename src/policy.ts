@@ -100,6 +100,7 @@ const COARSENING_PERMITTED_CATEGORIES: ReadonlySet<SafeHarborCategory> = new Set
  * derived-output, so the label contract fails closed.
  */
 function isDerivedOutputPair(category: SafeHarborCategory, transform: TransformName): boolean {
+  /* v8 ignore if -- the only caller refuses an unpublished name before it asks, so this never holds */
   if (!PUBLISHED_TRANSFORM_NAMES.has(transform)) {
     return true;
   }

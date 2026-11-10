@@ -478,10 +478,10 @@ describe("a marker property is evidence only at the value shape R4 gives that ma
 describe("the sweep is keyed on the datatype, never on the category name", () => {
   it("a GEOGRAPHIC category still reaches only elements the classifier typed as an Address", () => {
     const run = pass({
-      resourceType: "Location",
-      id: "loc9",
-      // `Endpoint.address` is a url string in R4 and this shape is its analogue: a plain string at a
-      // name the sweep watches. It is not an Address, so it is not swept.
+      resourceType: "Endpoint",
+      id: "ep9",
+      // `Endpoint.address` is a url string in R4: a plain string at a name the sweep watches, and
+      // the one place R4 puts a string there. It is not an Address, so it is not swept.
       address: "https://example.com/endpoint",
       status: "active",
     });

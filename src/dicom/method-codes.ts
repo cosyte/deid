@@ -279,8 +279,11 @@ export function resolveMethodDeclaration(
 
   const appliedCodeValues = new Set<string>();
   for (const option of activeOptions) {
-    const rows = ROWS_ACTIVATED_BY[option];
-    if (rows === undefined || rows.length !== 1) {
+    // An own row only: an option named after a property every object inherits (`constructor`) is not
+    // a row of the table, and its inherited value must not be read as one.
+    const rows = Object.hasOwn(ROWS_ACTIVATED_BY, option) ? ROWS_ACTIVATED_BY[option] : undefined;
+    const row = rows?.length === 1 ? rows[0] : undefined;
+    if (row === undefined) {
       throw new DeidError(
         FATAL_CODES.DEID_DECLARATION_UNNAMEABLE,
         `No single CID 7050 term names Annex E option "${option}"; refusing to write a coded de-identification method rather than declare an approximate one.`,
@@ -288,7 +291,7 @@ export function resolveMethodDeclaration(
     }
     // Unreachable via a table row that is not in the closed set, but the lookup goes through the same
     // gate anyway: nothing composes a term, everything looks one up.
-    appliedCodeValues.add(requireTerm(rows[0] ?? "", `Annex E option "${option}"`).codeValue);
+    appliedCodeValues.add(requireTerm(row, `Annex E option "${option}"`).codeValue);
   }
 
   const optionDeclarations = OPTION_CODE_VALUES.map((codeValue) =>
