@@ -89,3 +89,71 @@ describe("(0012,0063) De-identification Method fits LO, 64 characters per Value"
     expect(values[3]?.length).toBe(LO_VALUE_MAX);
   });
 });
+
+/** Every byte that is a C0 or C1 control character or DEL: PS3.5 6.2 allows none of them in an `LO`. */
+function controlBytes(dataset: Dataset): number[] {
+  const raw = dataset.get(TAG_METHOD_TEXT)?.rawBytes ?? Buffer.alloc(0);
+  return [...raw].filter((byte) => byte < 0x20 || (byte >= 0x7f && byte <= 0x9f));
+}
+
+/** `a`, the character at `codePoint`, then `b`. */
+function between(codePoint: number): string {
+  return `a${String.fromCodePoint(codePoint)}b`;
+}
+
+describe("(0012,0063) carries a policy name only as characters an LO Value can hold", () => {
+  // The method text is written as latin1, one byte per UTF-16 code unit, so a character above U+00FF
+  // lands on the wire as its low byte: U+015C as 5CH, the delimiter, and U+0100 as NUL.
+  const cases: readonly { label: string; name: string; expected: string }[] = [
+    { label: "U+015C, whose low byte is the delimiter", name: between(0x15c), expected: "a?b" },
+    { label: "U+0100, whose low byte is NUL", name: between(0x100), expected: "a?b" },
+    { label: "a newline", name: between(0x0a), expected: "a?b" },
+    { label: "a NUL", name: between(0x00), expected: "a?b" },
+    { label: "a backslash", name: between(0x5c), expected: "a/b" },
+    { label: "DEL", name: between(0x7f), expected: "a?b" },
+    { label: "a C1 control character", name: between(0x85), expected: "a?b" },
+    {
+      label: "a character outside the BMP, as one character",
+      name: between(0x1f600),
+      expected: "a?b",
+    },
+  ];
+
+  for (const { label, name, expected } of cases) {
+    it(`writes a name holding ${label} as exactly four Values with no control character`, () => {
+      const policy = defineDeidPolicy({ name });
+      const { bytes, warnings } = deidentifyDicomBuffer(serializeDicom(buildPhiDataset()), {
+        policy,
+      });
+      const dataset = parseDicom(bytes);
+      const values = methodValues(dataset);
+
+      expect(values).toHaveLength(4);
+      expectFitsLo(values);
+      expect(values[3]).toBe(`policy "${expected}"`);
+      expect(controlBytes(dataset)).toEqual([]);
+      expect(warnings.map((w) => w.code)).not.toContain(OVER_LENGTH_CODE);
+    });
+  }
+
+  it("keeps a latin1 letter, which is not a control character, as written", () => {
+    const resolved = resolveDicomOptions({ policy: defineDeidPolicy({ name: between(0xe9) }) });
+    expect(resolved.deidentificationMethod.split("\\")[3]).toBe(`policy "${between(0xe9)}"`);
+  });
+
+  it("measures a long name after mapping, so its Value is 64 characters on the wire", () => {
+    const name = String.fromCodePoint(0x15c).repeat(40) + String.fromCodePoint(0x1f600).repeat(40);
+    const policy = defineDeidPolicy({ name });
+    const { bytes, warnings } = deidentifyDicomBuffer(serializeDicom(buildPhiDataset()), {
+      policy,
+    });
+    const dataset = parseDicom(bytes);
+    const values = methodValues(dataset);
+
+    expect(values).toHaveLength(4);
+    expect(values[3]).toBe(`policy "${"?".repeat(LO_VALUE_MAX - 'policy "..."'.length)}..."`);
+    expect(values[3]?.length).toBe(LO_VALUE_MAX);
+    expect(controlBytes(dataset)).toEqual([]);
+    expect(warnings.map((w) => w.code)).not.toContain(OVER_LENGTH_CODE);
+  });
+});
