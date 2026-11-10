@@ -121,7 +121,8 @@ not mistaken for a date, so it survives.
   where R4 types a string at a part the reduction would re-emit verbatim. The street, the city, the
   state, the country, and the ZIP all go, and the disposition is recorded.
 - At an element name R4 **types** as one of the two datatypes (`name`, `address`, the choice-type
-  `locationAddress`, an open `valueAddress` / `valueHumanName`), **any** complex the classifier cannot
+  `locationAddress`, an open `valueAddress` / `valueHumanName`, the `HumanName` arms of the
+  `defaultValue[x]`, `fixed[x]` and `pattern[x]` choices), **any** complex the classifier cannot
   pin down is **blocked whole** rather than descended into: a `{ text }` or `{ use, text }`
   representation with no part it can key on, a `{ family, given, … }` or `{ line, city, … }` carrying
   some property R4 does not define, and equally a `{ streetAddress, town, zip }` whose every property
@@ -134,7 +135,13 @@ not mistaken for a date, so it survives.
   not the datatype either and is blocked whole too, except where R4 itself types the element as a
   string that names no person: `name` (`Organization.name`, `Location.name`) and the two `address`
   elements R4 types as a url, an `Endpoint`'s own and a `CapabilityStatement` messaging endpoint's,
-  which stay untouched. The one other string R4 puts at `address`, `AuditEvent.agent.network.address`,
+  which stay untouched. A contact's name is not one of them. A string where R4 types a `HumanName`,
+  at `Organization.contact.name` or `InsurancePlan.contact.name`, is blocked like any other. The
+  `name` of a `ContactDetail` (the `contact`, `author`, `editor`, `endorser` and `reviewer` of the
+  conformance and knowledge resources, and the `ContactDetail` arms of an open `value[x]`) is a
+  string R4 documents as the name of the individual to contact, so it is removed as a name, and any
+  other shape there is blocked. A contact sent as a bare string is blocked whole. The one other
+  string R4 puts at `address`, `AuditEvent.agent.network.address`,
   holds a machine name, an IP address or a phone number, so it is blocked like any other. The
   disposition is recorded either way. That block is scoped to those element
   names deliberately, and the residual it leaves is stated below.

@@ -14,7 +14,10 @@
  * rather than the standard's: a `HumanName` is removed and an `Address` is reduced wherever they sit,
  * so `Organization.contact.name` and `Location.address` are reached without any cross-resource role
  * derivation (see `./datatype.js` for the closed, marker-bound classification that keeps the sweep off
- * an organisation's own `name` string and off a clinical code). The **fail-closed** rule governs the
+ * an organisation's own `name` string and off a clinical code). A contact's name is reached by the
+ * same sweep through its R4 element path, whatever shape it arrives in: the `name` of an
+ * `Organization` or `InsurancePlan` contact (a `HumanName`) and the `name` of every `ContactDetail`
+ * (a string R4 documents as the individual to contact). The **fail-closed** rule governs the
  * person sweep, and the datatype sweep with it: a value-bearing top-level person-resource property that
  * is neither mapped PHI nor on the recognized allow-list is blocked, a swept `Address` the pass cannot
  * read faithfully is removed whole rather than partly retained, and at an element name R4 types as one
@@ -55,10 +58,13 @@ import {
   FHIR_DATE_CATEGORY,
   FHIR_DEMOGRAPHIC_ELEMENTS,
   FHIR_KEPT_ADDRESS_PARTS,
+  HUMAN_NAME_ELEMENT_PATHS,
   PERSON_RESOURCE_TYPES,
   RECOGNIZED_PERSON_ELEMENTS,
   TYPED_PERSONAL_ELEMENT_NAMES,
   categoryForIdentifierSystem,
+  isContactDetailName,
+  isContactElement,
   isFhirDateValue,
 } from "./locus-map.js";
 
@@ -413,45 +419,72 @@ const URL_TYPED_ADDRESS_ELEMENTS: ReadonlySet<string> = new Set<string>([
  * Whether a plain primitive at this typed element name is one this sweep leaves to the ordinary
  * descent, for an element at the R4 path `elementPath`. Two cases: `name`, which R4 types as a string
  * on many resources and backbones (`Organization.name`, `Location.name`), and the url-typed `address`
- * elements in {@link URL_TYPED_ADDRESS_ELEMENTS}. R4 has one more string at `address`,
+ * elements in {@link URL_TYPED_ADDRESS_ELEMENTS}. The `name` case stops at the contact backbones whose
+ * `name` R4 types as a `HumanName` ({@link HUMAN_NAME_ELEMENT_PATHS}): a string there is a person's
+ * name the pass cannot read, not an organisation's own. R4 has one more string at `address`,
  * `AuditEvent.agent.network.address`, and it is deliberately not here: it holds a machine name, an IP
  * address or a telephone number, which identify a person when the agent is one, so it is blocked. At
  * every other typed element name, and at every other `address`, a primitive is not the `HumanName` or
  * `Address` the standard promised there.
  */
 function primitiveConformsAt(name: string, elementPath: string): boolean {
-  return name === "name" || URL_TYPED_ADDRESS_ELEMENTS.has(elementPath);
+  if (name === "name") return !HUMAN_NAME_ELEMENT_PATHS.has(elementPath);
+  return URL_TYPED_ADDRESS_ELEMENTS.has(elementPath);
+}
+
+/** What the sweep knows about the position one candidate node sits at, from its R4 element path. */
+interface SweepPosition {
+  /**
+   * The element name when R4 types it as a `HumanName` or an `Address`, and `undefined` at every other
+   * position: the fail-closed arm exists only where the standard already promised a name or an address.
+   */
+  readonly typedElementName: string | undefined;
+  /** Whether R4 puts a plain primitive at this element, which leaves one there to the ordinary descent. */
+  readonly primitiveConforms: boolean;
+  /** The element is a `ContactDetail`'s `name`: a string in R4, and an individual's name. */
+  readonly contactName: boolean;
+  /** The element is a contact (a `ContactDetail`, or an `Organization` or `InsurancePlan` contact). */
+  readonly contact: boolean;
+}
+
+/**
+ * Decide what the sweep does with one node at a `ContactDetail`'s `name`. R4 types it as a string and
+ * documents it as the name of the individual to contact, so a string there is a person's name and is
+ * removed as one, exactly as a `HumanName` would be. Any other shape (a number, a `null`, a list nested
+ * in a list, an object that is not a `HumanName`) is a name the pass cannot read, so it is blocked
+ * whole. An empty object carries nothing to release and is left alone.
+ */
+function contactNameAction(node: FhirNode): PersonalAction | undefined {
+  if (isStringPrimitive(node)) return "human-name";
+  if (isComplex(node)) return node.properties.length > 0 ? "block" : undefined;
+  return "block";
 }
 
 /**
  * Decide what the sweep does with one candidate node. A positively classified `HumanName` or `Address`
- * is acted on wherever it sits. A complex the classifier could not pin down is **blocked**, but only at
- * an element name R4 types as one of those datatypes (see {@link carriesFhirPersonalEvidence} for why
- * the position carries the whole weight of that decision, and for the two conformant backbones it
- * excludes). So is anything there that is not a complex at all (a bare string, a number, a `null`, a
- * list nested in the list a model built by hand can hold), unless it is a primitive at an element R4
- * itself types as a string ({@link primitiveConformsAt}): the pass cannot locate a value in it. Everything
- * else is left to the ordinary descent, which is what keeps an organisation's own `name` string, a url
- * at `Endpoint.address`, a `Coding.display` and a clinical code, value, unit or status byte-identical.
- *
- * @param typedElementName - The element name when R4 types it as one of the two datatypes, and
- *   `undefined` at every other position: the fail-closed arm exists only where the standard already
- *   promised a name or an address.
- * @param primitiveConforms - Whether R4 puts a plain primitive at this element, which leaves one there
- *   to the ordinary descent.
+ * is acted on wherever it sits. At a `ContactDetail`'s `name` the position decides
+ * ({@link contactNameAction}). A contact that arrives as anything but an object (a bare string, a
+ * number, a `null`) is blocked whole: the pass cannot find the name in it. A complex the classifier
+ * could not pin down is **blocked**, but only at an element name R4 types as one of those datatypes
+ * (see {@link carriesFhirPersonalEvidence} for why the position carries the whole weight of that
+ * decision, and for the two conformant backbones it excludes). So is anything there that is not a
+ * complex at all (a bare string, a number, a `null`, a list nested in the list a model built by hand
+ * can hold), unless it is a primitive at an element R4 itself types as a string
+ * ({@link primitiveConformsAt}): the pass cannot locate a value in it. Everything else is left to the
+ * ordinary descent, which is what keeps an organisation's own `name` string, a url at
+ * `Endpoint.address`, a `Coding.display` and a clinical code, value, unit or status byte-identical.
  */
-function personalAction(
-  node: FhirNode,
-  typedElementName: string | undefined,
-  primitiveConforms: boolean,
-): PersonalAction | undefined {
+function personalAction(node: FhirNode, position: SweepPosition): PersonalAction | undefined {
   const datatype = classifyFhirPersonalDatatype(node);
   if (datatype !== undefined) return datatype;
+  if (position.contactName) return contactNameAction(node);
+  if (position.contact) return isComplex(node) ? undefined : "block";
+  const { typedElementName } = position;
   if (typedElementName === undefined) return undefined;
   if (isComplex(node)) {
     return carriesFhirPersonalEvidence(node, typedElementName) ? "block" : undefined;
   }
-  return isPrimitive(node) && primitiveConforms ? undefined : "block";
+  return isPrimitive(node) && position.primitiveConforms ? undefined : "block";
 }
 
 /**
@@ -520,10 +553,14 @@ function sweepPersonalDatatypes(
   path: string,
   elementPath: string,
 ): boolean {
-  const typedElementName = TYPED_PERSONAL_ELEMENT_NAMES.has(name) ? name : undefined;
-  const primitiveConforms = primitiveConformsAt(name, elementPath);
+  const position: SweepPosition = {
+    typedElementName: TYPED_PERSONAL_ELEMENT_NAMES.has(name) ? name : undefined,
+    primitiveConforms: primitiveConformsAt(name, elementPath),
+    contactName: isContactDetailName(elementPath),
+    contact: isContactElement(elementPath),
+  };
   const items = isList(value) ? value.items : [value];
-  const actions = items.map((item) => personalAction(item, typedElementName, primitiveConforms));
+  const actions = items.map((item) => personalAction(item, position));
   if (actions.every((action) => action === undefined)) return false;
   const multi = items.length > 1;
   items.forEach((item, i) => {

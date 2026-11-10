@@ -105,8 +105,13 @@ export const FHIR_DEMOGRAPHIC_ELEMENTS: Readonly<Record<string, FhirDemographicM
  * - `locationAddress` - the `Address` arm of `Claim.accident.location[x]` and
  *   `ExplanationOfBenefit.accident.location[x]`.
  * - `valueAddress` / `valueHumanName` - the two arms of an open `value[x]` (`Task.input.value[x]`,
- *   `Parameters.parameter.value[x]`). An `Extension.value[x]` never reaches here: every extension value
- *   is already blocked earlier, at the frontier rule.
+ *   `Task.output.value[x]`, `Parameters.parameter.value[x]`, `ElementDefinition.example.value[x]`). An
+ *   `Extension.value[x]` never reaches here: every extension value is already blocked earlier, at the
+ *   frontier rule.
+ * - `defaultValueHumanName` / `fixedHumanName` / `patternHumanName` - the `HumanName` arms of the other
+ *   open choices, `ElementDefinition.defaultValue[x]` / `fixed[x]` / `pattern[x]` and
+ *   `StructureMap.group.rule.source.defaultValue[x]`. The `Address` arms of those choices are not
+ *   listed: a conformant `Address` there is still classified and reduced wherever it sits.
  *
  * This is **not** how the sweep FINDS a name or an address, which is the point of keying on the
  * datatype: a conformant `Address` under any element name at all is classified and reduced without
@@ -129,8 +134,10 @@ export const FHIR_DEMOGRAPHIC_ELEMENTS: Readonly<Record<string, FhirDemographicM
  * either, so it is blocked whole too, except where R4 itself puts a string that names no person at the
  * name: `name` (`Organization.name`, `Location.name`) and the two `address` elements R4 types as a url,
  * `Endpoint.address` and `CapabilityStatement.messaging.endpoint.address`. Those are left untouched.
- * The one other string R4 puts at `address`, `AuditEvent.agent.network.address`, is a machine name, an
- * IP address or a phone number, so it is blocked like any other.
+ * The `name` exception stops at the elements in {@link HUMAN_NAME_ELEMENT_PATHS}, where R4 types the
+ * name as a `HumanName`, so a string there is blocked like a string at `valueHumanName`. The one other
+ * string R4 puts at `address`, `AuditEvent.agent.network.address`, is a machine name, an IP address or
+ * a phone number, so it is blocked like any other.
  *
  * @internal
  */
@@ -140,7 +147,163 @@ export const TYPED_PERSONAL_ELEMENT_NAMES: ReadonlySet<string> = new Set<string>
   "locationAddress",
   "valueAddress",
   "valueHumanName",
+  "defaultValueHumanName",
+  "fixedHumanName",
+  "patternHumanName",
 ]);
+
+/**
+ * The R4 element paths, outside the person resources, where the element named `name` is a `HumanName`:
+ * the `contact` backbone of an `Organization` and of an `InsurancePlan`. Everywhere else outside a
+ * person resource R4 puts a plain string at `name`, so this is what tells the contact's name, which is
+ * a person's, from the organisation's own. Read from the R4 core package (4.0.1): no other element
+ * named `name` outside `Patient`, `RelatedPerson`, `Practitioner` and `Person` is typed `HumanName`.
+ *
+ * @internal
+ */
+export const HUMAN_NAME_ELEMENT_PATHS: ReadonlySet<string> = new Set<string>([
+  "Organization.contact.name",
+  "InsurancePlan.contact.name",
+]);
+
+/** The conformance resources whose only `ContactDetail` element is `contact`. */
+const CONTACT_DETAIL_RESOURCES: readonly string[] = [
+  "CapabilityStatement",
+  "ChargeItemDefinition",
+  "CodeSystem",
+  "CompartmentDefinition",
+  "ConceptMap",
+  "ExampleScenario",
+  "GraphDefinition",
+  "ImplementationGuide",
+  "MessageDefinition",
+  "NamingSystem",
+  "OperationDefinition",
+  "Questionnaire",
+  "ResearchStudy",
+  "SearchParameter",
+  "StructureDefinition",
+  "StructureMap",
+  "TerminologyCapabilities",
+  "TestScript",
+  "ValueSet",
+];
+
+/** The knowledge resources that carry `author`, `editor`, `endorser` and `reviewer` beside `contact`. */
+const CONTACT_DETAIL_AUTHORSHIP_RESOURCES: readonly string[] = [
+  "ActivityDefinition",
+  "EffectEvidenceSynthesis",
+  "EventDefinition",
+  "Evidence",
+  "EvidenceVariable",
+  "Library",
+  "Measure",
+  "PlanDefinition",
+  "ResearchDefinition",
+  "ResearchElementDefinition",
+  "RiskEvidenceSynthesis",
+];
+
+/**
+ * Every R4 resource element typed `ContactDetail`, by element path: `contact` on each conformance and
+ * knowledge resource, and `author`, `editor`, `endorser` and `reviewer` on the knowledge resources that
+ * define them. Read from the R4 core package (4.0.1). A `ContactDetail` is `{ name, telecom }`, and R4
+ * documents its `name` as the name of an individual to contact, so it is a person's name even though
+ * R4 types it as a plain string.
+ *
+ * An explicit enumeration and never a name match: `Endpoint.contact` is a `ContactPoint`,
+ * `Organization.contact` is a backbone, `Patient.contact` is a person, and `Composition.author` is a
+ * `Reference`.
+ *
+ * @internal
+ */
+export const CONTACT_DETAIL_ELEMENT_PATHS: ReadonlySet<string> = new Set<string>([
+  ...CONTACT_DETAIL_RESOURCES.map((rt) => `${rt}.contact`),
+  ...CONTACT_DETAIL_AUTHORSHIP_RESOURCES.flatMap((rt) =>
+    ["contact", "author", "editor", "endorser", "reviewer"].map((el) => `${rt}.${el}`),
+  ),
+]);
+
+/**
+ * The `ContactDetail` arms of the open choices R4 defines (`Task.input.value[x]`,
+ * `Task.output.value[x]`, `Parameters.parameter.value[x]`, and on `ElementDefinition` and
+ * `StructureMap.group.rule.source` the `defaultValue[x]`, `fixed[x]`, `pattern[x]` and
+ * `example.value[x]` choices). A choice element's name carries its type, so the name alone says the
+ * element is a `ContactDetail` wherever it sits.
+ *
+ * @internal
+ */
+export const CONTACT_DETAIL_CHOICE_ELEMENTS: ReadonlySet<string> = new Set<string>([
+  "valueContactDetail",
+  "defaultValueContactDetail",
+  "fixedContactDetail",
+  "patternContactDetail",
+]);
+
+/**
+ * The `Contributor` arms of the same open choices. A `Contributor` carries its `contact` as a list of
+ * `ContactDetail`, so the `contact` under one of these is a `ContactDetail` element too.
+ *
+ * @internal
+ */
+export const CONTRIBUTOR_CHOICE_ELEMENTS: ReadonlySet<string> = new Set<string>([
+  "valueContributor",
+  "defaultValueContributor",
+  "fixedContributor",
+  "patternContributor",
+]);
+
+/**
+ * The two `contact` backbones whose `name` is a `HumanName` (see {@link HUMAN_NAME_ELEMENT_PATHS}).
+ * Held beside the `ContactDetail` elements because both are a contact, and a bare string sent where
+ * either belongs is a contact the pass cannot read.
+ */
+const CONTACT_BACKBONE_PATHS: ReadonlySet<string> = new Set<string>([
+  "Organization.contact",
+  "InsurancePlan.contact",
+]);
+
+/**
+ * `true` when the element at this R4 element path is typed `ContactDetail`: one of
+ * {@link CONTACT_DETAIL_ELEMENT_PATHS}, a `ContactDetail` choice arm, or the `contact` of a
+ * `Contributor` choice arm.
+ *
+ * @param elementPath - The R4 element path without list indexes (`ValueSet.contact`).
+ * @internal
+ */
+export function isContactDetailElement(elementPath: string): boolean {
+  if (CONTACT_DETAIL_ELEMENT_PATHS.has(elementPath)) return true;
+  const cut = elementPath.lastIndexOf(".");
+  const last = elementPath.slice(cut + 1);
+  if (CONTACT_DETAIL_CHOICE_ELEMENTS.has(last)) return true;
+  if (last !== "contact") return false;
+  const parent = elementPath.slice(0, cut);
+  return CONTRIBUTOR_CHOICE_ELEMENTS.has(parent.slice(parent.lastIndexOf(".") + 1));
+}
+
+/**
+ * `true` when the element at this R4 element path is a contact: a `ContactDetail`
+ * ({@link isContactDetailElement}) or the `contact` backbone of an `Organization` or an
+ * `InsurancePlan`.
+ *
+ * @param elementPath - The R4 element path without list indexes.
+ * @internal
+ */
+export function isContactElement(elementPath: string): boolean {
+  return CONTACT_BACKBONE_PATHS.has(elementPath) || isContactDetailElement(elementPath);
+}
+
+/**
+ * `true` when the element at this R4 element path is the `name` of a `ContactDetail`: a plain string
+ * in R4, and the name of the individual to contact.
+ *
+ * @param elementPath - The R4 element path without list indexes (`ValueSet.contact.name`).
+ * @internal
+ */
+export function isContactDetailName(elementPath: string): boolean {
+  const cut = elementPath.lastIndexOf(".");
+  return elementPath.slice(cut + 1) === "name" && isContactDetailElement(elementPath.slice(0, cut));
+}
 
 /**
  * The `Address` properties at or above state level, which Safe Harbor permits and the address edit
