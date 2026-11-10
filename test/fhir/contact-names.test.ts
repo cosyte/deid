@@ -271,6 +271,13 @@ describe("the name on every ContactDetail element R4 defines", () => {
     expect(rows(org)).toEqual(["Organization.contact blocked"]);
   });
 
+  it("removes an InsurancePlan contact that arrives as a bare string", () => {
+    const out = run({ resourceType: "InsurancePlan", contact: "ZZCONTACTNAME" });
+    expect(out.json).toBe('{"resourceType":"InsurancePlan"}');
+    expect(rows(out)).toEqual(["InsurancePlan.contact blocked"]);
+    expect(loci(out)).toEqual([]);
+  });
+
   it("reaches a contact name in a Bundle entry and in a contained resource", () => {
     const bundle = run({
       resourceType: "Bundle",
@@ -328,6 +335,54 @@ describe("the open value[x] arms R4 types as a HumanName, a ContactDetail or a C
     expect(out.json).not.toContain("ZZCONTACTNAME");
     expect(categories(out)).toEqual([
       "Parameters.parameter[0].valueContributor.contact[0].name NAMES",
+    ]);
+  });
+
+  it("removes a contact name inside a Contributor on the ElementDefinition and StructureMap arms", () => {
+    const out = run({
+      resourceType: "StructureDefinition",
+      snapshot: {
+        element: [
+          {
+            path: "Library.author",
+            fixedContributor: { type: "author", contact: [{ name: "ZZCONTACTNAME" }] },
+            patternContributor: { type: "editor", contact: [{ name: "ZZCONTACTOTHER" }] },
+            defaultValueContributor: { type: "reviewer", contact: [{ name: "ZZORGCONTACTFAM" }] },
+          },
+        ],
+      },
+    });
+    expect(out.json).not.toContain("ZZCONTACT");
+    expect(out.json).not.toContain("ZZORGCONTACT");
+    expect(out.json).toContain('"path":"Library.author"');
+    expect(categories(out)).toEqual([
+      "StructureDefinition.snapshot.element[0].fixedContributor.contact[0].name NAMES",
+      "StructureDefinition.snapshot.element[0].patternContributor.contact[0].name NAMES",
+      "StructureDefinition.snapshot.element[0].defaultValueContributor.contact[0].name NAMES",
+    ]);
+
+    const map = run({
+      resourceType: "StructureMap",
+      group: [
+        {
+          name: "main",
+          rule: [
+            {
+              name: "r1",
+              source: [
+                {
+                  context: "src",
+                  defaultValueContributor: { type: "author", contact: [{ name: "ZZCONTACTNAME" }] },
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+    expect(map.json).not.toContain("ZZCONTACTNAME");
+    expect(categories(map)).toEqual([
+      "StructureMap.group[0].rule[0].source[0].defaultValueContributor.contact[0].name NAMES",
     ]);
   });
 
