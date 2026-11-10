@@ -730,15 +730,18 @@ determination**.
 The full reference is on [docs.cosyte.com/deid](https://docs.cosyte.com/deid):
 
 - [Installation](https://docs.cosyte.com/deid/installation) and the [quickstart](https://docs.cosyte.com/deid/quickstart).
-- Core concepts: [the archetype](https://docs.cosyte.com/deid/concepts-archetype), what a policy, a transform, and the
-  manifest are.
-- Guides: [the overview](https://docs.cosyte.com/deid/guides-overview), [HL7 v2](https://docs.cosyte.com/deid/guides-hl7),
-  [C-CDA](https://docs.cosyte.com/deid/guides-ccda), [FHIR R4](https://docs.cosyte.com/deid/guides-fhir), [X12](https://docs.cosyte.com/deid/guides-x12),
+- How-to guides: [choose a policy and read the manifest](https://docs.cosyte.com/deid/choose-a-policy),
+  [HL7 v2](https://docs.cosyte.com/deid/guides-hl7), [C-CDA](https://docs.cosyte.com/deid/guides-ccda),
+  [FHIR R4](https://docs.cosyte.com/deid/guides-fhir), [X12](https://docs.cosyte.com/deid/guides-x12),
   [NCPDP Telecom](https://docs.cosyte.com/deid/guides-ncpdp), [DICOM](https://docs.cosyte.com/deid/guides-dicom),
-  [longitudinal linkage](https://docs.cosyte.com/deid/guides-longitudinal), [free text](https://docs.cosyte.com/deid/guides-freetext), and
+  [linkable records](https://docs.cosyte.com/deid/guides-longitudinal), [free text](https://docs.cosyte.com/deid/guides-freetext), and
   [Expert Determination support](https://docs.cosyte.com/deid/guides-expert-determination).
-- [Troubleshooting](https://docs.cosyte.com/deid/troubleshooting) and the [known limitations](https://docs.cosyte.com/deid/limitations). Read the
-  limitations before you point this at real data.
+- Explanation: [how the library works](https://docs.cosyte.com/deid/concepts-archetype) and the
+  [known limitations](https://docs.cosyte.com/deid/limitations). Read the limitations before you point this at real data.
+- Reference: [codes and categories](https://docs.cosyte.com/deid/codes-and-categories), and the API reference generated
+  from the source.
+- [Troubleshooting](https://docs.cosyte.com/deid/troubleshooting), [testing and quality](https://docs.cosyte.com/deid/testing-and-quality),
+  and [performance](https://docs.cosyte.com/deid/performance).
 - [`CHANGELOG.md`](https://github.com/cosyte/deid/blob/main/CHANGELOG.md): every release.
 
 ## Support

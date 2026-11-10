@@ -35,6 +35,7 @@
  * need a pixel-capable review (a future `@cosyte/dicom-pixel`).
  *
  * @packageDocumentation
+ * @module @cosyte/deid/dicom
  */
 
 import type { Buffer } from "node:buffer";

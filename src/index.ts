@@ -19,6 +19,7 @@
  * the matching subpath exports.
  *
  * @packageDocumentation
+ * @module @cosyte/deid
  */
 
 // ── The output label + version (own module, so internal modules read them without an index cycle).
@@ -49,7 +50,7 @@ export { RESTRICTED_ZIP3, RESTRICTED_ZIP3_SOURCE } from "./restricted-zip.js";
 // ── The context holding the consumer's key material (self-redacting; never leaks).
 export { createDeidContext, DeidContext, type DeidContextSpec } from "./context.js";
 
-// ── The corpus registry: cross-document longitudinal consistency + the key contract (DEID-7).
+// ── The corpus registry: cross-document longitudinal consistency + the key contract.
 export { createDeidRegistry, DeidRegistry, type DeidRegistrySpec } from "./registry.js";
 
 // ── The five transforms.
@@ -76,7 +77,7 @@ export {
   type TransformName,
 } from "./policy.js";
 
-// ── Policy profiles: named, reusable presets + the widen-never-narrow contract (DEID-10).
+// ── Policy profiles: named, reusable presets + the widen-never-narrow contract.
 export {
   SAFE_HARBOR_PROFILE,
   LIMITED_DATA_SET_PROFILE,
@@ -130,14 +131,14 @@ export { type UnexaminedResidual } from "./residual.js";
 // ── The engine.
 export { deidentify, type DeidOptions } from "./deidentify.js";
 
-// ── The BYO free-text redaction interface (DEID-8): the library ships the interface, never a detector.
+// ── The BYO free-text redaction interface: the library ships the interface, never a detector.
 export {
   type FreeTextRedactor,
   type FreeTextRedactionRequest,
   type FreeTextRedactionResult,
 } from "./redactor.js";
 
-// ── The Expert-Determination *support* report (DEID-9): supports a determination, never renders one.
+// ── The Expert-Determination *support* report: supports a determination, never renders one.
 export {
   EXPERT_DETERMINATION_DISCLAIMER,
   buildExpertDeterminationSupportReport,

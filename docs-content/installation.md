@@ -1,7 +1,7 @@
 ---
 id: installation
 title: Installation
-sidebar_position: 1
+sidebar_label: Installation
 description: "Install @cosyte/deid and the parser packages for the formats you transform, check the Node.js versions it supports, and run a smoke test."
 ---
 
@@ -26,14 +26,33 @@ configuration.
 npm install @cosyte/deid
 ```
 
+## Install the parser for each format you transform
+
+The root entry point is the format-agnostic core. Each format adapter is a subpath export that reads
+the model of the matching Cosyte parser, which is an **optional peer dependency**: install the ones
+for the formats you handle, and nothing else is pulled in.
+
+| Format        | Import from          | Install beside it |
+| ------------- | -------------------- | ----------------- |
+| HL7 v2        | `@cosyte/deid/hl7`   | `@cosyte/hl7`     |
+| C-CDA         | `@cosyte/deid/ccda`  | `@cosyte/ccda`    |
+| FHIR R4       | `@cosyte/deid/fhir`  | `@cosyte/fhir`    |
+| X12 EDI       | `@cosyte/deid/x12`   | `@cosyte/x12`     |
+| NCPDP Telecom | `@cosyte/deid/ncpdp` | `@cosyte/ncpdp`   |
+| DICOM         | `@cosyte/deid/dicom` | `@cosyte/dicom`   |
+
+```bash
+npm install @cosyte/deid @cosyte/hl7
+```
+
 ## Smoke test
 
 Confirm the package resolves and its output label is the honest one:
 
-```ts
+```ts runnable
 import { OUTPUT_LABEL } from "@cosyte/deid";
 
-console.log(OUTPUT_LABEL); // "Safe-Harbor-transformed per the configured policy"
+OUTPUT_LABEL; // => "Safe-Harbor-transformed per the configured policy"
 ```
 
-Head to the [Quickstart](./quickstart) to de-identify a model.
+Head to the [Quickstart](./quickstart.md) to de-identify a model.

@@ -1,11 +1,11 @@
 ---
 id: guides-x12
-title: De-identifying X12 EDI
-sidebar_position: 8
-description: "What the X12 EDI adapter locates, how each position is transformed, the REF frontier, and its known limitations."
+title: De-identify an X12 interchange
+sidebar_label: X12 EDI
+description: "Run an X12 EDI interchange through the Safe Harbor policy, read what is located, how each position is decided, the REF frontier, and its limits."
 ---
 
-# De-identifying X12 EDI
+# De-identify an X12 interchange
 
 The `@cosyte/deid/x12` adapter is the HIPAA 005010 X12 binding of the de-identification core. It locates
 PHI **structurally** in a parsed X12 interchange (a name is at `NM1-03..07` because the X12 TR3 says so,
@@ -22,27 +22,61 @@ de-identified X12 byte stream plus the core's **value-free manifest**.
 npm install @cosyte/deid @cosyte/x12
 ```
 
-## Quickstart
+## De-identify an interchange
 
-```ts
+Parse the interchange with `@cosyte/x12` and hand it to `deidentifyX12`, or pass the raw text to
+`deidentifyX12String`, which parses and de-identifies in one call. The 837P below is synthetic and
+cut down to one claim.
+
+```ts runnable
 import { parseX12 } from "@cosyte/x12";
 import { deidentifyX12, deidentifyX12String } from "@cosyte/deid/x12";
-import { createDeidContext } from "@cosyte/deid";
 
-const context = createDeidContext({ key: process.env.DEID_KEY! });
+const raw = [
+  "ISA*00*          *00*          *ZZ*COMMERCIAL     *ZZ*CLINICSUBMTR   *260615*0930*^*00501*000000002*0*P*:~",
+  "GS*HC*COMMERCIAL*CLINICSUBMTR*20260615*0930*2*X*005010X222A2~",
+  "ST*837*0002~",
+  "BHT*0019*00*REF01*20260615*0930*CH~",
+  "HL*1**20*1~",
+  "NM1*85*2*BILLINGPROV LLC*****XX*1999999999~",
+  "HL*2*1*22*0~",
+  "SBR*P*18*ZZPOLICY777******CI~",
+  "NM1*IL*1*ZZSUBLAST*ZZSUBFIRST****MI*ZZMEMBERX12~",
+  "N3*ZZSUBSTREET~",
+  "N4*ZZSUBCITY*OH*44101~",
+  "DMG*D8*19850302*M~",
+  "CLM*ZZACCTX12*100.00***11:B:1*Y*A*Y*Y~",
+  "HI*ABK:E1165~",
+  "SV1*HC:99213*100.00*UN*1***1~",
+  "DTP*472*D8*20260601~",
+  "SE*14*0002~",
+  "GE*1*2~",
+  "IEA*1*000000002~",
+].join("\n");
 
-const { x12, manifest } = deidentifyX12(parseX12(raw), { context });
+const { x12, manifest, unexaminedResiduals } = deidentifyX12(parseX12(raw));
 // or, parse + de-identify in one call:
-const out = deidentifyX12String(raw, { context });
+deidentifyX12String(raw).x12 === x12; // => true
 
-x12; // the de-identified interchange (byte-faithful for every untouched segment)
-manifest; // value-free audit: category + locus + disposition, never a value
+x12.includes("NM1*IL*1******MI*~"); // => true
+x12.includes("DMG*D8*1985*M~"); // => true
+x12.includes("N4**OH*441~"); // => true
+x12.includes("NM1*85*2*BILLINGPROV LLC*****XX*1999999999~"); // => true
+x12.includes("SV1*HC:99213*100.00*UN*1***1~"); // => true
+manifest[0]?.code; // => "DEID_PARTY_ROLE_RETAINED"
+unexaminedResiduals.length; // => 0
 ```
+
+The subscriber's name, identifier, street, city and claim account number are gone, the date of
+birth keeps its year, the ZIP keeps a safe three-digit prefix, and the billing provider, the codes
+and the amounts are kept. The manifest names each position, and the provider's row records the
+entity code it was kept on.
 
 The built-in Safe Harbor policy uses **no keyed transform**, so a Safe Harbor pass over an interchange
 needs no `context` at all. Under a preset that keeps consistent keyed surrogates instead, a `context`
 is required and calling without one when the interchange needs it is a fatal `DEID_NO_KEY`: the engine
-never falls back to an unkeyed surrogate.
+never falls back to an unkeyed surrogate. [Choose a policy](./choose-a-policy.md#use-a-profile) shows
+how to pass one.
 
 ## What is located, and how it is transformed
 
@@ -185,3 +219,17 @@ segments (`PLB`, `TS3`, `TS2`), the 837 segments `CUR`, `CR5` to `CR8`, `FRM`, `
 834 segments beyond `INS` / `HD` that carry member detail (`EC`, `ICM`, `HLH`, `LUI`, `COB`, `IDC`).
 The 837 provider taxonomy (`PRV`), other insurance indicators (`OI`) and dental `DN1` / `DN2` segments
 are kept by shape.
+
+## Reference
+
+- [`deidentifyX12`](./api/@cosyte/deid/x12.md#deidentifyx12),
+  [`deidentifyX12String`](./api/@cosyte/deid/x12.md#deidentifyx12string) and
+  [`X12DeidResult`](./api/@cosyte/deid/x12.md#x12deidresult)
+- [`classifyNm1Party`](./api/@cosyte/deid/x12.md#classifynm1party),
+  [`classifyRefQualifier`](./api/@cosyte/deid/x12.md#classifyrefqualifier),
+  [`PROVIDER_ENTITY_CODES`](./api/@cosyte/deid/x12.md#provider_entity_codes),
+  [`EMPLOYER_ENTITY_CODES`](./api/@cosyte/deid/x12.md#employer_entity_codes) and
+  [`X12_FREE_TEXT_ELEMENTS`](./api/@cosyte/deid/x12.md#x12_free_text_elements): the routing this page
+  describes
+- [`DeidOptions`](./api/@cosyte/deid.md#deidoptions)
+- [Codes and categories](./codes-and-categories.md): every disposition and fatal code

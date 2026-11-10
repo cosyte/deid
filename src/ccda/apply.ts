@@ -116,7 +116,7 @@ export function applyCcda(
     const { node } = coord;
     switch (coord.edit) {
       case "clear-element":
-        // A BYO-redacted narrative (DEID-8, `kind === "freetext"`) with a non-null value → write the
+        // A BYO-redacted narrative (`kind === "freetext"`) with a non-null value → write the
         // redacted prose back in place. Gated on `kind`, so a name locus a custom policy pseudonymized
         // (which shares `clear-element`) still empties rather than writing a surrogate as flat text. A
         // removed name or a blocked narrative (null value) empties the element.

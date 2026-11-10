@@ -1,11 +1,11 @@
 ---
 id: concepts-archetype
-title: Core concepts
-sidebar_position: 1
+title: How the library works
+sidebar_label: How it works
 description: "How the library works: it fails closed, applies five transforms over the 18 Safe Harbor categories, and records every decision in a value-free manifest."
 ---
 
-# Core concepts
+# How the library works
 
 `@cosyte/deid` is built from five pieces: the **policy engine**, the **five transforms**, the
 **18-category Safe Harbor model**, the **fail-closed rule**, and the **value-free manifest**.
@@ -51,6 +51,8 @@ stronger transform, and never rewrites a caller's policy name.
 The `SAFE_HARBOR_CATEGORIES` registry models §164.514(b)(2)(i)(A) to (R), including the open-ended
 catch-all **(R)** ("any other unique identifying number, characteristic, or code"), which is exactly
 why fail-closed is not optional: a closed allow-list of 17 concrete types can never satisfy (R).
+[Codes and categories](./codes-and-categories.md#the-18-safe-harbor-categories) lists the 18 and the
+transform each preset assigns.
 
 ## The value-free manifest
 
@@ -73,3 +75,13 @@ shape is still echoed, so this is a bound rather than an impossibility claim.
 ## Immutability
 
 The input model is never mutated; `deidentify` returns a deeply frozen `DeidResult`.
+
+## Put it to use
+
+- [Choose a policy and read the manifest](./choose-a-policy.md)
+- [De-identify an HL7 v2 message](./guides-hl7.md), and the guides for
+  [C-CDA](./guides-ccda.md), [FHIR](./guides-fhir.md), [X12](./guides-x12.md),
+  [NCPDP Telecom](./guides-ncpdp.md) and [DICOM](./guides-dicom.md)
+- [Keep a patient linkable across documents](./guides-longitudinal.md)
+- [Redact free text with your own detector](./guides-freetext.md)
+- [Build an Expert Determination support report](./guides-expert-determination.md)

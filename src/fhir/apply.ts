@@ -101,7 +101,7 @@ function writeFreeText(node: FhirNode, value: string): Rebuilt {
 function applyEdit(node: FhirNode, edit: Edit): Rebuilt {
   switch (edit.edit) {
     case "drop":
-      // A BYO-redacted free-text locus (§Phase 8) with a non-null value → write the redacted prose back
+      // A BYO-redacted free-text locus with a non-null value → write the redacted prose back
       // in place. Gated on `kind`, so a name/telecom locus a custom policy pseudonymized (which shares
       // the `drop` edit) still drops rather than being written through the free-text path. Every other
       // case (a removed/blocked locus, or a null value) omits the node.

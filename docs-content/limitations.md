@@ -1,7 +1,7 @@
 ---
 id: limitations
 title: Known limitations and honesty
-sidebar_position: 2
+sidebar_label: Known limitations
 description: "What @cosyte/deid does and does not do, what fails closed and what that does not cover, the Limited Data Set caveat, and free text."
 ---
 
@@ -123,7 +123,7 @@ Two things follow, and the second is the one that surprises people:
   does not account for, nested sequence items included. **X12 leaves none:** every element it hands
   through, envelope included, is kept only when it has the shape its position expects and is removed
   and recorded otherwise, so its list is always a measured zero. The
-  [X12 guide](guides-x12#every-position-is-decided) says what each position expects.
+  [X12 guide](./guides-x12.md#every-position-is-decided) says what each position expects.
 
 - **The envelope around a document is counted too, in every format that has one.** Retaining a
   _structure_ names no position inside it, so the positions of an HL7 v2 `MSH`, of a CDA document
@@ -421,3 +421,15 @@ transformation with a value-free manifest, never a leaked patient, and never a c
 more than one is **refused** with a typed `DeidError` carrying `DEID_FORMAT_UNSUPPORTED`, and returns no
 transformed message, no manifest and no partial output, so no transaction is dropped or returned
 untransformed. Split such a message and de-identify each transaction on its own.
+
+## Put it to use
+
+- [Choose a policy and read the manifest](./choose-a-policy.md): the profiles above, and what the
+  manifest records
+- [Keep a patient linkable across documents](./guides-longitudinal.md): the limited-data-set preset
+  and the key contract
+- [Redact free text with your own detector](./guides-freetext.md)
+- [Build an Expert Determination support report](./guides-expert-determination.md)
+- The format guides, each with its own limits: [HL7 v2](./guides-hl7.md), [C-CDA](./guides-ccda.md),
+  [FHIR](./guides-fhir.md), [X12](./guides-x12.md), [NCPDP Telecom](./guides-ncpdp.md) and
+  [DICOM](./guides-dicom.md)

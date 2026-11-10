@@ -76,6 +76,7 @@
  * through and counted as unexamined - the same bytes an `Organization` would have had removed.
  *
  * @packageDocumentation
+ * @module @cosyte/deid/fhir
  */
 
 import { parseResource, serializeResource, type FhirComplex } from "@cosyte/fhir";

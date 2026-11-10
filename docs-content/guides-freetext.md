@@ -1,11 +1,11 @@
 ---
 id: guides-freetext
-title: Free text (block-by-default + BYO redaction)
-sidebar_position: 9
+title: Redact free text with your own detector
+sidebar_label: Free text
 description: "Free text is blocked by default; bring your own redactor to transform it, and see what the library does and does not guarantee."
 ---
 
-# Free text (block-by-default + BYO redaction)
+# Redact free text with your own detector
 
 Structured PHI is tractable: the parser tells the engine exactly where a name, a date, or an MRN lives,
 and the adapter removes or transforms it. **Free text is different.** Narrative loci (C-CDA narrative
@@ -37,8 +37,8 @@ const result = deidentify(
   {},
 );
 
-result.document.loci[0].value; // => null
-result.manifest[0].code === DEID_DISPOSITION_CODES.DEID_FREETEXT_BLOCKED; // => true
+result.document.loci[0]?.value; // => null
+result.manifest[0]?.code === DEID_DISPOSITION_CODES.DEID_FREETEXT_BLOCKED; // => true
 ```
 
 > **The library bundles no PHI detector.** It ships **no** NLP model and **no** built-in regex scrub: a
@@ -65,8 +65,8 @@ const result = deidentify(
   { redactor },
 );
 
-result.document.loci[0].value; // => "seen by [NAME] today"
-result.manifest[0].code === DEID_DISPOSITION_CODES.DEID_FREETEXT_CONSUMER_REDACTED; // => true
+result.document.loci[0]?.value; // => "seen by [NAME] today"
+result.manifest[0]?.code === DEID_DISPOSITION_CODES.DEID_FREETEXT_CONSUMER_REDACTED; // => true
 ```
 
 The manifest records a BYO-redacted locus with the `byo-redact` transform and the
@@ -95,8 +95,8 @@ const result = deidentify(
   { redactor: flaky },
 );
 
-result.document.loci[0].value; // => null
-result.manifest[0].code === DEID_DISPOSITION_CODES.DEID_FREETEXT_BLOCKED; // => true
+result.document.loci[0]?.value; // => null
+result.manifest[0]?.code === DEID_DISPOSITION_CODES.DEID_FREETEXT_BLOCKED; // => true
 ```
 
 ## The honesty boundary (what the library does NOT guarantee)
@@ -117,3 +117,14 @@ Two things are unchanged no matter what the redactor does:
 The library's promise stays narrow and honest: a **fail-closed** free-text default, an **orchestrated**
 BYO redaction path whose completeness is the consumer's, and a **value-free manifest** that records which
 path each locus took, never the value.
+
+## Reference
+
+- [`FreeTextRedactor`](./api/@cosyte/deid.md#freetextredactor),
+  [`FreeTextRedactionRequest`](./api/@cosyte/deid.md#freetextredactionrequest) and
+  [`FreeTextRedactionResult`](./api/@cosyte/deid.md#freetextredactionresult)
+- [`deidentify`](./api/@cosyte/deid.md#deidentify) and
+  [`DeidOptions`](./api/@cosyte/deid.md#deidoptions): the `redactor` option
+- [`DEID_DISPOSITION_CODES`](./api/@cosyte/deid.md#deid_disposition_codes)
+- [Codes and categories](./codes-and-categories.md#disposition-codes): `DEID_FREETEXT_BLOCKED` and
+  `DEID_FREETEXT_CONSUMER_REDACTED`

@@ -43,6 +43,7 @@
  * residual inventory can be told apart from an unmeasured one.
  *
  * @packageDocumentation
+ * @module @cosyte/deid/ccda
  */
 
 import { parseCcda, parseSecureXml, resolveLimits, type CcdaDocument } from "@cosyte/ccda";
