@@ -568,6 +568,44 @@ function x12ShiftedNumbersCase(): CorpusCase {
   };
 }
 
+// ── X12 EDI, dates shifted by a separator added or left out ─────────────────────────────────────────
+// A date of death two places late lands in the patient's weight (`PAT-08`), with a unit code before it
+// that is a real code but not the pound the TR3s allow there. An adjudication or check date lands in an
+// `STC` amount or the check number after a separator is added or left out. Each is removed with every
+// value after the place the shift shows. The 270, 271 and 278 controls are well formed for their own
+// set and keep every value: their TR3s do not require `INS-03` / `-05` or the service line charge.
+function x12ShiftedDatesCase(): CorpusCase {
+  const ctx = createDeidContext({ key: "x12-corpus-synthetic-hmac-key", patientId: "p-x12" });
+  const raw = FIX("x12", "shifted-dates.edi");
+  const { x12, manifest, unexaminedResiduals } = deidentifyX12String(raw, { context: ctx });
+  return {
+    name: "x12-shifted-dates",
+    deidWire: x12,
+    manifest,
+    unexaminedResiduals,
+    decidesEveryPosition: true,
+    originalWire: raw,
+    sentinels: [
+      "20250117", // a date of death in PAT-08, after two extra separators (patient and subscriber)
+      "20260126", // the STC-02 status date, generalized where it is in place
+      "20260128", // an adjudication date in STC-05 (STC-03's empty slot left out)
+      "20260129", // a check issue date in STC-07
+      "20260130", // an adjudication date, generalized where it is in place
+      "20260131", // a check issue date in STC-09 (one extra separator)
+      "ZZCHECK02", // a check number in STC-08
+    ],
+    survivors: [
+      "PAT*19****D8*2024*01*165~",
+      "STC*A1:20*2026**150*150*2026*CHK*2026*ZZCHECKOK~",
+      "INS*Y*18***************1~",
+      "INS*Y*18*001*25*************1~",
+      "SV1*HC:99213**UN*1~",
+      "SV2*0300*HC:80053**UN*1~",
+      "SV3*AD:D2391*****1~",
+    ],
+  };
+}
+
 // ── X12 EDI, people who can be the individual or stand for the individual ────────────────────────────
 // The 835 Other Subscriber (`NM1*GB`) and the 834 responsible persons (`GB`, `6Y`, `9K`) and drop-off
 // person (`45`) name the individual, a relative or someone acting for them. Each one's name and
@@ -695,6 +733,7 @@ const CASES: readonly CorpusCase[] = [
   x12ShiftedCase(),
   x12FailClosedCase(),
   x12ShiftedNumbersCase(),
+  x12ShiftedDatesCase(),
   x12PersonsCase(),
   x12PremiumCase(),
   ncpdpCase(),

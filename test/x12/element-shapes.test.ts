@@ -113,31 +113,34 @@ describe("each position keeps a value of its shape and removes any other", () =>
 
   // CLM-01 is the patient account number, which the pass transforms, so these compare the output with
   // it removed. CLM-01 cannot be empty here: it is required, and an empty one before a value is a shift.
-  it("CLM composites: too many components removes the composite, the claim's codes stay", () => {
+  it("CLM composites: too many components removes the composite, and a shift point when required", () => {
+    // CLM-05 is required: when it fails its shape, the amount before it (no code or date shows it is in
+    // place) and every value after it may be shifted ones, so they are removed. CLM-11 is not required,
+    // but it is a composite of codes, so it is a shift point too: CLM-09 held, and nothing follows.
     const CLAIM: readonly (readonly [
       kept: string,
       out: string,
       wrong: string,
-      position: string,
+      positions: readonly string[],
     ])[] = [
       [
         "CLM*ZZACCTES*1.00***11:B:1~",
         "CLM**1.00***11:B:1~",
         "CLM*ZZACCTES*1.00***11:B:1:ZZ~",
-        "CLM[0]-5",
+        ["CLM[0]-2", "CLM[0]-5"],
       ],
       [
         "CLM*ZZACCTES*1.00***11:B:1*Y*A*Y*Y**AA:::OH:US~",
         "CLM**1.00***11:B:1*Y*A*Y*Y**AA:::OH:US~",
         "CLM*ZZACCTES*1.00***11:B:1*Y*A*Y*Y**AA:::ZZ:US~",
-        "CLM[0]-11",
+        ["CLM[0]-11"],
       ],
     ];
-    for (const [kept, out, wrong, position] of CLAIM) {
+    for (const [kept, out, wrong, positions] of CLAIM) {
       const good = one(kept);
       expect(good.out).toBe(out);
       expect(good.blocked).toEqual([]);
-      expect(one(wrong).blocked).toEqual([position]);
+      expect(one(wrong).blocked).toEqual(positions);
     }
   });
 

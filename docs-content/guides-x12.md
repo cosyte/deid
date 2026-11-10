@@ -122,6 +122,17 @@ rule names. The adapter decides every element it hands through, so none of those
   own position: `HI*BH:11:D8::20260118` loses the date in `C022-05`, and `CLM**4455667701*150...`
   loses everything after the empty `CLM-01`. An `HI` amount or quantity (`C022-05` / `06`) is kept only
   under a value code (`BE`), the one qualifier the TR3s give an amount.
+- **A shift left is caught by the first value out of place.** A missing separator moves every later
+  value one place left, so no position is left empty. A value that fails the shape of a required
+  position, or of a narrow one (a code, a date, a composite of codes), shows the shift instead: `PAT-07`
+  keeps only `01`, the pound the TR3s allow, so `PAT*19******D8*20250117` loses the date of death in
+  `PAT-08`, and `STC*F1:65*20260126*150*100*20260128...` loses the adjudication date in `STC-05`
+  because `150` is no action code. The values between the last narrow position whose value held and
+  that one may be shifted ones too, so they are removed with every value after it. The `ISA` is read at
+  fixed byte positions, so nothing in it can be shifted, and each of its elements is decided alone.
+- **The required positions are read for the transaction set.** A position is required where the TR3
+  of the set the segment sits in requires it: the 270 and 271 `INS` keep `INS-17` with no `INS-03` or
+  `INS-05`, and a 278 service line keeps its unit and count with no line charge.
 - **A free-text component is removed**: a procedure description inside `SV1-01`, a 999's copy of a bad
   data element (`IK4-04`), the business unit value a 999 context names (`CTX-01-2`).
 - **A position no rule names is removed**: `NM1-10` onward, `N1-05` onward, `REF-03` onward, and any

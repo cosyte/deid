@@ -78,13 +78,14 @@ export type X12ComponentShape =
  * How one element position is decided when no locus rule acted on it:
  *
  * - `keep`: kept when its value passes {@link X12ElementShape.test} (every repetition of it, when the
- *   element repeats);
+ *   element repeats). `anchor` marks a shape narrow enough that a value failing it shows a shift on its
+ *   own: a code from the element's list, or a date. Every value after it is then removed too;
  * - `date`: a date of the individual, transformed as a date when it is valid in the declared format;
  * - `composite`: split on the component separator and decided component by component. A composite
  *   with more components than the shape names, or a component that fails its test, is removed whole.
  */
 export type X12ElementShape =
-  | { readonly kind: "keep"; readonly test: X12ShapeTest }
+  | { readonly kind: "keep"; readonly test: X12ShapeTest; readonly anchor?: boolean }
   | { readonly kind: "date"; readonly format: X12DateFormatSource }
   | {
       readonly kind: "composite";
@@ -99,35 +100,66 @@ export type X12ElementShape =
  * there: a number shape cannot tell a shifted date or account number from an amount, so the shift is
  * detected instead, and every value after the empty position is removed and recorded.
  *
- * - `required`: a position the 005010 TR3s require in every transaction set that uses the segment;
+ * - `required`: a position the 005010 TR3 of the transaction set requires;
  * - `implied`: `[when, then]`, a position another one implies: when `when` holds a value, `then` must
- *   too. A date format implies a date, and the X12 syntax notes pair a qualifier with its value.
+ *   too. A date format implies a date, and the X12 syntax notes pair a qualifier with its value;
+ * - `spans`: `{ gap, after }`, a run of positions that cannot all be empty while a value sits before
+ *   the run and another sits at one of the `after` positions.
+ *
+ * Every position these name is also checked by shape: a value there that fails the shape its position
+ * expects marks a shift too, and every value after it is removed.
  */
 export interface X12PositionRequirements {
   /** The 1-based positions the TR3s require. */
   readonly required?: readonly number[];
   /** `[when, then]` pairs: when position `when` holds a value, position `then` must too. */
   readonly implied?: readonly (readonly [when: number, then: number])[];
+  /** Runs that cannot all be empty between a value before them and a value at one of `after`. */
+  readonly spans?: readonly {
+    readonly gap: readonly number[];
+    readonly after: readonly number[];
+  }[];
+}
+
+/** What {@link x12ShiftPoint} reads about each 1-based position of a segment or a composite. */
+export interface X12ShiftProbe {
+  /** Whether the position holds a value. */
+  readonly present: (position: number) => boolean;
+  /** Whether the value at the position fails the shape its position expects (`false` with no shape). */
+  readonly fails: (position: number) => boolean;
+  /**
+   * Whether the position's shape is narrow (a code, a date, a composite of codes), so that a value
+   * failing it marks a shift, and a value passing it shows the values before it are in place.
+   */
+  readonly anchored: (position: number) => boolean;
 }
 
 /**
- * The **shift point** of a segment or a composite: the first position that its requirements say must
- * hold a value, that is empty, and that some later position holds a value after. Every value after it
- * was shifted there. `undefined` when there is none.
+ * The **shift point** of a segment or a composite: the position after which a separator was added or
+ * left out. Every value after it may have been shifted, and is removed. It is the first of:
  *
- * @param present - Whether the 1-based position holds a value.
+ * - a position the requirements say must hold a value, that is empty while a later position holds one;
+ * - a run of `spans` that is empty between a value before it and a value at one of its `after` positions;
+ * - for a position the requirements name, or one whose shape is narrow, that holds a value failing its
+ *   shape: the last narrow position before it whose value passed. A missing separator shifts every
+ *   later value one place left, so the values between the last position known to be in place and the
+ *   first one that is not can all be shifted ones: a date moved into an amount passes the amount's
+ *   shape. This catches a value shifted left as well as one shifted right.
+ *
+ * `undefined` when there is none, and `0` when no value of the segment or composite can be placed.
+ *
+ * @param probe - What the pass reads about each position.
  * @param last - The last position there is.
  * @param requirements - The positions that cannot be empty while a later one holds a value.
- * @returns The 1-based shift point, or `undefined`.
+ * @returns The 1-based shift point, `0`, or `undefined`.
  * @internal
  */
 export function x12ShiftPoint(
-  present: (position: number) => boolean,
+  probe: X12ShiftProbe,
   last: number,
   requirements: X12PositionRequirements,
 ): number | undefined {
-  const needed = new Set<number>(requirements.required);
-  for (const [when, then] of requirements.implied ?? []) if (present(when)) needed.add(then);
+  const { present } = probe;
   let lastPresent = 0;
   for (let n = last; n > 0; n -= 1) {
     if (present(n)) {
@@ -135,8 +167,29 @@ export function x12ShiftPoint(
       break;
     }
   }
-  const empty = [...needed].filter((n) => n < lastPresent && !present(n));
-  return empty.length === 0 ? undefined : Math.min(...empty);
+  const named = new Set<number>(requirements.required);
+  const needed = new Set<number>(requirements.required);
+  for (const [when, then] of requirements.implied ?? []) {
+    named.add(when).add(then);
+    if (present(when)) needed.add(then);
+  }
+  const points = [...needed].filter((n) => n < lastPresent && !present(n));
+  for (const { gap, after } of requirements.spans ?? []) {
+    const first = Math.min(...gap);
+    for (const n of [...gap, ...after]) named.add(n);
+    let before = false;
+    for (let n = 1; n < first; n += 1) before ||= present(n);
+    if (before && !gap.some(present) && after.some(present)) points.push(first);
+  }
+  for (let n = 1; n <= lastPresent; n += 1) {
+    if (present(n) && (named.has(n) || probe.anchored(n)) && probe.fails(n)) {
+      let held = n - 1;
+      while (held > 0 && !(present(held) && probe.anchored(held) && !probe.fails(held))) held -= 1;
+      points.push(held);
+      break;
+    }
+  }
+  return points.length === 0 ? undefined : Math.min(...points);
 }
 
 /* ------------------------------------------------------------------------- primitive tests */
@@ -240,8 +293,10 @@ function codeOf(element: X12CodeListElement): X12ShapeTest {
 }
 
 const keep = (test: X12ShapeTest): X12ElementShape => ({ kind: "keep", test });
+/** A code or a date position: a value failing its shape marks a shift (see {@link x12ShiftPoint}). */
+const anchor = (test: X12ShapeTest): X12ElementShape => ({ kind: "keep", test, anchor: true });
 /** A position whose data element has a code list: kept when it holds one of the element's codes. */
-const code = (element: X12CodeListElement): X12ElementShape => keep(codeOf(element));
+const code = (element: X12CodeListElement): X12ElementShape => anchor(codeOf(element));
 const part = (test: X12ShapeTest): X12ComponentShape => ({ kind: "keep", test });
 /** A component whose data element has a code list: kept when it holds one of the element's codes. */
 const codePart = (element: X12CodeListElement): X12ComponentShape => part(codeOf(element));
@@ -259,8 +314,8 @@ const paired = (a: number, b: number): readonly (readonly [number, number])[] =>
   [b, a],
 ];
 
-const DATE8 = keep(isD8);
-const DATE6 = keep(isD6);
+const DATE8 = anchor(isD8);
+const DATE6 = anchor(isD6);
 const TIME = keep(isTime);
 const TIME4 = keep(isTime4);
 const DECIMAL = keep(isDecimal);
@@ -296,8 +351,14 @@ const QUANTITY_QUALIFIER = code("673");
 /** Element 355, unit or basis for measurement code. */
 const UNIT = code("355");
 
+/**
+ * `PAT-07`, the unit of the patient's weight: the 837 TR3s allow only `01` (actual pounds) of element
+ * 355. Any other unit there, `D8` above all, is a value shifted out of `PAT-05`.
+ */
+const PATIENT_WEIGHT_UNIT = anchor(inSet(new Set<string>(["01"])));
+
 /** Element 1365, service type code (`EB-03`, `EQ-01`, `UM-03`); the first two repeat. */
-const SERVICE_TYPE = keep(repeating(codeOf("1365")));
+const SERVICE_TYPE = anchor(repeating(codeOf("1365")));
 
 /** The qualifier of the composite a component test is reading. */
 function firstComponent(ctx: X12ShapeContext): string {
@@ -723,7 +784,7 @@ export const X12_ELEMENT_SHAPES: Readonly<
     4: code("1220"),
     5: DATE_FORMAT,
     6: { kind: "date", format: { from: "element", position: 5 } },
-    7: UNIT,
+    7: PATIENT_WEIGHT_UNIT,
     8: DECIMAL,
     9: YES_NO,
   },
@@ -1068,18 +1129,25 @@ for (let n = 5; n <= 17; n += 3) CAS_IMPLIED.push([n, n + 1], [n + 1, n], [n + 2
  * value after it is removed and recorded, each at its own position: a number shape cannot tell a shifted
  * date or account number from an amount (`CLM**4455667701*150...` puts the account number in `CLM-02`).
  *
- * `required` lists the positions the TR3s mark required in every transaction set that uses the
- * segment, so a well-formed segment never has one empty before a value. `implied` lists the pairs a
- * qualifier implies: a date format and its date (`PAT-05` / `06`, `INS-11` / `12`), a unit or a
- * qualifier and its value (`PAT-07` / `08`, `CR1-01` / `02`, `EB-09` / `10`, `HSD-01` / `02`), and
- * the `CAS` adjustment triples. Keyed by segment id.
+ * `required` lists the positions the TR3s mark required, so a well-formed segment never has one empty
+ * before a value. This table holds the usage of the transaction sets the segment is built for (the 837
+ * for a claim segment, the 834 for `INS`); a set whose TR3 uses the segment differently has its own
+ * entry in {@link X12_SEGMENT_REQUIREMENTS_BY_SET}, read first. `implied` lists the pairs a qualifier
+ * implies: a date format and its date (`PAT-05` / `06`, `INS-11` / `12`), a unit or a qualifier and its
+ * value (`PAT-07` / `08`, `CR1-01` / `02`, `EB-09` / `10`, `HSD-01` / `02`), a payment method and its
+ * check date and number (`STC-07`), and the `CAS` adjustment triples. Keyed by segment id.
+ *
+ * Every position named here, and every code or date position of the segment, is also checked by shape:
+ * a value there that fails its shape marks a shift, so a value shifted left by a missing separator is
+ * caught as well as one shifted right.
  *
  * @internal
  */
 export const X12_SEGMENT_REQUIREMENTS: Readonly<Record<string, X12PositionRequirements>> =
   Object.freeze({
     /* ---- the envelope: every position the counts and control numbers follow is required ---- */
-    ISA: { required: [1, 3, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16] },
+    // The ISA has none: the parser reads it at fixed byte positions and refuses one whose separators
+    // are not all in place, so no value in it can be shifted.
     TA1: { required: [1, 2, 3, 4, 5] },
     GS: { required: [1, 2, 3, 4, 5, 6, 7, 8] },
     GE: { required: [1, 2] },
@@ -1099,7 +1167,12 @@ export const X12_SEGMENT_REQUIREMENTS: Readonly<Record<string, X12PositionRequir
     CLP: { required: [1, 2, 3, 4, 6] },
     AMT: { required: [1, 2] },
     QTY: { required: [1, 2] },
-    PAT: { implied: [...paired(5, 6), ...paired(7, 8)] },
+    // A weight (PAT-07 / 08) with no date of death before it, after a relationship code: two extra
+    // separators before PAT-05 put the date format and the date of death there.
+    PAT: {
+      implied: [...paired(5, 6), ...paired(7, 8)],
+      spans: [{ gap: [5, 6], after: [7, 8] }],
+    },
     CAS: { required: [1, 2, 3], implied: CAS_IMPLIED },
     MIA: { required: [1] },
     LX: { required: [1] },
@@ -1125,7 +1198,17 @@ export const X12_SEGMENT_REQUIREMENTS: Readonly<Record<string, X12PositionRequir
     EB: { required: [1], implied: paired(9, 10) },
     INS: { required: [1, 2, 3, 5], implied: paired(11, 12) },
     REL: { required: [1] },
-    STC: { required: [1, 2] },
+    // A payment method implies the check date and number; a check number implies its date; a payment
+    // amount implies the charge it pays.
+    STC: {
+      required: [1, 2],
+      implied: [
+        [7, 8],
+        [7, 9],
+        [9, 8],
+        [5, 4],
+      ],
+    },
     HCR: { required: [1] },
 
     /* ---- the 999 acknowledgment ---- */
@@ -1137,6 +1220,60 @@ export const X12_SEGMENT_REQUIREMENTS: Readonly<Record<string, X12PositionRequir
     AK9: { required: [1, 2, 3, 4] },
     CTX: { required: [1] },
   });
+
+/**
+ * The **requirements of a segment in a transaction set whose TR3 uses it differently** from the default
+ * table ({@link X12_SEGMENT_REQUIREMENTS}), keyed by `ST-01` and then by segment id. A position that is
+ * situational or not used in a set is never required there, so a well-formed segment of that set keeps
+ * its values.
+ *
+ * - The 270 and 271 `INS` (2100C / 2100D) carry `INS-01` and `-02`, then `INS-17`, the birth sequence
+ *   number. `INS-03` and `-04` are situational in the 271 and `INS-05` is not used in either set.
+ * - In the 278 (X217) the `SV1`, `SV2` and `SV3` line charge is situational, and so is the unit and
+ *   count that follow it; a unit still implies its count. `SV101` and `SV301` stay required. `CR1` and
+ *   `CR3` keep only their paired positions there.
+ *
+ * No requirement differs between implementation guides that share an `ST-01` (the 837P, 837I and 837D,
+ * or the 277 and 277CA), so the set id alone keys the table.
+ *
+ * @internal
+ */
+export const X12_SEGMENT_REQUIREMENTS_BY_SET: Readonly<
+  Record<string, Readonly<Record<string, X12PositionRequirements>>>
+> = Object.freeze({
+  "270": { INS: { required: [1, 2] } },
+  "271": { INS: { required: [1, 2] } },
+  "278": {
+    SV1: { required: [1], implied: paired(3, 4) },
+    SV2: { implied: paired(4, 5) },
+    SV3: { required: [1] },
+    CR1: { implied: [...paired(1, 2), ...paired(5, 6)] },
+    CR3: { implied: paired(2, 3) },
+  },
+});
+
+/**
+ * The requirements of segment `segId` in the transaction set `ST-01` names: the set's own entry when
+ * its TR3 uses the segment differently ({@link X12_SEGMENT_REQUIREMENTS_BY_SET}), and the default table
+ * otherwise. An envelope segment has no set (`""`).
+ *
+ * @param segId - The segment id.
+ * @param transactionSetId - The `ST-01` of the transaction set the segment sits in.
+ * @returns The requirements, or `undefined` when the segment has none.
+ * @internal
+ */
+export function x12SegmentRequirements(
+  segId: string,
+  transactionSetId: string,
+): X12PositionRequirements | undefined {
+  const bySet = Object.hasOwn(X12_SEGMENT_REQUIREMENTS_BY_SET, transactionSetId)
+    ? X12_SEGMENT_REQUIREMENTS_BY_SET[transactionSetId]
+    : undefined;
+  if (bySet !== undefined && Object.hasOwn(bySet, segId)) return bySet[segId];
+  return Object.hasOwn(X12_SEGMENT_REQUIREMENTS, segId)
+    ? X12_SEGMENT_REQUIREMENTS[segId]
+    : undefined;
+}
 
 /**
  * The **date positions a locus rule transforms**, each with where it reads its declared format:

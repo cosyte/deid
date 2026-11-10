@@ -46,9 +46,10 @@ import {
 import {
   X12_ELEMENT_SHAPES,
   X12_RULE_DATE_FORMATS,
-  X12_SEGMENT_REQUIREMENTS,
   isX12DateInFormat,
+  x12SegmentRequirements,
   x12ShiftPoint,
+  type X12ComponentShape,
   type X12DateFormatSource,
   type X12ElementShape,
   type X12ShapeContext,
@@ -660,13 +661,75 @@ function handleSegment(out: X12LocusAccumulator, seg: X12Segment, pos: SegPos): 
   // its shape. A segment whose identifier is not recognized never reaches here (see closeSegment).
 }
 
+/** How a composite element is decided: removed whole, or kept with these components removed. */
+type CompositeJudgment =
+  | { readonly whole: true }
+  | {
+      readonly whole: false;
+      readonly decisions: readonly { readonly component: number; readonly date: boolean }[];
+    };
+
 /**
- * Decide one composite element component by component against its shape. A composite with more
- * components than the shape names, or a kept component that fails its test, is not trusted at all and
- * is removed whole. Otherwise the element is kept, except that a free-text component is removed, a
- * date component is transformed as a date (or removed, when it is no date in its declared format), and
- * a value whose qualifier is a real code with no shape the pass knows is removed on its own, each
- * recorded at its own component position (`837/HI[0]-1-4`).
+ * Judge one composite element component by component against its shape, without recording anything.
+ * A composite with more components than the shape names, or a kept component that fails its test, is
+ * not trusted at all and is removed whole. Otherwise the element is kept, except that a free-text
+ * component is removed, a date component is transformed as a date (or removed, when it is no date in
+ * its declared format), a value whose qualifier is a real code with no shape the pass knows is removed
+ * on its own, and every value after the composite's shift point is removed.
+ */
+function judgeComposite(
+  seg: SegmentElements,
+  components: readonly string[],
+  shape: Extract<X12ElementShape, { kind: "composite" }>,
+  ctx: X12ShapeContext,
+): CompositeJudgment {
+  if (components.length > shape.components.length) return { whole: true };
+  // `n` is in range wherever these read it: the length check above bounds it by the shape's list.
+  const spec = (n: number): X12ComponentShape => shape.components[n - 1] as X12ComponentShape;
+  const value = (n: number): string => components[n - 1] ?? "";
+  const dateFails = (n: number): boolean => {
+    const at = spec(n);
+    return (
+      at.kind === "date" && !isX12DateInFormat(value(n), declaredFormat(at.format, seg, components))
+    );
+  };
+  // A component the composite requires, or one an earlier component implies, left empty while a later
+  // one holds a value, or a date component that is no date in its format: every value after it, or
+  // after the last component before it that held, was shifted there, and is removed on its own. A
+  // kept component that fails its test removes the composite whole below, so only a date fails here.
+  const shift = x12ShiftPoint(
+    {
+      present: (n) => value(n).length > 0,
+      fails: dateFails,
+      anchored: (n) => spec(n).kind !== "free",
+    },
+    components.length,
+    shape.requirements ?? {},
+  );
+  const decisions: { readonly component: number; readonly date: boolean }[] = [];
+  for (const [i, text] of components.entries()) {
+    const n = i + 1;
+    if (text.length === 0) continue;
+    if (shift !== undefined && n > shift) {
+      decisions.push({ component: n, date: false });
+      continue;
+    }
+    const at = spec(n);
+    if (at.kind === "keep") {
+      const withComponents = { ...ctx, components };
+      if (at.test(text, withComponents)) continue;
+      if (at.alone?.(text, withComponents) !== true) return { whole: true };
+      decisions.push({ component: n, date: false });
+    } else {
+      decisions.push({ component: n, date: at.kind === "date" && !dateFails(n) });
+    }
+  }
+  return { whole: false, decisions };
+}
+
+/**
+ * Decide one composite element component by component against its shape ({@link judgeComposite}), and
+ * record each removed or transformed component at its own component position (`837/HI[0]-1-4`).
  */
 function decideComposite(
   out: X12LocusAccumulator,
@@ -677,48 +740,17 @@ function decideComposite(
   ctx: X12ShapeContext,
 ): void {
   const components = el(seg, element).split(out.delimiters.component);
-  const decisions: { readonly component: number; readonly date: boolean }[] = [];
-  const whole = (): void => {
+  const judgment = judgeComposite(seg, components, shape, ctx);
+  // A composite that fails its shape is a shift point, so the closing sweep removes it before it gets
+  // here; removing it whole stays the fail-closed answer should one ever arrive.
+  /* v8 ignore next 4 -- the closing sweep removes a composite that fails its shape before this */
+  if (judgment.whole) {
     blockElement(out, seg, pos, element);
-  };
-  if (components.length > shape.components.length) {
-    whole();
     return;
   }
-  // A component the composite requires, or one an earlier component implies, left empty while a later
-  // one holds a value: every value after it was shifted there, and is removed on its own.
-  const shift = x12ShiftPoint(
-    (n) => (components[n - 1] ?? "").length > 0,
-    components.length,
-    shape.requirements ?? {},
-  );
-  for (const [i, value] of components.entries()) {
-    if (value.length === 0) continue;
-    if (shift !== undefined && i + 1 > shift) {
-      decisions.push({ component: i + 1, date: false });
-      continue;
-    }
-    // `i` is in range: the length check above bounds it by the shape's own component list.
-    const spec = shape.components[i] as (typeof shape.components)[number];
-    if (spec.kind === "keep") {
-      const at = { ...ctx, components };
-      if (spec.test(value, at)) continue;
-      if (spec.alone?.(value, at) === true) {
-        decisions.push({ component: i + 1, date: false });
-        continue;
-      }
-      whole();
-      return;
-    } else if (spec.kind === "free") {
-      decisions.push({ component: i + 1, date: false });
-    } else {
-      const valid = isX12DateInFormat(value, declaredFormat(spec.format, seg, components));
-      decisions.push({ component: i + 1, date: valid });
-    }
-  }
   name(out, pos, [element]);
-  for (const { component, date } of decisions) {
-    // `component` is a 1-based index of a component this loop read out of `components` above.
+  for (const { component, date } of judgment.decisions) {
+    // `component` is a 1-based index of a component the judgment read out of `components`.
     const value = components[component - 1] as string;
     const at = `${path(pos, element)}-${String(component)}`;
     push(
@@ -730,6 +762,29 @@ function decideComposite(
       { ...coord(pos, [element]), component },
     );
   }
+}
+
+/**
+ * `true` when the value at element `element` fails the shape its position expects: a `keep` value that
+ * fails its test, a date that is no date in its declared format, or a composite that would be removed
+ * whole. A position with no shape (one a locus rule decides, or one the pass does not keep) fails
+ * nothing here.
+ */
+function failsShape(
+  seg: SegmentElements,
+  shape: X12ElementShape | undefined,
+  element: number,
+  ctx: X12ShapeContext,
+): boolean {
+  // A required position with no shape is one a locus rule decides, and the sweep never asks about one.
+  /* v8 ignore next -- the sweep reads only undecided positions that are required or have a shape */
+  if (shape === undefined) return false;
+  const value = el(seg, element);
+  if (shape.kind === "keep") return !shape.test(value, ctx);
+  if (shape.kind === "date") {
+    return !isX12DateInFormat(value, declaredFormat(shape.format, seg, []));
+  }
+  return judgeComposite(seg, value.split(ctx.component), shape, ctx).whole;
 }
 
 /**
@@ -783,20 +838,31 @@ function closeSegment(
     return;
   }
   name(out, pos, [0]);
-  // A position the TR3s require, or one a qualifier implies, left empty while a later one holds a
-  // value: every value after it was shifted there by an extra separator. A number shape cannot tell a
-  // shifted date or account number from an amount, so each of them is removed and recorded instead.
-  const requirements = X12_SEGMENT_REQUIREMENTS[pos.segId];
-  const shift =
-    requirements === undefined
-      ? undefined
-      : x12ShiftPoint(
-          (n) => isValueBearing(seg, pos.segId, n),
-          seg.elements.length - 1,
-          requirements,
-        );
+  // A position the set's TR3 requires, or one a qualifier implies, left empty while a later one holds a
+  // value, or a required, qualifier, code or date position whose value fails its shape: every value
+  // after it was shifted by an extra or a missing separator. A number shape cannot tell a shifted date
+  // or account number from an amount, so each of them is removed and recorded instead.
+  const shapes = X12_ELEMENT_SHAPES[pos.segId] ?? {};
+  const ctx: X12ShapeContext = { ...out.delimiters, elements: seg.elements };
+  const decided = (n: number): boolean => out.named.get(segKey(pos))?.has(n) === true;
+  // The ISA is read at fixed byte positions, and the parser refuses one whose separators are not all
+  // in place, so no value in it can be shifted: each element is decided by its own shape alone.
+  const fixed = pos.segId === FIXED_WIDTH_SEGMENT_ID;
+  const shift = x12ShiftPoint(
+    {
+      present: (n) => isValueBearing(seg, pos.segId, n),
+      fails: (n) => !decided(n) && failsShape(seg, shapes[n], n, ctx),
+      anchored: (n) => {
+        const shape = shapes[n];
+        if (fixed || shape === undefined) return false;
+        return shape.kind !== "keep" || shape.anchor === true;
+      },
+    },
+    seg.elements.length - 1,
+    x12SegmentRequirements(pos.segId, pos.stId) ?? {},
+  );
   for (let n = 1; n < seg.elements.length; n += 1) {
-    if (out.named.get(segKey(pos))?.has(n) === true) continue;
+    if (decided(n)) continue;
     if (!isValueBearing(seg, pos.segId, n)) continue;
     if (shift !== undefined && n > shift) blockElement(out, seg, pos, n);
     else decideByShape(out, seg, pos, n);

@@ -54,6 +54,12 @@ const DEFINITIONS = JSON.parse(
 const CODED = new Set<string>(DEFINITIONS.coded);
 const LISTED = new Set<string>(X12_CODE_LIST_ELEMENTS);
 
+/**
+ * The positions whose TR3s allow only part of the element's list, with the codes they allow. `PAT-07`
+ * is the unit of the patient's weight, and the 837 TR3s allow only `01` (actual pounds) there.
+ */
+const NARROWED: Readonly<Record<string, readonly string[]>> = { "PAT-7": ["01"] };
+
 /** A value that is a code of no element: too long for any of them. */
 const NO_CODE = "ZZNOTACODE";
 
@@ -121,10 +127,12 @@ describe("every code position the shape table keeps uses its element's complete 
   });
 
   for (const { label, element, test } of positions) {
-    it(`${label} (element ${element}) keeps every code of the list and removes a value that is no code`, () => {
+    it(`${label} (element ${element}) keeps every code of the list the TR3s allow there and removes a value that is no code`, () => {
       expect(LISTED.has(element)).toBe(true);
-      const missed = [...listOf(element)].filter((code) => !test(code));
-      expect(missed).toEqual([]);
+      const narrowed = Object.hasOwn(NARROWED, label) ? NARROWED[label] : undefined;
+      const kept = [...listOf(element)].filter((code) => test(code));
+      if (narrowed === undefined) expect(kept).toEqual([...listOf(element)]);
+      else expect(kept).toEqual(narrowed);
       expect(test(NO_CODE)).toBe(false);
     });
   }

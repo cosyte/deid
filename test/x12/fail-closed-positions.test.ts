@@ -107,11 +107,13 @@ describe("a code or date position the rules keep accepts only a value of its sha
     expect(blockedAt(manifest, "837/SBR[0]-2")).toBe(true);
   });
 
-  it("HI: an identifier where a diagnosis code belongs is removed with its entry", () => {
+  it("HI: an identifier where a diagnosis code belongs is removed with its entry and every entry after it", () => {
+    // HI-01 is required, so a value there that fails its shape marks a shift: what follows is removed.
     const { x12, manifest } = run(wrap("HI*ABK:ZZHIMEMBER*ABF:E119~", 3));
     expect(x12).not.toContain("ZZHIMEMBER");
-    expect(body(x12)).toEqual(["HI**ABF:E119~"]);
+    expect(body(x12)).toEqual(["HI**~"]);
     expect(blockedAt(manifest, "837/HI[0]-1")).toBe(true);
+    expect(blockedAt(manifest, "837/HI[0]-2")).toBe(true);
   });
 
   it("HI: an occurrence date is a date of the individual's care, generalized at its own component", () => {
@@ -228,11 +230,15 @@ describe("the envelope and a segment outside every transaction set", () => {
   });
 
   it("an envelope element of the wrong shape is removed from the envelope and recorded", () => {
+    // GS-04 is a required date: a value there that is no date marks a shift. GS-01 is the last code
+    // before it that held, so the sender and receiver ids between them go too, with what follows.
     const raw = wrap("HI*ABK:E1165~", 3).replace("GS*HC*A*B*20260615*", "GS*HC*A*B*ZZGSDATE*");
     const { x12, manifest } = run(raw);
     expect(x12).not.toContain("ZZGSDATE");
-    expect(x12).toContain("GS*HC*A*B**0930*6*X*005010X222A2~");
-    expect(blockedAt(manifest, "GS[0]-4")).toBe(true);
+    expect(x12).toContain("GS*HC*******~");
+    for (const element of [2, 3, 4, 5, 6, 7, 8]) {
+      expect(blockedAt(manifest, `GS[0]-${String(element)}`)).toBe(true);
+    }
   });
 
   it("a removed ISA element is written as blanks of its own width, so the header keeps 106 bytes", () => {
@@ -264,9 +270,13 @@ describe("the envelope and a segment outside every transaction set", () => {
     const { x12, manifest } = run(raw);
     expect(x12).not.toContain("ZZTA1D");
     expect(x12).not.toContain("ZZGEEXTRA");
-    expect(x12).toContain("TA1*000000008**1200*A*000~");
+    // TA1-02 is a required date: a value there that is no date marks a shift. No code or date before
+    // it held, so the control number before it goes too.
+    expect(x12).toContain("TA1*****~");
     expect(x12).toContain("GE*1*11*~");
-    expect(blockedAt(manifest, "TA1[0]-2")).toBe(true);
+    for (const element of [1, 2, 3, 4, 5]) {
+      expect(blockedAt(manifest, `TA1[0]-${String(element)}`)).toBe(true);
+    }
     expect(blockedAt(manifest, "GE[0]-3")).toBe(true);
   });
 

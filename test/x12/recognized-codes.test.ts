@@ -104,9 +104,10 @@ describe("AMT-01 and QTY-01 keep the 277CA codes", () => {
     });
   }
   it("a value that is no amount qualifier is removed", () => {
+    // AMT-01 is required, so the amount after a value that is no qualifier is removed too.
     expect(run("277", "AMT*ZZPATMEMBER*5000")).toMatchObject({
-      out: "AMT**5000",
-      loci: ["277/AMT[0]-1"],
+      out: "AMT**",
+      loci: ["277/AMT[0]-1", "277/AMT[0]-2"],
     });
   });
 });

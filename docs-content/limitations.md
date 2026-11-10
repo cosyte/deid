@@ -181,11 +181,23 @@ Two things follow, and the second is the one that surprises people:
 
 - **An X12 value shifted past an empty required position is removed with everything after it.** A
   number shape cannot tell a shifted date or account number from an amount, so the adapter treats a
-  position the TR3s require, or one a qualifier implies, left empty before a later value as a shift, and
-  removes and records every value after it. That over-removes a malformed segment that only omits a
-  required position (the x12 library's 837D sample omits `SV3-02`, so its place of service and count go
-  too), rather than keep a value it cannot place. A shift that leaves no required or implied position
-  empty, such as a value code's amount where another number belongs, is not detectable this way.
+  position the TR3 of the transaction set requires, or one a qualifier implies, left empty before a
+  later value as a shift, and removes and records every value after it. That over-removes a malformed
+  segment that only omits a required position (the x12 library's 837D sample omits `SV3-02`, so its
+  place of service and count go too), rather than keep a value it cannot place.
+- **An X12 value that fails the shape of a required or narrow position takes its neighbours with it.**
+  A value that is no code, no date or no valid composite at a required position, or at any code, date
+  or composite position, shows a separator was added or left out. Every value after it is removed, and
+  so is every value back to the last code, date or composite before it that held. That over-removes a
+  segment with one bad code: the x12 library's 837I samples write the three-digit bill type `111` in
+  `CLM-05-1`, which takes the claim's charge and its `Y` / `A` / `Y` / `Y` codes; an `HI` entry written
+  with a decimal point (`J45.50`) takes the entries after it; and an unknown `CARC`, `HD-01` or claim
+  status category takes the amounts after it. A weight in `PAT-07` / `08` after a relationship code with
+  no date of death between them is removed too, because two extra separators put a date of death there.
+- **Some X12 shifts are not detectable.** A shift that leaves no required or implied position empty and
+  puts no value where a narrow shape refuses it, such as a value code's amount where another number
+  belongs, is kept. So are two separator errors that cancel out, one left out and one added further
+  along, when every value between them still fits its position.
 
 - **X12 bytes after the `IEA` are not counted; they are removed.** They are neither a segment nor a
   loop, and they commonly hold a whole second interchange the parser did not decode, so no rule can

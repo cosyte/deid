@@ -34,7 +34,13 @@ date format implies its date), cannot be empty while a later one holds a value: 
 is removed and recorded, each at its own position. `HI*BH:11:D8::20260118` loses the date shifted into
 `C022-05`, and `CLM**4455667701*150...` loses the account number in `CLM-02` and everything after it;
 `CLP`, `PAT`, `STC`, `CAS` and every other segment with a number after a required position are checked
-the same way. An `HI` amount or quantity is kept only under a value code (`BE`).
+the same way. An `HI` amount or quantity is kept only under a value code (`BE`). A shift left, from
+a missing separator, is caught by the first value that fails the shape of a required position or of a
+code, date or composite position: every value after it is removed, and so is every value back to the
+last such position that held. `PAT-07` keeps only `01`, so `PAT*19******D8*20250117` loses the date
+of death shifted into `PAT-08`, and the `STC` dates are removed the same way after a shift either
+way. A segment's required positions are read for its transaction set (`ST-01`): the 270 and 271 `INS`
+keep `INS-17`, and a 278 service line keeps its unit and count with no line charge.
 
 A date of the individual inside a retained segment (`PAT-06`, `INS-12`, an `HI` occurrence or
 procedure date) is now generalized like `DTP-03`, at its own component. Recognized codes, valid dates
@@ -69,6 +75,7 @@ qualifiers route the 271, 276 / 277 and 834 member, account and case numbers to 
 payer, line and provider references.
 
 Visible changes on well-formed input: the Other Insured's, the drop-off location's and the 820 premium
-payer's names and identifiers are removed, a 999 loop id such as `2010BA` is kept, and a segment the pass has no shape for
+payer's names and identifiers are removed, a 999 loop id such as `2010BA` is kept, a segment the pass has no shape for
 leaves the output instead of staying as an empty shell, with its manifest rows under `<withheld>`
-rather than its segment id.
+rather than its segment id, and a patient's weight with no date of death before it
+(`PAT*19******01*145`) is removed.

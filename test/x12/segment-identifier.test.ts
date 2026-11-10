@@ -144,11 +144,13 @@ describe("a segment whose identifier the pass does not recognize is removed whol
   });
 
   it("an SE-01 that is no count is removed by its own shape, not reduced", () => {
+    // SE-01 is required, so the control number after a value that is no count is removed too.
     const raw = wrap("ZZPATMEMBER~").replace(/SE\*3\*0006/, "SE*ZZ*0006");
     const { x12, manifest } = run(raw);
     expect(x12).not.toContain("ZZPATMEMBER");
-    expect(body(x12)).toEqual({ segments: [], se: "SE**0006" });
+    expect(body(x12)).toEqual({ segments: [], se: "SE**" });
     expect(blockedAt(manifest, "837/SE[0]-1")).toBe(true);
+    expect(blockedAt(manifest, "837/SE[0]-2")).toBe(true);
   });
 
   it("an SE with no count at all is left as it is", () => {

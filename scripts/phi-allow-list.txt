@@ -470,6 +470,9 @@ ID ZZOTHERSUBMEMBER
 ID ZZSUBSCRIBER834
 ID ZZPREMMEMBER
 ID ZZPREMPAYEREIN
+# The shifted-date sweep in test/x12/shifted-dates.test.ts: a synthetic date in a DMG-02 sample whose
+# separators are moved one place, asserted ABSENT after de-id.
+DOB 20250117
 
 # --- Synthetic NCPDP Telecom identifiers (test/fixtures/ncpdp) ---
 ID 5550000301
