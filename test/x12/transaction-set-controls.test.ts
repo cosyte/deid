@@ -12,8 +12,10 @@
  *
  * For each one, every segment is listed with the output it must have. A segment with no individual's
  * value in it must come back byte-identical; one that carries a name, an identifier or a date of the
- * individual moves only at those positions. No other position is removed, SE-01 still counts every
- * segment, and the unexamined residual count is zero.
+ * individual moves only at those positions. `STC` keeps only its status composites and its payment
+ * method, so its dates, amounts, action code and check number are the control's `blocked` rows. No
+ * other position is removed, SE-01 still counts every segment, and the unexamined residual count is
+ * zero.
  *
  * Every value is a synthetic, ZZ-tagged sentinel, a reserved 555 telephone number, a 1999999999 or
  * 999999999 placeholder, or a synthetic date.
@@ -47,6 +49,10 @@ interface Control {
   /** The positions a policy blocks rather than removes or generalizes (none, for most sets). */
   readonly blocked?: readonly string[];
 }
+
+/** The blocked rows of the `k`-th `STC` of a 277, one per position. */
+const STC_ROWS = (k: number, positions: readonly number[]): string[] =>
+  positions.map((n) => `277/STC[${String(k)}]-${String(n)}`);
 
 const input = (line: Line): string => (typeof line === "string" ? line : line[0]);
 const output = (line: Line): string => (typeof line === "string" ? line : line[1]);
@@ -189,18 +195,16 @@ const CONTROLS: Readonly<Record<string, Control>> = {
       "HL*4*3*22*0",
       SUBSCRIBER("ZZMEMBER277"),
       "TRN*2*ZZTRACE1",
-      [
-        "STC*F1:65*20260610**200.00*150.00*20260608*CHK*20260612*ZZCHECK1",
-        "STC*F1:65*2026**200.00*150.00*2026*CHK*2026*ZZCHECK1",
-      ],
+      ["STC*F1:65*20260610**200.00*150.00*20260608*CHK*20260612*ZZCHECK1", "STC*F1:65******CHK**"],
       "REF*1K*ZZPAYERCLAIM",
       ["REF*EJ*ZZACCT277", "REF*EJ*"],
       ["DTP*472*RD8*20260601-20260602", "DTP*472*RD8*2026"],
       "SVC*HC:99213*100.00*75.00****1",
-      ["STC*F1:65*20260610", "STC*F1:65*2026"],
+      ["STC*F1:65*20260610", "STC*F1:65*"],
       "REF*FJ*ZZLINECTRL",
       DATE("472", "20260601"),
     ],
+    blocked: [...STC_ROWS(0, [2, 4, 5, 6, 8, 9]), ...STC_ROWS(1, [2])],
   },
   "278 services review response": {
     gs01: "HI",
@@ -449,7 +453,7 @@ const CONTROLS: Readonly<Record<string, Control>> = {
       "HL*2*1*21*1",
       SUBMITTER,
       "TRN*1*ZZBATCHTRACE",
-      ["STC*A1:19:PR*20260615*WQ*5000", "STC*A1:19:PR*2026*WQ*5000"],
+      ["STC*A1:19:PR*20260615*WQ*5000", "STC*A1:19:PR***"],
       "QTY*90*1",
       "QTY*AA*1",
       "AMT*YU*5000",
@@ -457,16 +461,17 @@ const CONTROLS: Readonly<Record<string, Control>> = {
       "HL*3*2*19*1",
       PROVIDER,
       "TRN*2*ZZPROVIDERTRACE",
-      ["STC*A2:20:PR*20260615*WQ*150", "STC*A2:20:PR*2026*WQ*150"],
+      ["STC*A2:20:PR*20260615*WQ*150", "STC*A2:20:PR***"],
       "QTY*QA*1",
       "AMT*YU*150",
       "HL*4*3*PT",
       ["NM1*QC*1*ZZPATLAST*ZZPATFIRST****MI*ZZMEMBER277CA", "NM1*QC*1******MI*"],
       "TRN*2*ZZCLAIMTRACE",
-      ["STC*A7:21:PR*20260615*U*150", "STC*A7:21:PR*2026*U*150"],
+      ["STC*A7:21:PR*20260615*U*150", "STC*A7:21:PR***"],
       "REF*1K*ZZPAYERCLAIM",
       ["DTP*472*RD8*20260601-20260602", "DTP*472*RD8*2026"],
     ],
+    blocked: [0, 1, 2].flatMap((k) => STC_ROWS(k, [2, 3, 4])),
   },
   "999 implementation acknowledgment": {
     gs01: "FA",

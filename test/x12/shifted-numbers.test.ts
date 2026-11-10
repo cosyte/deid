@@ -277,7 +277,7 @@ describe("a required position left empty: every value after it is removed and re
 });
 
 describe("well-formed input keeps its amounts, quantities and counts", () => {
-  it("claim, remittance, status and benefit segments are byte-identical with no blocked row", () => {
+  it("claim, remittance and benefit segments are byte-identical with no blocked row", () => {
     const claim = [
       "CLM*ZZACCTOK*150.00***11:B:1*Y*A*Y*Y",
       "AMT*F5*25.00",
@@ -308,8 +308,10 @@ describe("well-formed input keeps its amounts, quantities and counts", () => {
     expect(r835.body.slice(1)).toEqual(remit.slice(1));
     expect(blocked(r835.manifest)).toEqual([]);
 
-    const status = ["STC*A1:20*20260126*WQ*150"];
-    expect(blocked(run("277", status).manifest)).toEqual([]);
+    // STC keeps no amount or date at all (see shifted-dates.test.ts): only its status composite.
+    const status = run("277", ["STC*A1:20*20260126*WQ*150"]);
+    expect(status.body).toEqual(["STC*A1:20***"]);
+    expect(blocked(status.manifest)).toEqual(["277/STC[0]-2", "277/STC[0]-3", "277/STC[0]-4"]);
 
     const benefit = ["EB*1*IND*30******VS*30"];
     expect(run("271", benefit).body).toEqual(benefit);

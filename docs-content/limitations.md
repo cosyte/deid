@@ -191,9 +191,18 @@ Two things follow, and the second is the one that surprises people:
   so is every value back to the last code, date or composite before it that held. That over-removes a
   segment with one bad code: the x12 library's 837I samples write the three-digit bill type `111` in
   `CLM-05-1`, which takes the claim's charge and its `Y` / `A` / `Y` / `Y` codes; an `HI` entry written
-  with a decimal point (`J45.50`) takes the entries after it; and an unknown `CARC`, `HD-01` or claim
-  status category takes the amounts after it. A weight in `PAT-07` / `08` after a relationship code with
+  with a decimal point (`J45.50`) takes the entries after it; an unknown `CARC` or `HD-01` takes the
+  amounts after it; and an unknown claim status category takes the payment method and the status
+  composites after it. A weight in `PAT-07` / `08` after a relationship code with
   no date of death between them is removed too, because two extra separators put a date of death there.
+- **An X12 `STC` keeps only its codes.** A claim status keeps its status composites (`STC-01`, `-10`,
+  `-11`) and its payment method (`STC-07`). Its dates, amounts, action code, check or EFT trace number
+  and message are removed and recorded wherever they sit, even in a well-formed 277 or 277CA, where a
+  Safe-Harbor-named policy would otherwise keep each date's year. A separator left out between an
+  amount and the adjudication date after it moves the date into the amount, where it passes as a
+  number, and when the date is the last element nothing after it can fail and show the shift, so no date
+  or amount in `STC` can be placed. The claim status category and status codes are checked against the
+  form of their external code sources, not the published lists themselves.
 - **Some X12 shifts are not detectable.** A shift that leaves no required or implied position empty and
   puts no value where a narrow shape refuses it, such as a value code's amount where another number
   belongs, is kept. So are two separator errors that cancel out, one left out and one added further

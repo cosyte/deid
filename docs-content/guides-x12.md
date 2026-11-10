@@ -115,7 +115,7 @@ rule names. The adapter decides every element it hands through, so none of those
   keeps a bounded run of printable characters.
 - **A shift into a number is caught by the position it left empty.** A number shape cannot tell a
   shifted date or account number from an amount, so the adapter looks for the shift instead. A position
-  the 005010 TR3s require (`CLM-01`, `CLP-01`, `STC-02`, `CAS-03`, an `HI` entry's qualifier and code),
+  the 005010 TR3s require (`CLM-01`, `CLP-01`, `CAS-03`, an `HI` entry's qualifier and code),
   or one a qualifier implies (a date format implies its date, as `HI` `C022-03` / `04` and `PAT-05` /
   `06` pair; a unit or a qualifier implies its value), cannot be empty while a later position holds a
   value. When one is, every value after it was shifted there, and each is removed and recorded at its
@@ -126,13 +126,25 @@ rule names. The adapter decides every element it hands through, so none of those
   value one place left, so no position is left empty. A value that fails the shape of a required
   position, or of a narrow one (a code, a date, a composite of codes), shows the shift instead: `PAT-07`
   keeps only `01`, the pound the TR3s allow, so `PAT*19******D8*20250117` loses the date of death in
-  `PAT-08`, and `STC*F1:65*20260126*150*100*20260128...` loses the adjudication date in `STC-05`
-  because `150` is no action code. The values between the last narrow position whose value held and
-  that one may be shifted ones too, so they are removed with every value after it. The `ISA` is read at
-  fixed byte positions, so nothing in it can be shifted, and each of its elements is decided alone.
+  `PAT-08`. The values between the last narrow position whose value held and that one may be shifted
+  ones too, so they are removed with every value after it. The `ISA` is read at fixed byte positions,
+  so nothing in it can be shifted, and each of its elements is decided alone.
+- **`STC` keeps only its codes.** A claim status keeps its status composites (`STC-01`, `STC-10`,
+  `STC-11`: the category and status codes in the form of their code sources, the entity identifier and
+  the code list qualifier from their 005010 lists) and its payment method (`STC-07`, from its list).
+  Every other position is removed and recorded at its own position, in a 277 and a 277CA alike: the
+  status, adjudication and check dates (`STC-02`, `-06`, `-08`), the amounts (`STC-04`, `-05`), the
+  action code (`STC-03`), the check or EFT trace number (`STC-09`) and the message (`STC-12`). An
+  amount sits right before the adjudication date, so a separator left out between them moves the date
+  into the amount, where it passes as a number, and when the date is the last element nothing after
+  it can fail and show the shift (`STC*F2:88*20260126**1500*20260128`). So no `STC` date or amount is
+  kept, wherever it sits. Every other date of the individual (`DTP-03`, `DMG-02`, `DTM-02`, `PAT-06`,
+  `INS-12`, an `HI` date) has its format or qualifier code right before it, so a separator left out
+  puts the date in that code's place, where it fails, and one added puts it in a position that is a
+  code, a date, or not kept.
 - **The required positions are read for the transaction set.** A position is required where the TR3
-  of the set the segment sits in requires it: the 270 and 271 `INS` keep `INS-17` with no `INS-03` or
-  `INS-05`, and a 278 service line keeps its unit and count with no line charge.
+  of the set the segment sits in requires it: the 270, 271 and 278 `INS` keep `INS-17` with no
+  `INS-03` or `INS-05`, and a 278 service line keeps its unit and count with no line charge.
 - **A free-text component is removed**: a procedure description inside `SV1-01`, a 999's copy of a bad
   data element (`IK4-04`), the business unit value a 999 context names (`CTX-01-2`).
 - **A position no rule names is removed**: `NM1-10` onward, `N1-05` onward, `REF-03` onward, and any

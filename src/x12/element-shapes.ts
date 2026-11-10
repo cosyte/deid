@@ -1019,19 +1019,17 @@ export const X12_ELEMENT_SHAPES: Readonly<
     2: keep(matching(/^[0-9A-Z]$/)),
     3: keep(matching(/^\d{2}$/)),
   },
-  // STC claim status (277): the category / status / entity composites, the status, adjudication and
-  // check dates (dates of the individual's claim, generalized like a DTP date), the amounts, the payment
-  // method, and the check or EFT trace number. STC-12, a free-form message, is not kept.
+  // STC claim status (277, 277CA): only the status composites (STC-01, -10, -11) and the payment method
+  // (STC-07), each checked against its code list (the category and status codes against the form of
+  // their external code sources, 507 and 508). Every other position is removed and recorded: the status,
+  // adjudication and check dates (dates of the individual's claim), the amounts, the action code, the
+  // check or EFT trace number and the free-form message. An amount sits right before the adjudication
+  // date, and a missing separator runs them together or moves the date into the amount, where it passes
+  // as a number; with the date in the last position nothing after it can fail its shape and show the
+  // shift. So no STC date or amount is kept, wherever it sits.
   STC: {
     1: CLAIM_STATUS,
-    2: { kind: "date", format: { from: "fixed", format: "D8" } },
-    3: code("306"),
-    4: DECIMAL,
-    5: DECIMAL,
-    6: { kind: "date", format: { from: "fixed", format: "D8" } },
     7: code("591"),
-    8: { kind: "date", format: { from: "fixed", format: "D8" } },
-    9: keep(reference(16)),
     10: CLAIM_STATUS,
     11: CLAIM_STATUS,
   },
@@ -1134,8 +1132,8 @@ for (let n = 5; n <= 17; n += 3) CAS_IMPLIED.push([n, n + 1], [n + 1, n], [n + 2
  * for a claim segment, the 834 for `INS`); a set whose TR3 uses the segment differently has its own
  * entry in {@link X12_SEGMENT_REQUIREMENTS_BY_SET}, read first. `implied` lists the pairs a qualifier
  * implies: a date format and its date (`PAT-05` / `06`, `INS-11` / `12`), a unit or a qualifier and its
- * value (`PAT-07` / `08`, `CR1-01` / `02`, `EB-09` / `10`, `HSD-01` / `02`), a payment method and its
- * check date and number (`STC-07`), and the `CAS` adjustment triples. Keyed by segment id.
+ * value (`PAT-07` / `08`, `CR1-01` / `02`, `EB-09` / `10`, `HSD-01` / `02`), and the `CAS` adjustment
+ * triples. Keyed by segment id.
  *
  * Every position named here, and every code or date position of the segment, is also checked by shape:
  * a value there that fails its shape marks a shift, so a value shifted left by a missing separator is
@@ -1198,17 +1196,8 @@ export const X12_SEGMENT_REQUIREMENTS: Readonly<Record<string, X12PositionRequir
     EB: { required: [1], implied: paired(9, 10) },
     INS: { required: [1, 2, 3, 5], implied: paired(11, 12) },
     REL: { required: [1] },
-    // A payment method implies the check date and number; a check number implies its date; a payment
-    // amount implies the charge it pays.
-    STC: {
-      required: [1, 2],
-      implied: [
-        [7, 8],
-        [7, 9],
-        [9, 8],
-        [5, 4],
-      ],
-    },
+    // STC has no entry: it keeps only codes (the status composites and the payment method), whose
+    // shapes still mark a shift, and removes every date, amount and number wherever it sits.
     HCR: { required: [1] },
 
     /* ---- the 999 acknowledgment ---- */
@@ -1229,6 +1218,8 @@ export const X12_SEGMENT_REQUIREMENTS: Readonly<Record<string, X12PositionRequir
  *
  * - The 270 and 271 `INS` (2100C / 2100D) carry `INS-01` and `-02`, then `INS-17`, the birth sequence
  *   number. `INS-03` and `-04` are situational in the 271 and `INS-05` is not used in either set.
+ * - The 278 `INS` (2010C subscriber and 2010D dependent) carries the same: `INS-01`, `-02` and `INS-17`.
+ *   `INS-05` is not used there. It carries no date of the individual.
  * - In the 278 (X217) the `SV1`, `SV2` and `SV3` line charge is situational, and so is the unit and
  *   count that follow it; a unit still implies its count. `SV101` and `SV301` stay required. `CR1` and
  *   `CR3` keep only their paired positions there.
@@ -1244,6 +1235,7 @@ export const X12_SEGMENT_REQUIREMENTS_BY_SET: Readonly<
   "270": { INS: { required: [1, 2] } },
   "271": { INS: { required: [1, 2] } },
   "278": {
+    INS: { required: [1, 2] },
     SV1: { required: [1], implied: paired(3, 4) },
     SV2: { implied: paired(4, 5) },
     SV3: { required: [1] },

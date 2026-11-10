@@ -570,10 +570,12 @@ function x12ShiftedNumbersCase(): CorpusCase {
 
 // ── X12 EDI, dates shifted by a separator added or left out ─────────────────────────────────────────
 // A date of death two places late lands in the patient's weight (`PAT-08`), with a unit code before it
-// that is a real code but not the pound the TR3s allow there. An adjudication or check date lands in an
-// `STC` amount or the check number after a separator is added or left out. Each is removed with every
-// value after the place the shift shows. The 270, 271 and 278 controls are well formed for their own
-// set and keep every value: their TR3s do not require `INS-03` / `-05` or the service line charge.
+// that is a real code but not the pound the TR3s allow there; it is removed with every value after the
+// place the shift shows. An adjudication or check date lands in an `STC` amount, the check number or the
+// last position after a separator is added or left out: `STC` keeps only its status composites and its
+// payment method, so every date and amount in it is removed wherever it sits, in a 277 and a 277CA
+// alike. The 270, 271 and 278 controls are well formed for their own set and keep every value: their
+// TR3s do not require `INS-03` / `-05` or the service line charge.
 function x12ShiftedDatesCase(): CorpusCase {
   const ctx = createDeidContext({ key: "x12-corpus-synthetic-hmac-key", patientId: "p-x12" });
   const raw = FIX("x12", "shifted-dates.edi");
@@ -587,18 +589,28 @@ function x12ShiftedDatesCase(): CorpusCase {
     originalWire: raw,
     sentinels: [
       "20250117", // a date of death in PAT-08, after two extra separators (patient and subscriber)
-      "20260126", // the STC-02 status date, generalized where it is in place
+      "20260126", // the STC-02 status date, removed wherever it sits
       "20260128", // an adjudication date in STC-05 (STC-03's empty slot left out)
       "20260129", // a check issue date in STC-07
-      "20260130", // an adjudication date, generalized where it is in place
+      "20260130", // an adjudication date, removed in place too
       "20260131", // a check issue date in STC-09 (one extra separator)
       "ZZCHECK02", // a check number in STC-08
+      "20260202", // an adjudication date in STC-05, the last position (amounts run together)
+      "20260203", // the same date run into the payment amount in STC-05
+      "20260204", // two amounts run together, the date in STC-05 with no check after it
+      "20260205", // a well-formed STC that ends at its adjudication date
+      "20260206", // a 277CA status date
+      "20260207", // a 277CA status date in a status with STC-10 and -11
+      "ZZSTCMESSAGE", // a 277CA free-form message in STC-12
     ],
     survivors: [
       "PAT*19****D8*2024*01*165~",
-      "STC*A1:20*2026**150*150*2026*CHK*2026*ZZCHECKOK~",
+      "STC*A1:20******CHK**~",
+      "STC*A1:19:PR***~",
+      "STC*A3:21*********A3:562:85*A3:128*~",
       "INS*Y*18***************1~",
       "INS*Y*18*001*25*************1~",
+      "INS*N*19***************2~",
       "SV1*HC:99213**UN*1~",
       "SV2*0300*HC:80053**UN*1~",
       "SV3*AD:D2391*****1~",
