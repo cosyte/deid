@@ -527,6 +527,117 @@ function x12FailClosedCase(): CorpusCase {
   };
 }
 
+// ── X12 EDI, values shifted into amount, quantity and count positions ──────────────────────────────
+// A number shape cannot tell a shifted date or account number from an amount. An extra separator leaves
+// a position the TR3s require, or one a qualifier implies, empty while a later one holds a value: an
+// `HI` occurrence or procedure date past its component (C022-05 / -06), a numeric patient control number
+// in `CLM-02` or `CLP-03`, a date of death in `PAT-08`, an amount after an empty `CAS` reason, and a
+// status date in `STC-04`. Every value after the empty position is removed; the well-formed codes,
+// amounts and dates beside them survive.
+function x12ShiftedNumbersCase(): CorpusCase {
+  const ctx = createDeidContext({ key: "x12-corpus-synthetic-hmac-key", patientId: "p-x12" });
+  const raw = FIX("x12", "shifted-numbers.edi");
+  const { x12, manifest, unexaminedResiduals } = deidentifyX12String(raw, { context: ctx });
+  return {
+    name: "x12-shifted-numbers",
+    deidWire: x12,
+    manifest,
+    unexaminedResiduals,
+    decidesEveryPosition: true,
+    originalWire: raw,
+    sentinels: [
+      "4455667701", // a numeric patient control number in CLM-02 (CLM-01 empty)
+      "20260118", // an occurrence date in C022-05 (C022-04 empty after D8)
+      "20260119", // a principal procedure date in C022-05
+      "20260120", // an occurrence span start in C022-05 (after RD8)
+      "20260121", // a date in C022-05 after its format in C022-04 (C022-03 empty)
+      "20260122", // a date two separators late, in C022-06
+      "4455667704", // a value code amount's place taken by a number in C022-06
+      "20250117", // a date of death in PAT-08 (PAT-06 empty after D8)
+      "4455667702", // a numeric patient control number in CLP-03 (CLP-01 and -02 empty)
+      "4455667703", // a number in CAS-04 (CAS-03 empty)
+      "20260126", // a status date in STC-04 (STC-01 empty)
+      "20260127", // a status date in STC-04 (STC-02 empty)
+    ],
+    survivors: [
+      "HI*ABK:E1165*BE:80:::125.00*BH:11:D8:2026~",
+      "HI*BH:11:D8::~",
+      "SVC*HC:99213*150*100~",
+      "PAT*19****D8***~",
+    ],
+  };
+}
+
+// ── X12 EDI, people who can be the individual or stand for the individual ────────────────────────────
+// The 835 Other Subscriber (`NM1*GB`) and the 834 responsible persons (`GB`, `6Y`, `9K`) and drop-off
+// person (`45`) name the individual, a relative or someone acting for them. Each one's name and
+// identifier are removed and recorded; the payer, the payee and the clinical lines survive.
+function x12PersonsCase(): CorpusCase {
+  const ctx = createDeidContext({ key: "x12-corpus-synthetic-hmac-key", patientId: "p-x12" });
+  const raw = FIX("x12", "other-insured-and-responsible.edi");
+  const { x12, manifest, unexaminedResiduals } = deidentifyX12String(raw, { context: ctx });
+  return {
+    name: "x12-persons",
+    deidWire: x12,
+    manifest,
+    unexaminedResiduals,
+    decidesEveryPosition: true,
+    originalWire: raw,
+    sentinels: [
+      "ZZOTHERSUBLAST", // 835 Other Subscriber (GB)
+      "ZZOTHERSUBFIRST",
+      "ZZOTHERSUBMEMBER",
+      "ZZRESPGBLAST", // 834 responsible person (GB)
+      "ZZRESPGBFIRST",
+      "ZZCASEMGRLAST", // 834 responsible person (6Y)
+      "ZZCASEMGRFIRST",
+      "ZZKEYPERSONLAST", // 834 responsible person (9K)
+      "ZZKEYPERSONFIRST",
+      "ZZDROPOFFLAST", // 834 drop-off person (45)
+      "ZZDROPOFFFIRST",
+      "ZZGBPATLAST",
+      "ZZGBPATMEMBER",
+      "ZZMEMBERLAST834",
+      "ZZSUBSCRIBER834",
+    ],
+    survivors: [
+      "N1*PR*COMMERCIALPAYER~",
+      "N1*PE*ZZKEPTPAYEEORG*XX*1999999999~",
+      "SVC*HC:99213*150*100~",
+      "NM1*GB*1******MI*~",
+      "NM1*6Y*1**~",
+    ],
+  };
+}
+
+// ── X12 EDI, an entity code whose meaning changes by transaction set ────────────────────────────────
+// In the 820 premium payment the premium payer (`N1*PR`) is the employer of the individuals the payment
+// lists, not a health plan: its name and identifier are removed and recorded, as the 834 sponsor's are.
+// The premium receiver, the amounts and the payment's own references survive. The shape is the x12
+// library's golden 820.
+function x12PremiumCase(): CorpusCase {
+  const ctx = createDeidContext({ key: "x12-corpus-synthetic-hmac-key", patientId: "p-x12" });
+  const raw = FIX("x12", "820-premium.edi");
+  const { x12, manifest, unexaminedResiduals } = deidentifyX12String(raw, { context: ctx });
+  return {
+    name: "x12-premium",
+    deidWire: x12,
+    manifest,
+    unexaminedResiduals,
+    decidesEveryPosition: true,
+    originalWire: raw,
+    sentinels: [
+      "ZZPREMPAYERX12", // the premium payer, the members' employer
+      "ZZPREMPAYEREIN",
+      "ZZPREMPAYERSTREET",
+      "ZZPREMPAYERCITY",
+      "ZZPREMLAST",
+      "ZZPREMMEMBER",
+    ],
+    survivors: ["N1*PE*MEDPAY INSURANCE*FI*111223333~", "N1*PR**FI*~", "BPR*C*12500.00*"],
+  };
+}
+
 // ── NCPDP Telecom ─────────────────────────────────────────────────────────────────────────────────
 function ncpdpCase(): CorpusCase {
   const ctx = createDeidContext({ key: "ncpdp-corpus-synthetic-hmac-key", patientId: "p-ncpdp" });
@@ -583,6 +694,9 @@ const CASES: readonly CorpusCase[] = [
   x12Case(),
   x12ShiftedCase(),
   x12FailClosedCase(),
+  x12ShiftedNumbersCase(),
+  x12PersonsCase(),
+  x12PremiumCase(),
   ncpdpCase(),
   dicomCase(),
 ];

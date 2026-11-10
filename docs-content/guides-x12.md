@@ -52,7 +52,7 @@ implicit, so the map keys off each **segment id** plus two **qualifier classifie
 | Locus                                                            | Handling                                                                                                            |
 | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
 | **`NM1`**: subscriber / patient / dependent (`IL` / `QC` / `03`) | name (`NM1-03..07`) **removed**; id (`NM1-09`) routed by the `NM1-08` qualifier: SSN **removed**, member **removed** under Safe Harbor |
-| **`NM1`** / **`N1`**: the individual's employer (`36`)          | name and id **removed**, on the same footing as a patient-side party: §164.514(b)(2)(i) removes the identifiers of the individual's **employers**, so an employer is not an unrelated organization |
+| **`NM1`** / **`N1`**: the individual's employer (`36`, the plan sponsor `P5`, and in an `820` the premium payer `PR`) | name and id **removed**, on the same footing as a patient-side party: §164.514(b)(2)(i) removes the identifiers of the individual's **employers**, so an employer is not an unrelated organization |
 | **`NM1`**: recognized provider / organization (`85` / `82` / …)  | **retained**: provider identity is not the individual's PHI (mirrors the HL7 adapter's provider retention), and the **entity-identifier code** it was classified on is recorded, value-free, at the party's locus |
 | **`NM1`**: the Other Insured (`GB`), an 834 responsible person, an ambulance pick-up or drop-off location | name and id **removed** like the individual's: the 005010 TR3s use these codes for people around the individual and for places that can be the individual's own |
 | **`NM1`**: unknown entity code                                  | **fails closed**: name and id blocked (an unrecognized entity could be the patient); a real entity code no role table names is kept, its party's name and id are not |
@@ -113,6 +113,15 @@ rule names. The adapter decides every element it hands through, so none of those
   time of day included, is removed rather than cut down to whatever its front looks like.
 - **Amounts, quantities and counts keep only a number**, and a trace, control or trading partner number
   keeps a bounded run of printable characters.
+- **A shift into a number is caught by the position it left empty.** A number shape cannot tell a
+  shifted date or account number from an amount, so the adapter looks for the shift instead. A position
+  the 005010 TR3s require (`CLM-01`, `CLP-01`, `STC-02`, `CAS-03`, an `HI` entry's qualifier and code),
+  or one a qualifier implies (a date format implies its date, as `HI` `C022-03` / `04` and `PAT-05` /
+  `06` pair; a unit or a qualifier implies its value), cannot be empty while a later position holds a
+  value. When one is, every value after it was shifted there, and each is removed and recorded at its
+  own position: `HI*BH:11:D8::20260118` loses the date in `C022-05`, and `CLM**4455667701*150...`
+  loses everything after the empty `CLM-01`. An `HI` amount or quantity (`C022-05` / `06`) is kept only
+  under a value code (`BE`), the one qualifier the TR3s give an amount.
 - **A free-text component is removed**: a procedure description inside `SV1-01`, a 999's copy of a bad
   data element (`IK4-04`), the business unit value a 999 context names (`CTX-01-2`).
 - **A position no rule names is removed**: `NM1-10` onward, `N1-05` onward, `REF-03` onward, and any

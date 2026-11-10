@@ -86,7 +86,58 @@ export type X12ComponentShape =
 export type X12ElementShape =
   | { readonly kind: "keep"; readonly test: X12ShapeTest }
   | { readonly kind: "date"; readonly format: X12DateFormatSource }
-  | { readonly kind: "composite"; readonly components: readonly X12ComponentShape[] };
+  | {
+      readonly kind: "composite";
+      readonly components: readonly X12ComponentShape[];
+      /** The components that cannot be empty while a later one holds a value. */
+      readonly requirements?: X12PositionRequirements;
+    };
+
+/**
+ * The positions of a segment, or the components of a composite, that cannot be empty while a later one
+ * holds a value. When one is, a separator was added before it, and every value after it was shifted
+ * there: a number shape cannot tell a shifted date or account number from an amount, so the shift is
+ * detected instead, and every value after the empty position is removed and recorded.
+ *
+ * - `required`: a position the 005010 TR3s require in every transaction set that uses the segment;
+ * - `implied`: `[when, then]`, a position another one implies: when `when` holds a value, `then` must
+ *   too. A date format implies a date, and the X12 syntax notes pair a qualifier with its value.
+ */
+export interface X12PositionRequirements {
+  /** The 1-based positions the TR3s require. */
+  readonly required?: readonly number[];
+  /** `[when, then]` pairs: when position `when` holds a value, position `then` must too. */
+  readonly implied?: readonly (readonly [when: number, then: number])[];
+}
+
+/**
+ * The **shift point** of a segment or a composite: the first position that its requirements say must
+ * hold a value, that is empty, and that some later position holds a value after. Every value after it
+ * was shifted there. `undefined` when there is none.
+ *
+ * @param present - Whether the 1-based position holds a value.
+ * @param last - The last position there is.
+ * @param requirements - The positions that cannot be empty while a later one holds a value.
+ * @returns The 1-based shift point, or `undefined`.
+ * @internal
+ */
+export function x12ShiftPoint(
+  present: (position: number) => boolean,
+  last: number,
+  requirements: X12PositionRequirements,
+): number | undefined {
+  const needed = new Set<number>(requirements.required);
+  for (const [when, then] of requirements.implied ?? []) if (present(when)) needed.add(then);
+  let lastPresent = 0;
+  for (let n = last; n > 0; n -= 1) {
+    if (present(n)) {
+      lastPresent = n;
+      break;
+    }
+  }
+  const empty = [...needed].filter((n) => n < lastPresent && !present(n));
+  return empty.length === 0 ? undefined : Math.min(...empty);
+}
 
 /* ------------------------------------------------------------------------- primitive tests */
 
@@ -201,6 +252,12 @@ const composite = (...components: X12ComponentShape[]): X12ElementShape => ({
   kind: "composite",
   components,
 });
+
+/** `[when, then]` both ways: two positions the X12 syntax notes pair, each implying the other. */
+const paired = (a: number, b: number): readonly (readonly [number, number])[] => [
+  [a, b],
+  [b, a],
+];
 
 const DATE8 = keep(isD8);
 const DATE6 = keep(isD6);
@@ -353,30 +410,51 @@ function healthCareCodeShape(qualifier: string): RegExp | undefined {
   return Object.hasOwn(HEALTH_CARE_CODE, qualifier) ? HEALTH_CARE_CODE[qualifier] : undefined;
 }
 
+/** The `HI` qualifier of a value code (837I value information), the only one with an amount. */
+const VALUE_CODE_QUALIFIER = "BE";
+
+/**
+ * C022-05 and C022-06, the amount and quantity of an `HI` entry: the TR3s use them for a value code
+ * (`BE`) alone. Under any other qualifier a value there is removed on its own, because the usual way
+ * one gets there is a date or an identifier shifted past its component, and a number shape cannot tell
+ * it from an amount.
+ */
+const VALUE_CODE_NUMBER: X12ComponentShape = {
+  kind: "keep",
+  test: (value, ctx) => firstComponent(ctx) === VALUE_CODE_QUALIFIER && isDecimal(value),
+  alone: (_value, ctx) => firstComponent(ctx) !== VALUE_CODE_QUALIFIER,
+};
+
 /**
  * Composite C022, one `HI` entry: qualifier (element 1270, or a qualifier the `@cosyte/x12` table
  * names), code (shaped by the qualifier), the format of the date that follows, the date (a date of the
- * individual's care, transformed as a date), an amount (a value code's value), a quantity, and the
+ * individual's care, transformed as a date), a value code's amount and quantity, and the
  * present-on-admission indicator (element 1073, and the `1` the CMS POA reporting uses for exempt).
  *
  * A real qualifier whose code shape the pass does not know keeps its place, and the code it qualifies is
- * removed on its own.
+ * removed on its own. The qualifier and the code are required; a date format implies a date and a date
+ * implies its format (the X12 syntax note pairs C022-03 and -04); a quantity implies the amount before
+ * it. So `BH:11:D8::20260118`, a date one separator late, has its shifted value removed.
  */
-const HEALTH_CARE_CODE_INFO = composite(
-  part((value) => x12CodeList("1270").has(value) || healthCareCodeShape(value) !== undefined),
-  {
-    kind: "keep",
-    test: (value, ctx) => healthCareCodeShape(firstComponent(ctx))?.test(value) === true,
-    alone: (_value, ctx) => healthCareCodeShape(firstComponent(ctx)) === undefined,
-  },
-  codePart("1250"),
-  { kind: "date", format: { from: "component", position: 3 } },
-  part(isDecimal),
-  part(isDecimal),
-  NOT_USED, // C022-07, version identifier
-  NOT_USED, // C022-08, a range end code
-  part((value) => value === "1" || x12CodeList("1073").has(value)),
-);
+const HEALTH_CARE_CODE_INFO: X12ElementShape = {
+  kind: "composite",
+  components: [
+    part((value) => x12CodeList("1270").has(value) || healthCareCodeShape(value) !== undefined),
+    {
+      kind: "keep",
+      test: (value, ctx) => healthCareCodeShape(firstComponent(ctx))?.test(value) === true,
+      alone: (_value, ctx) => healthCareCodeShape(firstComponent(ctx)) === undefined,
+    },
+    codePart("1250"),
+    { kind: "date", format: { from: "component", position: 3 } },
+    VALUE_CODE_NUMBER,
+    VALUE_CODE_NUMBER,
+    NOT_USED, // C022-07, version identifier
+    NOT_USED, // C022-08, a range end code
+    part((value) => value === "1" || x12CodeList("1073").has(value)),
+  ],
+  requirements: { required: [1, 2], implied: [...paired(3, 4), [6, 5]] },
+};
 
 /* ----------------------------------------------------------------------- the segment shapes */
 
@@ -978,6 +1056,87 @@ export const X12_ELEMENT_SHAPES: Readonly<
     6: composite(part(isWhole), part(isWhole)),
   },
 });
+
+/** The `CAS` adjustment triples: a reason implies its amount, and an amount or a quantity its reason. */
+const CAS_IMPLIED: (readonly [number, number])[] = [];
+for (let n = 5; n <= 17; n += 3) CAS_IMPLIED.push([n, n + 1], [n + 1, n], [n + 2, n]);
+
+/**
+ * The **positions each segment cannot leave empty while a later one holds a value** (see
+ * {@link X12PositionRequirements}), for every segment with an amount, quantity, count, control number or
+ * reference after a position the 005010 TR3s require or a qualifier implies. When one is empty, every
+ * value after it is removed and recorded, each at its own position: a number shape cannot tell a shifted
+ * date or account number from an amount (`CLM**4455667701*150...` puts the account number in `CLM-02`).
+ *
+ * `required` lists the positions the TR3s mark required in every transaction set that uses the
+ * segment, so a well-formed segment never has one empty before a value. `implied` lists the pairs a
+ * qualifier implies: a date format and its date (`PAT-05` / `06`, `INS-11` / `12`), a unit or a
+ * qualifier and its value (`PAT-07` / `08`, `CR1-01` / `02`, `EB-09` / `10`, `HSD-01` / `02`), and
+ * the `CAS` adjustment triples. Keyed by segment id.
+ *
+ * @internal
+ */
+export const X12_SEGMENT_REQUIREMENTS: Readonly<Record<string, X12PositionRequirements>> =
+  Object.freeze({
+    /* ---- the envelope: every position the counts and control numbers follow is required ---- */
+    ISA: { required: [1, 3, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16] },
+    TA1: { required: [1, 2, 3, 4, 5] },
+    GS: { required: [1, 2, 3, 4, 5, 6, 7, 8] },
+    GE: { required: [1, 2] },
+    IEA: { required: [1, 2] },
+    ST: { required: [1, 2] },
+    SE: { required: [1, 2] },
+
+    /* ---- the transaction header ---- */
+    BHT: { required: [1, 2, 4] },
+    BGN: { required: [1, 2, 3] },
+    BPR: { required: [1, 2, 3, 4] },
+    TRN: { required: [1, 2] },
+    HL: { required: [1, 3] },
+
+    /* ---- claims, remittances and their lines ---- */
+    CLM: { required: [1, 2, 5, 7, 8, 9] },
+    CLP: { required: [1, 2, 3, 4, 6] },
+    AMT: { required: [1, 2] },
+    QTY: { required: [1, 2] },
+    PAT: { implied: [...paired(5, 6), ...paired(7, 8)] },
+    CAS: { required: [1, 2, 3], implied: CAS_IMPLIED },
+    MIA: { required: [1] },
+    LX: { required: [1] },
+    HI: { required: [1] },
+    SV1: { required: [1, 2, 3, 4, 7] },
+    SV2: { required: [1, 3, 4, 5] },
+    SV3: { required: [1, 2] },
+    SV5: { required: [1, 2, 3] },
+    SVC: { required: [1, 2] },
+    SVD: { required: [1, 2, 3, 5] },
+    TOO: { required: [1, 2] },
+    CR1: { required: [4, 5, 6], implied: paired(1, 2) },
+    CR2: { implied: [...paired(1, 2), ...paired(5, 6)] },
+    CR3: { required: [1, 2, 3] },
+    HCP: { required: [1, 2] },
+    CN1: { required: [1] },
+    PS1: { required: [1, 2] },
+    MEA: { required: [1, 2, 3] },
+    DN2: { required: [1, 2] },
+
+    /* ---- eligibility, services review, enrollment and claim status ---- */
+    HSD: { implied: [...paired(1, 2), [6, 5]] },
+    EB: { required: [1], implied: paired(9, 10) },
+    INS: { required: [1, 2, 3, 5], implied: paired(11, 12) },
+    REL: { required: [1] },
+    STC: { required: [1, 2] },
+    HCR: { required: [1] },
+
+    /* ---- the 999 acknowledgment ---- */
+    AK1: { required: [1, 2, 3] },
+    AK2: { required: [1, 2] },
+    IK3: { required: [1, 2] },
+    IK4: { required: [1, 3] },
+    IK5: { required: [1] },
+    AK9: { required: [1, 2, 3, 4] },
+    CTX: { required: [1] },
+  });
 
 /**
  * The **date positions a locus rule transforms**, each with where it reads its declared format:

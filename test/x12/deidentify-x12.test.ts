@@ -290,9 +290,15 @@ describe("X12 edge cases (branch coverage of the fail-closed frontier)", () => {
   });
 
   it("emits no locus for an empty CLM-01 (nothing to pseudonymize)", () => {
-    const raw = wrap("CLM**100.00***11:B:1~");
-    const { manifest } = deidentifyX12String(raw, { context: ctx });
+    const { manifest } = deidentifyX12String(wrap("CLM~"), { context: ctx });
     expect(manifest.some((e) => e.locus.includes("CLM"))).toBe(false);
+    // CLM-01 is required, so an empty one before a value is a shift: the values after it are removed
+    // and recorded, and CLM-01 itself still has nothing to pseudonymize.
+    const shifted = deidentifyX12String(wrap("CLM**100.00***11:B:1~"), { context: ctx });
+    expect(shifted.manifest.map((e) => [e.locus, e.disposition])).toEqual([
+      [expect.stringMatching(/CLM\[0\]-2$/), "blocked"],
+      [expect.stringMatching(/CLM\[0\]-5$/), "blocked"],
+    ]);
   });
 
   it("scrubs the SBR insured group/policy number and group name (was a silent retained leak)", () => {

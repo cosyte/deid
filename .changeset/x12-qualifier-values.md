@@ -28,6 +28,14 @@ as a blocked manifest row at its own position:
 - a segment the parser found outside every transaction set, removed whole with its identifier and
   recorded under `orphan/`, and bytes after the `IEA` that are not blank, recorded at `trailingBytes`.
 
+A number shape cannot tell a shifted date or account number from an amount, so a shift into a number
+is caught by the position it left empty. A position the TR3s require, or one a qualifier implies (a
+date format implies its date), cannot be empty while a later one holds a value: every value after it
+is removed and recorded, each at its own position. `HI*BH:11:D8::20260118` loses the date shifted into
+`C022-05`, and `CLM**4455667701*150...` loses the account number in `CLM-02` and everything after it;
+`CLP`, `PAT`, `STC`, `CAS` and every other segment with a number after a required position are checked
+the same way. An `HI` amount or quantity is kept only under a value code (`BE`).
+
 A date of the individual inside a retained segment (`PAT-06`, `INS-12`, an `HI` occurrence or
 procedure date) is now generalized like `DTP-03`, at its own component. Recognized codes, valid dates
 and amounts on well-formed input keep their output. Because every element is decided,
@@ -52,11 +60,15 @@ family members and representatives are removed like the individual; the plan spo
 dependent's school (`M8`) are removed like an employer. `GB` is the Other Insured, not a provider: the
 835 Other Subscriber and the 834 responsible person had their name and member id kept, and now they are
 removed and recorded. The 834 case manager and key person (`6Y`, `9K`), the drop-off location (`45`),
-whose 834 name is a person's, and the 837 pick-up location (`PW`) are removed the same way. New `REF`
+whose 834 name is a person's, and the 837 pick-up location (`PW`) are removed the same way. In an
+`820` premium payment the premium payer (`N1*PR`) is the employer of the members it lists, so its
+name and identifier are removed and recorded like the plan sponsor's; elsewhere `PR` is still a payer.
+`classifyNm1Party` and `classifyNm1Entity` take the transaction set id as an optional second argument,
+and `EMPLOYER_ENTITY_CODES_BY_SET` names the codes whose role changes by set. New `REF`
 qualifiers route the 271, 276 / 277 and 834 member, account and case numbers to removal and keep the
 payer, line and provider references.
 
-Visible changes on well-formed input: the Other Insured's and the drop-off location's names and
-identifiers are removed, a 999 loop id such as `2010BA` is kept, and a segment the pass has no shape for
+Visible changes on well-formed input: the Other Insured's, the drop-off location's and the 820 premium
+payer's names and identifiers are removed, a 999 loop id such as `2010BA` is kept, and a segment the pass has no shape for
 leaves the output instead of staying as an empty shell, with its manifest rows under `<withheld>`
 rather than its segment id.

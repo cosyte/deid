@@ -46,7 +46,9 @@ import {
 import {
   X12_ELEMENT_SHAPES,
   X12_RULE_DATE_FORMATS,
+  X12_SEGMENT_REQUIREMENTS,
   isX12DateInFormat,
+  x12ShiftPoint,
   type X12DateFormatSource,
   type X12ElementShape,
   type X12ShapeContext,
@@ -453,7 +455,8 @@ function emitRetainedParty(
 function handleNm1(out: X12LocusAccumulator, seg: X12Segment, pos: SegPos): void {
   keepCodeOrBlock(out, seg, pos, 1);
   // The classifier reads the entity code only when it passed the exact check; anything else is unknown.
-  const party = classifyNm1Party(trustedCode(seg, "NM1", 1));
+  // The transaction set decides a code whose meaning changes by set (the 820 premium payer).
+  const party = classifyNm1Party(trustedCode(seg, "NM1", 1), pos.stId);
   if (party.scope === "outside-scope") {
     // Recognized provider / organization: retained, and the role code that placed it outside the scope
     // clause is recorded at its locus rather than left to be inferred from an absence. Its qualifier is
@@ -503,7 +506,7 @@ function handleNm1(out: X12LocusAccumulator, seg: X12Segment, pos: SegPos): void
  */
 function handleN1(out: X12LocusAccumulator, seg: X12Segment, pos: SegPos): void {
   keepCodeOrBlock(out, seg, pos, 1);
-  const party = classifyNm1Party(trustedCode(seg, "N1", 1));
+  const party = classifyNm1Party(trustedCode(seg, "N1", 1), pos.stId);
   if (party.scope === "outside-scope") {
     // Recognized org / payer / provider party: retained, with the role code recorded at its locus.
     emitRetainedParty(out, seg, pos, party.roleCode, [2, 4]);
@@ -682,8 +685,19 @@ function decideComposite(
     whole();
     return;
   }
+  // A component the composite requires, or one an earlier component implies, left empty while a later
+  // one holds a value: every value after it was shifted there, and is removed on its own.
+  const shift = x12ShiftPoint(
+    (n) => (components[n - 1] ?? "").length > 0,
+    components.length,
+    shape.requirements ?? {},
+  );
   for (const [i, value] of components.entries()) {
     if (value.length === 0) continue;
+    if (shift !== undefined && i + 1 > shift) {
+      decisions.push({ component: i + 1, date: false });
+      continue;
+    }
     // `i` is in range: the length check above bounds it by the shape's own component list.
     const spec = shape.components[i] as (typeof shape.components)[number];
     if (spec.kind === "keep") {
@@ -769,10 +783,23 @@ function closeSegment(
     return;
   }
   name(out, pos, [0]);
+  // A position the TR3s require, or one a qualifier implies, left empty while a later one holds a
+  // value: every value after it was shifted there by an extra separator. A number shape cannot tell a
+  // shifted date or account number from an amount, so each of them is removed and recorded instead.
+  const requirements = X12_SEGMENT_REQUIREMENTS[pos.segId];
+  const shift =
+    requirements === undefined
+      ? undefined
+      : x12ShiftPoint(
+          (n) => isValueBearing(seg, pos.segId, n),
+          seg.elements.length - 1,
+          requirements,
+        );
   for (let n = 1; n < seg.elements.length; n += 1) {
     if (out.named.get(segKey(pos))?.has(n) === true) continue;
     if (!isValueBearing(seg, pos.segId, n)) continue;
-    decideByShape(out, seg, pos, n);
+    if (shift !== undefined && n > shift) blockElement(out, seg, pos, n);
+    else decideByShape(out, seg, pos, n);
   }
 }
 

@@ -232,6 +232,30 @@ export const EMPLOYER_ENTITY_CODES: ReadonlySet<string> = new Set<string>([
 ]);
 
 /**
+ * The entity-identifier codes whose **meaning changes by transaction set**: in the set named, the code
+ * is the individual's employer, whatever element 98 calls it elsewhere. Keyed by `ST-01`.
+ *
+ * - `820` (005010X218, the payroll-deducted and other group premium payment): `PR` is the premium payer
+ *   of 1000B, the employer of the individuals the payment lists in 2000B. Everywhere else a `PR` party
+ *   is a health plan, which the scope clause does not reach.
+ *
+ * The other sets were checked for the same: in the 837, 835, 270 / 271, 276 / 277, 277CA, 278, 834 and
+ * 999 TR3s, each code on {@link PROVIDER_ENTITY_CODES} names a provider, payer, facility, administrator,
+ * clearinghouse, broker, vendor or transmitting party in every set that uses it.
+ *
+ * @example
+ * ```ts
+ * import { EMPLOYER_ENTITY_CODES_BY_SET } from "@cosyte/deid/x12";
+ *
+ * EMPLOYER_ENTITY_CODES_BY_SET["820"]?.has("PR"); // => true (the premium payer: the employer)
+ * ```
+ */
+export const EMPLOYER_ENTITY_CODES_BY_SET: Readonly<Record<string, ReadonlySet<string>>> =
+  Object.freeze({
+    "820": new Set<string>(["PR"]),
+  });
+
+/**
  * The X12 **party-role table**: which side of §164.514(b)(2)(i)'s scope clause an `NM1-01` / `N1-01`
  * entity-identifier code puts a party on. The subject side is the individual and their relatives
  * ({@link PATIENT_ENTITY_CODES}) together with their employer ({@link EMPLOYER_ENTITY_CODES}); the
@@ -251,7 +275,11 @@ export type Nm1Disposition = "patient" | "employer" | "provider" | "unknown";
  * comes back with the code from this library's own table, which is what a retained party's manifest row
  * records; an unrecognized one comes back `unknown` and carries no code.
  *
+ * A code whose meaning changes by transaction set ({@link EMPLOYER_ENTITY_CODES_BY_SET}) is read in the
+ * set it sits in: given `"820"`, `PR` is the employer, a Safe Harbor subject.
+ *
  * @param entityCode - The `NM1-01` / `N1-01` entity-identifier code (e.g. `"IL"`, `"36"`, `"85"`).
+ * @param transactionSetId - The `ST-01` of the transaction set the party sits in, when known.
  * @returns Which side of the scope clause the role places the party on.
  * @example
  * ```ts
@@ -259,9 +287,20 @@ export type Nm1Disposition = "patient" | "employer" | "provider" | "unknown";
  *
  * classifyNm1Party("36"); // => { scope: "safe-harbor-subject", roleCode: "36" }
  * classifyNm1Party("85"); // => { scope: "outside-scope", roleCode: "85" }
+ * classifyNm1Party("PR", "820"); // => { scope: "safe-harbor-subject", roleCode: "PR" }
  * ```
  */
-export function classifyNm1Party(entityCode: string): PartyRoleClassification {
+export function classifyNm1Party(
+  entityCode: string,
+  transactionSetId?: string,
+): PartyRoleClassification {
+  const employer =
+    transactionSetId !== undefined && Object.hasOwn(EMPLOYER_ENTITY_CODES_BY_SET, transactionSetId)
+      ? EMPLOYER_ENTITY_CODES_BY_SET[transactionSetId]
+      : undefined;
+  if (employer?.has(entityCode) === true) {
+    return { scope: "safe-harbor-subject", roleCode: entityCode };
+  }
   return classifyPartyRole(entityCode, X12_PARTY_ROLES);
 }
 
@@ -274,6 +313,8 @@ export function classifyNm1Party(entityCode: string): PartyRoleClassification {
  * because the TR3 entity code says so, never because a string "looked like" a name.
  *
  * @param entityCode - The `NM1-01` entity-identifier code (e.g. `"IL"`, `"QC"`, `"36"`, `"85"`).
+ * @param transactionSetId - The `ST-01` of the transaction set the party sits in, when known: a code
+ *   whose meaning changes by set ({@link EMPLOYER_ENTITY_CODES_BY_SET}) is read in that set.
  * @returns The disposition governing how the name and id elements are handled.
  * @example
  * ```ts
@@ -283,13 +324,15 @@ export function classifyNm1Party(entityCode: string): PartyRoleClassification {
  * classifyNm1Entity("36"); // => "employer" (scrubbed like a patient-side party)
  * classifyNm1Entity("85"); // => "provider"
  * classifyNm1Entity("ZZ"); // => "unknown"  (fails closed)
+ * classifyNm1Entity("PR", "820"); // => "employer" (the 820 premium payer)
  * ```
  */
-export function classifyNm1Entity(entityCode: string): Nm1Disposition {
-  const party = classifyNm1Party(entityCode);
+export function classifyNm1Entity(entityCode: string, transactionSetId?: string): Nm1Disposition {
+  const party = classifyNm1Party(entityCode, transactionSetId);
   if (party.scope === "unknown") return "unknown";
   if (party.scope === "outside-scope") return "provider";
-  return EMPLOYER_ENTITY_CODES.has(party.roleCode) ? "employer" : "patient";
+  if (EMPLOYER_ENTITY_CODES.has(party.roleCode)) return "employer";
+  return PATIENT_ENTITY_CODES.has(party.roleCode) ? "patient" : "employer";
 }
 
 /**

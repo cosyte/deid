@@ -80,9 +80,6 @@ const CASES: readonly (readonly [string, string, string])[] = [
   ["HI*BE:80:::125.00~", "HI*BE:80:::ZZAMT~", "HI[0]-1"],
   ["HI*ABF:E119:::::::Y~", "HI*ABF:E119:::::::Q~", "HI[0]-1"],
   ["HI*ABF:E119~", "HI*ABF:E119:::::ZZV~", "HI[0]-1"],
-  // Composites with too many components.
-  ["CLM**1.00***11:B:1~", "CLM**1.00***11:B:1:ZZ~", "CLM[0]-5"],
-  ["CLM**1.00*********AA:::OH:US~", "CLM**1.00*********AA:::ZZ:US~", "CLM[0]-11"],
   // Dates, times, numbers, references and repeating elements.
   ["BHT*0019*00*REF01*20260615*093015*CH~", "BHT*0019*00*REF01*20260615*0961*CH~", "BHT[0]-5"],
   ["BHT*0019*00*REF01*20260615*0930*CH~", "BHT*0019*00*   *20260615*0930*CH~", "BHT[0]-3"],
@@ -114,6 +111,36 @@ describe("each position keeps a value of its shape and removes any other", () =>
     });
   }
 
+  // CLM-01 is the patient account number, which the pass transforms, so these compare the output with
+  // it removed. CLM-01 cannot be empty here: it is required, and an empty one before a value is a shift.
+  it("CLM composites: too many components removes the composite, the claim's codes stay", () => {
+    const CLAIM: readonly (readonly [
+      kept: string,
+      out: string,
+      wrong: string,
+      position: string,
+    ])[] = [
+      [
+        "CLM*ZZACCTES*1.00***11:B:1~",
+        "CLM**1.00***11:B:1~",
+        "CLM*ZZACCTES*1.00***11:B:1:ZZ~",
+        "CLM[0]-5",
+      ],
+      [
+        "CLM*ZZACCTES*1.00***11:B:1*Y*A*Y*Y**AA:::OH:US~",
+        "CLM**1.00***11:B:1*Y*A*Y*Y**AA:::OH:US~",
+        "CLM*ZZACCTES*1.00***11:B:1*Y*A*Y*Y**AA:::ZZ:US~",
+        "CLM[0]-11",
+      ],
+    ];
+    for (const [kept, out, wrong, position] of CLAIM) {
+      const good = one(kept);
+      expect(good.out).toBe(out);
+      expect(good.blocked).toEqual([]);
+      expect(one(wrong).blocked).toEqual([position]);
+    }
+  });
+
   it("a date component that is no date in its declared format is removed at that component", () => {
     const bad = one("HI*BH:11:D8:20261399~");
     expect(bad.out).toBe("HI*BH:11:D8:~");
@@ -121,7 +148,7 @@ describe("each position keeps a value of its shape and removes any other", () =>
   });
 
   it("an INS date of death is generalized in the INS-11 format", () => {
-    const { out } = one("INS*Y*18*001*25*******D8*20260104~");
-    expect(out).toBe("INS*Y*18*001*25*******D8*2026~");
+    const { out } = one("INS*Y*18*001*25*A******D8*20260104~");
+    expect(out).toBe("INS*Y*18*001*25*A******D8*2026~");
   });
 });

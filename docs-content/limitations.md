@@ -179,6 +179,14 @@ Two things follow, and the second is the one that surprises people:
   not say whose it is. That over-removes, for example, the 837 prescription number (`REF*XZ`) and the
   837I other operating physician (`NM1*ZZ`).
 
+- **An X12 value shifted past an empty required position is removed with everything after it.** A
+  number shape cannot tell a shifted date or account number from an amount, so the adapter treats a
+  position the TR3s require, or one a qualifier implies, left empty before a later value as a shift, and
+  removes and records every value after it. That over-removes a malformed segment that only omits a
+  required position (the x12 library's 837D sample omits `SV3-02`, so its place of service and count go
+  too), rather than keep a value it cannot place. A shift that leaves no required or implied position
+  empty, such as a value code's amount where another number belongs, is not detectable this way.
+
 - **X12 bytes after the `IEA` are not counted; they are removed.** They are neither a segment nor a
   loop, and they commonly hold a whole second interchange the parser did not decode, so no rule can
   decide them. Bytes there that are not blank are removed and recorded at `trailingBytes`; a blank
@@ -186,7 +194,8 @@ Two things follow, and the second is the one that surprises people:
 
 - **The employer is a Safe Harbor subject, and two employer surfaces still are not reached.**
   §164.514(b)(2)(i) removes the identifiers of the individual "or of relatives, **employers**, or
-  household members", so an X12 party whose entity-identifier code is `36` and the employer positions
+  household members", so an X12 party whose entity-identifier code is `36` (or `P5`, or `PR` in an
+  `820` premium payment, where the premium payer is the members' employer) and the employer positions
   the HL7 v2.5.1 financial segments type (GT1-16/17/18/19/29, IN1-10/11, IN2-3/49/50/64, and IN2-70 as
   an organization) are acted on and recorded. What that does **not** reach: **an employer named only in
   free text**, which is the consumer's redactor's business like any other prose; and **an employer

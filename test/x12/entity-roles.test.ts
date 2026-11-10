@@ -16,8 +16,11 @@ import { describe, expect, it } from "vitest";
 import { createDeidContext, type DeidManifestEntry } from "../../src/index.js";
 import {
   EMPLOYER_ENTITY_CODES,
+  EMPLOYER_ENTITY_CODES_BY_SET,
   PATIENT_ENTITY_CODES,
   PROVIDER_ENTITY_CODES,
+  classifyNm1Entity,
+  classifyNm1Party,
   deidentifyX12String,
 } from "../../src/x12/index.js";
 
@@ -127,5 +130,79 @@ describe("the provider list names no party that can be the individual or a perso
     ];
     expect(persons.filter((code) => !PATIENT_ENTITY_CODES.has(code))).toEqual([]);
     expect(persons.filter((code) => PROVIDER_ENTITY_CODES.has(code))).toEqual([]);
+  });
+});
+
+describe("820: the premium payer is the employer of the individuals the payment lists", () => {
+  // The 005010X218 payroll-deducted and other group premium payment: 1000A is the premium receiver (the
+  // health plan), 1000B the premium payer, which is the employer of the members listed in 2000B. Element
+  // 98 calls `PR` a payer, and in every other set a `PR` party is a health plan; in the 820 it is the
+  // individuals' employer, so its name and identifier are removed and recorded, as the 834 sponsor
+  // (`P5`) is. The shape is the x12 library's golden and canonical 820.
+  const PREMIUM = [
+    "BPR*C*12500.00*C*ACH*CCP*01*999000011*DA*123456789*1111111111**01*888000022*DA*987654321*20260601",
+    "TRN*1*PREM-202606*1111111111",
+    "N1*PE*ZZPREMRECEIVER*FI*111223333",
+    "N1*PR*ZZPREMPAYER*FI*ZZPREMPAYEREIN",
+    "N3*ZZPREMPAYERSTREET",
+    "N4*ZZPREMPAYERCITY*OH*43215",
+    "NM1*IL*1*ZZPREMLAST*ZZPREMFIRST****MI*ZZPREMMEMBER",
+  ];
+
+  function premium(st01: string): { body: string[]; manifest: readonly DeidManifestEntry[] } {
+    const raw =
+      `${ISA}GS*RA*A*B*20260601*1200*8*X*005010X218~ST*${st01}*0008~` +
+      `${PREMIUM.map((s) => `${s}~`).join("")}SE*${String(PREMIUM.length + 2)}*0008~GE*1*8~` +
+      `IEA*1*000000008~`;
+    const { x12, manifest } = deidentifyX12String(raw, { context: ctx });
+    const all = x12.split("~");
+    const st = all.findIndex((s) => s.startsWith("ST*"));
+    const se = all.findIndex((s) => s.startsWith("SE*"));
+    return { body: all.slice(st + 1, se), manifest };
+  }
+
+  it("N1*PR in an 820: the name and identifier are removed and recorded, no row says retained", () => {
+    const { body, manifest } = premium("820");
+    expect(body[3]).toBe("N1*PR**FI*");
+    expect(body.join("~")).not.toContain("ZZPREMPAYER");
+    const rows = manifest.filter((e) => e.locus.startsWith("820/N1[1]"));
+    expect(rows.map((e) => [e.locus, e.disposition])).toEqual([
+      ["820/N1[1]-2", expect.not.stringMatching(/retained/)],
+      ["820/N1[1]-4", "blocked"],
+    ]);
+    expect(rows[0]?.category).toBe("NAMES");
+    expect(retained(manifest).map((e) => e.locus)).toEqual(["820/N1[0]-1"]);
+  });
+
+  it("the premium receiver (PE) is still the health plan, and NM1*PR in an 820 is the employer too", () => {
+    const { body } = premium("820");
+    expect(body[2]).toBe("N1*PE*ZZPREMRECEIVER*FI*111223333");
+    const raw =
+      `${ISA}GS*RA*A*B*20260601*1200*8*X*005010X218~ST*820*0008~NM1*PR*2*ZZPREMPAYERNM1~` +
+      `SE*3*0008~GE*1*8~IEA*1*000000008~`;
+    const { x12, manifest } = deidentifyX12String(raw, { context: ctx });
+    expect(x12).not.toContain("ZZPREMPAYERNM1");
+    expect(retained(manifest)).toEqual([]);
+  });
+
+  it("outside the 820, PR is the payer: an 835 payer keeps its name and identifier", () => {
+    const { out, manifest } = one("835", "HP", "005010X221A1", "N1*PR*ZZPAYERORG*XV*ZZPAYERID");
+    expect(out).toBe("N1*PR*ZZPAYERORG*XV*ZZPAYERID");
+    expect(retained(manifest).map((e) => e.locus)).toEqual(["835/N1[0]-1"]);
+  });
+});
+
+describe("the classifiers read a code in the transaction set it sits in", () => {
+  it("PR is the employer in an 820 and the payer anywhere else", () => {
+    expect(EMPLOYER_ENTITY_CODES_BY_SET["820"]?.has("PR")).toBe(true);
+    expect(classifyNm1Party("PR", "820")).toEqual({ scope: "safe-harbor-subject", roleCode: "PR" });
+    expect(classifyNm1Entity("PR", "820")).toBe("employer");
+    expect(classifyNm1Entity("PR", "835")).toBe("provider");
+    expect(classifyNm1Entity("PR")).toBe("provider");
+    expect(classifyNm1Entity("PE", "820")).toBe("provider");
+    expect(classifyNm1Entity("IL", "820")).toBe("patient");
+    expect(classifyNm1Entity("36", "820")).toBe("employer");
+    // A set id that is an inherited property name is no set.
+    expect(classifyNm1Entity("PR", "constructor")).toBe("provider");
   });
 });
