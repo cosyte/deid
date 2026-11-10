@@ -389,9 +389,10 @@ both datatypes. The standard promised a name or an address there and the pass co
 it was given, so the boundary is readability rather than which keys happen to be present: adding an
 unrecognized sibling to an element that was already unreadable never unblocks it. Exactly two
 conformant R4 backbones share one of those element names, `MedicinalProduct.name` and `SubstanceSpecification.name`, and both are excluded positively, by the property R4 makes `1..1` on
-each together with that backbone's own closed property set. A plain string at one of those names is
-not a complex and is never a candidate, which is what leaves `Organization.name` and
-`Endpoint.address` untouched. The disposition is recorded either way. That block is scoped to those
+each together with that backbone's own closed property set. A plain string (or any other primitive)
+at one of those names is not the datatype either, and is blocked whole too, except where R4 itself
+types the element as a string: `name` (`Organization.name`, `Location.name`) and the `address` of an
+`Endpoint`, a url. Those two stay untouched. The disposition is recorded either way. That block is scoped to those
 positions on purpose; the residual it leaves is stated below.
 
 **Known limitations (this release).** Extension values are block-only (no profile-aware retention, a

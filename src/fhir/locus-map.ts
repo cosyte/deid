@@ -125,9 +125,10 @@ export const FHIR_DEMOGRAPHIC_ELEMENTS: Readonly<Record<string, FhirDemographicM
  * which is the mirror defect and the one no re-run undoes. That residual is stated in
  * `docs-content/limitations.md` rather than left implicit.
  *
- * A plain string at one of these names is untouched either way, and deliberately: `Organization.name`
- * and `Endpoint.address` are both R4 string elements, and neither is a person's name or a postal
- * address.
+ * A plain primitive at one of these names (a bare string, a number, a `null`) is not the datatype
+ * either, so it is blocked whole too, with two exceptions where R4 itself puts a string at the name:
+ * `name` (`Organization.name`, `Location.name`) and the `address` of an `Endpoint` resource, a url.
+ * Neither is a person's name or a postal address, so both are left untouched.
  *
  * @internal
  */

@@ -360,6 +360,7 @@ function fhirNonPersonCase(): CorpusCase {
       "ZZLOCSTREET",
       "ZZLOCCITY",
       "ZZLOCCOUNTY",
+      "ZZLOCADDRSTRING",
     ],
     survivors: [
       "ZZORGOWNNAME",
@@ -371,6 +372,7 @@ function fhirNonPersonCase(): CorpusCase {
       "mmol/L",
       "final",
       "Organization/org1",
+      "https://example.org/fhir/endpoint",
     ],
   };
 }

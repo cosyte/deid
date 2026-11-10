@@ -130,8 +130,10 @@ not mistaken for a date, so it survives.
   unrecognized sibling to an already unreadable element never unblocks it. Exactly two conformant R4
   backbones share one of those element names, `MedicinalProduct.name` and
   `SubstanceSpecification.name`, and each is excluded positively by the property R4 makes `1..1` on it
-  plus its own closed property set; a plain string there (`Organization.name`, `Endpoint.address`) is
-  never a candidate. The disposition is recorded either way. That block is scoped to those element
+  plus its own closed property set. A plain string (or any other primitive) at one of those names is
+  not the datatype either and is blocked whole too, except where R4 itself types the element as a
+  string: `name` (`Organization.name`, `Location.name`) and an `Endpoint`'s own `address`, a url,
+  which stay untouched. The disposition is recorded either way. That block is scoped to those element
   names deliberately, and the residual it leaves is stated below.
 - **Free-text prose** is blocked by default: the `note` element (`Annotation.text` + author), a
   `Communication`/message `contentString`, and an **uncoded `valueString`** (the FHIR analogue of an

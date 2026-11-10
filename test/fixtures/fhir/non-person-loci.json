@@ -70,6 +70,24 @@
       }
     },
     {
+      "fullUrl": "urn:uuid:location-2",
+      "resource": {
+        "resourceType": "Location",
+        "id": "loc2",
+        "status": "active",
+        "address": "ZZLOCADDRSTRING"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:endpoint-1",
+      "resource": {
+        "resourceType": "Endpoint",
+        "id": "ep1",
+        "status": "active",
+        "address": "https://example.org/fhir/endpoint"
+      }
+    },
+    {
       "fullUrl": "urn:uuid:observation-2",
       "resource": {
         "resourceType": "Observation",

@@ -58,8 +58,9 @@
  * recognized the way the classifier recognizes its own datatypes: closed for the backbone's property
  * set **and** carrying the property R4 makes `1..1` on it. Nothing conformant sits at `address`,
  * `locationAddress`, `valueAddress` or `valueHumanName` that is not the datatype itself. A plain string
- * at any of these names is not a complex and is never a candidate, which is what leaves
- * `Organization.name` and `Endpoint.address` alone.
+ * at any of these names is not a complex and is never a candidate here; the sweep in `./extract.js`
+ * blocks one on its own terms, except at `name` and at an `Endpoint`'s own `address`, which R4 types
+ * as strings, so `Organization.name` and `Endpoint.address` are left alone.
  *
  * That test is only meaningful at those positions, and its one caller consults it nowhere else. At an
  * arbitrary position `{ prefix, linkId, text, type }` is a conformant `Questionnaire.item`, not a name,
@@ -428,14 +429,14 @@ function isNonPersonalTypedBackbone(node: FhirComplex, elementName: string): boo
  * An **empty** complex is not evidence: there is nothing inside it to release, and blocking it would
  * put a manifest row against a position that carried no value.
  *
- * @param node - Any node of the parsed `@cosyte/fhir` element tree.
+ * @param node - A complex of the parsed `@cosyte/fhir` element tree; anything else at such a position
+ *   is the caller's to block, since it cannot be the datatype at all.
  * @param elementName - The element name the node was found under; must be one R4 types as one of the
  *   two datatypes, which is the caller's precondition and the whole basis of the rule.
  * @returns `true` when the node is an unreadable name or address at a position that promised one.
  * @internal
  */
-export function carriesFhirPersonalEvidence(node: FhirNode, elementName: string): boolean {
-  if (!isComplex(node)) return false;
+export function carriesFhirPersonalEvidence(node: FhirComplex, elementName: string): boolean {
   if (node.properties.length === 0) return false;
   return !isNonPersonalTypedBackbone(node, elementName);
 }

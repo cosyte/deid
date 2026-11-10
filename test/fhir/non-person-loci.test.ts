@@ -652,6 +652,8 @@ describe("the committed non-person fixture, end to end", () => {
       "Bundle.entry[0].resource.contact[0].name NAMES",
       "Bundle.entry[0].resource.contact[0].address GEOGRAPHIC",
       "Bundle.entry[1].resource.address GEOGRAPHIC",
+      // A plain string where Location.address belongs: blocked under the catch-all category.
+      "Bundle.entry[2].resource.address OTHER_UNIQUE_ID",
     ]);
   });
 
@@ -668,6 +670,7 @@ describe("the committed non-person fixture, end to end", () => {
       "final",
       "Organization/org1",
       "Patient/pat9",
+      "https://example.org/fhir/endpoint",
     ]) {
       expect(json).toContain(survivor);
     }
@@ -685,6 +688,7 @@ describe("the committed non-person fixture, end to end", () => {
       "ZZLOCSTREET",
       "ZZLOCCITY",
       "ZZLOCCOUNTY",
+      "ZZLOCADDRSTRING",
     ]) {
       expect(trail).not.toContain(sentinel);
     }

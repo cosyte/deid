@@ -394,27 +394,45 @@ function walkValue(
 type PersonalAction = "human-name" | "address" | "block";
 
 /**
+ * Whether R4 itself puts a plain primitive at this typed element name, for a property of a complex
+ * whose own `resourceType` is `parentResourceType`. Exactly two such elements exist: `name`, a string
+ * on many resources (`Organization.name`, `Location.name`), and `Endpoint.address`, a url. At every
+ * other typed element name, and at `address` anywhere but on an `Endpoint` itself, a primitive is not
+ * the `HumanName` or `Address` the standard promised there.
+ */
+function primitiveConformsAt(name: string, parentResourceType: string | undefined): boolean {
+  return name === "name" || (name === "address" && parentResourceType === "Endpoint");
+}
+
+/**
  * Decide what the sweep does with one candidate node. A positively classified `HumanName` or `Address`
  * is acted on wherever it sits. A complex the classifier could not pin down is **blocked**, but only at
  * an element name R4 types as one of those datatypes (see {@link carriesFhirPersonalEvidence} for why
  * the position carries the whole weight of that decision, and for the two conformant backbones it
- * excludes). Everything else is left to the ordinary descent, which is what keeps an organisation's own
- * `name` string, a `Coding.display` and a clinical code, value, unit or status byte-identical.
+ * excludes). So is anything there that is not a complex at all (a bare string, a number, a `null`, a
+ * list nested in the list a model built by hand can hold), unless it is a primitive at an element R4
+ * itself types as a string ({@link primitiveConformsAt}): the pass cannot locate a value in it. Everything
+ * else is left to the ordinary descent, which is what keeps an organisation's own `name` string,
+ * `Endpoint.address`, a `Coding.display` and a clinical code, value, unit or status byte-identical.
  *
  * @param typedElementName - The element name when R4 types it as one of the two datatypes, and
  *   `undefined` at every other position: the fail-closed arm exists only where the standard already
  *   promised a name or an address.
+ * @param primitiveConforms - Whether R4 puts a plain primitive at this element, which leaves one there
+ *   to the ordinary descent.
  */
 function personalAction(
   node: FhirNode,
   typedElementName: string | undefined,
+  primitiveConforms: boolean,
 ): PersonalAction | undefined {
   const datatype = classifyFhirPersonalDatatype(node);
   if (datatype !== undefined) return datatype;
-  if (typedElementName !== undefined && carriesFhirPersonalEvidence(node, typedElementName)) {
-    return "block";
+  if (typedElementName === undefined) return undefined;
+  if (isComplex(node)) {
+    return carriesFhirPersonalEvidence(node, typedElementName) ? "block" : undefined;
   }
-  return undefined;
+  return isPrimitive(node) && primitiveConforms ? undefined : "block";
 }
 
 /**
@@ -472,6 +490,8 @@ function emitSweptAddress(out: FhirLocusAccumulator, node: FhirComplex, path: st
  * unrelated one still walks the unrelated one exactly as before. When no item is claimed the sweep
  * reports so without walking anything, and the caller's ordinary dispatch continues untouched.
  *
+ * @param parentResourceType - The `resourceType` of the complex this property sits on, or `undefined`
+ *   when that complex is not a resource: it is what tells `Endpoint.address` from any other `address`.
  * @returns `true` when the sweep took ownership of this property value.
  */
 function sweepPersonalDatatypes(
@@ -479,10 +499,12 @@ function sweepPersonalDatatypes(
   name: string,
   value: FhirNode,
   path: string,
+  parentResourceType: string | undefined,
 ): boolean {
   const typedElementName = TYPED_PERSONAL_ELEMENT_NAMES.has(name) ? name : undefined;
+  const primitiveConforms = primitiveConformsAt(name, parentResourceType);
   const items = isList(value) ? value.items : [value];
-  const actions = items.map((item) => personalAction(item, typedElementName));
+  const actions = items.map((item) => personalAction(item, typedElementName, primitiveConforms));
   if (actions.every((action) => action === undefined)) return false;
   const multi = items.length > 1;
   items.forEach((item, i) => {
@@ -523,6 +545,7 @@ function handleProperty(
   personCtx: boolean,
   isPersonTop: boolean,
   parentIsCoding: boolean,
+  parentResourceType: string | undefined,
 ): void {
   if (name === "resourceType") {
     // Retained (structural), and NAMED: the walk reads it to derive the person/clinical role at every
@@ -569,7 +592,7 @@ function handleProperty(
   // Outside a person resource the DATATYPE decides: a `HumanName` or an `Address` is acted on wherever
   // the graph put it, so coverage stops depending on whether a producer shaped the document the way
   // the person map expected.
-  if (!personCtx && sweepPersonalDatatypes(out, name, value, path)) return;
+  if (!personCtx && sweepPersonalDatatypes(out, name, value, path, parentResourceType)) return;
   // A date-shaped primitive anywhere is a PHI date → generalized (fail closed on dates).
   if (isPrimitive(value) && dateEmit(out, value, path)) return;
   // Fail-closed person sweep: a bare unrecognized string at a person resource's top level is blocked.
@@ -608,6 +631,7 @@ function walkComplex(
       ctx,
       isPersonTop,
       parentIsCoding,
+      rt,
     );
   });
 }

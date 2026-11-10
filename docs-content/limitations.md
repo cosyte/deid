@@ -211,8 +211,9 @@ Two things follow, and the second is the one that surprises people:
   unrecognized sibling never unblocks an element that was already unreadable. Two conformant R4
   backbones share one of those element names, `MedicinalProduct.name` and `SubstanceSpecification.name`,
   and both are excluded positively: the property R4 makes `1..1` on each, plus that backbone's own
-  closed property set. A plain string at one of those names is never a candidate at all, which is what
-  leaves `Organization.name` and `Endpoint.address` alone.
+  closed property set. A plain string (or any other primitive) at one of those names is blocked whole
+  as well, except at the two elements R4 itself types as a string, `name` (`Organization.name`,
+  `Location.name`) and an `Endpoint`'s own `address`, a url, which are left alone.
 
 - **Five FHIR surfaces this release still does not reach.** Three because no person is typed at the
   position. A **`ContactPoint` outside a person resource**: a phone or an email on an `Organization`,
