@@ -546,6 +546,7 @@ function handleGeoSegment(
 ): void {
   const ruleByElement = new Map<number, X12ElementRule>();
   for (const rule of rules) ruleByElement.set(rule.element, rule);
+  /* v8 ignore next -- only an X12_GEO_SEGMENTS id (N3, N4) reaches here, and the table has a row for each */
   const retain = X12_GEO_RETAIN_ELEMENTS[pos.segId] ?? new Set<number>();
   for (let n = 1; n < seg.elements.length; n += 1) {
     if (!has(seg, n)) continue;

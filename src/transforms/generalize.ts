@@ -38,6 +38,7 @@ function extractYear(value: string): string | null {
   if (year < 1000) {
     return null;
   }
+  /* v8 ignore next -- group 1 is not optional in the pattern, so it is defined whenever the match is */
   return match[1] ?? null;
 }
 

@@ -294,6 +294,7 @@ function childSegments(parent: Element): { el: Element; path: string }[] {
   return named.map(({ el, name, withheld }) => {
     const idx = seen.get(name) ?? 0;
     seen.set(name, idx + 1);
+    /* v8 ignore next -- `counts` was filled from these same names just above, so `?? 1` never runs */
     const indexed = withheld || (counts.get(name) ?? 1) > 1;
     return { el, path: indexed ? `${name}[${String(idx)}]` : name };
   });
@@ -513,7 +514,8 @@ function blockNarrative(out: CcdaLocusAccumulator, el: Element, path: string): v
   for (const { el: child, path: seg } of childSegments(el)) {
     const childPath = join(path, seg);
     if (child.namespaceURI === V3_NS && (child.localName ?? "") === "text") {
-      if (text(child) === undefined) continue; // empty narrative: nothing to block
+      const narrative = text(child);
+      if (narrative === undefined) continue; // empty narrative: nothing to block
       nameText(out, child);
       push(
         out,
@@ -521,7 +523,7 @@ function blockNarrative(out: CcdaLocusAccumulator, el: Element, path: string): v
           path: childPath,
           kind: "freetext",
           category: SAFE_HARBOR_CATEGORIES.OTHER_UNIQUE_ID,
-          value: text(child) ?? "",
+          value: narrative,
         },
         { node: child, edit: "clear-element" },
       );

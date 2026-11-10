@@ -281,6 +281,17 @@ describe("DICOM File Meta positions are enumerated with the rest", () => {
     expect(unexaminedResiduals.map((r) => r.locus)).toContain("(0002,0003)");
   });
 
+  it("a File Meta key present but holding no value is not a position", () => {
+    // Read by key, so a key spread in as `undefined` is met by the walk: it is absent, not empty.
+    const sparse: EnumerableDataset = {
+      elements: () => [],
+      fileMeta: { transferSyntaxUID: TS_EXPLICIT_LE, mediaStorageSOPClassUID: undefined },
+    };
+    expect(deriveUnexaminedResiduals(sparse, EMPTY_REPORT).map((r) => r.locus)).toEqual([
+      "(0002,0010)",
+    ]);
+  });
+
   it("a dataset with no File Meta group at all enumerates cleanly", () => {
     const rootOnly: EnumerableDataset = {
       elements: () => [

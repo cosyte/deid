@@ -36,6 +36,29 @@ const scrub: FreeTextRedactor = ({ text }) => ({
   text: text.replace(/SENTINEL_\w+/g, "[REDACTED]"),
 });
 
+describe("BYO free-text redactor, a locus with no category", () => {
+  it("hands the redactor no category and records the result under the (R) catch-all", () => {
+    const seen: unknown[] = [];
+    const out = deidentify(
+      { loci: [{ path: "NTE-3", kind: "freetext", value: "note SENTINEL_NAME" }] },
+      {
+        redactor: (input) => {
+          seen.push(input);
+          return scrub(input);
+        },
+      },
+    );
+    expect(seen).toEqual([{ text: "note SENTINEL_NAME", locus: "NTE-3" }]);
+    expect(out.document.loci[0]?.value).toBe("note [REDACTED]");
+    expect(out.manifest).toEqual([
+      expect.objectContaining({
+        category: C.OTHER_UNIQUE_ID,
+        code: D.DEID_FREETEXT_CONSUMER_REDACTED,
+      }),
+    ]);
+  });
+});
+
 describe("BYO free-text redactor, fail-closed contract", () => {
   it("blocks free text when no redactor is supplied (the safe default is unchanged)", () => {
     const out = deidentify({ loci: [freetext("note SENTINEL_NAME")] }, {});
