@@ -64,7 +64,8 @@ implicit, so the map keys off each **segment id** plus two **qualifier classifie
 | **Code positions** (`NM1-01` / `08`, `N1-01` / `03`, `REF-01`, `N4-02` / `04`) | a recognized code (entity code, identification code qualifier, `REF` qualifier, state or province, ISO country) is kept as written; any other value **fails closed**: removed and recorded at its own position |
 | **`CLM-01` / `CLP-01`**                                         | patient account number **removed** under Safe Harbor (a consistent surrogate only under a preset that does not claim the label) |
 | **Free text** (`MSG-01`, `III-04`, `K3-01`, `NTE-02`)           | **fails closed**: blocked (coded siblings retained), never scrubbed by a naive pass                                |
-| **Clinical / financial** (`HI`, `SV*`, `SVC`, `AMT`, `CAS`, …)   | **retained untouched**: diagnosis / procedure / revenue codes, amounts, quantities survive byte-identical          |
+| **Clinical / financial** (`HI`, `SV*`, `SVC`, `AMT`, `CAS`, …)   | **retained**: diagnosis / procedure / revenue codes, amounts, quantities of their expected shape survive byte-identical |
+| **Every other position**, envelope included                     | kept only when it has the shape its position expects; any other value, and any position no rule names, **fails closed** |
 | Any **unmapped / unknown** segment                              | **fails closed**: every element blocked                                                                            |
 
 ## The `REF` frontier
@@ -82,13 +83,51 @@ sender who drops one element separator shifts the identifier left into `REF-01` 
 at its own position, never kept on the strength of where it sits. The same holds for an unrecognized
 `REF-01` code such as `ZZ`: it goes with the value it routes.
 
+## Every position is decided
+
+A missing element separator shifts every value after it one position left, and an extra one shifts them
+right, so an identifier can land in a code position, a date position, or a position past the last one a
+rule names. The adapter decides every element it hands through, so none of those leaves in the clear:
+
+- **A code position keeps only a code it knows, exactly as written.** The entity code, the
+  identification code qualifier, the `REF` qualifier, the `N4` state and country, and every qualifier
+  and code of `DMG`, `PER`, `DTP`, `DTM`, `SBR`, `CLM`, `HI` and the retained segments are checked
+  against the position's code list, or against the exact shape of a published code set (ICD-10-CM,
+  ICD-10-PCS, HCPCS, CARC, RARC). A lower-case or space-padded code is not the code.
+- **A refused code routes nothing.** The party and reference classifiers read a code only after it
+  passed that check. `NM1*pr*...` places no party outside the scope clause, so its name and
+  identifier are removed; `REF*f8*...` is no administrative reference, so `REF-02` is removed.
+- **A date position keeps only a valid date in the declared format.** `DMG-02` in the `DMG-01`
+  format, `DTP-03` in the `DTP-02` format (`D8`, `RD8`, `DT`), `DTM-02` as `CCYYMMDD`. A date of the
+  individual inside a retained segment (`PAT-06`, `INS-12`, an `HI` occurrence or procedure date) is
+  generalized the same way, at its own component. A value that is no valid date in its format, a `TM`
+  time of day included, is removed rather than cut down to whatever its front looks like.
+- **Amounts, quantities and counts keep only a number**, and a trace, control or trading partner number
+  keeps a bounded run of printable characters.
+- **A free-text component is removed**: a procedure description inside `SV1-01`, a 999's copy of a bad
+  data element (`IK4-04`), the business unit value a 999 context names (`CTX-01-2`).
+- **A position no rule names is removed**: `NM1-10` onward, `N1-05` onward, `REF-03` onward, and any
+  element past the last one a retained segment uses. `NM1-02` keeps only `1` or `2`, so a last name
+  shifted there is removed as well.
+- **The envelope is decided too.** An `ISA`, `GS`, `GE`, `TA1`, `IEA`, `ST` or `SE` element of the
+  wrong shape is removed (an `ISA` element becomes blanks of its own width, so the header keeps its 106
+  bytes). A segment the parser found outside every transaction set is removed whole and recorded under
+  `orphan/`, and bytes after the `IEA` that are not blank (a whole second interchange, say) are removed
+  and recorded at `trailingBytes`.
+
+Each removal is a blocked manifest row at its own position (`837/NM1[0]-10`, `837/HI[0]-1-4` for a
+component). Recognized codes, valid dates and amounts on well-formed input keep their output. Because
+nothing is left unexamined, `unexaminedResiduals` is always empty for X12: the count is still taken, and
+it is a measured zero. The transaction's creation date (`BHT-04`), a payment's effective date
+(`BPR-16`) and the envelope dates are kept when they are valid dates: they date the exchange, not the
+individual.
+
 ## Known limitations
 
 Provider / organization identity is **retained** as non-patient identity, and there is **no** option to
 suppress it: the retention is structural, in the extractor, not a per-category policy choice. It is not
 silent, though: every retained party emits a value-free manifest row naming the entity-identifier code
 that placed it outside the scope clause, so a reader can check the classification rather than infer it
-from an absence. A retained
-clinical segment may carry a residual
-patient-related date the map does not surface as `DTP` / `DTM`: a documented limitation mirroring the HL7
-adapter; forgetting one fails **safe** (retained, not leaked, but conversely not generalized).
+from an absence. Code lists cover what the HIPAA 005010 TR3s use for 837, 835, 270 / 271, 276 / 277,
+278, 999 and TA1; a real but rarer code outside them is removed and recorded, which over-removes a code
+rather than passing an unchecked value.

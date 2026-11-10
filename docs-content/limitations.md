@@ -118,14 +118,17 @@ Two things follow, and the second is the one that surprises people:
   and it is a separate list precisely so that a position nothing looked at can never be mistaken for a
   residual of a value the pass did examine. All six adapters produce it: the fields of a retained HL7 v2
   segment, the entry dates / entry ids / in-entry performers and family-history demographics inside a
-  retained C-CDA clinical body, the codes and statuses a FHIR walk descends past, the elements of a
-  retained X12 segment, the fields of a retained NCPDP segment and its fixed header, and every DICOM
-  attribute the delegated Annex E report does not account for, nested sequence items included.
+  retained C-CDA clinical body, the codes and statuses a FHIR walk descends past, the fields of a
+  retained NCPDP segment and its fixed header, and every DICOM attribute the delegated Annex E report
+  does not account for, nested sequence items included. **X12 leaves none:** every element it hands
+  through, envelope included, is kept only when it has the shape its position expects and is removed
+  and recorded otherwise, so its list is always a measured zero. The
+  [X12 guide](guides-x12#every-position-is-decided) says what each position expects.
 
 - **The envelope around a document is counted too, in every format that has one.** Retaining a
   _structure_ names no position inside it, so the positions of an HL7 v2 `MSH`, of a CDA document
-  envelope, of the X12 interchange and functional-group envelope (`ISA` / `TA1` / `GS` / `GE` / `IEA`),
-  and of the DICOM Part 10 File Meta group `(0002,xxxx)` are all enumerated and reported. Read those
+  envelope, and of the DICOM Part 10 File Meta group `(0002,xxxx)` are all enumerated and reported (the
+  X12 interchange and functional-group envelope is decided instead, like the rest of X12). Read those
   counts as the measurement they are: control numbers, trading-partner ids, timestamps, and transfer
   syntaxes sit there, and the number says only that no rule examined them.
 
@@ -162,12 +165,10 @@ Two things follow, and the second is the one that surprises people:
   naming the structure, rather than emitting a zero or a partial count that a reader would take for a
   clearance.
 
-- **Two stated edges of the count itself, so it is not read as finer than it is.** An **X12 element is
-  one position even when it carries a composite**: `HI-01` holding a qualifier and a diagnosis code is
-  counted once, not twice, which is the unit every X12 locus already uses. And **undecoded bytes after
-  an X12 interchange's `IEA` terminator contribute no position at all**: they are neither a segment nor
-  a loop, they commonly hold a whole second interchange, and any number reported for them would measure
-  nothing. Those bytes are re-emitted, and the count does not speak for them.
+- **X12 bytes after the `IEA` are not counted; they are removed.** They are neither a segment nor a
+  loop, and they commonly hold a whole second interchange the parser did not decode, so no rule can
+  decide them. Bytes there that are not blank are removed and recorded at `trailingBytes`; a blank
+  line after the last terminator stays.
 
 - **The employer is a Safe Harbor subject, and two employer surfaces still are not reached.**
   §164.514(b)(2)(i) removes the identifiers of the individual "or of relatives, **employers**, or

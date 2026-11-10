@@ -79,6 +79,12 @@ interface CorpusCase {
    * manifest names, so a locus composed there is the widest interpolation this library performs.
    */
   readonly unexaminedResiduals: readonly UnexaminedResidual[];
+  /**
+   * `true` for an adapter that decides every position it hands through (X12): its inventory is a
+   * measured zero, so the pre-condition asserts that zero instead of a haystack. The tamper proof below
+   * still runs against it, so the sweep is shown to read the list either way.
+   */
+  readonly decidesEveryPosition?: true;
   /** The serialized ORIGINAL (un-de-identified) wire: used to prove the sentinels are really present. */
   readonly originalWire: string;
   /** Synthetic PHI sentinels that must be ABSENT from `deidWire` and PRESENT in `originalWire`. */
@@ -385,6 +391,7 @@ function x12Case(): CorpusCase {
     deidWire: x12,
     manifest,
     unexaminedResiduals,
+    decidesEveryPosition: true,
     originalWire: raw,
     sentinels: [
       "ZZSUBLAST",
@@ -423,6 +430,7 @@ function x12ShiftedCase(): CorpusCase {
     deidWire: x12,
     manifest,
     unexaminedResiduals,
+    decidesEveryPosition: true,
     originalWire: raw,
     sentinels: [
       "ZZSHIFTPATMEMBER", // NM1-08 of a patient party
@@ -453,6 +461,56 @@ function x12ShiftedCase(): CorpusCase {
       "NM1*85*2*",
       "NM1*IL*1*",
       "*OH*441",
+    ],
+  };
+}
+
+// ── X12 EDI, values a rule's code check, shape check or unnamed position must catch ─────────────────
+// A refused code routes nothing (a lower-case or padded entity code or REF qualifier); a value shifted
+// into a position the rules keep must have that position's shape (a date of birth in DMG-01, a service
+// date in DTP-02, a phone in PER-03, a group number in SBR-02, a date in DTM-01); a value shifted right
+// past the last position a rule names is removed (NM1-02, NM1-10, N1-05, REF-03); and a segment
+// outside every transaction set is removed whole. The codes, dates and amounts around them survive.
+function x12FailClosedCase(): CorpusCase {
+  const ctx = createDeidContext({ key: "x12-corpus-synthetic-hmac-key", patientId: "p-x12" });
+  const raw = FIX("x12", "837p-fail-closed.edi");
+  const { x12, manifest, unexaminedResiduals } = deidentifyX12String(raw, { context: ctx });
+  return {
+    name: "x12-fail-closed",
+    deidWire: x12,
+    manifest,
+    unexaminedResiduals,
+    decidesEveryPosition: true,
+    originalWire: raw,
+    sentinels: [
+      "ZZORPHANLAST", // a segment between GS and ST
+      "ZZLOWERPAYERLAST", // NM1-01 in lower case
+      "ZZLOWERPAYERID",
+      "ZZPADPROVLAST", // NM1-01 padded with a space
+      "ZZPADPROVID",
+      "ZZLOWERN1NAME", // N1-01 in lower case
+      "ZZLOWERN1ID",
+      "ZZLOWERREFVAL", // REF-01 in lower case
+      "19800101", // a date of birth in DMG-01
+      "20260101", // a service date in DTP-02
+      "5559876543", // a phone in PER-03
+      "ZZGROUPNUM", // a group number in SBR-02
+      "20260102", // a date in DTM-01
+      "ZZNM102LAST", // a last name in NM1-02
+      "ZZNM102MEMBER",
+      "ZZNM110MEMBER", // a member id in NM1-10
+      "ZZN105MEMBER", // a member id in N1-05
+      "ZZREF03NAME", // a name in REF-03
+      "20260103", // an occurrence date, generalized at its own component
+      "ZZSV1DESC", // a free-text procedure description
+      "ZZHIMEMBER", // an identifier where a diagnosis code belongs
+    ],
+    survivors: [
+      "HI*ABK:E1165*BH:11:D8:2026~",
+      "SV1*HC:99213:25::::*100.00*UN*1***1:2~",
+      "REF*F8*ZZCLAIMCTRL*~",
+      "NM1*85*2*ZZKEPTPROVORG*****XX*1999999999~",
+      "DTP*472*D8*2026~",
     ],
   };
 }
@@ -512,6 +570,7 @@ const CASES: readonly CorpusCase[] = [
   fhirNonPersonCase(),
   x12Case(),
   x12ShiftedCase(),
+  x12FailClosedCase(),
   ncpdpCase(),
   dicomCase(),
 ];
@@ -586,10 +645,17 @@ describe("corpus non-vacuity, the sweep and the corpus both have teeth", () => {
       expect(c.manifest.length).toBeGreaterThan(0);
     });
 
-    it(`${c.name}: the unexamined-residual sweep has a haystack (pre-condition)`, () => {
-      // Same reasoning: a zero-leak result over an empty inventory proves nothing about the inventory.
-      expect(c.unexaminedResiduals.length).toBeGreaterThan(0);
-    });
+    if (c.decidesEveryPosition === true) {
+      it(`${c.name}: the unexamined-residual inventory is a measured zero (pre-condition)`, () => {
+        // Every position is decided by a rule or by its shape, so nothing is left to count.
+        expect(c.unexaminedResiduals).toEqual([]);
+      });
+    } else {
+      it(`${c.name}: the unexamined-residual sweep has a haystack (pre-condition)`, () => {
+        // Same reasoning: a zero-leak result over an empty inventory proves nothing about the inventory.
+        expect(c.unexaminedResiduals.length).toBeGreaterThan(0);
+      });
+    }
 
     it(`${c.name}: a sentinel injected into the residual inventory IS caught (tamper)`, () => {
       const canary = c.sentinels[0];

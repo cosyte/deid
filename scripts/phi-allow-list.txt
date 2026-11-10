@@ -404,6 +404,22 @@ NAME ZZSHIFTN1NAME
 NAME ZZSUBNAME
 ID ZZSHIFTSUBMEMBER
 ID ZZSUBMEMBER
+# The fail-closed fixture (test/fixtures/x12/837p-fail-closed.edi) and the inline sentinels in
+# test/x12/fail-closed-positions.test.ts: values one position off, a segment outside every transaction
+# set, and a second interchange after the IEA, each asserted ABSENT after de-id. `MI` and `F` are a
+# qualifier and a gender code the shift moved into the identifier and date of birth positions, and
+# `1985` is the year a generalized synthetic date of birth keeps.
+NAME ZZORPHANLAST
+NAME ZZORPHANFIRST
+NAME ZZNM102FIRST
+NAME ZZNM110LAST
+NAME ZZNM110FIRST
+NAME ZZN105NAME
+NAME ZZSECONDLAST
+NAME ZZSECONDFIRST
+ID MI
+DOB F
+DOB 1985
 
 # --- Synthetic NCPDP Telecom identifiers (test/fixtures/ncpdp) ---
 ID 5550000301

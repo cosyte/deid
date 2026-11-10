@@ -26,8 +26,11 @@
  *
  * Every **code position** these classifiers read (`NM1-01` / `N1-01`, `NM1-08` / `N1-03`, `REF-01`) and
  * the `N4` state and country are kept only when they hold a recognized code, exactly as written (see
- * {@link isRecognizedX12Code}). Anything else there fails closed: a missing element separator shifts an
- * identifier left by one position, and a code position must never carry it out in the clear.
+ * {@link isRecognizedX12Code}), and a classifier reads such a code only after it passed that check: a
+ * refused code routes its party or reference as unknown, which fails closed. Anything else at a code
+ * position fails closed too: a missing element separator shifts an identifier left by one position,
+ * and a code position must never carry it out in the clear. Every other position is decided by the
+ * shape it expects (see `./element-shapes.js`), and a position no rule or shape names is removed.
  *
  * Address (`N3` / `N4`), telecom (`PER`), and demographic date (`DMG-02`) loci are handled **universally**
  * (regardless of which loop's entity they belong to): a street / city / phone / date-of-birth is removed
@@ -42,6 +45,7 @@
  */
 
 import { SAFE_HARBOR_CATEGORIES, type SafeHarborCategory } from "../categories.js";
+import { COUNTRY_CODES, STATE_OR_PROVINCE_CODES } from "./element-shapes.js";
 import {
   classifyPartyRole,
   type PartyRoleClassification,
@@ -398,30 +402,6 @@ const ID_CODE_QUALIFIERS: ReadonlySet<string> = new Set<string>([
   "ZZ", // Mutually Defined
 ]);
 
-/** The `N4-02` state and province codes: the United States, its territories and military posts, Canada. */
-const STATE_OR_PROVINCE_CODES: ReadonlySet<string> = new Set<string>(
-  (
-    "AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM " +
-    "NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY " +
-    "AS GU MP PR VI UM FM MH PW AA AE AP " +
-    "AB BC MB NB NL NS NT NU ON PE QC SK YT"
-  ).split(" "),
-);
-
-/** The `N4-04` country codes: ISO 3166-1 alpha-2, the code source the TR3s name for that element. */
-const COUNTRY_CODES: ReadonlySet<string> = new Set<string>(
-  (
-    "AD AE AF AG AI AL AM AO AQ AR AS AT AU AW AX AZ BA BB BD BE BF BG BH BI BJ BL BM BN BO BQ BR BS " +
-    "BT BV BW BY BZ CA CC CD CF CG CH CI CK CL CM CN CO CR CU CV CW CX CY CZ DE DJ DK DM DO DZ EC EE " +
-    "EG EH ER ES ET FI FJ FK FM FO FR GA GB GD GE GF GG GH GI GL GM GN GP GQ GR GS GT GU GW GY HK HM " +
-    "HN HR HT HU ID IE IL IM IN IO IQ IR IS IT JE JM JO JP KE KG KH KI KM KN KP KR KW KY KZ LA LB LC " +
-    "LI LK LR LS LT LU LV LY MA MC MD ME MF MG MH MK ML MM MN MO MP MQ MR MS MT MU MV MW MX MY MZ NA " +
-    "NC NE NF NG NI NL NO NP NR NU NZ OM PA PE PF PG PH PK PL PM PN PR PS PT PW PY QA RE RO RS RU RW " +
-    "SA SB SC SD SE SG SH SI SJ SK SL SM SN SO SR SS ST SV SX SY SZ TC TD TF TG TH TJ TK TL TM TN TO " +
-    "TR TT TV TW TZ UA UG UM US UY UZ VA VC VE VG VI VN VU WF WS YE YT ZA ZM ZW"
-  ).split(" "),
-);
-
 /**
  * The **code positions** the rules read and keep, each with the code list it is checked against: the
  * entity identifier code (`NM1-01`, `N1-01`), the identification code qualifier (`NM1-08`, `N1-03`), the
@@ -467,17 +447,22 @@ export function isRecognizedX12Code(segId: string, element: number, value: strin
  * - `N3`, Address Information: both address lines removed (street PHI, no clean generalization).
  * - `N4`, Geographic Location: city removed, ZIP generalized to 3 digits; state / country retained.
  * - `DMG`, Demographic Information: `DMG-02` date of birth generalized to year (only ever the
- *   individual's: `DMG` appears solely in member loops); `DMG-03` gender retained.
+ *   individual's: `DMG` appears solely in member loops), when it is a valid date in the `DMG-01` format;
+ *   `DMG-03` gender retained when it is a gender code.
  * - `PER`, Administrative Communications Contact: contact name and every communication number removed;
- *   the function and qualifier codes retained.
+ *   the function and qualifier codes retained when they are codes.
  * - `DTP`, Date or Time Period: `DTP-03` date value generalized to year (a date of the individual's
- *   care under §164.514(b)(2)(i)(C)); qualifier / format retained.
- * - `DTM`, Date/Time Reference (835): `DTM-02` date value generalized to year.
+ *   care under §164.514(b)(2)(i)(C)) when it is a valid date in the `DTP-02` format, removed otherwise
+ *   (a `TM` time of day included); qualifier / format retained when they are codes.
+ * - `DTM`, Date/Time Reference (835): `DTM-02` date value generalized to year when it is a valid date.
  * - `SBR`, Subscriber Information: `SBR-03` Insured Group or Policy Number **pseudonymized** (a health
  *   plan beneficiary number, the same identifier `REF*1L` / `REF*6P` / NCPDP `301-C1` carry; when
  *   `SBR-02 = 18` the subscriber *is* the patient), `SBR-04` Insured Group Name **removed** (an employer /
  *   group name: Safe Harbor removes the individual's employer). The relationship / filing codes
- *   (`SBR-01/02/05/09`) are retained.
+ *   (`SBR-01/02/05/09`) are retained when they are codes.
+ *
+ * Any other position of these segments, and any value of the wrong shape at a retained one, is removed
+ * and recorded.
  *
  * @example
  * ```ts
@@ -597,20 +582,21 @@ export const X12_GEO_RETAIN_ELEMENTS: Readonly<Record<string, ReadonlySet<number
 export const X12_ACCOUNT_SEGMENTS: ReadonlySet<string> = new Set<string>(["CLM", "CLP"]);
 
 /**
- * The recognized **clinical / financial / envelope** segments retained (passed through untouched): the
- * positive half of the fail-closed rule for X12 (the analogue of the HL7 adapter's `RETAIN_SEGMENTS`).
- * These carry diagnosis / procedure / revenue codes, monetary amounts, quantities, adjustments, and
- * control structure, **no direct patient or relative Safe Harbor identifier**, so their values must
- * survive the over-scrub test byte-identical. A segment that is neither mapped (`NM1` / `N3` / `N4` /
- * `DMG` / `PER` / `REF` / `DTP` / `DTM` / `CLM` / `CLP`) nor on this list **fails closed**: every one
- * of its elements is blocked, so an unknown segment can never ride a patient identifier through in the
- * clear.
+ * The recognized **clinical / financial / envelope** segments retained: the positive half of the
+ * fail-closed rule for X12 (the analogue of the HL7 adapter's `RETAIN_SEGMENTS`). These carry diagnosis
+ * / procedure / revenue codes, monetary amounts, quantities, adjustments, and control structure, **no
+ * direct patient or relative Safe Harbor identifier**, so their values must survive the over-scrub test
+ * byte-identical. A segment that is neither mapped (`NM1` / `N3` / `N4` / `DMG` / `PER` / `REF` / `DTP`
+ * / `DTM` / `CLM` / `CLP`) nor on this list **fails closed**: every one of its elements is blocked, so
+ * an unknown segment can never ride a patient identifier through in the clear.
  *
- * **Documented limitation (mirrors the HL7 adapter).** Retained clinical segments may still
- * carry patient-related *dates* not surfaced as `DTP` / `DTM` (e.g. a `DTM` inside a retained 837 loop
- * the map does not descend, or a service-line date), and administrative per-claim references (a
- * prescription number, a prior-authorization number). Selective scrubbing of those residual loci is
- * **not** performed; forgetting a clinical segment here fails **safe**: it is blocked, not leaked.
+ * Retaining a segment keeps each element only when it has the shape its position expects (a code, a
+ * valid date, a number, a bounded administrative reference); a value of any other shape, a free-text
+ * component, and an element at a position the shape table does not name are removed and recorded (see
+ * `./element-shapes.js`). A date of the individual inside one (`PAT-06` date of death, `INS-12`, an `HI`
+ * occurrence or procedure date) is generalized like a `DTP` date. The transaction's creation date
+ * (`BHT-04`) and a payment's effective date (`BPR-16`) are kept when they are valid dates: they date the
+ * exchange, not the individual.
  *
  * @example
  * ```ts

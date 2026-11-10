@@ -29,17 +29,24 @@
  * - **`CLM-01` / `CLP-01`**: the patient account number pseudonymized to a consistent surrogate.
  *
  * **Fail closed.** A segment that is neither mapped nor on the recognized clinical / financial retain
- * list is blocked element-by-element; an unknown `NM1` entity or `REF` qualifier is blocked. Clinical
- * and financial values (diagnosis / procedure / revenue codes, monetary amounts, quantities, NDCs)
- * are **retained untouched** (the over-scrub guard). The honesty line is unchanged: the output is
+ * list is blocked element-by-element; an unknown `NM1` entity or `REF` qualifier is blocked, and so is
+ * the name, identifier or reference it would have routed. Every other element the output carries,
+ * envelope included, is kept only when it has the shape its position expects (a code the position
+ * knows, a valid date in the declared format, a number, a bounded administrative reference); a value
+ * of any other shape, a value at a position no rule names, a segment outside every transaction set,
+ * and bytes after the `IEA` are removed and recorded. Clinical and financial values (diagnosis /
+ * procedure / revenue codes, monetary amounts, quantities, NDCs) of their expected shape are
+ * **retained untouched** (the over-scrub guard). The honesty line is unchanged: the output is
  * **"Safe-Harbor-transformed per the configured policy"**, never "de-identified".
  *
  * **Known limitations.** Provider / organization identity is **retained** as non-patient identity, and
  * there is **no** option to suppress it: the retention is structural, in the extractor, not a
  * per-category policy choice. It is no longer silent, though: every retained party emits a value-free
- * `DEID_PARTY_ROLE_RETAINED` row naming the entity-identifier code it was classified on. Retained clinical segments may carry residual patient-related dates the
- * map does not surface as `DTP` / `DTM` (a documented limitation, mirroring the HL7 adapter): forgetting one
- * fails **safe** (retained, not leaked, but conversely a residual date is not generalized). NCPDP SCRIPT
+ * `DEID_PARTY_ROLE_RETAINED` row naming the entity-identifier code it was classified on. A date of the
+ * individual inside a retained segment (`PAT-06`, `INS-12`, an `HI` occurrence or procedure date) is
+ * generalized like a `DTP` date; the transaction's own creation date (`BHT-04`), a payment's effective
+ * date (`BPR-16`) and the envelope dates are kept when they are valid dates, as administrative dates
+ * of the exchange rather than of the individual. NCPDP SCRIPT
  * de-identification is deferred; NCPDP Telecom ships alongside this adapter at `@cosyte/deid/ncpdp`.
  *
  * @packageDocumentation
@@ -76,11 +83,10 @@ export interface X12DeidResult {
   readonly manifest: readonly DeidManifestEntry[];
   /**
    * The manifest's **second list**: every value-bearing element this pass handed through that **no
-   * locus rule named**, counted and located. A retained clinical / financial / control segment
-   * contributes all of its elements, because retaining a structure names no position inside it, and so
-   * does the interchange and functional-group envelope around them (`ISA` / `TA1` / `GS` / `GE` /
-   * `IEA`), whose positions print without a transaction-set root. An empty list is a **measured zero**,
-   * not a silence.
+   * rule decided**, counted and located. The X12 pass decides every element it hands through (acted
+   * on, kept because it has its position's shape, or removed and recorded), so for X12 this is always
+   * a **measured zero**, not a silence: the count is still taken over every segment, the envelope
+   * included, and would show a position a rule failed to decide.
    */
   readonly unexaminedResiduals: readonly UnexaminedResidual[];
 }
@@ -161,7 +167,12 @@ export {
   type Nm1Disposition,
   type RefDisposition,
 } from "./locus-map.js";
-export { extractX12Loci, type X12Coord, type X12Extraction } from "./extract.js";
+export {
+  extractX12Loci,
+  type X12Coord,
+  type X12EnvelopeAddress,
+  type X12Extraction,
+} from "./extract.js";
 export { applyX12 } from "./apply.js";
 export { type UnexaminedResidual } from "../residual.js";
 export { SAFE_HARBOR_CATEGORIES, type SafeHarborCategory } from "../categories.js";

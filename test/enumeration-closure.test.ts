@@ -370,23 +370,32 @@ const X12_WHITESPACE =
   "NTE*ADD*note*   *ZZTAIL~" +
   "SE*4*0001~GE*1*1~IEA*1*000000001~";
 
+/**
+ * X12 no longer hands a position through unexamined: every element is decided by a locus rule or by the
+ * shape its position expects. So the X12 case asserts the decision instead of the count. A whitespace-only
+ * element outside the fixed-width `ISA` is content, has no shape, and is removed and recorded; the
+ * `ISA`'s blank fill is not a value and is neither.
+ */
 describe("closure: a whitespace-only X12 element outside the fixed-width ISA", () => {
   const result = deidentifyX12(parseX12(X12_WHITESPACE), { context: ctx() });
-  const loci = new Set(result.unexaminedResiduals.map((r) => r.locus));
+  const recorded = new Set(result.manifest.map((e) => e.locus));
 
-  it("the element is re-emitted verbatim (non-vacuity)", () => {
-    expect(result.x12).toContain("*   *ZZTAIL");
+  it("the element was in the input (non-vacuity)", () => {
+    expect(X12_WHITESPACE).toContain("*   *ZZTAIL");
   });
 
-  it("counts it: the definition says non-empty, and whitespace there is content", () => {
-    expect(loci.has("837/NTE[0]-3")).toBe(true);
-    expect(loci.has("837/NTE[0]-4")).toBe(true);
+  it("decides it: the definition says non-empty, and whitespace there is content", () => {
+    expect(result.x12).not.toContain("ZZTAIL");
+    expect(result.x12).toContain("NTE*ADD***~");
+    expect(recorded.has("837/NTE[0]-3")).toBe(true);
+    expect(recorded.has("837/NTE[0]-4")).toBe(true);
+    expect(result.unexaminedResiduals).toEqual([]);
   });
 
-  it("does NOT count the ISA's blank fill, which the standard pads to a declared width", () => {
-    expect(loci.has("ISA[0]-2")).toBe(false);
-    expect(loci.has("ISA[0]-4")).toBe(false);
-    expect(loci.has("ISA[0]-6")).toBe(true); // and the populated ISA positions still are counted
+  it("does NOT decide the ISA's blank fill, which the standard pads to a declared width", () => {
+    expect(recorded.has("ISA[0]-2")).toBe(false);
+    expect(recorded.has("ISA[0]-4")).toBe(false);
+    expect(result.x12.startsWith("ISA*00*          *00*          *ZZ*SENDER")).toBe(true);
   });
 });
 
@@ -527,9 +536,17 @@ describe("closure: the measured inventory over every committed fixture", () => {
   };
 
   it("every adapter measures a non-zero inventory: none is silently at zero", () => {
-    for (const [name, count] of Object.entries(measured)) {
+    // X12 decides every position it hands through, so its zero is the measurement, asserted below.
+    for (const [name, count] of Object.entries(measured).filter(([n]) => n !== "x12")) {
       expect(count, `${name} measured nothing`).toBeGreaterThan(0);
     }
+  });
+
+  it("X12 measures a real zero: every element of the fixture was decided", () => {
+    const result = deidentifyX12(parseX12(FIX("x12", "837p.edi")), { context: ctx() });
+    expect(result.unexaminedResiduals).toEqual([]);
+    // Not vacuous: the fixture still carries the envelope, the control pair and the retained segments.
+    expect(result.x12).toContain("ST*837*0002~BHT*0019*00*REF01*20260615*0930*CH~");
   });
 
   it("the per-fixture totals are pinned, so a class that stops being counted is a number", () => {
@@ -541,7 +558,7 @@ describe("closure: the measured inventory over every committed fixture", () => {
         "hl7 oru-r01": 61,
         "ncpdp request": 15,
         "ncpdp response": 13,
-        "x12": 82,
+        "x12": 0,
       }
     `);
   });

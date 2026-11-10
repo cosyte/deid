@@ -218,3 +218,67 @@ describe("a recognized code in a qualifier position is kept as before", () => {
     expect(body(x12)[0]).toMatch(/^N4\*\*ON\*.*\*CA~$/);
   });
 });
+
+/**
+ * **A code that fails the exact check routes as unknown, everywhere.** The pass removes a value at a code
+ * position when the position's list does not hold it exactly as written. The classifiers that route a
+ * party's name and identifier, or a `REF-02`, read that same position, so they must not read a value the
+ * pass itself refused: a lower-case or space-padded entity code is not a provider's, and a lower-case
+ * `REF-01` is not an administrative reference. The party or reference fails closed, and the code
+ * position carries one row, a block, never a block beside a party-role row.
+ */
+describe("a code that fails the exact check routes nothing", () => {
+  /** Every manifest locus appears at most once: no position carries two rows. */
+  function oneRowPerLocus(manifest: readonly DeidManifestEntry[]): void {
+    const loci = manifest.map((e) => e.locus);
+    expect(new Set(loci).size).toBe(loci.length);
+  }
+
+  it("NM1-01 in lower case: the payer code is removed, and so are the name and the identifier", () => {
+    const { x12, manifest } = run(wrap("NM1*pr*2*ZZPATLAST*****PI*ZZPATMEMBER~", 3));
+    expect(x12).not.toContain("ZZPATLAST");
+    expect(x12).not.toContain("ZZPATMEMBER");
+    expect(body(x12)).toEqual(["NM1**2******PI*~"]);
+    expect(blockedAt(manifest, "837/NM1[0]-1")).toBe(true);
+    expect(blockedAt(manifest, "837/NM1[0]-3")).toBe(true);
+    expect(blockedAt(manifest, "837/NM1[0]-9")).toBe(true);
+    // No party-role row: the refused code placed nobody outside the scope clause.
+    expect(manifest.some((e) => e.disposition === "retained")).toBe(false);
+    oneRowPerLocus(manifest);
+  });
+
+  it("NM1-01 padded with a space: a provider code that is not the code itself retains nothing", () => {
+    const { x12, manifest } = run(wrap("NM1* 85*2*ZZPATLAST*****XX*ZZPATMEMBER~", 3));
+    expect(x12).not.toContain("ZZPATLAST");
+    expect(x12).not.toContain("ZZPATMEMBER");
+    expect(blockedAt(manifest, "837/NM1[0]-1")).toBe(true);
+    expect(manifest.some((e) => e.disposition === "retained")).toBe(false);
+    oneRowPerLocus(manifest);
+  });
+
+  it("N1-01 in lower case: the party's name and identifier are removed", () => {
+    const { x12, manifest } = run(wrap("N1*pr*ZZPATNAME*PI*ZZPATMEMBER~", 3));
+    expect(x12).not.toContain("ZZPATNAME");
+    expect(x12).not.toContain("ZZPATMEMBER");
+    expect(body(x12)).toEqual(["N1***PI*~"]);
+    expect(blockedAt(manifest, "837/N1[0]-2")).toBe(true);
+    expect(blockedAt(manifest, "837/N1[0]-4")).toBe(true);
+    oneRowPerLocus(manifest);
+  });
+
+  it("REF-01 in lower case: REF-02 is removed and recorded, not kept as an administrative reference", () => {
+    const { x12, manifest } = run(wrap("REF*f8*ZZPATMEMBER~", 3));
+    expect(x12).not.toContain("ZZPATMEMBER");
+    expect(body(x12)).toEqual(["REF**~"]);
+    expect(blockedAt(manifest, "837/REF[0]-1")).toBe(true);
+    expect(blockedAt(manifest, "837/REF[0]-2")).toBe(true);
+    oneRowPerLocus(manifest);
+  });
+
+  it("NM1-08 in lower case routes nothing: the identifier is blocked, not routed as a member id", () => {
+    const { x12, manifest } = run(wrap("NM1*QC*1*ZZPATLAST*****mi*ZZPATMEMBER~", 3));
+    expect(x12).not.toContain("ZZPATMEMBER");
+    expect(blockedAt(manifest, "837/NM1[0]-9")).toBe(true);
+    oneRowPerLocus(manifest);
+  });
+});

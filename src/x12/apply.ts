@@ -13,26 +13,94 @@
  *
  * Removal is clean: a redacted or blocked element becomes the empty string (it serializes as an empty
  * element between two separators), never a fabricated placeholder. A pseudonymized identifier and a
- * generalized date / ZIP replace only their own element; every sibling element is retained.
+ * generalized date / ZIP replace only their own element; every sibling element is retained. A locus on
+ * one component of a composite (a date inside an `HI` entry) rewrites that component alone.
+ *
+ * The envelope is rewritten the same way when the extractor removed one of its elements: a `GS`, `GE`,
+ * `TA1` or `IEA` element becomes empty, and an `ISA` element becomes blanks of its own width, so the
+ * header keeps its fixed 106 bytes. A segment the parser found outside every transaction set is
+ * rewritten in place, and removed bytes after the `IEA` are dropped.
  *
  * @packageDocumentation
  */
 
-import { serializeX12, type X12Interchange, type X12Segment } from "@cosyte/x12";
+import { serializeX12, type X12Interchange } from "@cosyte/x12";
 
 import type { TransformedLocus } from "../locus.js";
 import type { X12Coord } from "./extract.js";
 
-/** A working set of element edits for one segment: 1-based element index → new value. */
-type SegmentEdits = Map<number, string>;
+/**
+ * A working set of edits for one segment: 1-based element index → the element's new value, or → the
+ * new values of some of its components (1-based component index → value).
+ */
+type SegmentEdits = Map<number, string | Map<number, string>>;
+
+/** The parts of the interchange the edits rewrite, beside its transaction bodies. */
+type EnvelopeKind = NonNullable<X12Coord["envelope"]>["segment"];
+
+/** Apply the edits to a copy of a segment's decoded elements and return the new element list. */
+function editedElements(
+  elements: readonly string[],
+  edits: SegmentEdits,
+  componentSep: string,
+): string[] {
+  const out = elements.slice();
+  // A coord only ever references an element the extractor read from this same segment, so every index is
+  // in range against the copy; the assignment is always valid.
+  for (const [index, edit] of edits) {
+    if (typeof edit === "string") {
+      out[index] = edit;
+      continue;
+    }
+    const components = (out[index] as string).split(componentSep);
+    for (const [component, value] of edit) components[component - 1] = value;
+    out[index] = components.join(componentSep);
+  }
+  return out;
+}
 
 /** Rebuild one segment's raw text from its decoded elements with the collected edits applied. */
-function rebuildSegmentRaw(seg: X12Segment, edits: SegmentEdits, elementSep: string): string {
-  const elements = seg.elements.slice();
-  // A coord only ever references an element the extractor read from this same segment, so every index is
-  // in range against `seg.elements.slice()`; the assignment is always valid.
-  for (const [index, value] of edits) elements[index] = value;
-  return elements.join(elementSep);
+function rebuildSegmentRaw(
+  elements: readonly string[],
+  edits: SegmentEdits,
+  elementSep: string,
+  componentSep: string,
+): string {
+  return editedElements(elements, edits, componentSep).join(elementSep);
+}
+
+/**
+ * Rebuild the fixed-width `ISA`. Every element there is padded to its declared width, and an all-blank
+ * element is the standard's spelling of "not used", so a removed element is written as blanks of its
+ * own width and the header keeps its 106 bytes. The bytes after the last element (the segment
+ * terminator the raw text carries) are kept as they were.
+ */
+function rebuildIsaRaw(
+  isa: { readonly raw: string; readonly elements: readonly string[] },
+  edits: SegmentEdits,
+  elementSep: string,
+  componentSep: string,
+): string {
+  const original = isa.elements.join(elementSep);
+  // The edited list is index-aligned with the original: an edit replaces an element, never adds one.
+  const padded = editedElements(isa.elements, edits, componentSep).map((value, index) =>
+    value.padEnd((isa.elements[index] as string).length, " "),
+  );
+  return padded.join(elementSep) + isa.raw.slice(original.length);
+}
+
+/** Record one coordinate's write into a segment's edit set. */
+function recordEdit(edits: SegmentEdits, coord: X12Coord, value: string): void {
+  for (const element of coord.elements) {
+    if (coord.component === undefined) {
+      edits.set(element, value);
+      continue;
+    }
+    const existing = edits.get(element);
+    const components = existing instanceof Map ? existing : new Map<number, string>();
+    components.set(coord.component, value);
+    edits.set(element, components);
+  }
 }
 
 /**
@@ -62,9 +130,16 @@ export function applyX12(
   coords: readonly X12Coord[],
 ): string {
   const elementSep = original.delimiters.element;
+  const componentSep = original.delimiters.component;
 
-  // Collect edits: groupIndex → txIndex → segIndex → (elementIndex → value).
+  // Collect edits: groupIndex → txIndex → segIndex → edits, and envelope kind → index → edits.
   const byGroup = new Map<number, Map<number, Map<number, SegmentEdits>>>();
+  const byEnvelope = new Map<EnvelopeKind, Map<number, SegmentEdits>>();
+  const editsFor = <K>(map: Map<K, SegmentEdits>, key: K): SegmentEdits => {
+    const edits = map.get(key) ?? new Map<number, string | Map<number, string>>();
+    map.set(key, edits);
+    return edits;
+  };
   for (let i = 0; i < coords.length; i += 1) {
     const coord = coords[i];
     const t = transformed[i];
@@ -76,33 +151,75 @@ export function applyX12(
     if (coord.elements.length === 0) continue;
     const value = t.value ?? ""; // removed / blocked → empty element
 
+    if (coord.envelope !== undefined) {
+      const byIndex = byEnvelope.get(coord.envelope.segment) ?? new Map<number, SegmentEdits>();
+      byEnvelope.set(coord.envelope.segment, byIndex);
+      recordEdit(editsFor(byIndex, coord.envelope.index), coord, value);
+      continue;
+    }
     const byTx = byGroup.get(coord.groupIndex) ?? new Map<number, Map<number, SegmentEdits>>();
     byGroup.set(coord.groupIndex, byTx);
     const bySeg = byTx.get(coord.txIndex) ?? new Map<number, SegmentEdits>();
     byTx.set(coord.txIndex, bySeg);
-    const edits = bySeg.get(coord.segIndex) ?? new Map<number, string>();
-    bySeg.set(coord.segIndex, edits);
-    for (const element of coord.elements) edits.set(element, value);
+    recordEdit(editsFor(bySeg, coord.segIndex), coord, value);
   }
+
+  /** Rewrite one envelope segment's raw text when it carries an edit, and return it unchanged when not. */
+  const envelopeSegment = <
+    S extends { readonly raw: string; readonly elements: readonly string[] },
+  >(
+    kind: EnvelopeKind,
+    index: number,
+    seg: S,
+  ): S => {
+    const edits = byEnvelope.get(kind)?.get(index);
+    if (edits === undefined) return seg;
+    const raw =
+      kind === "ISA"
+        ? rebuildIsaRaw(seg, edits, elementSep, componentSep)
+        : rebuildSegmentRaw(seg.elements, edits, elementSep, componentSep);
+    return { ...seg, raw, elements: editedElements(seg.elements, edits, componentSep) };
+  };
 
   // Reconstruct the interchange, rewriting only the raw segments that carry an edit.
   const groups = original.groups.map((group, groupIndex) => {
     const byTx = byGroup.get(groupIndex);
-    if (byTx === undefined) return group;
-    const transactions = group.transactions.map((tx, txIndex) => {
-      const bySeg = byTx.get(txIndex);
-      if (bySeg === undefined) return tx;
-      const rawSegments = tx.rawSegments.map((raw, segIndex) => {
-        const edits = bySeg.get(segIndex);
-        const seg = tx.segments[segIndex];
-        if (edits === undefined || seg === undefined) return raw;
-        return rebuildSegmentRaw(seg, edits, elementSep);
-      });
-      return { ...tx, rawSegments };
-    });
-    return { ...group, transactions };
+    const gs = envelopeSegment("GS", groupIndex, group.gs);
+    const ge = group.ge === undefined ? undefined : envelopeSegment("GE", groupIndex, group.ge);
+    const transactions =
+      byTx === undefined
+        ? group.transactions
+        : group.transactions.map((tx, txIndex) => {
+            const bySeg = byTx.get(txIndex);
+            if (bySeg === undefined) return tx;
+            const rawSegments = tx.rawSegments.map((raw, segIndex) => {
+              const edits = bySeg.get(segIndex);
+              const seg = tx.segments[segIndex];
+              if (edits === undefined || seg === undefined) return raw;
+              return rebuildSegmentRaw(seg.elements, edits, elementSep, componentSep);
+            });
+            return { ...tx, rawSegments };
+          });
+    return { ...group, gs, ge, transactions };
   });
 
-  const deidentified: X12Interchange = { ...original, groups };
+  // A peer older than the orphan list carries none.
+  const orphanSegments = (original.orphanSegments ?? []).map((orphan, index) => {
+    const segment = envelopeSegment("orphan", index, orphan.segment);
+    return segment === orphan.segment ? orphan : { ...orphan, raw: segment.raw, segment };
+  });
+
+  // Bytes after the IEA the extractor removed are dropped whole; blank ones were never touched.
+  const keepTrailing = !byEnvelope.has("trailing");
+  const { trailingBytes, ...rest } = original;
+  const deidentified: X12Interchange = {
+    ...rest,
+    ...(keepTrailing && trailingBytes !== undefined ? { trailingBytes } : {}),
+    isa: envelopeSegment("ISA", 0, original.isa),
+    ta1Segments: original.ta1Segments.map((ta1, index) => envelopeSegment("TA1", index, ta1)),
+    groups,
+    iea: original.iea === undefined ? undefined : envelopeSegment("IEA", 0, original.iea),
+    orphanSegments,
+  };
   return serializeX12(deidentified);
 }

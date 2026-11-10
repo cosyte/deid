@@ -456,9 +456,22 @@ const { x12, manifest } = deidentifyX12(parseX12(raw), { context });
 | **`DMG-02`**, **`DTP-03`**, **`DTM-02`**                     | dates → **year**                                                                                                                                             |
 | **`PER`**                                                    | contact name + communication numbers **removed**                                                                                                             |
 | **`REF`**                                                    | patient / member / group / SSN identifier **removed** under Safe Harbor; admin/provider reference retained; **unknown qualifier fails closed**               |
-| **Code positions**                                           | `NM1-01`/`08`, `N1-01`/`03`, `REF-01`, `N4-02`/`04`: a recognized code is kept; anything else **fails closed** (removed and recorded)                        |
+| **Code positions**                                           | `NM1-01`/`08`, `N1-01`/`03`, `REF-01`, `N4-02`/`04`: a recognized code is kept; anything else **fails closed** (removed and recorded), and routes nothing    |
 | **`CLM-01` / `CLP-01`**                                      | patient account number **removed** under Safe Harbor (pseudonymized only under a preset that does not claim it)                                              |
-| **Clinical / financial** (`HI`, `SV*`, `SVC`, `AMT`, `CAS`…) | **retained untouched**: diagnosis / procedure codes, amounts, quantities survive byte-identical                                                              |
+| **Clinical / financial** (`HI`, `SV*`, `SVC`, `AMT`, `CAS`…) | **retained**: diagnosis / procedure codes, amounts, quantities of their expected shape survive byte-identical                                                |
+| **Every other position**                                     | kept only when it has its position's shape (a code, a valid date, a number); anything else, and any position no rule names, **fails closed**                 |
+
+The X12 pass decides every element it hands through, the envelope included. A value has to have the
+shape its position expects to stay: a code the position knows, exactly as written; a valid date in the
+format the segment declares; a number; or, at a trace or control number, a bounded reference. A value of
+any other shape, a value at a position no rule names (`NM1-02` holding a name, `NM1-10` onward, `N1-05`
+onward, `REF-03` onward), a segment outside every transaction set, and bytes after the `IEA` are
+removed and recorded at their own position. That is how a missing or an extra element separator, which
+shifts an identifier into a code, date or unused position, is caught. A code the pass refuses also
+routes nothing: a lower-case `pr` at `NM1-01` places no party outside the scope clause, so its name and
+identifier are removed too. So `result.unexaminedResiduals` is always empty for X12. A date of the
+individual inside a retained segment (`PAT-06`, an `HI` occurrence date) is generalized like `DTP-03`;
+the transaction's creation date (`BHT-04`) and the envelope dates are kept as dates of the exchange.
 
 ### De-identify an NCPDP Telecom transaction
 
