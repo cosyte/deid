@@ -101,6 +101,15 @@ describe("deidentifyHl7, partial values on the wire", () => {
   });
 });
 
+describe("deidentifyHl7, an IN2 with no employer organisation", () => {
+  it("acts on the fields it carries and records nothing for an absent IN2-70", () => {
+    const out = run(message(segment("IN2", { 1: "1", 3: "ZZEMPCONTACTFAM^ZZEMPCONTACTGIV" })));
+    expect(out.wire).not.toContain("ZZEMPCONTACT");
+    expect(out.rows.filter((r) => r.startsWith("IN2"))).toEqual(["IN2-3 removed"]);
+    expect(out.residuals.filter((l) => l.startsWith("IN2"))).toEqual(["IN2-1"]);
+  });
+});
+
 describe("extractHl7Loci, a parsed message a caller left holes in", () => {
   it("skips a missing repetition or component rather than crashing or counting it", () => {
     const msg = parseHL7(message(segment("AL1", { 1: "1", 2: "DA", 4: "SV", 5: "HIVES~RASH" })));

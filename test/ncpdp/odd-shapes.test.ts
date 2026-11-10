@@ -54,6 +54,21 @@ describe("a hand-built model", () => {
   });
 });
 
+describe("a field sent with its id and no value", () => {
+  it("is handed back empty, with no manifest row and no residual, and the rest is unchanged", () => {
+    // `D5` (days supply) carries `30` in the fixture; here it arrives with its id and nothing after it.
+    const raw = RAW.replace("\x1CD530", "\x1CD5");
+    expect(raw).toContain("\x1CD5\x1C");
+    const empty = deidentifyTelecom(parseTelecom(raw), { context: ctx });
+    const full = deidentifyTelecom(parseTelecom(RAW), { context: ctx });
+    expect(empty.telecom).toBe(full.telecom.replace("\x1CD530", "\x1CD5"));
+    expect(empty.manifest).toEqual(full.manifest);
+    const loci = (r: typeof full) => r.unexaminedResiduals.map((x) => x.locus);
+    expect(loci(full)).toContain("07/D5");
+    expect(loci(empty)).toEqual(loci(full).filter((l) => l !== "07/D5"));
+  });
+});
+
 describe("applyTelecom, hand-built coordinates", () => {
   it("skips a coordinate with no transformed locus beside it, and a hole in the coordinate list", () => {
     const tx = parseTelecom(RAW);

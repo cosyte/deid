@@ -93,6 +93,30 @@ describe("deidentify, Safe Harbor per-category defaults", () => {
   });
 });
 
+describe("deidentify, a dates-category locus whose kind is not a date", () => {
+  const ctx = createDeidContext({ key: "engine-key-synthetic-hmac-key", patientId: "p1" });
+
+  it("generalizes it as a date by its category, and blocks one that is not a date", () => {
+    const out = deidentify(
+      {
+        loci: [
+          loc({ path: "OBX-14", kind: "identifier", category: C.DATES, value: "1985-07-02" }),
+          loc({ path: "OBX-19", kind: "identifier", category: C.DATES, value: "not-a-date" }),
+        ],
+      },
+      { context: ctx },
+    );
+    expect(out.document.loci.map((l) => [l.value, l.disposition])).toEqual([
+      ["1985", "transformed"],
+      [null, "blocked"],
+    ]);
+    expect(out.manifest.map((e) => e.code)).toEqual([
+      D.DEID_RESIDUAL_RETAINED,
+      D.DEID_LOCUS_BLOCKED,
+    ]);
+  });
+});
+
 describe("deidentify, fail closed", () => {
   const ctx = createDeidContext({ key: "engine-key-synthetic-hmac-key", patientId: "p1" });
 
