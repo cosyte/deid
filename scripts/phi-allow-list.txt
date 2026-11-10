@@ -215,6 +215,16 @@ NAME ZZORGOWNNAME
 NAME ZZORGALIAS
 NAME ZZORGTYPEDISPLAY
 NAME ZZLOCNAME
+# A contact's name at the positions R4 types as a HumanName or a ContactDetail outside a person
+# resource (test/fhir/contact-names.test.ts and the non-person fixture), seeded in every shape it can
+# arrive in and asserted ABSENT; and the own names of the resources carrying them, asserted PRESENT.
+NAME ZZCONTACTNAME
+NAME ZZCONTACTOTHER
+NAME ZZPLANCONTACTNAME
+NAME ZZVSCONTACTNAME
+NAME ZZPLANOWNNAME
+NAME ZZVSOWNNAME
+NAME ZZOWNCOMPUTERNAME
 # The ePrescribing SCRIPT sample of test/ncpdp/script-refusal.test.ts. The document is REFUSED rather
 # than de-identified, so these are seeded to prove the refusal's diagnostic carries none of them.
 NAME ZZSCRIPTFAM

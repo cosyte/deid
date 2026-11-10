@@ -205,7 +205,8 @@ Two things follow, and the second is the one that surprises people:
   unexpected shape at a part the reduction would keep, is **removed whole** and recorded, never partly
   retained. So is **any** complex the classifier cannot pin down at an element name R4 **types** as one
   of the two datatypes (`name`, `address`, a choice-type `locationAddress`, an open `valueAddress` /
-  `valueHumanName`), whether nothing is left to key on, a property R4 does not define sits beside a
+  `valueHumanName`, the `HumanName` arms of the `defaultValue[x]`, `fixed[x]` and `pattern[x]`
+  choices), whether nothing is left to key on, a property R4 does not define sits beside a
   `family` or a `line`, or every property it carries is foreign to both datatypes. The test is whether
   the pass can read what the standard promised at that position, not which keys are present, so an
   unrecognized sibling never unblocks an element that was already unreadable. Two conformant R4
@@ -214,7 +215,13 @@ Two things follow, and the second is the one that surprises people:
   closed property set. A plain string (or any other primitive) at one of those names is blocked whole
   as well, except where R4 itself types the element as a string that names no person: `name`
   (`Organization.name`, `Location.name`) and the two `address` elements R4 types as a url, an
-  `Endpoint`'s own and a `CapabilityStatement` messaging endpoint's, which are left alone. The one
+  `Endpoint`'s own and a `CapabilityStatement` messaging endpoint's, which are left alone. A
+  contact's name is not one of them. A string where R4 types a `HumanName`, at
+  `Organization.contact.name` or `InsurancePlan.contact.name`, is blocked like any other. The `name`
+  of a `ContactDetail` (the `contact`, `author`, `editor`, `endorser` and `reviewer` of the
+  conformance and knowledge resources, and the `ContactDetail` arms of an open `value[x]`) is a
+  string R4 documents as the name of the individual to contact, so it is removed as a name, and any
+  other shape there is blocked. A contact sent as a bare string is blocked whole. The one
   other string R4 puts at `address`, `AuditEvent.agent.network.address`, holds a machine name, an IP
   address or a phone number, so it is blocked.
 
