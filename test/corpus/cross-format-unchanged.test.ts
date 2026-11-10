@@ -16,6 +16,7 @@
  * Every value is a synthetic sentinel from the committed fixtures.
  */
 
+import { Buffer } from "node:buffer";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -24,7 +25,7 @@ import { describe, expect, it } from "vitest";
 import { parseCcda } from "@cosyte/ccda";
 import { parseResource, serializeResource } from "@cosyte/fhir";
 import { parseHL7 } from "@cosyte/hl7";
-import { Dataset, serializeDicom } from "@cosyte/dicom";
+import { Dataset, Element, serializeDicom } from "@cosyte/dicom";
 
 import {
   buildExpertDeterminationSupportReport,
@@ -107,6 +108,10 @@ describe("every adapter emits the same transformed document, byte for byte", () 
   // `(0002,0012)` / `(0002,0013)`. No sentinel reaches the output (the leak corpus asserts that), and
   // the other five adapters' digests are unmoved by their 0.1 peers.
   //
+  // IT MOVED A THIRD TIME WHEN THE `(0012,0063)` METHOD TEXT WAS SPLIT INTO `LO` VALUES OF AT MOST 64
+  // CHARACTERS. The control below puts the old single text back and requires both earlier pins, so
+  // nothing else moved.
+  //
   // THE X12 DIGEST MOVED ONCE, DELIBERATELY. A segment whose identifier the pass does not recognize is
   // removed whole, identifier included, so the fixture's `ZZZ*` segment (its value was already
   // removed) leaves the output and SE-01 counts one segment fewer. The fixture's `REF*ZZ*` qualifier is
@@ -117,7 +122,7 @@ describe("every adapter emits the same transformed document, byte for byte", () 
     expect(transformedDocumentDigests()).toMatchInlineSnapshot(`
       {
         "ccda": "152ba0fce5feff3fa707d6c25c868ee9",
-        "dicom": "99a98829ee94575f76b3a48e89740d5b",
+        "dicom": "2b394aad0215ba5dff5c19cf18c49802",
         "fhir": "a9237473c3c96a54b5ad915ad10afe34",
         "hl7": "b0e71b72dd6f4078c43d1d7b767ef843",
         "hl7-encounter": "7aef4fa7fa7ed2ffd1ce4c05158e4773",
@@ -204,9 +209,58 @@ describe("every adapter emits the same transformed document, byte for byte", () 
     ).toBe("7d75d422c369f12b3c5875996c705564");
   });
 
+  /**
+   * The method text `(0012,0063)` this adapter wrote before it was split into `LO` Values of at most 64
+   * characters, padded to even length as written. Putting it back is the control that the split moved
+   * that one element and nothing else.
+   */
+  const PRIOR_METHOD_TEXT =
+    'Cosyte @cosyte/deid, PS3.15 Basic Application Level Confidentiality Profile (metadata only); policy "safe-harbor" ';
+
+  /** The same dataset with `(0012,0063)` holding {@link PRIOR_METHOD_TEXT}, optionally without `(0012,0064)`. */
+  const withPriorMethodText = (dataset: Dataset, dropDeclaration: boolean): Dataset => {
+    const method = dataset.get("00120063");
+    expect(method?.vr).toBe("LO");
+    const rawBytes = Buffer.from(PRIOR_METHOD_TEXT, "latin1");
+    const prior = new Element({
+      tag: "00120063",
+      vr: "LO",
+      vm: 1,
+      length: rawBytes.length,
+      rawBytes,
+      byteOffset: 0,
+      littleEndian: true,
+    });
+    return new Dataset({
+      warnings: [],
+      elements: new Map(
+        dataset
+          .elements()
+          .filter((el) => !dropDeclaration || el.tag !== "00120064")
+          .map((el) => [el.tag, el.tag === "00120063" ? prior : el]),
+      ),
+      ...(dataset.fileMeta !== undefined ? { fileMeta: dataset.fileMeta } : {}),
+    });
+  };
+
+  it("and the DICOM document moved only by the method text being split into LO Values", () => {
+    // THE DICOM DIGEST MOVED A THIRD TIME, DELIBERATELY. De-identification Method `(0012,0063)` is `LO`,
+    // `1-n` (PS3.6), and an `LO` Value is at most 64 characters (PS3.5 Table 6.2-1), so the single
+    // 113-character text became four Values. Putting the old text back has to reproduce the pin from
+    // before the split, exactly, with and without the coded declaration.
+    const { dataset } = deidentifyDicom(buildPhiDataset());
+    expect(digest(serializeDicom(withPriorMethodText(dataset, false)).toString("latin1"))).toBe(
+      "99a98829ee94575f76b3a48e89740d5b",
+    );
+    expect(digest(serializeDicom(withPriorMethodText(dataset, true)).toString("latin1"))).toBe(
+      "3033a8688dbeac85eec96ba1495df9a8",
+    );
+  });
+
   it("and the DICOM document is unchanged once the added declaration is taken back out", () => {
     // The pinned value is the digest without `(0012,0064)`, recaptured on `@cosyte/dicom` 0.1 for the
-    // reason given above the previous test; before that, it was the ORIGINAL digest. Removing
+    // reason given above the first test, and again when the `(0012,0063)` method text was split into
+    // `LO` Values (the previous test is that control); before that, it was the ORIGINAL digest. Removing
     // that one element and re-serializing has to reproduce it exactly: that is what makes the digest
     // above an ADDITION rather than a rewrite, and it holds the coded declaration to the same bar the
     // measurement was held to. Every other byte of the pass, the `(0012,0063)` method text and the
@@ -223,7 +277,7 @@ describe("every adapter emits the same transformed document, byte for byte", () 
       ...(dataset.fileMeta !== undefined ? { fileMeta: dataset.fileMeta } : {}),
     });
     expect(digest(serializeDicom(withoutDeclaration).toString("latin1"))).toBe(
-      "3033a8688dbeac85eec96ba1495df9a8",
+      "d9a864f5e5760357475082d8d6559d9b",
     );
   });
 });

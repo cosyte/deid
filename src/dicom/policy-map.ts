@@ -32,7 +32,10 @@ export interface ResolvedDicomOptions {
   readonly uidRoot?: string;
   /** Caller-owned source→replacement UID cache for cross-file consistency. */
   readonly uidMap?: Map<string, string>;
-  /** The de-identification method text written to `(0012,0063)`. */
+  /**
+   * The de-identification method text written to `(0012,0063)`: several `LO` Values joined by the
+   * DICOM value delimiter `\`, each at most 64 characters. See {@link deidentificationMethodText}.
+   */
   readonly deidentificationMethod: string;
 }
 
@@ -51,11 +54,56 @@ export function resolveDicomOptions(options: DicomDeidOptions): ResolvedDicomOpt
   const policy = resolvePolicy(options.policy);
   const base: ResolvedDicomOptions = {
     retain: [],
-    deidentificationMethod: `Cosyte @cosyte/deid, PS3.15 Basic Application Level Confidentiality Profile (metadata only); policy "${policy.name}"`,
+    deidentificationMethod: deidentificationMethodText(policy.name),
   };
   return {
     ...base,
     ...(options.uidRoot !== undefined ? { uidRoot: options.uidRoot } : {}),
     ...(options.uidMap !== undefined ? { uidMap: options.uidMap } : {}),
   };
+}
+
+/** PS3.5 Table 6.2-1, `LO` row: 64 characters maximum, per Value. */
+const LO_VALUE_MAX_CHARS = 64;
+
+/** The DICOM value delimiter (5CH) between the Values of a multi-valued string VR. */
+const VALUE_DELIMITER = "\\";
+
+/** What a policy name too long for one Value is cut to end with, inside its closing quote. */
+const ELLIPSIS = "...";
+
+/**
+ * The fixed Values of the method text: the library, the profile it applies, and that only metadata is
+ * touched. Each is inside the `LO` maximum on its own.
+ */
+const FIXED_METHOD_VALUES: readonly string[] = [
+  "Cosyte @cosyte/deid",
+  "PS3.15 Basic Application Level Confidentiality Profile",
+  "metadata only",
+];
+
+/**
+ * Compose the De-identification Method `(0012,0063)` text for a run under the named policy.
+ *
+ * PS3.6 gives `(0012,0063)` the VR `LO` with value multiplicity `1-n`, and PS3.5 Table 6.2-1 caps an
+ * `LO` at 64 characters per Value, so the method is written as several Values rather than one long
+ * one: the library, the profile, "metadata only", and `policy "<name>"`. PS3.15 E.1.1 asks for "a
+ * text string describing the method used", and the Values together still say exactly that.
+ *
+ * The policy name is the caller's, so its Value is the only one that can be long. A backslash in it is
+ * written as `/`, because 5CH is the delimiter and is never part of an `LO` Value; a name that would
+ * take its Value past 64 characters is cut to fit and ends in `...` inside the quotes.
+ *
+ * @param policyName - The resolved policy's name.
+ * @returns The Values joined by `\`, each at most 64 characters.
+ * @internal
+ */
+export function deidentificationMethodText(policyName: string): string {
+  const name = policyName.replaceAll(VALUE_DELIMITER, "/");
+  const whole = `policy "${name}"`;
+  const policyValue =
+    whole.length <= LO_VALUE_MAX_CHARS
+      ? whole
+      : `policy "${name.slice(0, LO_VALUE_MAX_CHARS - 'policy ""'.length - ELLIPSIS.length)}${ELLIPSIS}"`;
+  return [...FIXED_METHOD_VALUES, policyValue].join(VALUE_DELIMITER);
 }
