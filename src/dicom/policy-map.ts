@@ -78,25 +78,28 @@ const DELIMITER_STAND_IN = "/";
 /** What any other character an `LO` Value cannot carry is written as. */
 const UNWRITABLE_STAND_IN = "?";
 
-/** The highest code point the method text's single-byte (latin1) encoding writes as itself. */
-const MAX_SINGLE_BYTE_CODE_POINT = 0xff;
+/** The first and last printable ASCII characters, SPACE (20H) and TILDE (7EH). */
+const FIRST_PRINTABLE_ASCII = 0x20;
+const LAST_PRINTABLE_ASCII = 0x7e;
 
 /**
  * Map one character of a policy name to what its `LO` Value can carry.
  *
- * The method text reaches the wire one byte per UTF-16 code unit (latin1), so a character above
- * U+00FF would land as its low byte: U+015C as 5CH, the delimiter, and U+0100 as NUL. PS3.5 6.2
- * allows no control character in an `LO` Value, so C0 (U+0000 to U+001F), DEL (U+007F) and C1
- * (U+0080 to U+009F) are out too. Each of those, and a whole character outside the BMP, becomes `?`;
- * a backslash becomes `/`.
+ * Only printable ASCII (U+0020 to U+007E) is kept. The method text reaches the wire one byte per
+ * UTF-16 code unit (latin1), so a character above U+00FF would land as its low byte: U+015C as 5CH,
+ * the delimiter, and U+0100 as NUL. PS3.5 6.2 allows no control character in an `LO` Value. And a
+ * byte from A0H to FFH is a letter only under a Specific Character Set (0008,0005) that declares it,
+ * which this pass neither checks nor sets: in the default repertoire (PS3.5 6.1.2.1) it is invalid.
+ * So every character outside printable ASCII, a character outside the BMP as one, becomes `?`; a
+ * backslash becomes `/`.
  */
 function loCharacter(character: string): string {
   if (character === VALUE_DELIMITER) return DELIMITER_STAND_IN;
-  // The first UTF-16 code unit decides: a character outside the BMP starts with a surrogate, above U+00FF.
+  // The first UTF-16 code unit decides: a character outside the BMP starts with a surrogate.
   const unit = character.charCodeAt(0);
-  if (unit < 0x20 || (unit >= 0x7f && unit <= 0x9f)) return UNWRITABLE_STAND_IN;
-  if (unit > MAX_SINGLE_BYTE_CODE_POINT) return UNWRITABLE_STAND_IN;
-  return character;
+  return unit >= FIRST_PRINTABLE_ASCII && unit <= LAST_PRINTABLE_ASCII
+    ? character
+    : UNWRITABLE_STAND_IN;
 }
 
 /**
@@ -119,7 +122,7 @@ const FIXED_METHOD_VALUES: readonly string[] = [
  *
  * The policy name is the caller's, so its Value is the only one that can be long or hold a character
  * an `LO` Value cannot. A backslash in it is written as `/`, because 5CH is the delimiter and is never
- * part of an `LO` Value; a control character or a character above U+00FF is written as `?`. The
+ * part of an `LO` Value; any other character outside printable ASCII is written as `?`. The
  * length is measured after that mapping, and a name that would take its Value past 64 characters is
  * cut to fit and ends in `...` inside the quotes.
  *

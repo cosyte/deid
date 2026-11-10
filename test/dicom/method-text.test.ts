@@ -96,6 +96,15 @@ function controlBytes(dataset: Dataset): number[] {
   return [...raw].filter((byte) => byte < 0x20 || (byte >= 0x7f && byte <= 0x9f));
 }
 
+/**
+ * Every byte outside printable ASCII (20H to 7EH). The pass never sets Specific Character Set
+ * (0008,0005), so the default repertoire (PS3.5 6.1.2.1) is the only one the method text can assume.
+ */
+function nonAsciiBytes(dataset: Dataset): number[] {
+  const raw = dataset.get(TAG_METHOD_TEXT)?.rawBytes ?? Buffer.alloc(0);
+  return [...raw].filter((byte) => byte < 0x20 || byte > 0x7e);
+}
+
 /** `a`, the character at `codePoint`, then `b`. */
 function between(codePoint: number): string {
   return `a${String.fromCodePoint(codePoint)}b`;
@@ -103,7 +112,8 @@ function between(codePoint: number): string {
 
 describe("(0012,0063) carries a policy name only as characters an LO Value can hold", () => {
   // The method text is written as latin1, one byte per UTF-16 code unit, so a character above U+00FF
-  // lands on the wire as its low byte: U+015C as 5CH, the delimiter, and U+0100 as NUL.
+  // lands on the wire as its low byte: U+015C as 5CH, the delimiter, and U+0100 as NUL. A byte from
+  // A0H to FFH is only a letter under a declared Specific Character Set, which the pass never sets.
   const cases: readonly { label: string; name: string; expected: string }[] = [
     { label: "U+015C, whose low byte is the delimiter", name: between(0x15c), expected: "a?b" },
     { label: "U+0100, whose low byte is NUL", name: between(0x100), expected: "a?b" },
@@ -112,6 +122,9 @@ describe("(0012,0063) carries a policy name only as characters an LO Value can h
     { label: "a backslash", name: between(0x5c), expected: "a/b" },
     { label: "DEL", name: between(0x7f), expected: "a?b" },
     { label: "a C1 control character", name: between(0x85), expected: "a?b" },
+    { label: "a no-break space, U+00A0", name: between(0xa0), expected: "a?b" },
+    { label: "a latin1 letter, U+00E9", name: between(0xe9), expected: "a?b" },
+    { label: "U+00FF", name: between(0xff), expected: "a?b" },
     {
       label: "a character outside the BMP, as one character",
       name: between(0x1f600),
@@ -132,13 +145,19 @@ describe("(0012,0063) carries a policy name only as characters an LO Value can h
       expectFitsLo(values);
       expect(values[3]).toBe(`policy "${expected}"`);
       expect(controlBytes(dataset)).toEqual([]);
+      expect(nonAsciiBytes(dataset)).toEqual([]);
       expect(warnings.map((w) => w.code)).not.toContain(OVER_LENGTH_CODE);
     });
   }
 
-  it("keeps a latin1 letter, which is not a control character, as written", () => {
-    const resolved = resolveDicomOptions({ policy: defineDeidPolicy({ name: between(0xe9) }) });
-    expect(resolved.deidentificationMethod.split("\\")[3]).toBe(`policy "${between(0xe9)}"`);
+  it("keeps every printable ASCII character but the backslash as written", () => {
+    const printable = Array.from({ length: 0x7f - 0x20 }, (_, i) => String.fromCharCode(0x20 + i))
+      .filter((character) => character !== "\\")
+      .join("");
+    for (const part of [printable.slice(0, 40), printable.slice(40)]) {
+      const resolved = resolveDicomOptions({ policy: defineDeidPolicy({ name: part }) });
+      expect(resolved.deidentificationMethod.split("\\")[3]).toBe(`policy "${part}"`);
+    }
   });
 
   it("measures a long name after mapping, so its Value is 64 characters on the wire", () => {
@@ -154,6 +173,7 @@ describe("(0012,0063) carries a policy name only as characters an LO Value can h
     expect(values[3]).toBe(`policy "${"?".repeat(LO_VALUE_MAX - 'policy "..."'.length)}..."`);
     expect(values[3]?.length).toBe(LO_VALUE_MAX);
     expect(controlBytes(dataset)).toEqual([]);
+    expect(nonAsciiBytes(dataset)).toEqual([]);
     expect(warnings.map((w) => w.code)).not.toContain(OVER_LENGTH_CODE);
   });
 });
