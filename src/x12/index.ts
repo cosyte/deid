@@ -28,8 +28,10 @@
  * - **`DTP-03` / `DTM-02`**: dates generalized to year.
  * - **`CLM-01` / `CLP-01`**: the patient account number pseudonymized to a consistent surrogate.
  *
- * **Fail closed.** A segment that is neither mapped nor on the recognized clinical / financial retain
- * list is blocked element-by-element; an unknown `NM1` entity or `REF` qualifier is blocked, and so is
+ * **Fail closed.** A segment whose identifier is neither mapped nor on the recognized clinical /
+ * financial retain list is removed whole, identifier included (an extra segment terminator or a missing
+ * element separator can put a value where the identifier belongs), and the `SE-01` count is reduced to
+ * match; an unknown `NM1` entity or `REF` qualifier is blocked, and so is
  * the name, identifier or reference it would have routed. Every other element the output carries,
  * envelope included, is kept only when it has the shape its position expects (a code the position
  * knows, a valid date in the declared format, a number, a bounded administrative reference); a value

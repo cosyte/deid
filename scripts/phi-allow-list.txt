@@ -420,6 +420,19 @@ NAME ZZSECONDFIRST
 ID MI
 DOB F
 DOB 1985
+# Values where a segment identifier belongs (test/fixtures/x12/837p-fail-closed.edi and
+# test/x12/segment-identifier.test.ts) and the well-formed transaction set controls
+# (test/x12/transaction-set-controls.test.ts). The first are asserted ABSENT after de-id; the controls
+# assert each name and identifier is removed.
+NAME ZZSEGIDLAST
+NAME ZZSEGIDFIRST
+NAME ZZMEMLAST
+NAME ZZMEMFIRST
+ID ZZGROUP270
+ID ZZSUBNUM834
+ID ZZGROUP834
+ID ZZMEMBER834
+ID ZZMEMBER835
 
 # --- Synthetic NCPDP Telecom identifiers (test/fixtures/ncpdp) ---
 ID 5550000301

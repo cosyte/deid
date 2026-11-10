@@ -504,9 +504,13 @@ function x12FailClosedCase(): CorpusCase {
       "20260103", // an occurrence date, generalized at its own component
       "ZZSV1DESC", // a free-text procedure description
       "ZZHIMEMBER", // an identifier where a diagnosis code belongs
+      "ZZSEGIDMEMBER", // a member id after an extra segment terminator, where the segment id belongs
+      "ZZSEGIDRUNON", // a value run into the segment id by a missing element separator
+      "ZZSEGIDORPHAN", // a value alone between GE and IEA, where the segment id belongs
     ],
     survivors: [
       "HI*ABK:E1165*BH:11:D8:2026~",
+      "SE*21*0005~", // SE-01 counts out the two segments removed whole
       "SV1*HC:99213:25::::*100.00*UN*1***1:2~",
       "REF*F8*ZZCLAIMCTRL*~",
       "NM1*85*2*ZZKEPTPROVORG*****XX*1999999999~",

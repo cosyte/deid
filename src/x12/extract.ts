@@ -8,8 +8,10 @@
  * PHI is located **structurally**, per the cited {@link "./locus-map.js"}: `NM1` names + identifiers
  * (entity-classified), `N3` / `N4` address, `DMG` date of birth, `PER` telecom, `REF` identifiers
  * (qualifier-classified), `DTP` / `DTM` dates, and the `CLM-01` / `CLP-01` patient account number.
- * Everything else is either a recognized clinical / financial segment (retained untouched, the
- * over-scrub guard) or an **unknown segment**, which **fails closed** (every populated element blocked).
+ * Everything else is either a recognized clinical / financial segment (each element kept when it has
+ * the shape its position expects, the over-scrub guard) or a segment whose identifier the pass does not
+ * recognize, which **fails closed**: it is removed whole, identifier included, and every value it
+ * carried is recorded.
  *
  * The `@cosyte/x12` model is immutable and its serializer reconstructs from the verbatim `rawSegments`
  * strings, so the extractor never edits the tree; the applier rebuilds the affected raw segments (see
@@ -21,7 +23,7 @@
 import { type X12Interchange, type X12Segment } from "@cosyte/x12";
 
 import { SAFE_HARBOR_CATEGORIES, type SafeHarborCategory } from "../categories.js";
-import { safeLocusToken } from "../derived-token.js";
+import { WITHHELD_LOCUS_TOKEN, safeLocusToken } from "../derived-token.js";
 import type { GenericLocus } from "../locus.js";
 import {
   enumerateOrFail,
@@ -98,6 +100,13 @@ export interface X12Coord {
    * segment instead of a transaction's.
    */
   readonly envelope?: X12EnvelopeAddress;
+  /**
+   * Set when the segment this locus sits in is **removed whole**: a segment whose identifier the pass
+   * does not recognize, or a segment outside every transaction set. The applier drops the segment from
+   * the output instead of rewriting one element, and reduces the `SE-01` segment count of the
+   * transaction set it sat in by one.
+   */
+  readonly segmentRemoved?: boolean;
 }
 
 /** The paired output of {@link extractX12Loci}: loci for the engine + coordinates for the applier. */
@@ -163,6 +172,37 @@ function el(seg: SegmentElements, n: number): string {
 function has(seg: SegmentElements, n: number): boolean {
   return el(seg, n).length > 0;
 }
+
+/**
+ * The segment identifiers the pass **recognizes inside a transaction set**: every segment a locus rule
+ * acts on, and every segment it retains and decides by shape (`ST` and `SE` among them). An identifier
+ * outside this set is not trusted as an identifier at all. The usual way one gets there is an extra
+ * segment terminator or a missing element separator after the identifier, which puts a value (a member
+ * id, a date of birth, a last name, a whole segment run together) where the identifier belongs, so a
+ * segment with any other identifier is removed whole.
+ */
+const X12_RECOGNIZED_SEGMENT_IDS: ReadonlySet<string> = new Set<string>([
+  "NM1",
+  "N1",
+  "REF",
+  ...X12_ACCOUNT_SEGMENTS,
+  ...Object.keys(X12_FREE_TEXT_ELEMENTS),
+  ...Object.keys(X12_UNIVERSAL_SEGMENT_RULES),
+  ...X12_RETAIN_SEGMENTS,
+]);
+
+/**
+ * The envelope segment identifiers. Inside a transaction set none of them is a body segment, but a
+ * segment the parser found outside every transaction set can be one (a `TA1` inside an open group, a
+ * `GE` closing nothing), and its identifier is then printed in its `orphan` path like any it knows.
+ */
+const X12_ENVELOPE_SEGMENT_IDS: ReadonlySet<string> = new Set<string>([
+  "ISA",
+  "TA1",
+  "GS",
+  "GE",
+  "IEA",
+]);
 
 /**
  * The one X12 segment whose elements are **fixed-width and space-padded by the standard**: the `ISA` is
@@ -549,11 +589,23 @@ function handleFreeTextSegment(
 }
 
 /**
- * Fail closed on an unknown segment, or on a segment the parser found outside every transaction set:
- * block every populated element (unrecognized structure).
+ * **Remove a segment whole** and record every value it carried, its identifier (element `0`) included,
+ * each at its own position (`837/<withheld>[0]-0`). This is how a segment whose identifier the pass does
+ * not recognize fails closed, and how a segment outside every transaction set leaves: no part of it is
+ * re-emitted, so an identifier that landed where the segment identifier belongs never leaves in the
+ * clear. Each coordinate is marked {@link X12Coord.segmentRemoved}, so the applier drops the segment.
  */
-function handleUnknown(out: X12LocusAccumulator, seg: SegmentElements, pos: SegPos): void {
-  for (let n = 1; n < seg.elements.length; n += 1) blockElement(out, seg, pos, n);
+function removeSegment(out: X12LocusAccumulator, seg: SegmentElements, pos: SegPos): void {
+  for (let n = 0; n < seg.elements.length; n += 1) {
+    name(out, pos, [n]);
+    if (!has(seg, n)) continue;
+    push(
+      out,
+      pos,
+      { path: path(pos, n), kind: "identifier", value: el(seg, n) },
+      { ...coord(pos, [n]), segmentRemoved: true },
+    );
+  }
 }
 
 /** Dispatch one segment through the X12 PHI rules. */
@@ -592,8 +644,8 @@ function handleSegment(out: X12LocusAccumulator, seg: X12Segment, pos: SegPos): 
     for (const rule of universal) emitRule(out, seg, pos, rule);
     return;
   }
-  if (X12_RETAIN_SEGMENTS.has(id)) return; // recognized clinical / financial / control: the sweep decides
-  handleUnknown(out, seg, pos); // fail closed
+  // A recognized clinical, financial or control segment: the closing sweep decides every element by
+  // its shape. A segment whose identifier is not recognized never reaches here (see closeSegment).
 }
 
 /**
@@ -684,12 +736,24 @@ function decideByShape(
 }
 
 /**
- * The **closing sweep** every segment the pass hands through gets after its rules ran: each
- * value-bearing element no rule decided is decided by its shape ({@link decideByShape}). After it, no
- * element of the segment is unexamined: each was acted on, kept because it has the shape its position
- * expects, or removed and recorded.
+ * The **closing sweep** every segment the pass hands through gets after its rules ran. It starts at the
+ * segment identifier (element `0`): a segment the pass does not keep (`recognized` is `false`) is
+ * removed whole ({@link removeSegment}); otherwise the identifier is one the pass knows, which is
+ * structure rather than a value, and each value-bearing element no rule decided is decided by its shape
+ * ({@link decideByShape}). After it, no element of the segment is unexamined: each was acted on, kept
+ * because it has the shape its position expects, or removed and recorded.
  */
-function closeSegment(out: X12LocusAccumulator, seg: SegmentElements, pos: SegPos): void {
+function closeSegment(
+  out: X12LocusAccumulator,
+  seg: SegmentElements,
+  pos: SegPos,
+  recognized: boolean,
+): void {
+  if (!recognized) {
+    removeSegment(out, seg, pos);
+    return;
+  }
+  name(out, pos, [0]);
   for (let n = 1; n < seg.elements.length; n += 1) {
     if (out.named.get(segKey(pos))?.has(n) === true) continue;
     if (!isValueBearing(seg, pos.segId, n)) continue;
@@ -790,7 +854,7 @@ export function extractX12Loci(interchange: X12Interchange): X12Extraction {
   ): void => {
     if (seg === undefined) return;
     const pos = envelopePos(segId, occurrence);
-    closeSegment(out, seg, pos);
+    closeSegment(out, seg, pos, true);
     enumerated.push({ seg, pos });
   };
 
@@ -805,13 +869,16 @@ export function extractX12Loci(interchange: X12Interchange): X12Extraction {
     envelope(group.gs, "GS", groupIndex);
     group.transactions.forEach((tx, txIndex) => {
       // `ST-01` is a data element the parser copies verbatim, and it is the ROOT of every path this
-      // transaction produces; `X12Segment.id` is the token before the first element separator on a
-      // line the parser may not have recognized at all. Both are bounded before they are interpolated,
-      // and the occurrence counter keys on the bounded id so refused segments stay distinguishable.
+      // transaction produces; it is bounded before it is interpolated. `X12Segment.id` is the token
+      // before the first element separator, which can be a value that landed there; it is printed
+      // only when it is an identifier the pass recognizes, and withheld otherwise, because a short
+      // value (a name suffix, a two-letter last name) passes the bare shape. The occurrence counter
+      // keys on the printed id so withheld segments stay distinguishable.
       const stId = safeLocusToken(tx.st.elements[1] ?? "", "x12TransactionSetId");
       const occ = new Map<string, number>();
       tx.segments.forEach((seg, segIndex) => {
-        const segId = safeLocusToken(seg.id, "x12SegmentId");
+        const recognized = X12_RECOGNIZED_SEGMENT_IDS.has(seg.id);
+        const segId = recognized ? safeLocusToken(seg.id, "x12SegmentId") : WITHHELD_LOCUS_TOKEN;
         const n = occ.get(segId) ?? 0;
         occ.set(segId, n + 1);
         const pos: SegPos = {
@@ -822,9 +889,10 @@ export function extractX12Loci(interchange: X12Interchange): X12Extraction {
           at: { groupIndex, txIndex, segIndex },
         };
         // The control pair carries no rule of its own; the closing sweep decides it like any other.
+        // A segment whose identifier is not recognized gets no rule: the sweep removes it whole.
         const start = out.loci.length;
-        if (seg.id !== "ST" && seg.id !== "SE") handleSegment(out, seg, pos);
-        closeSegment(out, seg, pos);
+        if (recognized && seg.id !== "ST" && seg.id !== "SE") handleSegment(out, seg, pos);
+        closeSegment(out, seg, pos, recognized);
         orderSegmentLoci(out, start);
         enumerated.push({ seg, pos });
       });
@@ -833,14 +901,16 @@ export function extractX12Loci(interchange: X12Interchange): X12Extraction {
   });
   envelope(interchange.iea, "IEA", 0);
 
-  // A segment the parser found outside every transaction set is re-emitted where it sat, so it is
-  // handed through like any other; it belongs to no structure a rule knows, so it fails closed whole.
-  // Recorded after the interchange, in the order the parser kept them.
+  // A segment the parser found outside every transaction set belongs to no structure a rule knows, so
+  // it fails closed: removed whole, identifier included, and every value it carried recorded under
+  // `orphan`. Recorded after the interchange, in the order the parser kept them. Its identifier is
+  // printed only when the pass recognizes it, as inside a transaction set.
   const orphanOcc = new Map<string, number>();
   // A peer older than the orphan list carries none.
   (interchange.orphanSegments ?? []).forEach((orphan, index) => {
     const seg = orphan.segment;
-    const segId = safeLocusToken(seg.id, "x12SegmentId");
+    const known = X12_RECOGNIZED_SEGMENT_IDS.has(seg.id) || X12_ENVELOPE_SEGMENT_IDS.has(seg.id);
+    const segId = known ? safeLocusToken(seg.id, "x12SegmentId") : WITHHELD_LOCUS_TOKEN;
     const n = orphanOcc.get(segId) ?? 0;
     orphanOcc.set(segId, n + 1);
     const pos: SegPos = {
@@ -850,7 +920,7 @@ export function extractX12Loci(interchange: X12Interchange): X12Extraction {
       segIdBracket: `${segId}[${String(n)}]`,
       at: { groupIndex: -1, txIndex: -1, segIndex: -1, envelope: { segment: "orphan", index } },
     };
-    handleUnknown(out, seg, pos);
+    closeSegment(out, seg, pos, false);
     enumerated.push({ seg, pos });
   });
 
@@ -881,9 +951,10 @@ export function extractX12Loci(interchange: X12Interchange): X12Extraction {
 
 /**
  * Enumerate one segment's value-bearing elements and record the ones no rule decided. A **position**
- * here is one element of one segment (`837/DTP[0]-2`), the unit every X12 locus already uses; element 0
- * is the segment identifier itself and is structure, not a value. The closing sweep decides every
- * element, so this records nothing; it is the independent count that would show one it missed.
+ * here is one element of one segment (`837/DTP[0]-2`), the unit every X12 locus already uses, and it
+ * starts at element `0`, the segment identifier: an identifier is structure only when the pass
+ * recognized it, and a value that landed there is a position like any other. The closing sweep decides
+ * every element, so this records nothing; it is the independent count that would show one it missed.
  */
 function recordUnexaminedX12Positions(
   residuals: UnexaminedResidualBuilder,
@@ -891,7 +962,7 @@ function recordUnexaminedX12Positions(
   pos: SegPos,
   named: ReadonlySet<number> | undefined,
 ): void {
-  for (let n = 1; n < seg.elements.length; n += 1) {
+  for (let n = 0; n < seg.elements.length; n += 1) {
     if (named?.has(n) === true) continue;
     if (!isValueBearing(seg, pos.segId, n)) continue;
     residuals.record(path(pos, n));

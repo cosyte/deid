@@ -142,6 +142,21 @@ export const PROVIDER_ENTITY_CODES: ReadonlySet<string> = new Set<string>([
   "TT", // Transfer To
   "GP", // Gateway Provider
   "AY", // Clearinghouse
+  "QB", // Purchase Service Provider (837P)
+  "X3", // Utilization Management Organization (278)
+  "AAJ", // Admitting Services (278)
+  "G3", // Clinic (278)
+  "QV", // Group Practice (278)
+  "13", // Contracted Service Provider (271)
+  "1I", // Preferred Provider Organization (271)
+  "PRP", // Primary Payer (271)
+  "SEP", // Secondary Payer (271)
+  "TTP", // Tertiary Payer (271)
+  "VN", // Vendor (271)
+  "IN", // Insurer (834)
+  "TV", // Third Party Administrator (834)
+  "BO", // Broker or Sales Office (834)
+  "Y2", // Managed Care Organization (834)
 ]);
 
 /**
@@ -164,8 +179,19 @@ export const PATIENT_ENTITY_CODES: ReadonlySet<string> = new Set<string>([
   "QD", // Responsible Party
   "GD", // Guardian
   "74", // Corrected Insured
-  "S1", // Insured (secondary)
-  "S3", // Legal Representative
+  "S1", // Insured (secondary); Parent (834)
+  "S3", // Legal Representative; Custodial Parent (834)
+  // The 834 and 271 member-side parties: the individual's prior name and mailing address, and the
+  // relatives, household members and representatives the TR3s name.
+  "70", // Prior Incorrect Insured
+  "31", // Postal Mailing Address
+  "E1", // Person or Other Entity Legally Responsible for a Child
+  "EI", // Executor of Estate
+  "EXS", // Ex-spouse
+  "J6", // Power of Attorney
+  "LR", // Legal Representative
+  "TZ", // Significant Other
+  "X4", // Spouse
 ]);
 
 /**
@@ -184,6 +210,8 @@ export const PATIENT_ENTITY_CODES: ReadonlySet<string> = new Set<string>([
  */
 export const EMPLOYER_ENTITY_CODES: ReadonlySet<string> = new Set<string>([
   "36", // Employer (the individual's employer: §164.514(b)(2)(i) names it)
+  "P5", // Plan Sponsor (271, 834): in practice the individual's employer, so on the same footing
+  "M8", // Educational Institution (834): the school a dependent attends, removed like an employer
 ]);
 
 /**
@@ -302,6 +330,18 @@ const REF_PHI_QUALIFIERS: Readonly<Record<string, SafeHarborCategory>> = {
   "23": C.ACCOUNT, // Client Number
   "6P": C.HEALTH_PLAN_BENEFICIARY, // Group Number
   "1H": C.HEALTH_PLAN_BENEFICIARY, // CHAMPUS/TRICARE Identification Number, the individual's beneficiary id
+  EJ: C.ACCOUNT, // Patient Account Number (271, 276/277, 278)
+  F6: C.HEALTH_PLAN_BENEFICIARY, // Health Insurance Claim (HIC) Number (271, 834)
+  NQ: C.HEALTH_PLAN_BENEFICIARY, // Medicaid Recipient Identification Number (271)
+  Q4: C.HEALTH_PLAN_BENEFICIARY, // Prior Identifier Number (271, 834)
+  HJ: C.HEALTH_PLAN_BENEFICIARY, // Identity Card Number (271)
+  GH: C.HEALTH_PLAN_BENEFICIARY, // Identification Card Serial Number (271)
+  "49": C.HEALTH_PLAN_BENEFICIARY, // Family Unit Number (271)
+  "3H": C.HEALTH_PLAN_BENEFICIARY, // Case Number (271, 834)
+  "38": C.HEALTH_PLAN_BENEFICIARY, // Master Policy Number (834)
+  ABB: C.OTHER_UNIQUE_ID, // Personal ID Number (834)
+  "4A": C.OTHER_UNIQUE_ID, // Personal Identification Number (834)
+  "28": C.OTHER_UNIQUE_ID, // Employee Identification Number (835)
 };
 
 /**
@@ -337,6 +377,25 @@ const REF_RETAIN_QUALIFIERS: ReadonlySet<string> = new Set<string>([
   "RB", // Rate Code Number
   "EO", // Submitter Identification Number
   "4N", // Special Payment Reference Number
+  "1K", // Payer's Claim Number (276/277, 835)
+  "BLT", // Billing Type (276/277)
+  "FJ", // Line Item Control Number (276/277)
+  "9A", // Repriced Claim Reference Number (837, 835)
+  "9C", // Adjusted Repriced Claim Reference Number (837, 835)
+  "X4", // Clinical Laboratory Improvement Amendment Number (837P)
+  "EW", // Mammography Certification Number (837P)
+  "F5", // Medicare Version Code (837)
+  "P4", // Project Code (837)
+  "T4", // Signal Code (837)
+  "LX", // Qualified Products List (837)
+  "1A", // Blue Cross Provider Number (835)
+  "D3", // National Council for Prescription Drug Programs Pharmacy Number (835)
+  "HPI", // Centers for Medicare and Medicaid Services National Provider Identifier (835)
+  "NF", // National Association of Insurance Commissioners Code (835)
+  "EV", // Receiver Identification Number (835)
+  "0K", // Policy Form Identifying Number (835)
+  "APC", // Ambulatory Payment Classification (835)
+  "1S", // Ambulatory Patient Group Number (835)
 ]);
 
 /**
@@ -382,6 +441,7 @@ const ID_CODE_QUALIFIERS: ReadonlySet<string> = new Set<string>([
   "BD", // Blue Cross Provider Number
   "BS", // Blue Shield Provider Number
   "C", // Insured's Changed Unique Identification Number
+  "FA", // Facility Identification (271)
   "FI", // Federal Taxpayer's Identification Number
   "HN", // Health Insurance Claim Number
   "II", // Standard Unique Health Identifier for each Individual
@@ -587,8 +647,9 @@ export const X12_ACCOUNT_SEGMENTS: ReadonlySet<string> = new Set<string>(["CLM",
  * / procedure / revenue codes, monetary amounts, quantities, adjustments, and control structure, **no
  * direct patient or relative Safe Harbor identifier**, so their values must survive the over-scrub test
  * byte-identical. A segment that is neither mapped (`NM1` / `N3` / `N4` / `DMG` / `PER` / `REF` / `DTP`
- * / `DTM` / `CLM` / `CLP`) nor on this list **fails closed**: every one of its elements is blocked, so
- * an unknown segment can never ride a patient identifier through in the clear.
+ * / `DTM` / `CLM` / `CLP`) nor on this list **fails closed**: it is removed whole, its identifier
+ * included, and every value it carried is recorded, so an unknown segment, or a value that landed where
+ * a segment identifier belongs, can never ride a patient identifier through in the clear.
  *
  * Retaining a segment keeps each element only when it has the shape its position expects (a code, a
  * valid date, a number, a bounded administrative reference); a value of any other shape, a free-text
@@ -658,10 +719,9 @@ export const X12_RETAIN_SEGMENTS: ReadonlySet<string> = new Set<string>([
   "REL", // Relationship
   // 835 payment order (bank routing / amounts, not the patient)
   "BPR", // Beginning Segment for Payment Order/Remittance
-  // NOTE: the 820-premium-specific segments (ENT / RMR / ADX) and the 834 enrollment segments are
-  // deliberately NOT retained. This slice scopes 837 / 835 / 270-271 (they never appear there), so if an
-  // out-of-scope 820 / 834 interchange is fed in, those individual-detail segments, which can carry a
-  // subscriber/member identifier, fail closed (blocked) rather than riding through wholesale.
+  // NOTE: the 820-premium-specific segments (ENT / RMR / ADX) and the 834 individual-detail segments
+  // other than INS / HD (EC / ICM / HLH / LUI / COB / IDC) are deliberately NOT retained: they
+  // can carry a subscriber or member identifier, so they are removed whole rather than riding through.
   // 999 / TA1 acknowledgements (structurally PHI-free)
   "AK1",
   "AK2",
@@ -670,4 +730,12 @@ export const X12_RETAIN_SEGMENTS: ReadonlySet<string> = new Set<string>([
   "IK4",
   "IK5",
   "CTX",
+  // Loop markers (271, 834): a loop identifier code and nothing else
+  "LS",
+  "LE",
+  // Institutional claim codes (837I), claim status (277), services review and decision (278)
+  "CL1",
+  "STC",
+  "UM",
+  "HCR",
 ]);

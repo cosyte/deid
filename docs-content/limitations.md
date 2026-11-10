@@ -165,6 +165,13 @@ Two things follow, and the second is the one that surprises people:
   naming the structure, rather than emitting a zero or a partial count that a reader would take for a
   clearance.
 
+- **An X12 segment the pass does not recognize is removed whole, not counted.** Its identifier may be a
+  value that an extra segment terminator or a missing separator put there, so it is removed with the
+  segment's other values, each recorded under a withheld segment id, and the transaction set's `SE-01`
+  counts it out. A real X12 segment the pass has no shape for (`PLB`, `TS3`, the 834 member detail
+  segments beyond `INS` / `HD`) is removed the same way, which over-removes it rather than passing it
+  through.
+
 - **X12 bytes after the `IEA` are not counted; they are removed.** They are neither a segment nor a
   loop, and they commonly hold a whole second interchange the parser did not decode, so no rule can
   decide them. Bytes there that are not blank are removed and recorded at `trailingBytes`; a blank

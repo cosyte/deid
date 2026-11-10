@@ -211,8 +211,9 @@ describe("the envelope and a segment outside every transaction set", () => {
     const { x12, manifest, residuals } = run(raw);
     expect(x12).not.toContain("ZZORPHANLAST");
     expect(x12).not.toContain("ZZORPHANFIRST");
-    expect(x12).toContain(`${GS}NM1****~ST*837*0006~`);
-    for (const element of [1, 2, 3, 4]) {
+    // Nothing of it is re-emitted, its identifier included.
+    expect(x12).toContain(`${GS}ST*837*0006~`);
+    for (const element of [0, 1, 2, 3, 4]) {
       expect(blockedAt(manifest, `orphan/NM1[0]-${String(element)}`)).toBe(true);
     }
     expect(residuals).toEqual([]);

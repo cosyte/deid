@@ -466,9 +466,11 @@ shape its position expects to stay: a code the position knows, exactly as writte
 format the segment declares; a number; or, at a trace or control number, a bounded reference. A value of
 any other shape, a value at a position no rule names (`NM1-02` holding a name, `NM1-10` onward, `N1-05`
 onward, `REF-03` onward), a segment outside every transaction set, and bytes after the `IEA` are
-removed and recorded at their own position. That is how a missing or an extra element separator, which
-shifts an identifier into a code, date or unused position, is caught. A code the pass refuses also
-routes nothing: a lower-case `pr` at `NM1-01` places no party outside the scope clause, so its name and
+removed and recorded at their own position. A segment whose identifier the pass does not recognize is
+removed whole, identifier included, because an extra segment terminator or a missing separator after
+the identifier puts a value there; `SE-01` is reduced to count it out. That is how a missing or an
+extra element separator, which shifts an identifier into a code, date or unused position, is caught. A
+code the pass refuses also routes nothing: a lower-case `pr` at `NM1-01` places no party outside the scope clause, so its name and
 identifier are removed too. So `result.unexaminedResiduals` is always empty for X12. A date of the
 individual inside a retained segment (`PAT-06`, an `HI` occurrence date) is generalized like `DTP-03`;
 the transaction's creation date (`BHT-04`) and the envelope dates are kept as dates of the exchange.

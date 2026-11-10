@@ -22,8 +22,11 @@
  * or an extra element separator, which shifts every value after it by one position; an identifier
  * shifted into a code, date or unused position must never leave in the clear.
  *
- * Code lists are grounded in the HIPAA 005010 TR3s for 837P / 837I / 837D, 835, 270 / 271, 276 / 277,
- * 278, 999 and TA1, and in the X12 envelope (`ISA` / `GS` / `ST` / `SE` / `GE` / `IEA`).
+ * Code lists are grounded in the HIPAA 005010 TR3s for 837P / 837I / 837D (X222A1, X223A2, X224A2),
+ * 835 (X221A1), 270 / 271 (X279A1), 276 / 277 (X212), 278 (X217), 834 (X220A1), 999 (X231A1) and TA1,
+ * and in the X12 envelope (`ISA` / `GS` / `ST` / `SE` / `GE` / `IEA`). Each list is the union of the
+ * codes those TR3s name at that position, so a list shared by several segments (the date qualifier, the
+ * amount qualifier, the relationship code) holds every transaction set's codes.
  *
  * @packageDocumentation
  * @internal
@@ -199,6 +202,9 @@ const DATE_FORMAT = keep(oneOf("D8 RD8 DT TM"));
 
 /* ------------------------------------------------------------------------------ code lists */
 
+/** Element 365, communication number qualifier (`PER-03` / `05` / `07`), the 834 phones included. */
+const COMMUNICATION_QUALIFIER = keep(oneOf("AP BN CP ED EM EX FX HP TE UR WP"));
+
 /** Element 1336, insurance type code (`SBR-05`, `EB-04`). */
 const INSURANCE_TYPE = oneOf(
   "12 13 14 15 16 41 42 43 47 AP C1 CO CP D DB EP FF GP HM HN HS IN IP LC LD LI LT MA MB MC MH MI " +
@@ -208,25 +214,43 @@ const INSURANCE_TYPE = oneOf(
 /** Element 1032, claim filing indicator code (`SBR-09`, `CLP-06`). */
 const CLAIM_FILING = oneOf("11 12 13 14 15 16 17 AM BL CH CI DS FI HM LM MA MB MC OF TV VA WC ZZ");
 
-/** Element 1069, individual relationship code (`SBR-02`, `PAT-01`, `INS-02`). */
+/**
+ * Element 1069, individual relationship code (`SBR-02`, `PAT-01`, `INS-02`): the 837, 271 and 278
+ * codes, and the 834 member relationships (`25` to `60`, `D2`, `G9`).
+ */
 const RELATIONSHIP = oneOf(
-  "01 03 04 05 07 09 10 15 17 18 19 20 21 22 23 24 29 32 33 34 36 39 40 41 43 53 76 G8",
+  "01 03 04 05 07 09 10 15 17 18 19 20 21 22 23 24 25 26 29 31 32 33 34 36 38 39 40 41 43 48 49 53 " +
+    "60 76 D2 G8 G9",
 );
 
-/** Element 374, date/time qualifier: the codes the TR3s use at `DTP-01` and `DTM-01`. */
+/**
+ * Element 374, date/time qualifier: the codes the TR3s use at `DTP-01` and `DTM-01`. That includes the
+ * 837D appliance placement (`452`), the 271 certification, policy and status dates (`458`, `539`,
+ * `540`, `771`), the 278 effective and estimated-birth dates (`007`, `ABC`), and the 834 member,
+ * employment, coverage and coordination-of-benefits dates.
+ */
 const DATE_QUALIFIER = oneOf(
-  "009 011 036 050 090 091 096 102 139 150 151 152 193 194 196 198 232 233 286 290 291 292 295 " +
-    "296 297 300 303 304 307 314 318 340 341 342 343 346 347 348 349 356 357 360 361 368 382 " +
-    "385 386 393 394 405 431 434 435 438 439 441 442 444 446 453 454 455 456 461 463 471 472 " +
-    "473 474 484 573 607 636 738 739 AAH",
+  "007 009 011 036 050 090 091 096 102 139 150 151 152 193 194 196 198 232 233 286 290 291 292 " +
+    "295 296 297 300 301 303 304 307 314 318 336 337 338 339 340 341 342 343 344 345 346 347 348 " +
+    "349 350 351 356 357 360 361 368 382 383 385 386 388 393 394 405 431 434 435 438 439 441 442 " +
+    "444 446 452 453 454 455 456 458 461 463 471 472 473 474 484 539 540 543 573 607 636 695 738 " +
+    "739 771 AAH ABC",
 );
 
-/** Element 522, amount qualifier code (`AMT-01`). */
-const AMOUNT_QUALIFIER = oneOf("A8 AU B6 D D8 DY EAF F3 F4 F5 I KH NL R T T2 ZK ZL ZM ZN ZO ZT");
+/**
+ * Element 522, amount qualifier code (`AMT-01`): the 837 and 835 codes, the 276 total submitted
+ * charges (`T3`), and the 834 coverage amounts (`B9`, `C1`, `D2`, `EBA`, `FK`, `P3`, `R`).
+ */
+const AMOUNT_QUALIFIER = oneOf(
+  "A8 AU B6 B9 C1 D D2 D8 DY EAF F3 F4 F5 FK I KH NL P3 R T T2 T3 ZK ZL ZM ZN ZO ZT",
+);
 
-/** Element 673, quantity qualifier (`QTY-01`, `EB-09`). */
+/**
+ * Element 673, quantity qualifier (`QTY-01`, `EB-09`), with the 834 header totals (`DT`, `ET`, `TO`).
+ */
 const QUANTITY_QUALIFIER = oneOf(
-  "8H 90 91 99 CA CD CE D3 DB DY FL HS LA LE M2 MN NA NE NR OU P6 PS PT QA S7 S8 VS YY ZK ZL ZM ZN ZO",
+  "8H 90 91 99 CA CD CE D3 DB DT DY ET FL HS LA LE M2 MN NA NE NR OU P6 PS PT QA S7 S8 TO VS YY " +
+    "ZK ZL ZM ZN ZO",
 );
 
 /** Element 235, product or service id qualifier (the first component of a procedure composite). */
@@ -409,6 +433,18 @@ const SEGMENT_ID_CODE = keep(matching(/^[A-Z][A-Z0-9]{1,2}$/));
 /** A loop identifier code a 999 names (`IK3-03`, `CTX-04`). */
 const LOOP_ID = keep(matching(/^[A-Z0-9]{1,4}$/));
 
+/**
+ * Composite C043, a health care claim status (`STC-01`, `STC-10`, `STC-11`): the category code (code
+ * source 507, `A1`, `F3F`), the status code (code source 508), the entity identifier code, and the code
+ * list qualifier.
+ */
+const CLAIM_STATUS = composite(
+  part(matching(/^[A-Z]\d{1,2}[A-Z]?$/)),
+  part(matching(/^\d{1,3}$/)),
+  part(matching(/^[A-Z0-9]{2,3}$/)),
+  part(matching(/^[A-Z0-9]{1,3}$/)),
+);
+
 /** Composite C030, a position in a segment (`IK4-01`, `CTX-05`). */
 const POSITION_IN_SEGMENT = composite(part(isWhole), part(isWhole), part(isWhole));
 
@@ -475,7 +511,8 @@ export const X12_ELEMENT_SHAPES: Readonly<
     3: keep(reference(50)),
     4: DATE8,
     5: TIME,
-    6: keep(oneOf("31 CH RP RT RU TH")),
+    // 837 chargeable, reporting and subrogation demand; 277 response (DG) and 277CA receipt (TH).
+    6: keep(oneOf("31 CH DG RP RT RU TH")),
   },
   BGN: {
     1: keep(oneOf("00 15 22")),
@@ -526,12 +563,20 @@ export const X12_ELEMENT_SHAPES: Readonly<
   DMG: {
     1: keep(oneOf("D8")),
     3: keep(oneOf("F M U")),
+    // The 834 marital status, race or ethnicity (code, `RET` list qualifier, CDC code) and citizenship.
+    4: keep(oneOf("B D I M R S U W X")),
+    5: composite(
+      part(oneOf("7 8 A B C D E F G H I J N O P Z")),
+      part(oneOf("RET")),
+      part(matching(/^\d{4}-\d$/)),
+    ),
+    6: keep(oneOf("1 2 3 4 5 6 7")),
   },
   PER: {
     1: keep(oneOf("BL CX IC IP SU")),
-    3: keep(oneOf("ED EM EX FX TE UR")),
-    5: keep(oneOf("ED EM EX FX TE UR")),
-    7: keep(oneOf("ED EM EX FX TE UR")),
+    3: COMMUNICATION_QUALIFIER,
+    5: COMMUNICATION_QUALIFIER,
+    7: COMMUNICATION_QUALIFIER,
   },
   DTP: { 1: keep(DATE_QUALIFIER), 2: DATE_FORMAT },
   DTM: { 1: keep(DATE_QUALIFIER) },
@@ -557,6 +602,7 @@ export const X12_ELEMENT_SHAPES: Readonly<
       part(inSet(COUNTRY_CODES)),
     ),
     12: keep(oneOf("02 03 05 09")),
+    19: keep(oneOf("PB")), // 837D predetermination of benefits
     20: keep(oneOf("1 2 3 4 5 6 7 8 9 10 11 15")),
   },
   CLP: {
@@ -580,7 +626,7 @@ export const X12_ELEMENT_SHAPES: Readonly<
   },
   K3: {},
   NTE: {
-    1: keep(oneOf("ADD ALG CER DCP DGN DME MED NTR ODT PMT RHB RLH RNH SET SFM TPO UPI")),
+    1: keep(oneOf("ADD ALG CER DCP DGN DME MED NTR ODT PMT RHB RLH RNH SET SFM SPT TPO UPI")),
   },
 
   /* ---- the retained clinical, financial and control segments ---- */
@@ -608,7 +654,7 @@ export const X12_ELEMENT_SHAPES: Readonly<
   },
   MIA: MIA_SHAPES,
   QTY: { 1: keep(QUANTITY_QUALIFIER), 2: DECIMAL },
-  LQ: { 1: keep(oneOf("HE RX UT")), 2: keep(matching(/^[A-Z0-9]{1,8}$/)) },
+  LQ: { 1: keep(oneOf("AS HE RX UT")), 2: keep(matching(/^[A-Z0-9]{1,8}$/)) },
   LX: { 1: WHOLE },
   HI: HI_SHAPES,
   SV1: {
@@ -636,12 +682,13 @@ export const X12_ELEMENT_SHAPES: Readonly<
     1: PROCEDURE,
     2: DECIMAL,
     3: keep(matching(/^\d{2}$/)),
+    // C006 oral cavity designation: an area code, or L / R for the left or right side.
     4: composite(
-      part(matching(/^\d{2}$/)),
-      part(matching(/^\d{2}$/)),
-      part(matching(/^\d{2}$/)),
-      part(matching(/^\d{2}$/)),
-      part(matching(/^\d{2}$/)),
+      part(matching(/^(\d{2}|L|R)$/)),
+      part(matching(/^(\d{2}|L|R)$/)),
+      part(matching(/^(\d{2}|L|R)$/)),
+      part(matching(/^(\d{2}|L|R)$/)),
+      part(matching(/^(\d{2}|L|R)$/)),
     ),
     5: keep(oneOf("I M R")),
     6: WHOLE,
@@ -800,6 +847,7 @@ export const X12_ELEMENT_SHAPES: Readonly<
     3: keep(oneOf("001 021 024 025 030 032")),
     4: keep(matching(/^[A-Z0-9]{2}$/)),
     5: keep(oneOf("A C S T")),
+    6: composite(part(oneOf("A B C D E"))), // C052 Medicare plan code
     7: keep(matching(/^(\d{1,2}|ZZ)$/)),
     8: keep(oneOf("AC AU FT L1 PT RT TE")),
     9: keep(oneOf("F N P")),
@@ -815,6 +863,7 @@ export const X12_ELEMENT_SHAPES: Readonly<
       oneOf("AG AH AJ AK DCP DEN EPO FAC HE HLT HMO LTC LTD MM MOD PDG POS PPO PRA STD UR VIS"),
     ),
     5: keep(oneOf("CHD DEP E1D E2D E3D E5D E6D E7D E8D E9D ECH EMP ESP FAM IND SPC SPO TWO")),
+    9: YES_NO, // late enrollment indicator
   },
   DSB: {
     1: keep(oneOf("1 2 3 4")),
@@ -822,6 +871,57 @@ export const X12_ELEMENT_SHAPES: Readonly<
     8: keep(matching(/^[A-Z0-9]{3,7}$/)),
   },
   REL: { 1: keep(matching(/^[A-Z0-9]{1,2}$/)), 2: keep(RELATIONSHIP) },
+  // CL1 institutional claim code (837I): admission type, admission source, patient status.
+  CL1: {
+    1: keep(matching(/^\d$/)),
+    2: keep(matching(/^[0-9A-Z]$/)),
+    3: keep(matching(/^\d{2}$/)),
+  },
+  // STC claim status (277): the category / status / entity composites, the status, adjudication and
+  // check dates (dates of the individual's claim, generalized like a DTP date), the amounts, the payment
+  // method, and the check or EFT trace number. STC-12, a free-form message, is not kept.
+  STC: {
+    1: CLAIM_STATUS,
+    2: { kind: "date", format: { from: "fixed", format: "D8" } },
+    3: keep(oneOf("U WQ")),
+    4: DECIMAL,
+    5: DECIMAL,
+    6: { kind: "date", format: { from: "fixed", format: "D8" } },
+    7: keep(oneOf("ACH BOP CHK FWT NON")),
+    8: { kind: "date", format: { from: "fixed", format: "D8" } },
+    9: keep(reference(16)),
+    10: CLAIM_STATUS,
+    11: CLAIM_STATUS,
+  },
+  // UM health care services review (278): request category, certification type, service type,
+  // facility code, related causes, level of service, prognosis.
+  UM: {
+    1: keep(oneOf("AR HS IN SC")),
+    2: keep(oneOf("1 2 3 4 I N R S")),
+    3: keep(matching(/^[A-Z0-9]{1,2}$/)),
+    4: composite(part(matching(/^\d{2}$/)), part(oneOf("A B"))),
+    5: composite(
+      part(oneOf("AA AP EM OA")),
+      part(oneOf("AA AP EM OA")),
+      part(oneOf("AA AP EM OA")),
+      part(inSet(STATE_OR_PROVINCE_CODES)),
+      part(inSet(COUNTRY_CODES)),
+    ),
+    6: keep(oneOf("03 E U")),
+    8: keep(oneOf("1 2 3 4 5 6 7 8")),
+  },
+  // HCR health care services review decision (278 response): action, the certification number (an
+  // administrative reference, like a prior authorization number), the decision reason, and the second
+  // surgical opinion indicator.
+  HCR: {
+    1: keep(oneOf("A1 A2 A3 A4 A6 C CT D IP NA")),
+    2: keep(reference(50)),
+    3: keep(matching(/^[A-Z0-9]{1,2}$/)),
+    4: YES_NO,
+  },
+  // The 271 and 834 loop markers: a loop identifier code and nothing else.
+  LS: { 1: LOOP_ID },
+  LE: { 1: LOOP_ID },
 
   /* ---- the 999 acknowledgment ---- */
   AK1: { 1: FUNCTIONAL_ID, 2: keep(matching(/^\d{1,9}$/)), 3: VERSION },

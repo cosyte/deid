@@ -191,10 +191,15 @@ describe("X12 structured behavior", () => {
 });
 
 describe("X12 fail-closed + manifest + immutability", () => {
-  it("blocks an unknown segment element-by-element (fails closed)", () => {
+  it("removes an unknown segment whole, identifier included (fails closed)", () => {
     const { x12, manifest } = deidentifyX12String(load("837p"), { context: ctx });
-    expect(x12).toContain("ZZZ*~"); // the unknown segment's value is cleared
-    expect(manifest.some((e) => e.locus.includes("ZZZ") && e.disposition === "blocked")).toBe(true);
+    expect(x12).not.toContain("ZZZ"); // the identifier leaves with the value
+    expect(x12).not.toContain("ZZWEIRDPHI");
+    expect(x12).toContain("~K3*~SE*29*0002~"); // SE-01 counts the segment that left
+    // Recorded at the identifier and at the value, under a withheld segment id.
+    for (const locus of ["837/<withheld>[0]-0", "837/<withheld>[0]-1"]) {
+      expect(manifest.some((e) => e.locus === locus && e.disposition === "blocked")).toBe(true);
+    }
   });
 
   it("blocks free-text message segments (MSG/III/K3/NTE) but retains their coded elements", () => {

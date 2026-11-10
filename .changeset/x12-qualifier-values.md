@@ -20,13 +20,33 @@ as a blocked manifest row at its own position:
   element past the last one a retained segment uses;
 - a free-text component: a procedure description inside a procedure composite, a 999 copy of a bad
   data element (`IK4-04`), the business unit value of a 999 context (`CTX-01-2`);
-- a segment the parser found outside every transaction set, removed whole and recorded under
-  `orphan/`, and bytes after the `IEA` that are not blank, recorded at `trailingBytes`.
+- a segment whose identifier the pass does not recognize, removed whole with its identifier, because
+  an extra segment terminator or a missing separator after the identifier puts a value there
+  (`DMG*D8~19800101*F~`, `NM1ZZMEMBER*X~`). Each value is recorded under a withheld segment id, the
+  identifier at element `0`, and the transaction set's `SE-01` is reduced by one for each segment
+  removed. This also applies to a real X12 segment the pass has no shape for, such as `PLB`;
+- a segment the parser found outside every transaction set, removed whole with its identifier and
+  recorded under `orphan/`, and bytes after the `IEA` that are not blank, recorded at `trailingBytes`.
 
 A date of the individual inside a retained segment (`PAT-06`, `INS-12`, an `HI` occurrence or
 procedure date) is now generalized like `DTP-03`, at its own component. Recognized codes, valid dates
 and amounts on well-formed input keep their output. Because every element is decided,
-`unexaminedResiduals` is always empty for X12. `X12Coord` gains two optional fields, `component` and
-`envelope`, which the applier reads to rewrite one component or an envelope segment. One visible change
-on well-formed input: a `REF-01` code on neither `REF` table, such as `ZZ`, is removed along with the
-value it routes. No option passes an unexamined value through.
+`unexaminedResiduals` is always empty for X12, and it now counts from the segment identifier.
+`X12Coord` gains three optional fields, `component`, `envelope` and `segmentRemoved`, which the applier
+reads to rewrite one component or an envelope segment, or to drop a segment. No option passes an
+unexamined value through.
+
+The code lists are checked against the 005010 TR3s for 270 / 271, 276 / 277, 278, 834, 835, 837 and
+999, with a well-formed control of each that keeps every code it carries. That adds, among others, the
+276 `AMT*T3` and 277 `BHT-06` `DG`, the 834 dates, relationships, phone qualifiers and `DMG` marital
+status, race and citizenship, the 837D `CLM-19` and oral cavity sides, and the shapes of `CL1`, `STC`,
+`UM`, `HCR`, `LS` and `LE`. The `STC` dates are generalized like a `DTP` date. New entity codes are
+classified too: the 278 utilization management organization, the 834 insurer, administrator and broker,
+and the 271 payers and vendors are kept as organizations; the 834 and 271 family members and
+representatives are removed like the individual; the plan sponsor (`P5`) and a dependent's school (`M8`)
+are removed like an employer. New `REF` qualifiers route the 271, 276 / 277 and 834 member, account and
+case numbers to removal and keep the payer, line and provider references.
+
+Visible changes on well-formed input: a `REF-01` code on neither `REF` table, such as `ZZ`, is removed
+along with the value it routes, and a segment the pass has no shape for leaves the output instead of
+staying as an empty shell, with its manifest rows under `<withheld>` rather than its segment id.

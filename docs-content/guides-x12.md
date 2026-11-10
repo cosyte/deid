@@ -66,7 +66,7 @@ implicit, so the map keys off each **segment id** plus two **qualifier classifie
 | **Free text** (`MSG-01`, `III-04`, `K3-01`, `NTE-02`)           | **fails closed**: blocked (coded siblings retained), never scrubbed by a naive pass                                |
 | **Clinical / financial** (`HI`, `SV*`, `SVC`, `AMT`, `CAS`, …)   | **retained**: diagnosis / procedure / revenue codes, amounts, quantities of their expected shape survive byte-identical |
 | **Every other position**, envelope included                     | kept only when it has the shape its position expects; any other value, and any position no rule names, **fails closed** |
-| Any **unmapped / unknown** segment                              | **fails closed**: every element blocked                                                                            |
+| Any **unmapped / unknown** segment                              | **fails closed**: removed whole, identifier included, each value recorded under a `<withheld>` segment id; `SE-01` counts it out |
 
 ## The `REF` frontier
 
@@ -109,11 +109,19 @@ rule names. The adapter decides every element it hands through, so none of those
 - **A position no rule names is removed**: `NM1-10` onward, `N1-05` onward, `REF-03` onward, and any
   element past the last one a retained segment uses. `NM1-02` keeps only `1` or `2`, so a last name
   shifted there is removed as well.
+- **A segment identifier is decided too.** The parser reads a segment's identifier as the text before
+  its first element separator, so an extra segment terminator (`DMG*D8~19800101*F~`) or a missing
+  separator (`NM1ZZMEMBER*X~`) puts a value where the identifier belongs. A segment whose identifier
+  is not one the pass recognizes is removed whole, identifier included, and each value it carried is
+  recorded at its own position under a withheld segment id (`837/<withheld>[0]-0` for the identifier).
+  The identifier is withheld even when it has the shape of one, because a two-letter last name or a
+  name suffix does. The transaction set's `SE-01` is reduced by one for each segment removed, so a
+  count that was right stays right.
 - **The envelope is decided too.** An `ISA`, `GS`, `GE`, `TA1`, `IEA`, `ST` or `SE` element of the
   wrong shape is removed (an `ISA` element becomes blanks of its own width, so the header keeps its 106
-  bytes). A segment the parser found outside every transaction set is removed whole and recorded under
-  `orphan/`, and bytes after the `IEA` that are not blank (a whole second interchange, say) are removed
-  and recorded at `trailingBytes`.
+  bytes). A segment the parser found outside every transaction set is removed whole, identifier
+  included, and recorded under `orphan/`, and bytes after the `IEA` that are not blank (a whole second
+  interchange, say) are removed and recorded at `trailingBytes`.
 
 Each removal is a blocked manifest row at its own position (`837/NM1[0]-10`, `837/HI[0]-1-4` for a
 component). Recognized codes, valid dates and amounts on well-formed input keep their output. Because
@@ -129,5 +137,8 @@ suppress it: the retention is structural, in the extractor, not a per-category p
 silent, though: every retained party emits a value-free manifest row naming the entity-identifier code
 that placed it outside the scope clause, so a reader can check the classification rather than infer it
 from an absence. Code lists cover what the HIPAA 005010 TR3s use for 837, 835, 270 / 271, 276 / 277,
-278, 999 and TA1; a real but rarer code outside them is removed and recorded, which over-removes a code
-rather than passing an unchecked value.
+278, 834, 999 and TA1, checked against a well-formed transaction set of each kind; a real but rarer code
+outside them is removed and recorded, which over-removes a code rather than passing an unchecked value.
+The same holds for a segment: one the pass has no rule or shape for is removed whole even when it is a
+real X12 segment. That includes the 835 provider adjustment and summary segments (`PLB`, `TS3`) and the
+834 segments beyond `INS` / `HD` that carry member detail (`EC`, `ICM`, `HLH`, `LUI`, `COB`, `IDC`).

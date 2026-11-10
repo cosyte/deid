@@ -52,7 +52,8 @@ describe("X12 unexamined residual positions", () => {
     expect(x12).toContain("ST*837*0002~");
     expect(x12).toContain("BHT*0019*00*REF01*20260615*0930*CH~");
     expect(x12).toContain("HL*2*1*22*0~");
-    expect(x12).toContain("SE*30*0002~GE*1*2~IEA*1*000000002~");
+    // The fixture's unknown `ZZZ*` segment is removed whole, so SE-01 counts one segment fewer.
+    expect(x12).toContain("SE*29*0002~GE*1*2~IEA*1*000000002~");
   });
 
   it("NEGATIVE CONTROL: a position kept because it has its shape carries no manifest row", () => {
