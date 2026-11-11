@@ -154,6 +154,12 @@ export function applyCcda(
       case "id":
         applyId(node, t.value);
         break;
+      case "id-root":
+        // A root the header replaced, on an element that carries it beside something else: only the
+        // root changes. A withheld value removes it.
+        if (t.value === null) node.removeAttribute("root");
+        else node.setAttribute("root", t.value);
+        break;
       case "date-value":
         if (t.value === null && isBirthTime(node)) removeValue(node);
         else if (t.value === null) node.removeAttribute("value");

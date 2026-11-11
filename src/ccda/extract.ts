@@ -64,6 +64,7 @@ export type CcdaEditKind =
   | "clear-element"
   | "clear-telecom"
   | "id"
+  | "id-root"
   | "date-value"
   | "age-value"
   | "address"
@@ -135,6 +136,12 @@ interface CcdaLocusAccumulator {
    * carries the same root gets the same replacement and the link between the two still holds.
    */
   readonly replacedRoots: Map<string, SafeHarborCategory>;
+  /**
+   * Every element whose `@root` a coordinate already writes: an extension-less `<id>` replaced, or an
+   * element blocked (which removes its root). The closing pass that replaces a replaced root wherever
+   * else it sits ({@link replaceRootsEverywhere}) leaves these alone.
+   */
+  readonly rootWritten: Set<Element>;
 }
 
 /**
@@ -149,8 +156,8 @@ interface CcdaLocusAccumulator {
  * Only the two `clear-*` edits qualify, because only they call the applier's `removeAllChildren`. The
  * others each hand something below the element through: `address` **keeps** the state / country children
  * ({@link CCDA_KEPT_ADDRESS_PARTS}) verbatim, `block` and `block-text` remove the element's own text
- * nodes and leave every child element where it was, and `id` / `date-value` / `age-value`
- * rewrite one attribute.
+ * nodes and leave every child element where it was, and `id` / `id-root` / `date-value` /
+ * `age-value` rewrite one attribute.
  */
 const EDIT_REMOVES_EVERY_CHILD_NODE: Readonly<Record<CcdaEditKind, boolean>> = {
   "clear-element": true,
@@ -159,6 +166,7 @@ const EDIT_REMOVES_EVERY_CHILD_NODE: Readonly<Record<CcdaEditKind, boolean>> = {
   block: false,
   "block-text": false,
   id: false,
+  "id-root": false,
   "date-value": false,
   "age-value": false,
 };
@@ -168,6 +176,16 @@ function push(out: CcdaLocusAccumulator, locus: GenericLocus, coord: CcdaCoord):
   out.loci.push(locus);
   out.coords.push(coord);
   if (EDIT_REMOVES_EVERY_CHILD_NODE[coord.edit]) named(out, coord.node).subtree = true;
+  if (writesRoot(coord)) out.rootWritten.add(coord.node);
+}
+
+/**
+ * `true` when the applier writes this coordinate's element's `@root`: an `id-root` edit, a `block`
+ * (which removes it), and an `id` edit on an `<id>` with no extension, whose root is its value.
+ */
+function writesRoot(coord: CcdaCoord): boolean {
+  if (coord.edit === "id-root" || coord.edit === "block") return true;
+  return coord.edit === "id" && isExtensionless(coord.node);
 }
 
 /** The named-position record for an element, created empty on first use. */
@@ -413,6 +431,40 @@ function replaceRoot(
     { path, kind: "identifier", category: settled, referencedId: true, value: root },
     { node: el, edit: "id" },
   );
+}
+
+/**
+ * Replace a root the header replaced **wherever else it sits**: on an `<id>` that carries an
+ * extension, in the header or the body, and on any other element that carries it as its `@root`. A
+ * root the header replaced was an identifier on its own, so it must not survive beside an extension
+ * either: the extension is decided as it always was (transformed in the header, kept and counted in
+ * the body), and the root takes the same replacement it took in the header, at its own position
+ * (`.../id@root`). An element whose root a coordinate already writes is left to it, and nothing below
+ * an element the applier empties is visited, because nothing below it reaches the output. Paths are composed exactly as the sweeps compose them
+ * ({@link childSegments}).
+ */
+function replaceRootsEverywhere(out: CcdaLocusAccumulator, parent: Element, path: string): void {
+  if (out.replacedRoots.size === 0) return;
+  for (const { el, path: seg } of childSegments(parent)) {
+    const childPath = join(path, seg);
+    const root = attr(el, "root");
+    const category = root === undefined ? undefined : out.replacedRoots.get(root);
+    if (root !== undefined && category !== undefined && !out.rootWritten.has(el)) {
+      nameAttributes(out, el, ["root"]);
+      push(
+        out,
+        {
+          path: `${childPath}@root`,
+          kind: "identifier",
+          category,
+          referencedId: true,
+          value: root,
+        },
+        { node: el, edit: "id-root" },
+      );
+    }
+    if (out.named.get(el)?.subtree !== true) replaceRootsEverywhere(out, el, childPath);
+  }
 }
 
 /**
@@ -751,6 +803,7 @@ export function extractCcdaLoci(root: Element): CcdaExtraction {
     coords: [],
     named: new Map<Element, NamedPositions>(),
     replacedRoots: new Map<string, SafeHarborCategory>(),
+    rootWritten: new Set<Element>(),
   };
   // The body is walked after the header, so every root the header replaces is known when the body
   // meets the same root. CDA puts the body last anyway; this holds for a document that does not.
@@ -782,6 +835,8 @@ export function extractCcdaLoci(root: Element): CcdaExtraction {
     sweep(out, el, path);
   }
   for (const { el, path } of bodies) handleBody(out, el, path);
+  // Last, once every root the header replaced is known: the same root anywhere else is replaced too.
+  replaceRootsEverywhere(out, root, "");
 
   const residuals = new UnexaminedResidualBuilder();
   const rootName = safeLocusToken(root.localName ?? "", "xmlName");

@@ -481,7 +481,7 @@ ${header}
     expect(rows).toContain(`setId ${D.DEID_IDENTIFIER_SUBSTITUTED}`);
   });
 
-  it("an id with nothing to replace, or with an extension, is left as it was", () => {
+  it("an id with nothing to replace is left as it was; a replaced root is replaced beside an extension", () => {
     const header = "2.16.840.1.113883.19.5.99.3";
     const r = deidentifyCcda(
       parseCcda(
@@ -499,10 +499,15 @@ ${header}
     expect(out).toContain(`<id nullFlavor="NI"/>`);
     expect(out).toContain(`<setId root="2.16.840.1.113883.19.5.99.4" extension="ZZSET1"/>`);
     expect(residuals).toContain("setId@extension");
-    // The body: the header's root behind an extension is the assigning authority, kept and counted.
-    expect(out).toContain(`<id root="${header}" extension="ZZENTRY1"/>`);
-    expect(residuals).toContain(
+    // The body: the root the header replaced is the same identifier beside an extension, so it takes
+    // the header's replacement there too. The extension, a clinical record id, is kept and counted.
+    expect(out).not.toContain(header);
+    expect(out).toContain(`<id root="2.25.1" extension="ZZENTRY1"/>`);
+    expect(residuals).not.toContain(
       "component/structuredBody/component/section/entry/observation/id[0]@root",
+    );
+    expect(residuals).toContain(
+      "component/structuredBody/component/section/entry/observation/id[0]@extension",
     );
     expect(out).toContain(`<id nullFlavor="NA"/>`);
   });

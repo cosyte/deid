@@ -40,8 +40,13 @@ const ctx = createDeidContext({ key: "leak-property-ccda-synthetic-key", patient
 /** Where a fragment goes. */
 type Slot = "doc" | "patientRole" | "patient" | "name" | "addr" | "entry";
 
-/** One fragment template: its slot and its XML around the sentinel `S`. */
-type Template = readonly [Slot, (s: string) => string];
+/**
+ * One fragment template: its slot and its XML around the sentinel `S`, and optionally a second
+ * fragment with the same sentinel in another slot (an identifier named in two places).
+ */
+type Template =
+  | readonly [Slot, (s: string) => string]
+  | readonly [Slot, (s: string) => string, Slot, (s: string) => string];
 
 const TEMPLATES: Readonly<Record<string, readonly Template[]>> = {
   "plain-for-composite": [
@@ -78,6 +83,15 @@ const TEMPLATES: Readonly<Record<string, readonly Template[]>> = {
     ["patientRole", (s) => `<id root="${s}"/>`],
     ["patientRole", (s) => `<id root="${s}" extension=""/>`],
     ["doc", (s) => `<setId root="${s}"/>`],
+    // A root replaced in the header is the same identifier beside an extension: it is replaced there
+    // too, in the header, on the document's own id, and in the clinical body.
+    ["patientRole", (s) => `<id root="${s}" extension="ZZEXTA"/><id root="${s}"/>`],
+    [
+      "doc",
+      (s) => `<id root="${s}" extension="ZZEXTB"/>`,
+      "patientRole",
+      (s) => `<id root="${s}"/>`,
+    ],
     ["entry", (s) => `<code code="${s}" codeSystem="2.16.840.1.113883.6.1"/>`],
     ["entry", (s) => `<value xsi:type="CD" code="${s}" codeSystem="2.16.840.1.113883.6.96"/>`],
     ["entry", (s) => `<statusCode code="${s}"/>`],
@@ -111,6 +125,12 @@ const TEMPLATES: Readonly<Record<string, readonly Template[]>> = {
     ["entry", (s) => `<text>see ${s}</text>`],
     // A record id in the body: handed through and counted, unless the header replaced the same root.
     ["entry", (s) => `<author><assignedAuthor><id root="${s}"/></assignedAuthor></author>`],
+    [
+      "entry",
+      (s) => `<id root="${s}" extension="ZZEXTC"/>`,
+      "patientRole",
+      (s) => `<id root="${s}"/>`,
+    ],
   ],
 };
 
@@ -146,8 +166,10 @@ export function build(value: {
   value.placements.forEach((p, i) => {
     const sentinel = sentinelAt(value.stem, i);
     const list = TEMPLATES[p.shape] ?? [];
-    const [slot, xml] = list[p.pick % list.length] as Template;
+    const [slot, xml, otherSlot, otherXml] = list[p.pick % list.length] as Template;
     slots[slot].push(xml(sentinel));
+    if (otherSlot !== undefined && otherXml !== undefined)
+      slots[otherSlot].push(otherXml(sentinel));
     placed.push({ sentinel, shape: p.shape, where: `${slot}#${String(p.pick % list.length)}` });
   });
   const addr =
@@ -364,5 +386,32 @@ ${envelope}
     const outcome = pass(raw);
     expect(sweep(placed, outcome, undefined, CCDA_PINS)).toEqual([]);
     expect(outcome.output).not.toContain(sentinel);
+  });
+});
+
+/**
+ * A root the header replaced, also carried beside an extension (in the header, on the document's own
+ * id, in the clinical body), put through the same sweep and pins as a generated case. The pin on a
+ * patient-role root beside an extension never accepts it, because the same sentinel sits on an id with
+ * no extension, and it is gone from the output. Before the change the root beside the extension was
+ * kept, so the sweep reported it.
+ */
+describe("the C-CDA pins never accept a header-replaced root kept beside an extension", () => {
+  it.each([
+    ["qualifier-or-code", 8],
+    ["qualifier-or-code", 9],
+    ["nested", 7],
+  ] as const)("%s template %i", (shape, pick) => {
+    const { raw, placed } = build({
+      stem: "ZQLKROOT",
+      withAddress: false,
+      placements: [{ shape, pick }],
+    });
+    const [first] = placed;
+    if (first === undefined) throw new Error("no placement");
+    expect(raw.split(first.sentinel).length).toBeGreaterThan(2);
+    const outcome = pass(raw);
+    expect(sweep(placed, outcome, undefined, CCDA_PINS)).toEqual([]);
+    expect(outcome.output).not.toContain(first.sentinel);
   });
 });

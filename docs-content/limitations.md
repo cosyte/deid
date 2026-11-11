@@ -345,8 +345,9 @@ in the output as it arrived:
   referral and classification numbers listed below, none of them counted;
 - a C-CDA header code and display name and the assigning-authority root of an `<id>` that has an
   extension, not counted, and the document's own `id` and `setId` when they have an extension,
-  counted;
-- a C-CDA clinical body `<id>`, counted, unless its root is one the header replaced;
+  counted, each unless its root is one the header replaced;
+- a C-CDA clinical body `<id>`, counted, except that a root the header replaced is replaced there,
+  with an extension or without, and only the extension is kept and counted;
 - a FHIR person resource's `language` that is a two-letter code on the list, written in small letters
   (`li`, `bo` and `ng` are languages, and as surnames written that way they are kept);
 - an NCPDP Telecom other payer id of five or six digits.
@@ -367,7 +368,11 @@ needs any of them gone must remove it after the pass.
   no trace type code (`TRN-01`) loses everything after it instead. The originating company id and its
   supplemental code (`TRN-03`, `TRN-04`) are kept when each is one value of printable text of the
   element's length; a value holding the component or the repetition separator is no single value and
-  is removed, here and at every position kept as a bounded run of printable text. A procedure code (`SV1-01`, `SV2-02`, `SV3-01`) is kept when it has the shape its qualifier
+  is removed, here and at every position kept as a bounded run of printable text. The repetition
+  separator is `ISA-11` from version 00402 on. Before it (`ISA-12` of `00401` or earlier), `ISA-11` is
+  the standards identifier `U` and the interchange has no repetition separator, so a `U` in a value is
+  a letter and no reason to remove it. Where `ISA-12` cannot be read as a version, or `ISA-11` is a
+  punctuation character, `ISA-11` is still read as the separator. A procedure code (`SV1-01`, `SV2-02`, `SV3-01`) is kept when it has the shape its qualifier
   gives it, which for a qualifier with no published code shape is 1 to 48 letters and digits. And a
   party whose role keeps it (a provider, a service location) keeps its name and identifier elements as
   they arrived, a repetition inside its identifier included.
@@ -395,11 +400,17 @@ needs any of them gone must remove it after the pass.
   no extension, or an empty one, is identified by its root alone, so the root is **replaced**: in the
   header, and in the document's own `id` and `setId`, by a stand-in in the root's shape (an OID under
   `2.25`, a UUID, or a plain token), the same one for the same root throughout the document, so a
-  `setId` that repeats the `id`, or an author named in two places, still match. A clinical body
-  `<id>` with that same root gets the same stand-in; any other body `<id>` is a clinical record's own
-  id and is kept and counted, as the body always was. The document `id` and `setId` with an extension
-  are kept and counted too. Before this, a header `<id>` with no extension was removed, which cut its
-  links, and the document `id` and `setId` were kept and counted.
+  `setId` that repeats the `id`, or an author named in two places, still match. A root the header
+  replaced is replaced on every element that carries it as its `@root`, with an extension or
+  without: a header `<id>`, the document's own `id` and `setId`, and a clinical body `<id>` take the
+  same stand-in, and an extension beside it is decided as before (transformed in the header, kept and
+  counted in the body and on the document's own ids). Any other body `<id>` is a clinical record's own
+  id and is kept and counted, as the body always was; the document `id` and `setId` with an extension
+  and a root the header did not replace are kept and counted too. What this does not reach: a root the
+  header replaced that also appears inside another attribute (an `@extension`, a `reference/@value`)
+  or in narrative text is not found there, and a root that only body `<id>`s carry, with no extension,
+  is kept and counted rather than replaced. Before this, a header `<id>` with no extension was
+  removed, which cut its links, and the same root beside an extension was kept.
 - **FHIR:** a person resource's `language` is kept only as a language tag in canonical form whose
   primary subtag is one of the 184 two-letter ISO 639-1 codes the library lists: the code in small
   letters, then optionally a four-letter script (`Hant`) and a region (`US`, `419`). A short name such
@@ -534,6 +545,33 @@ sits, and inside an `Address` by the address reduction.
 Still not named, and so handed through and counted as unexamined residuals: `NK1-26` (the associated
 party's mother's maiden name) and `NK1-38` (its birth place). Any other field of a mapped segment that
 the maps do not list is handed through the same way.
+
+## A keyed surrogate in a field shorter than 64 characters
+
+A keyed surrogate (`pseudonymize`, `hash`) is 64 characters of lowercase hex. The X12 adapter bounds
+every position it writes a value into by the maximum length of its data element, and the engine cuts
+a surrogate to that length, 4 bits for each character kept
+([the X12 guide](./guides-x12.md#a-keyed-surrogate-fits-its-field) lists each field, the bits kept and
+the collision bound). What that leaves:
+
+- **Linking is by prefix across fields of different lengths.** The same value under the same key gets
+  the same surrogate in every field of one length; in a shorter field it gets the first characters of
+  it. A member id in `NM1-09` (64 characters kept) and in `REF-02` (50) matches on its first 50
+  characters, not on the whole value, and so does an X12 surrogate against the one another adapter
+  writes for the same value.
+- **A field shorter than 20 characters (80 bits) gets no surrogate.** The value is removed and
+  recorded as blocked. In X12 that is a person's name that has a prefix or a suffix (`NM1-06`,
+  `NM1-07`, 10 characters), a postal code (`N4-03`, 15), and every date, whose declared format fixes a
+  length of 17 or fewer. A caller who needs those linked cannot link them through the X12 output.
+- **A group whose `GS-08` does not name 005010 or later takes the 004010 maxima**, the shorter of the
+  two, so a 005010 group with an unreadable version gets a 30-character `REF-02` surrogate where 50
+  would fit.
+- **The other adapters set no bound.** The HL7 v2, C-CDA, FHIR, NCPDP Telecom and DICOM adapters do
+  not declare a maximum length on any position, so the engine writes the whole surrogate there (or the
+  UUID or OID form of a referenced identifier), whatever the field allows. A caller who validates field
+  lengths in those formats must check them after the pass.
+
+A caller building loci by hand bounds a position with `GenericLocus.maxLength`; the same rule applies.
 
 <a id="policy-profiles"></a>
 

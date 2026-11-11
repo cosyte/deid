@@ -73,15 +73,21 @@ export function keyedInShape(digest: string, id: string): string {
  * @internal
  */
 export class ReferencedIdStandIns {
-  /** Identifier to stand-in, for this call only. */
-  private readonly assigned = new Map<string, string>();
+  /** Identifier to its sequence number, for this call only. */
+  private readonly assigned = new Map<string, number>();
 
-  /** The stand-in for `id`: the one already assigned, or the next sequence number in `id`'s shape. */
-  public standIn(id: string): string {
-    const existing = this.assigned.get(id);
-    if (existing !== undefined) return existing;
-    const next = sequenceInShape(this.assigned.size + 1, shapeOf(id));
-    this.assigned.set(id, next);
-    return next;
+  /**
+   * The stand-in for `id`: the sequence number already assigned to it, or the next one, written in
+   * `id`'s shape. When `max` is given and the shaped stand-in is longer, the bare sequence number is
+   * written instead, so the same identifier keeps the same number wherever it appears.
+   */
+  public standIn(id: string, max?: number): string {
+    let n = this.assigned.get(id);
+    if (n === undefined) {
+      n = this.assigned.size + 1;
+      this.assigned.set(id, n);
+    }
+    const shaped = sequenceInShape(n, shapeOf(id));
+    return max === undefined || shaped.length <= max ? shaped : String(n);
   }
 }
