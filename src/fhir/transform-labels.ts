@@ -26,11 +26,7 @@ import {
   type FhirProperty,
 } from "@cosyte/fhir";
 
-import {
-  FHIR_ELEMENT_ALIASES,
-  FHIR_REQUIRED_CHOICES,
-  FHIR_REQUIRED_ELEMENTS,
-} from "./generated/required-elements.js";
+import { FHIR_ELEMENT_ALIASES, FHIR_REQUIRED_ELEMENTS } from "./generated/required-elements.js";
 
 /**
  * The `meta.security` coding the FHIR adapter writes, under `transformLabels`, on every resource the
@@ -97,17 +93,14 @@ export function childElementPath(parent: string, name: string): string {
 }
 
 /**
- * `true` when R4 requires the element `name` under the definition path `parent` and its type is one
- * the pass can remove: the element itself, or a required choice element (`content[x]`) whose name the
- * property starts with (`contentString`).
+ * `true` when R4 requires the element at the definition path `path` (from {@link childElementPath})
+ * and its type is one the pass can remove. A choice element is listed under each concrete name
+ * (`contentString`).
  *
  * @internal
  */
-export function isRequiredElement(parent: string, name: string): boolean {
-  return (
-    FHIR_REQUIRED_ELEMENTS.has(childElementPath(parent, name)) ||
-    FHIR_REQUIRED_CHOICES.get(parent)?.some((base) => name.startsWith(base)) === true
-  );
+export function isRequiredElement(path: string): boolean {
+  return FHIR_REQUIRED_ELEMENTS.has(path);
 }
 
 /**
@@ -125,17 +118,22 @@ export function absentPlaceholder(removed: FhirNode): FhirNode {
   return isList(removed) ? list([item]) : item;
 }
 
-/** The text of a primitive property of a complex, or `undefined`. */
-function textOf(node: FhirNode, name: string): unknown {
-  const value = isComplex(node) ? getProperty(node, name) : undefined;
-  return value !== undefined && isPrimitive(value) ? value.value : undefined;
+/**
+ * The value of a property of a complex: a primitive's value, and `undefined` for a node of any other
+ * kind, which carries none.
+ */
+function valueOf(node: FhirNode, name: string): unknown {
+  const value: { readonly kind: string; readonly value?: unknown } | undefined = isComplex(node)
+    ? getProperty(node, name)
+    : undefined;
+  return value?.value;
 }
 
 /** `true` when a coding already carries the label's system and code. */
 function isTheLabel(node: FhirNode): boolean {
   return (
-    textOf(node, "system") === FHIR_TRANSFORMED_SECURITY_LABEL.system &&
-    textOf(node, "code") === FHIR_TRANSFORMED_SECURITY_LABEL.code
+    valueOf(node, "system") === FHIR_TRANSFORMED_SECURITY_LABEL.system &&
+    valueOf(node, "code") === FHIR_TRANSFORMED_SECURITY_LABEL.code
   );
 }
 
