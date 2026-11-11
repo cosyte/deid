@@ -267,7 +267,7 @@ describe("the meta.security label", () => {
         name: "extension",
         value: list([
           complex([
-            { name: "resourceType", value: primitive(7) },
+            { name: "resourceType", value: primitive(true) },
             { name: "name", value: name },
           ]),
           complex([{ name: "resourceType", value: complex([]) }]),
