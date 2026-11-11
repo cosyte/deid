@@ -53,7 +53,7 @@ function rebuildSegment(seg: TelecomSegment, edits: SegmentEdits): TelecomSegmen
  * const tx = parseTelecom(raw);
  * const { loci, coords } = extractTelecomLoci(tx);
  * const { document } = deidentify({ loci }, { context });
- * const clean = applyTelecom(tx, document.loci, coords); // de-identified Telecom text
+ * const clean = applyTelecom(tx, document.loci, coords); // transformed Telecom text
  * ```
  */
 export function applyTelecom(

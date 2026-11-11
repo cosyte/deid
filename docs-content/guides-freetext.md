@@ -2,7 +2,7 @@
 id: guides-freetext
 title: Redact free text with your own detector
 sidebar_label: Free text
-description: "Free text is blocked by default; bring your own redactor to transform it, and see what the library does and does not guarantee."
+description: "Free text is blocked by default; bring your own redactor to transform it, and see what the library does and does not check."
 ---
 
 # Redact free text with your own detector
@@ -73,7 +73,7 @@ The manifest records a BYO-redacted locus with the `byo-redact` transform and th
 `DEID_FREETEXT_CONSUMER_REDACTED` disposition code, so the audit shows plainly that the free text was
 cleared by a **consumer-supplied** redactor, not by the library.
 
-## The fail-closed contract (what the library guarantees)
+## The fail-closed contract (what the library enforces)
 
 Whatever redactor you plug in, the engine still fails **closed** on any failure: a redactor is never
 allowed to leak free text through:
@@ -99,7 +99,7 @@ result.document.loci[0]?.value; // => null
 result.manifest[0]?.code === DEID_DISPOSITION_CODES.DEID_FREETEXT_BLOCKED; // => true
 ```
 
-## The honesty boundary (what the library does NOT guarantee)
+## The honesty boundary (what the library does not check)
 
 When your redactor returns `{ text }`, the engine trusts it as **consumer-asserted**. It does **not**
 re-scan the returned prose for residual PHI, and it does **not** treat a redactor's "no findings"

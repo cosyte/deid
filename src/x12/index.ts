@@ -75,7 +75,7 @@ import { extractX12Loci } from "./extract.js";
  *
  * const ix = parseX12(raw);
  * const result: X12DeidResult = deidentifyX12(ix, { context: createDeidContext({ key: process.env.DEID_KEY! }) });
- * result.x12;      // de-identified X12 text
+ * result.x12;      // transformed X12 text
  * result.manifest; // value-free audit: category + locus, never a value
  * ```
  */

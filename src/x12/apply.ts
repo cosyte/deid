@@ -137,7 +137,7 @@ function recordEdit(edits: SegmentEdits, coord: X12Coord, value: string): void {
  * const ix = parseX12(raw);
  * const { loci, coords } = extractX12Loci(ix);
  * const { document } = deidentify({ loci }, { context });
- * const clean = applyX12(ix, document.loci, coords); // de-identified X12 text
+ * const clean = applyX12(ix, document.loci, coords); // transformed X12 text
  * ```
  */
 export function applyX12(

@@ -41,7 +41,8 @@
       "esbuild@>=0.27.3 <0.28.2": "0.28.2",
       "js-yaml@>=4.0.0 <4.3.2": "4.3.2",
       "js-yaml@>=3.0.0 <3.15.2": "3.15.2",
-      "minimatch@>=10.0.0 <11.0.1": "11.0.1"
+      "minimatch@>=10.0.0 <11.0.1": "11.0.1",
+      "typedoc>minimatch": "10.2.6"
     }
   },
   "main": "./dist/index.cjs",
@@ -173,6 +174,8 @@
     "check:claude-card": "cosyte-claude-card",
     "check:catalog": "cosyte-catalog",
     "check:process": "cosyte-process check",
+    "check:docs-content": "cosyte-docs-content",
+    "check:docs-reference": "cosyte-docs-reference --check",
     "lint": "cosyte-process lint",
     "lint:fix": "cosyte-process lint --fix",
     "format": "cosyte-process format",
@@ -195,9 +198,10 @@
     "examples": "tsx scripts/run-examples.ts",
     "clean": "rm -rf dist coverage",
     "pack:docs": "cosyte-process pack-docs",
+    "docs:reference": "cosyte-docs-reference",
     "smoke": "node scripts/smoke.mjs",
     "attw": "cosyte-attw",
-    "version": "changeset version && node scripts/sync-version.mjs && cosyte-process format",
+    "version": "changeset version && node scripts/sync-version.mjs && cosyte-docs-reference && cosyte-process format",
     "release": "changeset publish",
     "prepublishOnly": "pnpm clean && pnpm typecheck && pnpm lint && pnpm test && pnpm build && pnpm attw",
     "prepare": "command -v simple-git-hooks >/dev/null 2>&1 && simple-git-hooks 1>&2 || true"
@@ -216,8 +220,8 @@
     "@cosyte/hl7": "^0.1.12",
     "@cosyte/ncpdp": "^0.1.7",
     "@cosyte/prettier-config": "^0.1.2",
-    "@cosyte/process": "^0.1.7",
-    "@cosyte/script-utils": "^0.1.11",
+    "@cosyte/process": "^0.1.8",
+    "@cosyte/script-utils": "^0.1.12",
     "@cosyte/test-utils": "^0.1.5",
     "@cosyte/tsconfig": "^0.1.2",
     "@cosyte/tsup-config": "^0.1.3",

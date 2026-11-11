@@ -10,7 +10,7 @@ description: "Run an NCPDP Telecom transaction through the Safe Harbor policy, r
 The `@cosyte/deid/ncpdp` adapter is the NCPDP **Telecommunication (vD.0)** binding of the
 de-identification core. It locates PHI **structurally** in a parsed Telecom transaction (a value is the
 patient's last name because it sits in field `311-CB`, never because a string "looked like" a name),
-applies the configured policy, and returns the de-identified Telecom byte stream plus the core's
+applies the configured policy, and returns the transformed Telecom byte stream plus the core's
 **value-free manifest**.
 
 > **`@cosyte/ncpdp` is an optional peer dependency.** Install it alongside `@cosyte/deid` to use this
@@ -89,7 +89,7 @@ routing code from a short name, so it is blocked and recorded whatever it holds.
 ## NCPDP SCRIPT is refused
 
 NCPDP **SCRIPT** (ePrescribing XML) de-identification is **not** shipped in this release. The
-`@cosyte/ncpdp` SCRIPT surface cannot be de-identified faithfully through its public API:
+`@cosyte/ncpdp` SCRIPT surface cannot be transformed faithfully through its public API:
 `serializeScript` emits only the **modeled** fields (a `parse → serialize` round-trip drops any unmodeled
 XML element), and the SCRIPT `Patient` model has **no address, phone, or patient-id** field. A partial
 pass would silently drop content and leave unmodeled patient identifiers unhandled: a false-safety

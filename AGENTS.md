@@ -43,8 +43,18 @@ pnpm check:readme
 pnpm check:claude-card
 pnpm check:catalog
 pnpm check:process
+pnpm check:docs-content
+pnpm check:docs-reference
 pnpm test:perf
 ```
+
+`pnpm check:docs-content` holds `docs-content/` to the docs-content standard: the sidebar, each page's
+front matter, the required pages, and every link into the reference. The API reference in
+`docs-content/api/` is generated from the TSDoc comments of every entry point in `exports`, and
+`pnpm check:docs-reference` fails when the committed pages differ from a fresh generation or an
+export has no TSDoc summary. After changing a public export or its comment, run
+`pnpm docs:reference` and commit the pages. The `version` script regenerates them, since they
+print `VERSION`.
 
 A change that reaches the published package adds a changeset (`pnpm changeset`).
 

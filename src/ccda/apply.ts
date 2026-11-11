@@ -126,7 +126,7 @@ function applyBlock(el: Element): void {
  * const { loci, coords } = extractCcdaLoci(dom.documentElement);
  * const { document } = deidentify({ loci }, { context });
  * applyCcda(document.loci, coords);
- * // dom now serializes to spec-clean, de-identified C-CDA XML.
+ * // dom now serializes to spec-clean, transformed C-CDA XML.
  * ```
  */
 export function applyCcda(
