@@ -80,3 +80,5 @@ The value is removed, and the manifest records the category and the locus, never
 - [How the library works](./concepts-archetype.md): the policy engine, the transforms, and fail-closed.
 - [Known limitations and honesty](./limitations.md): read it before you rely on the library for
   anything that leaves your control.
+- [What the caller still owns](./what-the-caller-still-owns.md): the duties that stay with you
+  before you release output, and what each adapter does not cover.

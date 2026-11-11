@@ -210,6 +210,9 @@ date is empty but which holds a value in a later component or subcomponent is bl
 The honesty line is unchanged: the output is **"Safe-Harbor-transformed per the configured policy,"**
 never "de-identified" and never "HIPAA-compliant."
 
+[What the caller still owns](./what-the-caller-still-owns.md) lists the duties that stay with you
+before you release the output, with a table of what this adapter does not cover.
+
 ## Reference
 
 - [`deidentifyHl7`](./api/@cosyte/deid/hl7.md#deidentifyhl7) and

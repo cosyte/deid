@@ -164,14 +164,17 @@ Three scoping notes, because each is easy to over-read:
 - Narrative is **block-only**: there is no built-in NLP scrub.
 - Within the **retained** clinical body, entry-level service **dates** (`effectiveTime`), entry **ids**,
   in-entry **performer** names, and **family-history** relative demographics are **not**
-  de-identified: exactly mirroring the HL7 v2 adapter's retained-clinical-segment boundary. Forgetting one fails
-  **safe** (retained in a coded entry), never leaked, because the leak surface for this release is the
-  header and the narrative.
+  de-identified: exactly mirroring the HL7 v2 adapter's retained-clinical-segment boundary. They are
+  passed through and counted on `unexaminedResiduals`. A `<birthTime>` in the body, a relative's in a
+  family history included, is the exception: it is reduced to its year like the header's.
 - The document `id` / `code` / `title` envelope is retained (like HL7's MSH). The address generalization
   keeps state and country (permitted) and the safe 3-digit ZIP, dropping every finer component.
 
 The honesty line is unchanged: the output is **"Safe-Harbor-transformed per the configured policy,"**
 never "de-identified" and never "HIPAA-compliant."
+
+[What the caller still owns](./what-the-caller-still-owns.md) lists the duties that stay with you
+before you release the output, with a table of what this adapter does not cover.
 
 ## Reference
 
