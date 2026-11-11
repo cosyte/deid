@@ -11,6 +11,7 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import * as hl7 from "@cosyte/hl7";
+import type * as Hl7Module from "@cosyte/hl7";
 import { Hl7Message } from "@cosyte/hl7";
 
 import { createDeidContext, profileOptions, SAFE_HARBOR_PROFILE } from "../../src/index.js";
@@ -18,7 +19,7 @@ import { deidentifyHl7, deidentifyHl7String } from "../../src/hl7/index.js";
 import { hl7Message } from "../../bench/shapes.mjs";
 
 vi.mock("@cosyte/hl7", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@cosyte/hl7")>();
+  const actual = await importOriginal<typeof Hl7Module>();
   return { ...actual, parseHL7: vi.fn(actual.parseHL7) };
 });
 

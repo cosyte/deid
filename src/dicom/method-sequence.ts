@@ -26,11 +26,12 @@
 
 import { Buffer } from "node:buffer";
 
-import { Dataset, Element, Item, parseDicom, readCode, serializeDicom } from "@cosyte/dicom";
+import { Dataset, Element, Item, parseDicom, readCode } from "@cosyte/dicom";
 
 import { DeidError, FATAL_CODES } from "../codes.js";
 
 import type { DicomCodedTerm } from "./method-codes.js";
+import { writeDicom } from "./pixel-data.js";
 
 /** De-identification Method Code Sequence. Not in Table E.1-1, so no Annex E rule acts on it. */
 export const TAG_DEIDENTIFICATION_METHOD_CODE_SEQUENCE = "00120064";
@@ -311,17 +312,26 @@ function failUnverifiableDeclaration(): never {
  * term whose meaning came back altered, a sequence that will not re-parse at all, a dataset that cannot
  * be serialized because it carries no transfer syntax - fails the pass.
  *
+ * The bytes read are written once, with the Pixel Data value copied at most once (`./pixel-data.ts`);
+ * when the caller wants only the dataset, the value is not copied at all and the check reads the bytes
+ * in front of it, where the declaration is.
+ *
  * @param dataset - The de-identified dataset carrying the attached `(0012,0064)`.
  * @param terms - The terms the run declared, in the order they were written.
- * @returns The verified Part 10 bytes.
+ * @param whole - `true` when the caller returns the bytes, so the whole file is written and read.
+ * @returns The verified Part 10 bytes: the whole file when `whole` is `true`.
  * @throws {@link DeidError} `DEID_OUTPUT_INVALID` when the declaration does not read back unchanged.
  * @internal
  */
-export function serializeVerified(dataset: Dataset, terms: readonly DicomCodedTerm[]): Buffer {
+export function serializeVerified(
+  dataset: Dataset,
+  terms: readonly DicomCodedTerm[],
+  whole: boolean,
+): Buffer {
   let bytes: Buffer;
   let items: readonly Item[];
   try {
-    bytes = serializeDicom(dataset);
+    bytes = writeDicom(dataset, whole);
     items = parseDicom(bytes).get(TAG_DEIDENTIFICATION_METHOD_CODE_SEQUENCE)?.items ?? [];
   } catch (err) {
     if (err instanceof DeidError) throw err;
