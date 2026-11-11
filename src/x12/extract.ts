@@ -244,7 +244,7 @@ function name(pos: SegPos, elements: readonly number[]): void {
 function push(out: X12LocusAccumulator, pos: SegPos, locus: GenericLocus, coord: X12Coord): void {
   out.loci.push(locus);
   out.coords.push(coord);
-  name(pos,coord.elements);
+  name(pos, coord.elements);
 }
 
 /**
@@ -271,7 +271,7 @@ function blockElement(
   pos: SegPos,
   element: number,
 ): void {
-  name(pos,[element]);
+  name(pos, [element]);
   if (!has(seg, element)) return;
   push(
     out,
@@ -332,7 +332,7 @@ function emitRule(
   pos: SegPos,
   rule: X12ElementRule,
 ): void {
-  name(pos,[rule.element]);
+  name(pos, [rule.element]);
   if (!has(seg, rule.element)) return;
   if (rule.mode === "block") {
     blockElement(out, seg, pos, rule.element);
@@ -369,7 +369,7 @@ function emitId(
   element: number,
   category: SafeHarborCategory | undefined,
 ): void {
-  name(pos,[element]);
+  name(pos, [element]);
   if (!has(seg, element)) return;
   if (category === undefined) {
     blockElement(out, seg, pos, element); // unknown identifier qualifier → fail closed
@@ -397,7 +397,7 @@ function keepCodeOrBlock(
   pos: SegPos,
   element: number,
 ): void {
-  name(pos,[element]);
+  name(pos, [element]);
   if (!has(seg, element)) return;
   if (isRecognizedX12Code(pos.segId, element, el(seg, element))) return;
   blockElement(out, seg, pos, element);
@@ -433,7 +433,7 @@ function emitRetainedParty(
 ): void {
   // The party-role test named the role code AND the identity elements it decided to leave in place, so
   // none of them is an unexamined residual: they were retained under a rule, not passed over in silence.
-  name(pos,[1, ...identityElements]);
+  name(pos, [1, ...identityElements]);
   if (!identityElements.some((n) => has(seg, n))) return;
   push(
     out,
@@ -464,7 +464,7 @@ function handleNm1(out: X12LocusAccumulator, seg: X12Segment, pos: SegPos): void
 
   // Name components NM1-03..07. A subject entity redacts (category NAMES); an unknown entity fails
   // closed (blocked): an unrecognized entity could be the patient, so its name is never passed through.
-  name(pos,[3, 4, 5, 6, 7]);
+  name(pos, [3, 4, 5, 6, 7]);
   const nameElements = [3, 4, 5, 6, 7].filter((n) => has(seg, n));
   if (nameElements.length > 0) {
     push(
@@ -523,7 +523,7 @@ function handleRef(out: X12LocusAccumulator, seg: X12Segment, pos: SegPos): void
   // The qualifier routes REF-02 only when it passed the exact check; anything else routes as unknown.
   const disposition = classifyRefQualifier(trustedCode(seg, "REF", 1));
   if (disposition.kind === "retain") {
-    name(pos,[2]); // recognized administrative / provider reference
+    name(pos, [2]); // recognized administrative / provider reference
     return;
   }
   // An unknown qualifier fails closed (category R); a patient identifier is routed to its category.
@@ -575,7 +575,7 @@ function handleFreeTextSegment(
   pos: SegPos,
   elements: readonly number[],
 ): void {
-  name(pos,elements);
+  name(pos, elements);
   for (const n of elements) {
     if (!has(seg, n)) continue;
     push(
@@ -601,7 +601,7 @@ function handleFreeTextSegment(
  */
 function removeSegment(out: X12LocusAccumulator, seg: SegmentElements, pos: SegPos): void {
   for (let n = 0; n < seg.elements.length; n += 1) {
-    name(pos,[n]);
+    name(pos, [n]);
     if (!has(seg, n)) continue;
     push(
       out,
@@ -739,7 +739,7 @@ function decideComposite(
     blockElement(out, seg, pos, element);
     return;
   }
-  name(pos,[element]);
+  name(pos, [element]);
   for (const { component, date } of judgment.decisions) {
     // `component` is a 1-based index of a component the judgment read out of `components`.
     const value = components[component - 1] as string;
@@ -799,7 +799,7 @@ function decideByShape(
   }
   const ctx: X12ShapeContext = { ...out.delimiters, elements: seg.elements };
   if (shape.kind === "keep") {
-    if (shape.test(el(seg, element), ctx)) name(pos,[element]);
+    if (shape.test(el(seg, element), ctx)) name(pos, [element]);
     else blockElement(out, seg, pos, element);
     return;
   }
@@ -828,7 +828,7 @@ function closeSegment(
     removeSegment(out, seg, pos);
     return;
   }
-  name(pos,[0]);
+  name(pos, [0]);
   // A position the set's TR3 requires, or one a qualifier implies, left empty while a later one holds a
   // value, or a required, qualifier, code or date position whose value fails its shape: every value
   // after it was shifted by an extra or a missing separator. A number shape cannot tell a shifted date

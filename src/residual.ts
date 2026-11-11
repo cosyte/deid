@@ -125,10 +125,12 @@ export class UnexaminedResidualBuilder {
       return;
     }
     // A record a previous build froze has been handed out: count on a copy, never under its holder.
-    if (Object.isFrozen(existing)) this.entries.set(key, { ...existing, count: existing.count + 1 });
+    if (Object.isFrozen(existing))
+      this.entries.set(key, { ...existing, count: existing.count + 1 });
     else existing.count += 1;
   }
 
+  /** How many positions have been recorded so far, counts included. A measured number, never an estimate. */
   public get total(): number {
     let total = 0;
     for (const entry of this.entries.values()) total += entry.count;
