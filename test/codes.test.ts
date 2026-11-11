@@ -51,6 +51,11 @@ describe("code surface stability", () => {
   // changed name or meaning, and in particular `DEID_RESIDUAL_RETAINED` still means a residual of a
   // value the pass EXAMINED. The new code is its opposite, a position no locus rule reached, and it
   // exists precisely so the two can never be read as the same fact.
+  //
+  // `DEID_IDENTIFIER_SUBSTITUTED` is an ADDITION too: no existing code changed name or meaning. It
+  // records a referenced identifier whose value was withheld and a per-call stand-in written in its
+  // place, which no existing code described: the value is gone, as under `DEID_CATEGORY_REMOVED`, but
+  // something not derived from it stands at the position.
   it("disposition codes are stable", () => {
     expect(sortedCodeSet(DEID_DISPOSITION_CODES)).toMatchInlineSnapshot(`
       [
@@ -61,6 +66,7 @@ describe("code surface stability", () => {
         "DEID_CATEGORY_REMOVED",
         "DEID_FREETEXT_BLOCKED",
         "DEID_FREETEXT_CONSUMER_REDACTED",
+        "DEID_IDENTIFIER_SUBSTITUTED",
         "DEID_LOCUS_BLOCKED",
         "DEID_PARTY_ROLE_RETAINED",
         "DEID_POSITION_UNEXAMINED",

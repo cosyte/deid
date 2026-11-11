@@ -22,6 +22,8 @@
  * - `age`: the `value` of an age `Quantity` is kept exactly as it arrived when the pass kept the age,
  *   and dropped otherwise (an age over 89, an age it could not read, or a surrogate a custom policy
  *   computed, which a number cannot hold).
+ * - `reference`: a literal carrying a logical id is rebuilt as the structure around the id followed by
+ *   the replacement, with any `/_history/vid` suffix dropped; a `null` result drops it.
  *
  * **Primitive-extension guard.** A FHIR primitive can carry an `extension` (the JSON `_`-sibling) that
  * holds PHI (`_birthDate.extension[…]`). The structural walk does not descend that side-channel, so the
@@ -49,6 +51,7 @@ import {
 import type { LocusKind, TransformedLocus } from "../locus.js";
 import { FHIR_KEPT_ADDRESS_PARTS } from "./locus-map.js";
 import { primitiveString, type FhirCoord, type FhirEditKind } from "./extract.js";
+import { readFhirLiteral } from "./reference.js";
 
 /** Sentinel returned by {@link rebuildNode} when a node is removed (dropped from its parent). @internal */
 const REMOVE = Symbol("deid.fhir.remove");
@@ -122,7 +125,27 @@ function applyEdit(node: FhirNode, edit: Edit): Rebuilt {
       return isPrimitive(node) && edit.value !== null && edit.value === primitiveString(node)
         ? primitive(node.value)
         : REMOVE;
+    case "reference":
+      return rebuildLiteral(node, edit.value);
   }
+}
+
+/**
+ * Rebuild a literal whose id was replaced: the structure the extractor kept (the `#`, the resource
+ * type, the `urn:` scheme or the server base) in front of the replacement, and no version suffix. The
+ * literal is read again with the same reader the extractor used, so the two cannot disagree about
+ * which part is the id. A `null` replacement drops the literal.
+ */
+function rebuildLiteral(node: FhirNode, value: string | null): Rebuilt {
+  if (value === null) return REMOVE;
+  // The extractor names only a primitive the same reader read as an id, so neither guard below ever
+  // holds; they are kept so a coordinate that did not come from the extractor drops rather than writes.
+  /* v8 ignore if -- the extractor's reference coordinate always names a primitive */
+  if (!isPrimitive(node)) return REMOVE;
+  const literal = readFhirLiteral(primitiveString(node), true);
+  /* v8 ignore if -- the same reader read this same string as an id when the extractor named it */
+  if (literal?.kind !== "id") return REMOVE;
+  return primitive(`${literal.prefix}${value}`);
 }
 
 /** Rebuild any node: apply its edit if the map named it, else structurally reconstruct its children. */

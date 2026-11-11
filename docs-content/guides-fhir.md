@@ -45,8 +45,8 @@ const json = JSON.stringify({
 const { resource } = parseResource(json);
 const { document, manifest } = deidentifyFhir(resource);
 
-serializeResource(document); // => '{"resourceType":"Patient","id":"example","identifier":[{"system":"urn:oid:2.16.840.1.113883.19.5"}],"gender":"female","birthDate":"1985","address":[{"state":"MA","postalCode":"902"}]}'
-manifest.map((entry) => entry.locus); // => ["Patient.identifier.value", "Patient.name", "Patient.telecom", "Patient.birthDate", "Patient.address"]
+serializeResource(document); // => '{"resourceType":"Patient","id":"1","identifier":[{"system":"urn:oid:2.16.840.1.113883.19.5"}],"gender":"female","birthDate":"1985","address":[{"state":"MA","postalCode":"902"}]}'
+manifest.map((entry) => entry.locus); // => ["Patient.id", "Patient.identifier.value", "Patient.name", "Patient.telecom", "Patient.birthDate", "Patient.address"]
 ```
 
 A convenience wrapper parses, de-identifies, and re-serializes in one call:
@@ -87,8 +87,9 @@ of the residuals below.
 | **Person resources**: `Patient` / `RelatedPerson` / `Practitioner` / `Person` (+ nested `Patient.contact`, a relative) | `name`, `telecom`, `photo`, `address`, `birthDate`, `deceasedDateTime` | name/telecom/photo **removed**; `address` → safe **3-digit ZIP** (or `000` for a restricted prefix), finer geography dropped; dates → **year**, and a `birthDate` whose year shows an age over 89 is **removed** |
 | **Every resource, by datatype** | any `HumanName`, any `Address`: `Organization.contact.name`, `Location.address`, `Organization.address`, a choice-type `locationAddress` | name **removed**; address → the same safe **3-digit ZIP** (or `000`), finer geography dropped, that a person resource's address gets |
 | **Every resource (the universal PHI vectors)** | `identifier`, PHI-bearing dates, narrative `text.div`, `extension` / `modifierExtension` values, `Reference.display` | identifier **removed** under Safe Harbor, `system` retained (a consistent keyed surrogate by `system` only under a preset that does not claim the label); dates → **year**; narrative div / extension values / reference labels **blocked** |
+| **Every resource's logical id** | the resource `id`; the id in a `Bundle.entry.fullUrl`, a `Reference.reference`, a `Bundle.entry.request.url` and a `Bundle.entry.response.location` | **replaced**, the same id by the same value throughout the call so every reference still resolves: a per-call stand-in under Safe Harbor, a keyed surrogate under a keyed policy (see [Resource ids and references](#resource-ids-and-references)) |
 | **Contained resources and `Bundle` entries** | each nested resource | **walked**: the resource role is re-derived at every `resourceType`, so a contained `RelatedPerson` or a Bundled `Patient` is de-identified too |
-| **Clinical resources**: `Observation`, `Condition`, `Encounter`, … | codes, values, units, statuses, reference ranges, reference wiring | **retained untouched** (the over-scrub guard) |
+| **Clinical resources**: `Observation`, `Condition`, `Encounter`, … | codes, values, units, statuses, reference ranges, reference wiring | **retained untouched** (the over-scrub guard); the wiring keeps every link, with the ids in it replaced |
 
 Positive classification is **closed**, and that is the over-scrub guard: an element is a `HumanName`
 only when every property it carries is one FHIR R4 defines on `HumanName`, **and** at least one of them
@@ -120,6 +121,81 @@ it sits, so a date in an unexpected element is caught too. A bare four-digit yea
 except at `birthDate`, where it is the very year the age rule reads: a year-only `birthDate` is
 located and recorded like a full one, and removed when it shows an age over 89; a clinical code that merely looks date-ish (`2951-2`, `1234-56`) is
 not mistaken for a date, so it survives.
+
+## Resource ids and references
+
+A FHIR server gives every resource a logical `id`, and the id of a `Patient` is often the medical record
+number itself. So every resource's `id` (a `Bundle` entry's resource and a contained resource
+included) is replaced, and so is the id part of every literal that names one: a `Bundle.entry.fullUrl`,
+a `Reference.reference`, a `Bundle.entry.request.url` and a `Bundle.entry.response.location`. Each is
+recorded at its own position under the medical record number category, and the same id gets the same
+replacement everywhere in one call, so every reference still resolves to the resource it named.
+
+What replaces it depends on the configured transform for that category:
+
+- **`redact` or `block` (the Safe Harbor default):** a **stand-in**, the sequence number of the id
+  among the distinct ids met in the call, counted from 1 in document order. It is not computed from the
+  id, so two documents that differ only in their ids come out identical, and it means nothing outside
+  the call. A UUID is replaced by a UUID (`00000000-0000-4000-8000-` and the number in twelve hex
+  digits) and an OID by an OID under `2.25`, so a `urn:uuid:` or `urn:oid:` stays valid. The manifest
+  code is `DEID_IDENTIFIER_SUBSTITUTED` and the entry is not flagged as a re-identification code. No
+  key is needed.
+- **`pseudonymize` or `hash` (the limited data set preset pseudonymizes):** the **keyed surrogate**.
+  For an id that is neither a UUID nor an OID it is exactly what `registry.pseudonym(id)` returns under
+  `pseudonymize`; a UUID becomes the first 128 bits of the same digest laid out as a version 8 UUID,
+  and an OID those 128 bits as a decimal under `2.25`. The same key gives the same surrogate in every
+  call, so a corpus links. The entry is flagged `reidentificationCode` and lands in the support
+  report's keyed-surrogate inventory: Expert-Determination territory, not Safe Harbor.
+- **Any other transform:** the id is removed, and every literal carrying it with it.
+
+```ts runnable
+import { deidentifyFhirJson } from "@cosyte/deid/fhir";
+
+const input = JSON.stringify({
+  resourceType: "Bundle",
+  type: "collection",
+  entry: [
+    { fullUrl: "urn:uuid:zz-entry-1", resource: { resourceType: "Patient", id: "zz-mrn-123" } },
+    {
+      resource: {
+        resourceType: "Observation",
+        status: "final",
+        code: { text: "ZZ test" },
+        subject: { reference: "Patient/zz-mrn-123" },
+      },
+    },
+  ],
+});
+
+const { json, manifest } = deidentifyFhirJson(input);
+const out = JSON.parse(json);
+
+out.entry[0].fullUrl; // => "urn:uuid:1"
+out.entry[0].resource.id; // => "2"
+out.entry[1].resource.subject.reference; // => "Patient/2"
+manifest.map((entry) => entry.code); // => ["DEID_IDENTIFIER_SUBSTITUTED", "DEID_IDENTIFIER_SUBSTITUTED", "DEID_IDENTIFIER_SUBSTITUTED"]
+```
+
+The structure around an id is kept: the `#` of a contained reference, the resource type, the
+`urn:uuid:` or `urn:oid:` scheme, and the server base of an absolute URL. A `/_history/vid` version
+suffix is dropped, so a version-specific reference becomes a reference to the same resource. `#` alone
+(a reference to the containing resource) and a resource type alone in a request url (a create) carry
+no id and are kept.
+
+What the pass cannot read is **removed** and recorded as blocked (the (R) catch-all), never kept:
+
+- a literal whose resource type is not one of the 148 codes of the R4 `resource-types` code system, a
+  search or conditional url (`Patient?identifier=...`), a relative, absolute or `#` id outside the R4
+  `id` alphabet (a `urn:uuid:` or `urn:oid:` tail is replaced whatever it holds), a scheme
+  other than `http`, `https`, `urn:uuid:` and `urn:oid:`, an empty string, and a value that is not a
+  string (a number, an object);
+- an **absolute reference to another server**: one whose base is not the base of a `fullUrl` in the
+  same input. It cannot resolve inside the document, so a single resource carrying an absolute
+  reference loses it too;
+- a resource `id` held as an object or a list.
+
+A removed reference leaves the rest of its `Reference` in place (its `type`, its `identifier` under
+the identifier rule), and an empty one as `{}`.
 
 ## Fail closed
 
@@ -190,16 +266,21 @@ not mistaken for a date, so it survives.
   extension that could carry PHI is blocked, never passed through in the clear.
 - **No over-scrub.** Clinical resources (observation and medication codes, values, units, result
   statuses, reference ranges, coded displays) are retained, and reference **wiring**
-  (`Reference.reference` pointers) is preserved, so intra-document linkage survives whichever
-  transform the configured policy applies to an identifier.
+  (`Reference.reference` pointers) is preserved with the ids in it replaced, so intra-document linkage
+  survives under a policy that withholds, pseudonymizes or hashes the medical record number category.
 
 ## Known limitations (this release)
 
 - Extension values are **block-only**: there is no profile-aware retention, so a `us-core-*`
   demographic extension is dropped rather than kept.
-- Reference **wiring** and resource logical `id`s are preserved structurally; coordinated
-  pseudonymization of resource ids across a corpus (so the same patient links across documents) is
-  **not** performed.
+- Resource ids are replaced, but **not every place an id can be written is read**. The server base of a
+  `fullUrl`, and of an absolute reference to that server, is kept verbatim: it names the server, and
+  a base that carries anything else carries it out. An id written anywhere else is passed through and
+  counted as an unexamined position: `meta.versionId`, `meta.source`, `Bundle.link.url` (a search
+  link), an `Attachment.url`, any other uri, and an element's own `id`.
+- Under the Safe Harbor default the stand-ins are **per call**: the same resource de-identified in two
+  calls gets two unrelated ids, and a reference from one call's output does not resolve in another's.
+  Linkage across documents needs a keyed policy, which does not claim Safe Harbor.
 - Free-text **prose** loci (`note`, `contentString`, uncoded `valueString`) fail closed by default; a
   semantic (NLP) narrative scrub and `contentAttachment` binary content remain out of scope.
 - Three surfaces are still not reached because FHIR types no person at the position: a

@@ -118,6 +118,24 @@ export interface GenericLocus {
    * adapters set it on the ages they locate; a caller building loci by hand sets it on its own.
    */
   readonly ageUnit?: string;
+  /**
+   * `true` when the value is an identifier **other positions of the same document point at**: a FHIR
+   * resource's logical `id`, or the id part of a `fullUrl` or a reference to one. Removing it would cut
+   * every link to it, so the engine writes a replacement instead, the same one for the same value
+   * throughout the call:
+   *
+   * - under `redact` or `block` (the Safe Harbor default for its category), a **stand-in**: a sequence
+   *   number counted from 1 in the order the distinct values are first met in the call, never computed
+   *   from the value, recorded as `DEID_IDENTIFIER_SUBSTITUTED`;
+   * - under `pseudonymize` or `hash`, the **keyed surrogate** that transform computes, recorded as it
+   *   always is and flagged `reidentificationCode`.
+   *
+   * Either replacement keeps the value's shape: a UUID becomes a UUID, an OID an OID under `2.25`, and
+   * anything else a plain token. Under any other transform the locus is blocked. Absent (the default)
+   * the locus takes its policy transform exactly as before. The FHIR adapter sets it; a caller building
+   * loci by hand sets it on its own.
+   */
+  readonly referencedId?: boolean;
   /** The value at the locus. Consumed by the engine, never copied into the manifest. */
   readonly value: string;
 }

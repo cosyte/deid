@@ -26,6 +26,16 @@
  *   coverage does not depend on it. **Inside** a person resource the demographic map above decides, so
  *   the sweep adds nothing there and a name or an address at a person-resource property the map does
  *   not list is a residual, stated below.
+ * - **Every resource's logical id, and every literal that names one:** the resource `id`, and the id
+ *   part of a `Bundle.entry.fullUrl`, a `Reference.reference`, a `Bundle.entry.request.url` and a
+ *   `Bundle.entry.response.location`, recorded as medical record numbers. The same id gets the same
+ *   replacement throughout one call, so every reference still resolves. Under a policy that withholds
+ *   that category (Safe Harbor) the replacement is a per-call sequence number not derived from the id
+ *   (`DEID_IDENTIFIER_SUBSTITUTED`); under `pseudonymize` or `hash` it is the keyed surrogate, so
+ *   documents keyed alike link; under any other transform the id is removed. The structure around an
+ *   id is kept (`#`, the resource type, the `urn:uuid:` / `urn:oid:` scheme, a server base one of the
+ *   input's own `fullUrl`s names) and a `/_history/` version suffix is dropped. A literal the pass cannot
+ *   read, and an absolute reference to a server no `fullUrl` in the input names, is removed.
  * - **Contained resources and `Bundle` entries** are walked, re-deriving each resource's role at its own
  *   `resourceType`; **clinical resources** (`Observation`, `Condition`, …) are otherwise **retained
  *   untouched** (the over-scrub guard): their codes, values, units, and statuses survive byte-identical.
@@ -53,8 +63,12 @@
  *
  * **Known limitations.** Extension values are block-only (no profile-aware retention, a
  * `us-core-*` demographic extension is dropped, not kept).
- * Reference **wiring** (`Reference.reference` pointers and resource logical `id`s) is preserved
- * structurally; coordinated pseudonymization of resource ids across a corpus is **not** performed here.
+ * Resource ids are replaced and the reference wiring is kept, with what that does not reach stated:
+ * the server base of a `fullUrl`, and of an absolute reference to it, is kept verbatim; and an id
+ * written anywhere else (`meta.versionId`, `meta.source`, `Bundle.link.url`, an `Attachment.url`, any
+ * other uri, and an element's own `id`) is passed through and counted as unexamined. Under the Safe
+ * Harbor default the stand-ins are per call, so the same resource de-identified in two calls gets two
+ * unrelated ids; linkage across calls needs a keyed policy, which does not claim Safe Harbor.
  * Structured free-text elements inside clinical resources (`Observation.valueString`, `Annotation.text`)
  * are retained (the over-scrub guard): narrative free-text de-id is separately scoped (the BYO
  * redaction interface); only the rendered narrative `text.div` is blocked here.

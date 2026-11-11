@@ -293,6 +293,24 @@ Two things follow, and the second is the one that surprises people:
   five are passed through, and all five are counted as unexamined residual positions like anything
   else no rule names.
 
+<a id="fhir-resource-ids"></a>
+
+- **FHIR resource ids are replaced; what that does not reach.** Every resource's logical `id` and the
+  id in every `Bundle.entry.fullUrl`, `Reference.reference`, `Bundle.entry.request.url` and
+  `Bundle.entry.response.location` is replaced by the same value throughout one call, recorded as a
+  medical record number, so every reference still resolves (see
+  [the FHIR guide](./guides-fhir.md#resource-ids-and-references)). A literal the pass cannot read,
+  and an absolute reference to a server no `fullUrl` in the input names, is removed. Four things are
+  not covered. The **server base** of an absolute `fullUrl`, and of an absolute reference to that same
+  server, is kept verbatim: it names the server, and a base that carries anything else carries it out.
+  An **id written anywhere else** is passed through and counted as an unexamined position:
+  `meta.versionId`, `meta.source`, a `Bundle.link.url` (a search link can carry a query on an
+  identifier), an `Attachment.url`, any other uri, url or canonical, and an element's own `id`. Under
+  the Safe Harbor default the stand-ins are **per call**, so the same resource de-identified in two
+  calls gets two unrelated ids and one call's references do not resolve in another call's output;
+  linkage across calls needs a keyed policy, which does not claim Safe Harbor. And a removed
+  reference leaves the rest of its `Reference` in place, an empty one as `{}`.
+
 Vendor-proprietary loci absent from public specs are deferred, **not invented**: a quirk is encoded
 only when a real de-identified document grounds it.
 
@@ -423,7 +441,9 @@ the maps do not list is handed through the same way.
   year, and an encounter or order number is blocked. It emits **no keyed surrogate**: the medical
   record, health plan beneficiary, and account numbers are **removed**, because a surrogate derived
   from the individual's own value is not a §164.514(c)(1) code and the (R) exception does not reach
-  it. It therefore **needs no key at all**.
+  it. A FHIR resource id, recorded as a medical record number, is removed the same way, and a per-call
+  sequence number is written in its place so the references to it still resolve: it is computed from
+  the order the ids are met, never from the id. It therefore **needs no key at all**.
 - **`LIMITED_DATA_SET_PROFILE`**: a **research / longitudinal** preset that **date-shifts** dates
   (interval-preserving) rather than generalizing them, and that keeps a **consistent keyed surrogate**
   for the medical record, health plan beneficiary, and account numbers so cross-document linkage
@@ -434,7 +454,9 @@ the maps do not list is handed through the same way.
   dataset, **not** a certified de-identification, and **not**, on its own, a HIPAA §164.514(e) Limited
   Data Set. Disclosing an actual Limited Data Set additionally requires a **Data Use Agreement**, which
   is the consumer's responsibility. Every keyed surrogate it emits is flagged `reidentificationCode`
-  in the manifest and listed in the support report's keyed-surrogate residual inventory.
+  in the manifest and listed in the support report's keyed-surrogate residual inventory. That
+  includes every FHIR resource id and the ids in the literals that name one, which it pseudonymizes as
+  medical record numbers so a corpus keyed alike links.
 
   It also **keeps unchanged** the three classes §164.514(e)(2) permits and Safe Harbor does not: the
   **encounter dates** (admission / discharge / service / diagnosis), the **encounter and order

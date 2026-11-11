@@ -353,6 +353,13 @@ A `Reference.display` (a person label) is blocked; a `Coding.display` (a coded t
 retained: the two are told apart structurally. Contained resources and `Bundle` entries are walked, with
 each resource's role re-derived at its own `resourceType`.
 
+**Resource ids are replaced and the wiring kept.** Every resource's logical `id`, and the id in every
+`Bundle.entry.fullUrl`, `Reference.reference`, request url and response location, is replaced by the
+same value wherever it appears in one call, so every reference still resolves. Under Safe Harbor the
+replacement is a per-call sequence number not derived from the id; under a keyed policy it is the keyed
+surrogate, so a corpus links. A literal the pass cannot read, and an absolute reference to a server no
+`fullUrl` in the input names, is removed. See the FHIR guide for the forms and what is kept.
+
 **Why the datatype and not the resource type.** Which resource carries a person's name is a choice the
 producing system made: the same home address arrives at `Patient.address` from one sender and at
 `Location.address` from a home-health sender. A rule keyed on the enclosing resource therefore hands you
@@ -410,8 +417,10 @@ positions on purpose; the residual it leaves is stated below.
 
 **Known limitations (this release).** Extension values are block-only (no profile-aware retention, a
 `us-core-*` demographic extension is dropped). Reference
-_wiring_ (`Reference.reference` pointers, resource logical `id`s) is preserved structurally; coordinated
-pseudonymization of resource ids across a corpus is **not** performed. Free-text **prose** loci
+_wiring_ is kept with the resource ids in it replaced, but the server base of a `fullUrl` (and of an
+absolute reference to it) is kept verbatim, and an id written anywhere else (`meta.versionId`,
+`meta.source`, `Bundle.link.url`, an `Attachment.url`, an element's own `id`) is passed through and
+counted as unexamined. Free-text **prose** loci
 (`note`, `contentString`, uncoded `valueString`) fail closed by default, or run through an opt-in BYO
 redactor (see [Free text](#free-text-block-by-default--byo-redaction)); a **built-in** semantic (NLP)
 narrative scrub and `contentAttachment` binary content remain out of scope for this release.

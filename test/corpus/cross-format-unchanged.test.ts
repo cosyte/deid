@@ -118,12 +118,16 @@ describe("every adapter emits the same transformed document, byte for byte", () 
   // a real 005010 code (element 128, mutually defined), so it keeps its place, and the value it routes
   // is removed as before. The control below puts the segment back and requires the pin from before it,
   // so nothing else moved.
+  //
+  // THE FHIR DIGEST MOVED ONCE, DELIBERATELY. Every resource id, fullUrl and reference id is replaced
+  // by a per-call stand-in, so the FHIR document changes at exactly those positions. The other five
+  // adapters' digests are unmoved.
   it("the six adapters' transformed documents are unchanged", () => {
     expect(transformedDocumentDigests()).toMatchInlineSnapshot(`
       {
         "ccda": "152ba0fce5feff3fa707d6c25c868ee9",
         "dicom": "2b394aad0215ba5dff5c19cf18c49802",
-        "fhir": "a9237473c3c96a54b5ad915ad10afe34",
+        "fhir": "9fc5255a8e8ac924da7090e2c56bcf0f",
         "hl7": "b0e71b72dd6f4078c43d1d7b767ef843",
         "hl7-encounter": "7aef4fa7fa7ed2ffd1ce4c05158e4773",
         "ncpdp": "e8a8259ce46ed5764268f2c0a51dbfc5",
@@ -181,7 +185,7 @@ describe("every adapter emits the same transformed document, byte for byte", () 
     expect(wire).not.toContain("ZZLOCSTREET");
     expect(manifest.map((m) => m.locus)).toContain("Bundle.entry[6].resource.contact[0].name");
     expect(manifest.map((m) => m.locus)).toContain("Bundle.entry[7].resource.address");
-    expect(digest(wire)).not.toBe("a9237473c3c96a54b5ad915ad10afe34");
+    expect(digest(wire)).not.toBe("9fc5255a8e8ac924da7090e2c56bcf0f");
   });
 
   it("and the FHIR document, manifest and residual inventory are unchanged with them taken back out", () => {
@@ -191,7 +195,7 @@ describe("every adapter emits the same transformed document, byte for byte", () 
     const { document, manifest, unexaminedResiduals } = deidentifyFhir(resource, options());
 
     // The pinned digest above, reached from a graph the widened walk has just been through.
-    expect(digest(serializeResource(document))).toBe("a9237473c3c96a54b5ad915ad10afe34");
+    expect(digest(serializeResource(document))).toBe("9fc5255a8e8ac924da7090e2c56bcf0f");
     // The manifest, contents and order both: the same list the `FHIR` case below pins.
     expect(order(manifest)).toEqual(
       order(deidentifyFhir(parseResource(FIX("fhir", "bundle.json")).resource, options()).manifest),
@@ -200,13 +204,16 @@ describe("every adapter emits the same transformed document, byte for byte", () 
     // measured-and-empty rather than as a pass that measured nothing, so the inventory is pinned by
     // its total and by a digest of its (locus, count) pairs, both captured from the pass as it stood
     // before the sweep widened.
-    expect(unexaminedResiduals.reduce((sum, r) => sum + r.count, 0)).toBe(51);
+    // Re-captured when the logical ids began to be replaced. The fixture carries seventeen id, fullUrl
+    // and reference positions; thirteen were in this inventory and left it for the manifest. The other
+    // four, the ids of the four person resources, were kept by name and never counted here.
+    expect(unexaminedResiduals.reduce((sum, r) => sum + r.count, 0)).toBe(38);
     expect(
       createHash("sha256")
         .update(JSON.stringify(unexaminedResiduals.map((r) => [r.locus, r.count])), "utf8")
         .digest("hex")
         .slice(0, 32),
-    ).toBe("7d75d422c369f12b3c5875996c705564");
+    ).toBe("916d2425dc853e4e8ea1bb6732d15281");
   });
 
   /**
@@ -370,11 +377,16 @@ describe("the other five adapters produce the same manifests, in the same order"
     `);
   });
 
+  // The FHIR rows gained the logical ids on purpose: every resource id, every fullUrl and every
+  // reference that names one is replaced by a stand-in and recorded at its own position. Every row that
+  // was here before is still here, in the same order relative to the others.
   it("FHIR", () => {
     const { resource } = parseResource(FIX("fhir", "bundle.json"));
     const { manifest } = deidentifyFhir(resource, options());
     expect(order(manifest)).toMatchInlineSnapshot(`
       [
+        "Bundle.entry[0].fullUrl",
+        "Bundle.entry[0].resource.id",
         "Bundle.entry[0].resource.text.div",
         "Bundle.entry[0].resource.identifier[0].value",
         "Bundle.entry[0].resource.identifier[1].value",
@@ -390,23 +402,38 @@ describe("the other five adapters produce the same manifests, in the same order"
         "Bundle.entry[0].resource.extension[0].valueString",
         "Bundle.entry[0].resource.extension[1].extension[0].valueString",
         "Bundle.entry[0].resource.vendorMotherMaidenName",
+        "Bundle.entry[1].fullUrl",
+        "Bundle.entry[1].resource.id",
         "Bundle.entry[1].resource.identifier.value",
         "Bundle.entry[1].resource.name",
         "Bundle.entry[1].resource.telecom",
         "Bundle.entry[1].resource.address",
+        "Bundle.entry[2].fullUrl",
+        "Bundle.entry[2].resource.id",
+        "Bundle.entry[2].resource.patient.reference",
         "Bundle.entry[2].resource.name",
         "Bundle.entry[2].resource.telecom",
         "Bundle.entry[2].resource.birthDate",
+        "Bundle.entry[3].fullUrl",
+        "Bundle.entry[3].resource.id",
+        "Bundle.entry[3].resource.subject.reference",
         "Bundle.entry[3].resource.subject.display",
+        "Bundle.entry[3].resource.performer[0].reference",
         "Bundle.entry[3].resource.performer[1].display",
         "Bundle.entry[3].resource.effectiveDateTime",
         "Bundle.entry[3].resource.issued",
         "Bundle.entry[3].resource.identifier.value",
         "Bundle.entry[3].resource.note",
+        "Bundle.entry[4].fullUrl",
+        "Bundle.entry[4].resource.id",
         "Bundle.entry[4].resource.subject.display",
         "Bundle.entry[4].resource.payload[0].contentString",
+        "Bundle.entry[5].fullUrl",
+        "Bundle.entry[5].resource.id",
+        "Bundle.entry[5].resource.subject.reference",
         "Bundle.entry[5].resource.period.start",
         "Bundle.entry[5].resource.period.end",
+        "Bundle.entry[5].resource.contained[0].id",
         "Bundle.entry[5].resource.contained[0].name",
         "Bundle.entry[5].resource.contained[0].telecom",
       ]

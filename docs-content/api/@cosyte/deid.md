@@ -1292,6 +1292,26 @@ retained, so this marker can never become a route for passing an identifier thro
 
 The format-neutral path to the value. Recorded in the manifest; **never** a value.
 
+##### referencedId?
+
+> `readonly` `optional` **referencedId?**: `boolean`
+
+`true` when the value is an identifier **other positions of the same document point at**: a FHIR
+resource's logical `id`, or the id part of a `fullUrl` or a reference to one. Removing it would cut
+every link to it, so the engine writes a replacement instead, the same one for the same value
+throughout the call:
+
+- under `redact` or `block` (the Safe Harbor default for its category), a **stand-in**: a sequence
+  number counted from 1 in the order the distinct values are first met in the call, never computed
+  from the value, recorded as `DEID_IDENTIFIER_SUBSTITUTED`;
+- under `pseudonymize` or `hash`, the **keyed surrogate** that transform computes, recorded as it
+  always is and flagged `reidentificationCode`.
+
+Either replacement keeps the value's shape: a UUID becomes a UUID, an OID an OID under `2.25`, and
+anything else a plain token. Under any other transform the locus is blocked. Absent (the default)
+the locus takes its policy transform exactly as before. The FHIR adapter sets it; a caller building
+loci by hand sets it on its own.
+
 ##### retainedPart?
 
 > `readonly` `optional` **retainedPart?**: [`RetainedLocusPart`](#retainedlocuspart)
@@ -2021,6 +2041,19 @@ redactor at free-text loci and records the outcome here. This code is **consumer
 library guarantee**: "no findings" from a BYO redactor is not an attestation, and a redactor's
 completeness is the consumer's responsibility (Expert-Determination territory). The
 structural PHI removal the format adapters perform is unaffected: this covers only the free *prose*.
+
+##### DEID\_IDENTIFIER\_SUBSTITUTED
+
+> `readonly` **DEID\_IDENTIFIER\_SUBSTITUTED**: `"DEID_IDENTIFIER_SUBSTITUTED"` = `"DEID_IDENTIFIER_SUBSTITUTED"`
+
+An identifier that other positions of the same document point at (a FHIR resource's logical `id`,
+the id part of a `fullUrl` or of a reference) was **removed and a stand-in written in its place**,
+because the configured transform for its category withholds the value (`redact` or `block`). The
+stand-in is a sequence number counted from 1 in the order the distinct identifiers are first met in
+one call, written in the identifier's shape (a UUID, an OID, or a plain token). It is not computed
+from the identifier; the same identifier gets the same stand-in throughout the call, so every link
+still resolves, and it means nothing outside that call. It is not a keyed surrogate, so the entry's
+`reidentificationCode` is `false`. The disposition-code set is additions-only.
 
 ##### DEID\_LOCUS\_BLOCKED
 

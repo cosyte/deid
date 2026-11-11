@@ -27,6 +27,7 @@ import type { DeidDocument, GenericLocus, TransformedLocus } from "./locus.js";
 import { ManifestBuilder, type DeidManifestEntry, type DeidResult } from "./manifest.js";
 import { resolvePolicy, type DeidPolicy, type TransformName } from "./policy.js";
 import type { FreeTextRedactor } from "./redactor.js";
+import { keyedInShape, ReferencedIdStandIns } from "./referenced-id.js";
 import {
   assertRetentionContract,
   isRetainableCategory,
@@ -252,6 +253,61 @@ function keptAge(
   };
 }
 
+/**
+ * The outcome for a **referenced identifier** (a locus marked `referencedId`).
+ *
+ * - `redact` and `block` withhold the value. Removing it would cut every link to it, so a **stand-in**
+ *   is written instead: the call's next sequence number, the same one for the same value throughout
+ *   the call ({@link ReferencedIdStandIns}). It is not computed from the value, so it is not a keyed
+ *   surrogate and the label contract has nothing to refuse.
+ * - `pseudonymize` and `hash` write the keyed surrogate they always compute, laid out in the value's
+ *   shape, and record it exactly as they record any other.
+ * - Every other transform **blocks** it. None of them is a way to replace an identifier, and one of
+ *   them, `date-shift`, would write a shifted value derived from an id that happens to look like a
+ *   date, so the ordinary transform is never run here.
+ */
+function referencedIdOutcome(
+  transform: TransformName,
+  locus: GenericLocus,
+  category: SafeHarborCategory,
+  context: DeidContext | undefined,
+  standIns: ReferencedIdStandIns,
+): LocusOutcome {
+  if (transform === "redact" || transform === "block") {
+    return {
+      value: standIns.standIn(locus.value),
+      disposition: "transformed",
+      manifest: {
+        category,
+        transform,
+        locus: locus.path,
+        disposition: "transformed",
+        code: DEID_DISPOSITION_CODES.DEID_IDENTIFIER_SUBSTITUTED,
+      },
+    };
+  }
+  if (transform === "pseudonymize" || transform === "hash") {
+    const ctx = requireContext(context, transform);
+    const digest =
+      transform === "pseudonymize" ? pseudonymize(locus.value, ctx) : keyedHash(locus.value, ctx);
+    return {
+      value: keyedInShape(digest, locus.value),
+      disposition: "transformed",
+      manifest: {
+        category,
+        transform,
+        locus: locus.path,
+        disposition: "transformed",
+        code:
+          transform === "pseudonymize"
+            ? DEID_DISPOSITION_CODES.DEID_CATEGORY_PSEUDONYMIZED
+            : DEID_DISPOSITION_CODES.DEID_CATEGORY_HASHED,
+      },
+    };
+  }
+  return blocked(locus.path, category, DEID_DISPOSITION_CODES.DEID_LOCUS_BLOCKED);
+}
+
 /** Apply a policy transform to a classified, non-free-text locus. */
 function applyTransform(
   transform: TransformName,
@@ -420,6 +476,7 @@ function handleLocus(
   redactor: FreeTextRedactor | undefined,
   retainedLoci: readonly RetainedLocusClass[] | undefined,
   referenceYear: number,
+  standIns: ReferencedIdStandIns,
 ): LocusOutcome {
   // Over-scrub guard: a clinical value is not an identifier, retain it untouched.
   if (locus.kind === "clinical") {
@@ -482,13 +539,14 @@ function handleLocus(
       return retainedResidual(locus, locus.category);
     }
   }
-  return applyTransform(
-    policy.transforms[locus.category],
-    locus,
-    locus.category,
-    context,
-    referenceYear,
-  );
+  const transform = policy.transforms[locus.category];
+  // A referenced identifier is replaced rather than removed, so the links to it still resolve. It is
+  // reached only after every fail-closed guard above, so an unclassified or unrecognized locus is
+  // blocked however an adapter marked it.
+  if (locus.referencedId === true) {
+    return referencedIdOutcome(transform, locus, locus.category, context, standIns);
+  }
+  return applyTransform(transform, locus, locus.category, context, referenceYear);
 }
 
 /**
@@ -536,6 +594,9 @@ export function deidentify(
   // used: it is earlier than the call in every ordinary case, so it would understate the age the
   // person has when the output is released.
   const referenceYear = new Date().getUTCFullYear();
+  // The stand-ins of this call alone: created here and dropped when the call returns, so the mapping
+  // from an identifier to its stand-in is never returned, kept or logged.
+  const standIns = new ReferencedIdStandIns();
 
   for (const locus of inputLoci) {
     const outcome = handleLocus(
@@ -545,6 +606,7 @@ export function deidentify(
       options.redactor,
       options.retainedLoci,
       referenceYear,
+      standIns,
     );
     loci.push(
       Object.freeze({
