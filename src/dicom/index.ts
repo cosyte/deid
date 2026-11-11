@@ -87,13 +87,16 @@ import { resolveUidReferentialIntegrity } from "./uid-scope.js";
  * forgive, because a stale entry in one would hide a real attribute rather than a self-signature.
  *
  * The bytes are returned alongside the result so {@link deidentifyDicomBuffer} does not serialize a
- * second time: the buffer entry point hands back exactly the bytes the verification read.
+ * second time: the buffer entry point hands back exactly the bytes the verification read. With `whole`
+ * false (the dataset entry point, which returns no bytes) they are the bytes in front of the Pixel Data
+ * value, so the value is never copied for a check that does not read it.
  *
  * @internal
  */
 function runDicomPass(
   dataset: Dataset,
   options: DicomDeidOptions,
+  whole: boolean,
 ): { readonly result: DicomDeidResult; readonly bytes: Buffer } {
   const resolved = resolveDicomOptions(options);
   // Resolved before anything is delegated: a profile or option the vocabulary cannot name refuses the
@@ -109,7 +112,7 @@ function runDicomPass(
   });
 
   const result = attachMethodCodeSequence(deidentified, declaration.appliedTerms);
-  const bytes = serializeVerified(result, declaration.appliedTerms);
+  const bytes = serializeVerified(result, declaration.appliedTerms, whole);
 
   const warnings: readonly DicomDeidWarning[] = Object.freeze([
     ...foldWarnings(report.warnings),
@@ -182,7 +185,7 @@ function runDicomPass(
  * ```
  */
 export function deidentifyDicom(dataset: Dataset, options: DicomDeidOptions = {}): DicomDeidResult {
-  return runDicomPass(dataset, options).result;
+  return runDicomPass(dataset, options, false).result;
 }
 
 /**
@@ -208,7 +211,7 @@ export function deidentifyDicomBuffer(
   bytes: Buffer | Uint8Array | ArrayBuffer,
   options: DicomDeidOptions = {},
 ): DicomBufferDeidResult {
-  const { result, bytes: serialized } = runDicomPass(parseDicom(bytes), options);
+  const { result, bytes: serialized } = runDicomPass(parseDicom(bytes), options, true);
   return Object.freeze({
     // Exactly the bytes the round-trip verification read the coded declaration back out of: the buffer
     // entry point never re-serializes, so it cannot hand back bytes that were never verified.

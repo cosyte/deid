@@ -24,20 +24,20 @@ importers:
         specifier: ^0.1.1
         version: 0.1.1
       '@cosyte/ccda':
-        specifier: ^0.1.1
-        version: 0.1.1
+        specifier: ^0.1.6
+        version: 0.1.6
       '@cosyte/dicom':
-        specifier: ^0.1.1
-        version: 0.1.1
+        specifier: ^0.1.11
+        version: 0.1.11
       '@cosyte/eslint-config':
         specifier: ^0.1.4
         version: 0.1.4(eslint@10.14.0)(typescript@5.9.3)
       '@cosyte/fhir':
-        specifier: ^0.1.1
-        version: 0.1.1
+        specifier: ^0.1.8
+        version: 0.1.8
       '@cosyte/hl7':
-        specifier: ^0.1.1
-        version: 0.1.1
+        specifier: ^0.1.8
+        version: 0.1.8(fast-check@4.10.2)
       '@cosyte/ncpdp':
         specifier: ^0.1.1
         version: 0.1.1
@@ -63,8 +63,8 @@ importers:
         specifier: ^0.1.3
         version: 0.1.3(@vitest/coverage-v8@5.1.0)(vite@8.3.6(@types/node@22.20.1)(esbuild@0.28.2)(tsx@4.23.15))(vitest@5.1.0)
       '@cosyte/x12':
-        specifier: ^0.1.2
-        version: 0.1.2
+        specifier: ^0.1.10
+        version: 0.1.10(fast-check@4.10.2)
       '@types/node':
         specifier: ^22.0.0
         version: 22.20.1
@@ -205,12 +205,12 @@ packages:
     engines: {node: '>=22.15.0'}
     hasBin: true
 
-  '@cosyte/ccda@0.1.1':
-    resolution: {integrity: sha512-fuybRn++xRtfpa1YjaM6ztUUh9slHVI1JiNG98QJBvAs94F19jmu3ZxrMVKYbz1KTnoW8Lj5vHgHjuTdGvT5dg==}
+  '@cosyte/ccda@0.1.6':
+    resolution: {integrity: sha512-3ZheOAuUufIVWo5oTdLayb6ClJYV72lWcmg865cPD2IQyh/CtFVcKsb7s3jfbEVxOX7xMCp9DOv7g470vhkMRg==}
     engines: {node: '>=22.0.0'}
 
-  '@cosyte/dicom@0.1.1':
-    resolution: {integrity: sha512-rP3/Gl6lN16FzYnH1WZiklG7M0Xz0y61xG0WoFQy1GczI/ssqso+9D2JrO6a6yaRThsYp8pCNElijbyzcpNaew==}
+  '@cosyte/dicom@0.1.11':
+    resolution: {integrity: sha512-dlP0wC742pbXR0Y02i3Y7khq0cAQBPzEJAZiefaTPs7FTGokeJ5TYFa0D1Z9s+qhvvUjGlujysWlq+n18T6TAg==}
     engines: {node: '>=22.0.0'}
 
   '@cosyte/eslint-config@0.1.4':
@@ -220,13 +220,18 @@ packages:
       eslint: ^9.0.0 || ^10.0.0
       typescript: '>=5.0.0'
 
-  '@cosyte/fhir@0.1.1':
-    resolution: {integrity: sha512-DKAGcMpj6VBjczbN2GxGu2VNoZxY8aTn+8mXCU4vkUwY4o2MSungXd1h/2TzfDhbaylbLQY+rWiXFLssMl1LFg==}
+  '@cosyte/fhir@0.1.8':
+    resolution: {integrity: sha512-3jZxM1OS84o+TyyBkF8JZfmC89PzgrJp3xskOXPh7l9lgBB3vSwEYz2eCbeJIWzjULlWU9PKfiFJLmSlT8jCJg==}
     engines: {node: '>=22.0.0'}
 
-  '@cosyte/hl7@0.1.1':
-    resolution: {integrity: sha512-sLR9xJIxrsZgOzJki7MbqKeBayzJ9axM2aLM325ZONmmKL9QFptjdC+qvaoYFaQYQdvdG838I3GefsP8boZ5KQ==}
+  '@cosyte/hl7@0.1.8':
+    resolution: {integrity: sha512-5xlmD818oeuSKUkSB283RsR/l/qmfXhyZ+PcnULIu/BXXcz+2CP3k2S9bi8ysS9UOqMRLOEpa0hXoTZWKo0+sw==}
     engines: {node: '>=22.0.0'}
+    peerDependencies:
+      fast-check: ^4.0.0
+    peerDependenciesMeta:
+      fast-check:
+        optional: true
 
   '@cosyte/ncpdp@0.1.1':
     resolution: {integrity: sha512-uFtHsDfa0wEa6LgpfrOdCTCmQ7CG3quoJa32tu6Eq9zHcsZuGyDxIB/Cv+YjQzigGmbmR4+ciOwI48uBcRURZA==}
@@ -266,9 +271,14 @@ packages:
       vite: ^6.0.0 || ^7.0.0 || ^8.0.0
       vitest: ^4.0.0 || ^5.0.0
 
-  '@cosyte/x12@0.1.2':
-    resolution: {integrity: sha512-Nwk+ftZlgz/3mzgXtDZqlGoVTSoOfEPHHuuYCUPHohUMwy4qYh/omZ+Te4+f0jAWQ4yRfPB6Tg9kRAKxVRFYlg==}
+  '@cosyte/x12@0.1.10':
+    resolution: {integrity: sha512-4XRNKE3/JzSq8lsYpxAkcrQLYVKgCmAfLI62J9Pzm76EcLTc6pD1qHkISRSeWcHuchlo89EjGPkKfjAPFCcueA==}
     engines: {node: '>=22.0.0'}
+    peerDependencies:
+      fast-check: ^4.0.0
+    peerDependenciesMeta:
+      fast-check:
+        optional: true
 
   '@es-joy/escodegen@5.0.1':
     resolution: {integrity: sha512-0sOnDSVMt7Zg5qmXz4ab1yOXrUi0QmSPqpm5d547puNdJxT0J+Xdip2F/5j07nuE1pW131AX5jFUvOIfZPYNRg==}
@@ -2309,11 +2319,11 @@ snapshots:
 
   '@cosyte/bench@0.1.1': {}
 
-  '@cosyte/ccda@0.1.1':
+  '@cosyte/ccda@0.1.6':
     dependencies:
       '@xmldom/xmldom': 0.9.12
 
-  '@cosyte/dicom@0.1.1': {}
+  '@cosyte/dicom@0.1.11': {}
 
   '@cosyte/eslint-config@0.1.4(eslint@10.14.0)(typescript@5.9.3)':
     dependencies:
@@ -2326,9 +2336,11 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@cosyte/fhir@0.1.1': {}
+  '@cosyte/fhir@0.1.8': {}
 
-  '@cosyte/hl7@0.1.1': {}
+  '@cosyte/hl7@0.1.8(fast-check@4.10.2)':
+    optionalDependencies:
+      fast-check: 4.10.2
 
   '@cosyte/ncpdp@0.1.1':
     dependencies:
@@ -2384,7 +2396,9 @@ snapshots:
       vite: 8.3.6(@types/node@22.20.1)(esbuild@0.28.2)(tsx@4.23.15)
       vitest: 5.1.0(@types/node@22.20.1)(@vitest/coverage-v8@5.1.0)(vite@8.3.6(@types/node@22.20.1)(esbuild@0.28.2)(tsx@4.23.15))
 
-  '@cosyte/x12@0.1.2': {}
+  '@cosyte/x12@0.1.10(fast-check@4.10.2)':
+    optionalDependencies:
+      fast-check: 4.10.2
 
   '@es-joy/escodegen@5.0.1':
     dependencies:

@@ -195,7 +195,9 @@ const engine = (): ScalingGateOptions<Model, number> => ({
   parse: (model) => deidentify(model, {}).manifest.length,
   weigh: (n) => n,
   count: { n: 2_048, generate: (i) => locusModel(i, 16) },
-  size: { inputs: 2, size: 8_000, generate: (i, size) => locusModel(i, size) },
+  // 4 inputs: the manifest step no longer builds a key for every value, and 2 inputs of 8,000 loci
+  // measured 3.94 ms on a GitHub runner, under the 4 ms a phase needs to be measured.
+  size: { inputs: 4, size: 8_000, generate: (i, size) => locusModel(i, size) },
 });
 gate("policy engine", engine, (model) => {
   const loci: Model["loci"] = [];
