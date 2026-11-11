@@ -81,6 +81,18 @@ const OVER_SCRUB_GRAPH = {
         id: "loc9",
         status: "active",
         name: "ZZLOCNAME",
+        // A hospital: a facility type is what keeps a position, a physical type alone never does.
+        type: [
+          {
+            coding: [
+              {
+                system: "http://terminology.hl7.org/CodeSystem/v3-RoleCode",
+                code: "HOSP",
+                display: "Hospital",
+              },
+            ],
+          },
+        ],
         physicalType: {
           coding: [
             {
@@ -151,7 +163,9 @@ describe("the widened sweep changes nothing about a document that carries none o
     // stashed out of `src/fhir/`. It is here as a HISTORICAL pin rather than as a restatement of the
     // assertion above: byte identity says the pass did nothing today, this says it also did nothing
     // yesterday, so a future change that starts acting here has to move a written-down number.
-    expect(digest(run.after)).toMatchInlineSnapshot(`"b460b9f6640bf68ba1534c0170c4c5d6"`);
+    // Re-captured once, when the Location gained its hospital `type`: a position is now kept only for
+    // a facility type, so the input itself changed. The output is still the input, byte for byte.
+    expect(digest(run.after)).toMatchInlineSnapshot(`"ade43d2d765c9f2b086e67b2b6fd834a"`);
   });
 
   it("nothing is recorded as acted on", () => {

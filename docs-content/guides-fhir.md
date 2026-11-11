@@ -178,10 +178,10 @@ not mistaken for a date, so it survives.
 - `FamilyMemberHistory.bornDate`, each bound of `bornPeriod`, `bornString` and an
   `Observation.valueDateTime` coded as a birth date (LOINC `21112-8`) are **dates of birth**, like
   `birthDate`: a year that shows an age over 89 is removed.
-- **`Location.position`** is removed, as geography finer than a State, unless every coding on the
-  Location's `type` and `physicalType` is a known facility code in its known system (see
-  [the limitations page](./limitations.md#ages-over-89)). A home, an unknown system, a coding with no
-  system, a mixed list or no type at all removes it.
+- **`Location.position`** is removed, as geography finer than a State, unless the Location carries a
+  facility `type` code (a hospital, an emergency room, a pharmacy, ...) in v3 RoleCode, every coding on
+  its `type` is one, its `physicalType` names nothing that removes it, and it has no `partOf` (see
+  [the limitations page](./limitations.md#ages-over-89)). A physical type alone never keeps a position.
 
 ## The two guarantees
 

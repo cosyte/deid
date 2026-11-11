@@ -462,7 +462,7 @@ describe("FHIR R4: Location.position", () => {
     expect(fhir(location("HOSP")).json).toContain('"latitude":42.3601');
   });
 
-  it("reads the physical type too: a house is removed, a building is kept", () => {
+  it("reads the physical type only to remove: a house, or a building with no type, is removed", () => {
     const physical = (code: string) => ({
       resourceType: "Location",
       status: "active",
@@ -472,7 +472,7 @@ describe("FHIR R4: Location.position", () => {
       position: { longitude: -71.0589, latitude: 42.3601 },
     });
     expect(fhir(physical("ho")).json).not.toContain("42.3601");
-    expect(fhir(physical("bu")).json).toContain('"latitude":42.3601');
+    expect(fhir(physical("bu")).json).not.toContain("42.3601");
   });
 
   it("removes a geolocation extension on a residence's address or on the Location itself", () => {
@@ -679,9 +679,9 @@ describe("what the rules read, and the shapes they fail closed on", () => {
       expect(mixedCodings).not.toContain("42.3601");
     });
 
-    it("reads physicalType alone: a building is kept, a house or an unsystemed code removed", () => {
-      expect(run({ physicalType: { coding: [{ system: PHYSICAL, code: "bu" }] } })).toContain(
-        '"latitude":42.3601',
+    it("never keeps it on physicalType alone: a building, a house or an unsystemed code", () => {
+      expect(run({ physicalType: { coding: [{ system: PHYSICAL, code: "bu" }] } })).not.toContain(
+        "42.3601",
       );
       expect(run({ physicalType: { coding: [{ system: PHYSICAL, code: "ho" }] } })).not.toContain(
         "42.3601",
@@ -695,6 +695,34 @@ describe("what the rules read, and the shapes they fail closed on", () => {
         physicalType: { coding: [{ system: PHYSICAL, code: "wa" }] },
       });
       expect(json).toContain('"latitude":42.3601');
+    });
+
+    it("removes it for a bed with no type, with or without partOf (a home-care bed)", () => {
+      const bed = { physicalType: { coding: [{ system: PHYSICAL, code: "bd" }] } };
+      expect(run(bed)).not.toContain("42.3601");
+      expect(run({ ...bed, partOf: { reference: "Location/zz-home" } })).not.toContain("42.3601");
+    });
+
+    it("removes it for a hospital type that is part of another Location", () => {
+      const json = run({
+        type: [{ coding: [{ system: ROLE, code: "HOSP" }] }],
+        partOf: { reference: "Location/zz-parent" },
+      });
+      expect(json).not.toContain("42.3601");
+    });
+
+    it("removes it for an ambulance or a mobile unit, which may be parked at a home", () => {
+      for (const code of ["AMB", "MBL"]) {
+        expect(run({ type: [{ coding: [{ system: ROLE, code }] }] })).not.toContain("42.3601");
+      }
+    });
+
+    it("keeps it for a hospital type with no partOf, alone or beside a building", () => {
+      const hospital = { type: [{ coding: [{ system: ROLE, code: "HOSP" }] }] };
+      expect(run(hospital)).toContain('"latitude":42.3601');
+      expect(
+        run({ ...hospital, physicalType: { coding: [{ system: PHYSICAL, code: "bu" }] } }),
+      ).toContain('"latitude":42.3601');
     });
 
     it("removes it when the type is a facility but the physical type is a house", () => {

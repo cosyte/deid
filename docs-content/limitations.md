@@ -387,15 +387,27 @@ read as the associated party's identifiers (one locus per repetition, as `PID-2`
 as the contact person's Social Security number; the map had the two the other way round.
 
 FHIR removes `Location.position`, recorded as geographic and blocked, unless the Location is
-positively a facility: it keeps the position **only** when it carries at least one coded `type` or
-`physicalType`, and every coding on both is a known facility code in its known system. For `type` that
-is v3 RoleCode (by its URI or its OID `2.16.840.1.113883.5.111`) and one of `HOSP`, `ER`, `ICU`, `OR`,
-`PHARM`, `LAB`, `AMB`, `MBL`, `HU`, `SNF`, `PSYCHF`, `RH`, `CHR`; for `physicalType` it is
-location-physical-type (by its URI) and one of `bu`, `wi`, `wa`, `lvl`, `co`, `ro`, `bd`. Anything
-else removes it: `PTRES`, a house, a local or unknown system, a coding with no system, an uncoded
-concept, a list that mixes a facility code with anything else, and a Location with no type at all. A
-facility coded in a system or with a code outside those lists loses its position too, which is the
-over-removal this rule accepts. A `geolocation` extension is removed by the extension rule wherever it
+positively a fixed facility. **A facility Location must carry a facility `type` code to keep its
+position.** It keeps it only when all of these hold:
+
+- `type` carries at least one concept, and every coding on it is v3 RoleCode (by its URI or its OID
+  `2.16.840.1.113883.5.111`) and one of `HOSP`, `ER`, `ICU`, `OR`, `PHARM`, `LAB`, `HU`, `SNF`,
+  `PSYCHF`, `RH`, `CHR`. A Location with no `type` never keeps its position. The ambulance and
+  mobile-unit codes (`AMB`, `MBL`) are not on the list: the vehicle may be parked at a home.
+- `physicalType` can only remove it, never keep it. Building, wing, ward, level, corridor, room and
+  bed describe physical form, which a house has too, so they leave the decision to `type`; `ho`
+  (house), any other code, an unknown system, a coding with no system and an uncoded concept remove
+  it.
+- The Location has no `partOf`. What it is part of is not known within the resource, so any `partOf`
+  removes the position.
+
+Anything else removes it: `PTRES`, a local or unknown system, a coding with no system, an uncoded
+concept, a list that mixes a facility code with anything else. A facility coded with a code or in a
+system outside those lists, or one that is part of another Location, loses its position too, which is
+the over-removal this rule accepts. What the rule still cannot see: free text that contradicts the
+code, such as a `name`, `description` or `type.text` reading "patient home" beside a `HOSP` code, and a
+`Coding.display` that contradicts its own code. The code decides, and a Location coded `HOSP` keeps its
+position whatever its text says. A `geolocation` extension is removed by the extension rule wherever it
 sits, and inside an `Address` by the address reduction.
 
 Still not named, and so handed through and counted as unexamined residuals: `NK1-26` (the associated
