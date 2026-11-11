@@ -69,10 +69,30 @@ jobs:
   # Those releases are immutable, so the tag names one commit and cannot be moved, and every caller
   # in this repository moves to the next one together, by hand. A job that calls a reusable workflow
   # cannot carry `timeout-minutes`; the shared jobs set their own.
+  #
+  # The performance standard's two jobs run beside `verify`, never after it, so a pull request waits
+  # for the slowest job rather than their sum:
+  # - `scaling-gate`: `pnpm test:perf`, the scaling gates on each format adapter and on the policy
+  #   engine, and their self-checks, never under coverage. A skipped job satisfies a required
+  #   check, so require `ci / scaling-gate` only while its input below stays on.
+  # - `bench-compare` (pull requests only): bench/deid.bench.mjs timed on the base build and the
+  #   head build, interleaved on one runner, at each format's smallest size and the engine's. The
+  #   target is bench/target.mjs, which gathers every built entry of its own checkout, because the
+  #   adapters are subpaths and the shared job hands a suite one module. Advisory: it never fails,
+  #   so never require it. The large sizes are measured by bench.yml's reading instead.
+  #
+  # This caller alone is one release ahead of the others: the release of commit 0be6757a7738 is the
+  # first with those two jobs. Its name carries its date, which a PHI scan of a changed file can
+  # read as a date of service, so the comment names its commit instead. The other callers move to it
+  # with the next change to them.
   ci:
-    uses: cosyte/.github/.github/workflows/ci.yml@c0db8d8e5927269820de4401b3b5ad6141854b76 # workflows-2026-11-08-c0db8d8e5927
+    uses: cosyte/.github/.github/workflows/ci.yml@0be6757a773885cbd5165dbfa0f93772d907b3e8 # the release of 0be6757a7738
     with:
       run-phi-scan: true
+      run-scaling-gate: true
+      run-bench-compare: true
+      bench-suites: bench/deid.bench.mjs
+      bench-target: bench/target.mjs
 
   # The programs under examples/, run against the BUILT package the way a consumer imports it:
   # `pnpm examples` (scripts/run-examples.ts) fails when any example exits non-zero, and each
