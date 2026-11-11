@@ -118,12 +118,17 @@ export function recordUnexaminedHl7Positions(
   for (let field = 1; field <= highest; field += 1) {
     const repetitions = seg.field(field).repetitions;
     for (let rep = 0; rep < repetitions.length; rep += 1) {
+      // `@cosyte/hl7` 0.1.8 and later hand every Field back dense, so the fallback is reached only by
+      // an earlier peer that kept a hole in a hand-built message; it stays for those.
+      /* v8 ignore next */
       const components = repetitions[rep]?.components ?? [];
       for (let i = 0; i < components.length; i += 1) {
         const component = i + 1;
         if (examined.covers(field, component)) continue;
         // Value-bearing is decided over the WHOLE component: a composite's later subcomponents carry
         // values too, and a position whose first subcomponent happens to be empty is still populated.
+        // Dense from `@cosyte/hl7` 0.1.8 on, like the repetitions above.
+        /* v8 ignore next */
         const subcomponents = components[i]?.subcomponents ?? [];
         if (!subcomponents.some((s) => s.length > 0)) continue;
         residuals.record(
