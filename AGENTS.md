@@ -40,9 +40,18 @@ pnpm check:readme
 pnpm check:claude-card
 pnpm check:catalog
 pnpm check:process
+pnpm test:perf
 ```
 
 A change that reaches the published package adds a changeset (`pnpm changeset`).
+
+## Performance
+
+`pnpm test:perf` builds, then runs the scaling gates in `test/perf/` (does a pass grow faster than
+its input?), apart from `pnpm test` and never under coverage. `bench/deid.bench.mjs` is the
+benchmark suite on `@cosyte/bench`, every input built in code by `bench/shapes.mjs`; the comments
+at its top say how to take a reading, a profile and a base against head comparison. Take a full
+reading on a GitHub runner through the Bench workflow, not on a shared machine.
 
 ## Data
 

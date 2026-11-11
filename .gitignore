@@ -39,3 +39,6 @@ yarn-error.log*
 .cache/
 .turbo/
 dist-artifacts/
+
+# Bench readings and profiles (`pnpm bench:reading --out bench-results/...`)
+bench-results/
