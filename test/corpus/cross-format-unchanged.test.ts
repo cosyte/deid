@@ -128,10 +128,14 @@ describe("every adapter emits the same transformed document, byte for byte", () 
   // (`2.25.1`). The fixture's other payer id (`05/7C`, `PAYERID99`) is letters and digits, which the
   // pass no longer keeps (only five or six digits), so it is removed and recorded; the NCPDP manifest
   // below gains its row. The other four digests are unmoved.
+  //
+  // THE C-CDA DIGEST MOVED A SECOND TIME, DELIBERATELY. The restricted ZIP list now follows the 2020
+  // Census, which restricts `205`, so the author's `20500` becomes `000` where it was `205`. The
+  // control below puts `205` back and requires the pin from before it, so nothing else moved.
   it("the six adapters' transformed documents are unchanged", () => {
     expect(transformedDocumentDigests()).toMatchInlineSnapshot(`
       {
-        "ccda": "504776ed802d5ff310349b136ef02b0c",
+        "ccda": "a8d7dc049b345cb1d5e1a410ffa3f45b",
         "dicom": "2b394aad0215ba5dff5c19cf18c49802",
         "fhir": "9fc5255a8e8ac924da7090e2c56bcf0f",
         "hl7": "b0e71b72dd6f4078c43d1d7b767ef843",
@@ -140,6 +144,16 @@ describe("every adapter emits the same transformed document, byte for byte", () 
         "x12": "7afec841b7487faa5774697142fb8514",
       }
     `);
+  });
+
+  it("the C-CDA document moved only by the author's ZIP prefix the 2020 Census restricts", () => {
+    const wire = deidentifyCcda(parseCcda(FIX("ccda", "ccd.xml")), options()).document.toString();
+    const zeros = [...wire.matchAll(/<postalCode>000<\/postalCode>/g)];
+    // The guardian's 03601 first, then the author's 20500.
+    expect(zeros).toHaveLength(2);
+    const at = zeros[1]?.index ?? -1;
+    const before = `${wire.slice(0, at)}<postalCode>205</postalCode>${wire.slice(at + "<postalCode>000</postalCode>".length)}`;
+    expect(digest(before)).toBe("504776ed802d5ff310349b136ef02b0c");
   });
 
   it("the X12 document moved only by the removed unknown segment", () => {
