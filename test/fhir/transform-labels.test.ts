@@ -538,6 +538,37 @@ describe("the Data Absent Reason", () => {
     );
   });
 
+  it("drops list items one by one, and stands in for the list once none is left", () => {
+    const a = complex([{ name: "display", value: primitive("ZZA") }]);
+    const b = complex([{ name: "reference", value: primitive("#zz") }]);
+    const resource = complex([
+      { name: "resourceType", value: primitive("Provenance") },
+      { name: "target", value: list([a, b]) },
+    ]);
+    const one = applyFhir(resource, [removed("a")], [{ node: a, edit: "drop" }], {
+      transformLabels: true,
+    });
+    expect(JSON.parse(serializeResource(one))).toEqual({
+      resourceType: "Provenance",
+      meta: { security: [SECURITY] },
+      target: [{ reference: "#zz" }],
+    });
+    const both = applyFhir(
+      resource,
+      [removed("a"), removed("b")],
+      [
+        { node: a, edit: "drop" },
+        { node: b, edit: "drop" },
+      ],
+      { transformLabels: true },
+    );
+    expect(JSON.parse(serializeResource(both))).toEqual({
+      resourceType: "Provenance",
+      meta: { security: [SECURITY] },
+      target: [{ extension: [ABSENT] }],
+    });
+  });
+
   it("writes a complex absent item for a list that is not all primitives", () => {
     const target = list([primitive("zz"), complex([{ name: "display", value: primitive("ZZ") }])]);
     const resource = complex([
