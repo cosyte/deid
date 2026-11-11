@@ -129,7 +129,10 @@ const hl7 = (): ScalingGateOptions<string, string> => ({
   name: "@cosyte/deid HL7 v2, text in, text out",
   parse: deidentifyHl7Text,
   weigh: (text) => text.length,
-  count: { n: 16, generate: (i) => hl7Message(i) },
+  // 48 messages: the pass reads and writes each message fewer times than it did, and at the
+  // runner reading's 221 us a message, 16 of them come to about 3.5 ms, under the 4 ms a phase
+  // needs to be measured.
+  count: { n: 48, generate: (i) => hl7Message(i) },
   size: { inputs: 2, size: 16, generate: (i, size) => hl7Batch(i, size) },
 });
 gate("HL7 v2", hl7, (text) => deidentifyHl7Text(readTextQuadratically(text, TEXT_STEP)));
@@ -176,7 +179,9 @@ const dicom = (): ScalingGateOptions<Buffer, Buffer> => ({
   parse: dicomFile,
   weigh: (bytes) => bytes.length,
   count: { n: 32, generate: (i) => ctImage(i, GATE_SIDE) },
-  size: { inputs: 4, size: 50, generate: (i, size) => enhancedCt(i, size, GATE_SIDE) },
+  // 8 inputs: Pixel Data is no longer copied on the way out, so 4 objects of 50 frames left the
+  // phase near the 4 ms floor.
+  size: { inputs: 8, size: 50, generate: (i, size) => enhancedCt(i, size, GATE_SIDE) },
 });
 gate(
   "DICOM",
