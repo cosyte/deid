@@ -43,6 +43,7 @@ import {
   pseudonymize,
   type GeneralizeOutcome,
 } from "./transforms/index.js";
+import { birthYearShowsAgeOver89 } from "./transforms/generalize.js";
 
 /**
  * Options for {@link deidentify}.
@@ -179,12 +180,34 @@ function requireContext(context: DeidContext | undefined, transform: TransformNa
   return context;
 }
 
+/**
+ * Build the outcome for a **date of birth whose year shows an age over 89**: the year is removed
+ * rather than kept. §164.514(b)(2)(i)(C) aggregates such an age into a single category of 90 or older,
+ * and none of the formats has a field beside the birth date to write that category into, so the
+ * aggregate a recipient reads is the absence of the year. The manifest says so with
+ * `DEID_CATEGORY_GENERALIZED`: nothing of the value remains, so it is never a residual.
+ */
+function birthYearAggregated(locus: GenericLocus, category: SafeHarborCategory): LocusOutcome {
+  return {
+    value: null,
+    disposition: "removed",
+    manifest: {
+      category,
+      transform: "generalize",
+      locus: locus.path,
+      disposition: "removed",
+      code: DEID_DISPOSITION_CODES.DEID_CATEGORY_GENERALIZED,
+    },
+  };
+}
+
 /** Apply a policy transform to a classified, non-free-text locus. */
 function applyTransform(
   transform: TransformName,
   locus: GenericLocus,
   category: SafeHarborCategory,
   context: DeidContext | undefined,
+  referenceYear: number,
 ): LocusOutcome {
   switch (transform) {
     case "redact":
@@ -203,6 +226,12 @@ function applyTransform(
       const gen = generalizeLocus(locus, category);
       if (gen === null) {
         return blocked(locus.path, category, DEID_DISPOSITION_CODES.DEID_LOCUS_BLOCKED);
+      }
+      // A date generalizes to its year; a date of birth whose year shows an age over 89 does not keep
+      // even that. The marker is the adapter's: it sets it only on a `date` locus, whose kept value is
+      // the four-digit year this compares.
+      if (locus.dateOfBirth === true && birthYearShowsAgeOver89(gen.value, referenceYear)) {
+        return birthYearAggregated(locus, category);
       }
       return {
         value: gen.value,
@@ -335,6 +364,7 @@ function handleLocus(
   context: DeidContext | undefined,
   redactor: FreeTextRedactor | undefined,
   retainedLoci: readonly RetainedLocusClass[] | undefined,
+  referenceYear: number,
 ): LocusOutcome {
   // Over-scrub guard: a clinical value is not an identifier, retain it untouched.
   if (locus.kind === "clinical") {
@@ -397,7 +427,13 @@ function handleLocus(
       return retainedResidual(locus, locus.category);
     }
   }
-  return applyTransform(policy.transforms[locus.category], locus, locus.category, context);
+  return applyTransform(
+    policy.transforms[locus.category],
+    locus,
+    locus.category,
+    context,
+    referenceYear,
+  );
 }
 
 /**
@@ -440,6 +476,11 @@ export function deidentify(
   assertRetentionContract(policy.name, options.retainedLoci);
   const builder = new ManifestBuilder();
   const loci: TransformedLocus[] = [];
+  // The year an age over 89 is measured at: the year of this call, read once so every locus of one
+  // pass is measured alike. The document's own date (a message timestamp, a date of service) is not
+  // used: it is earlier than the call in every ordinary case, so it would understate the age the
+  // person has when the output is released.
+  const referenceYear = new Date().getUTCFullYear();
 
   for (const locus of inputLoci) {
     const outcome = handleLocus(
@@ -448,6 +489,7 @@ export function deidentify(
       options.context,
       options.redactor,
       options.retainedLoci,
+      referenceYear,
     );
     loci.push(
       Object.freeze({

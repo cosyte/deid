@@ -64,7 +64,7 @@ standard, so the map keys off the field id directly.
 
 | Segment / locus                          | Handling                                                                                                       |
 | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| **Patient (`01`)**                       | name (`CA`/`CB`) + phone (`CQ`) removed; street (`CM`) + city (`CN`) removed; ZIP (`CP`) → 3-digit; DOB (`C4`) → year; patient id (`CY`) **removed** under Safe Harbor; gender + state retained |
+| **Patient (`01`)**                       | name (`CA`/`CB`) + phone (`CQ`) removed; street (`CM`) + city (`CN`) removed; ZIP (`CP`) → 3-digit; DOB (`C4`) → year (removed when it shows an age over 89); patient id (`CY`) **removed** under Safe Harbor; gender + state retained |
 | **Insurance (`04`)**                     | cardholder id (`C2`) + group id (`C1`) **removed** under Safe Harbor; cardholder name (`CC`/`CD`) removed; person code retained |
 | **Prescriber (`03`)**                    | prescriber id (`DB`) **removed**                                                                              |
 | **Coordination of Benefits (`05`)**      | other-payer cardholder (`NU`) + group (`MJ`) ids **removed** under Safe Harbor; other-payer date (`E8`) → year |

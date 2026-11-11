@@ -296,6 +296,67 @@ Two things follow, and the second is the one that surprises people:
 Vendor-proprietary loci absent from public specs are deferred, **not invented**: a quirk is encoded
 only when a real de-identified document grounds it.
 
+<a id="ages-over-89"></a>
+
+## Ages over 89: what is removed, and what is not
+
+§164.514(b)(2)(i)(C) lets a date keep its year, except that every element of a date, the year
+included, that is indicative of an age over 89 is aggregated into a single category of age 90 or
+older. Under a policy that generalizes dates (the `safe-harbor` default), a **date of birth** whose
+year shows such an age is therefore **removed**, and the manifest records it as
+`DEID_CATEGORY_GENERALIZED` with the disposition `removed`, never as a `DEID_RESIDUAL_RETAINED`
+residual. A birth year under that line keeps its year and its residual row exactly as before.
+
+- **The aggregate is the absence of the year.** None of the six formats has a field beside the birth
+  date that could carry a "90 or older" category: a `90+` written into the date itself would not be a
+  valid date in any of them, and DICOM's own Patient's Age `(0010,1010)` is removed by the Basic
+  Profile. So the field is emptied. A recipient who sees a date of birth with no year, where every
+  other date kept its year, can read it as 90 or older, and nothing narrower than that.
+- **Where it applies.** HL7 v2 `PID-7`, the guarantor's `GT1-8` and the insured's `IN1-18`; every
+  C-CDA `<birthTime>` (a bound of one given as an interval included); FHIR `birthDate`, a year-only
+  `birthDate` included; X12 `DMG-02`; NCPDP Telecom `304-C4`. DICOM `(0010,0030)` Patient's Birth Date is
+  emptied for everyone by the delegated Annex E Basic Profile, so no year survives there to aggregate.
+  A date that is not a date of birth (a death date, a service date) keeps its year however old.
+- **The reference date is the year the pass runs.** The age is measured against the UTC year of the
+  call, not against a date in the document (`MSH-7`, `ISA-09`, the C-CDA `effectiveTime`, the NCPDP
+  date of service). A document's date is earlier than the call in every ordinary case, so measuring
+  from it would understate the age the person has when the output is released. It follows that the
+  same input can give different output in a later year: a birth year that is 89 years back today is
+  removed once the calendar turns. Release output soon after the pass, or run the pass again.
+- **The comparison is by year alone.** A year 90 or more years before the year of the call is removed,
+  so a person who turns 90 in that year is aggregated whether or not the birthday has passed. The year
+  is all the output keeps, and it cannot say which side of the birthday the person is on.
+- **The generic core needs the marker.** On the root entry, set `dateOfBirth: true` on a `date` locus
+  for the engine to apply the rule; a locus without it keeps its year however old. A policy that
+  date-shifts or retains dates does not aggregate either: the rule is part of the year generalization.
+- **A removed C-CDA `birthTime` is written empty.** The `value` attribute is dropped and no
+  `nullFlavor` is added, so the element reads `<birthTime/>`, the same as a date the pass blocks. A
+  receiver that requires a value or a `nullFlavor` on `birthTime` will reject it as it stands.
+
+**An age held as a value is not found or aggregated.** No adapter locates an age written as a number,
+so an age over 89 passes through unchanged under every policy, `safe-harbor` included. The
+`generalize` transform turns an age over 89 into `90+` only for a locus a caller builds by hand with
+`kind: "age"`; no adapter emits one. Examples of ages that are kept as they arrive:
+
+- an HL7 v2 numeric result such as `OBX|1|NM|30525-0^Age^LN||93|a`: OBX-5 typed `NM` (or another
+  numeric or coded type) is a structured clinical value and is retained;
+- a FHIR age: `Observation.valueQuantity` in years, `Condition.onsetAge`,
+  `FamilyMemberHistory.ageAge`;
+- a C-CDA age observation in the clinical body, which is retained untouched.
+
+Finding and aggregating these is the caller's job: read the ages your documents carry and band or
+remove every one over 89 before the output leaves your control.
+
+**Birth dates the pass does not treat as birth dates.** Three positions carry a birth date the rule
+above never reaches, so an over-89 year can survive in each:
+
+- **HL7 v2 `NK1-16`**, the next of kin's date of birth, is not in the `NK1` field map. It leaves the
+  pass untouched, counted as an unexamined residual rather than reduced or removed.
+- **An HL7 v2 OBX result typed as a date that holds a birth date.** OBX-5 typed `DT` or `TS` is cut to
+  its year like any date, but nothing marks it as a birth date, so a year over 89 is kept.
+- **A relative's birth date in a C-CDA family history** sits in the clinical body, which the pass does
+  not read, so it is never located at all.
+
 <a id="policy-profiles"></a>
 
 ## Policy profiles, and the Limited Data Set caveat

@@ -93,7 +93,7 @@ implicit, so the map keys off each **segment id** plus two **qualifier classifie
 | **`N1`** (payer / provider org)                                 | **retained**; a patient-side or **unknown** party's name + id scrubbed / **fail closed** (same classification as `NM1`) |
 | **`SBR`** (subscriber)                                          | `SBR-03` group / policy number **removed** under Safe Harbor, `SBR-04` group name **removed**; relationship codes retained |
 | **`N3` / `N4`**                                                 | street + city **removed**; ZIP → safe 3-digit; state retained; an unmapped element (`N4-06` location id) **fails closed** |
-| **`DMG-02`**, **`DTP-03`**, **`DTM-02`**                        | dates → **year**                                                                                                    |
+| **`DMG-02`**, **`DTP-03`**, **`DTM-02`**                        | dates → **year**; a `DMG-02` birth year that shows an age over 89 is **removed**                                    |
 | **`PER`**                                                       | contact name + communication numbers **removed**                                                                   |
 | **`REF`**                                                       | patient / member / group / SSN identifier **removed** under Safe Harbor; recognized admin/provider reference retained; **unknown qualifier fails closed** |
 | **Code positions** (`NM1-01` / `08`, `N1-01` / `03`, `REF-01`, `N4-02` / `04`) | a code of the element's complete 005010 list (entity code, identification code qualifier, `REF` qualifier, country), or a state or province, is kept as written; any other value **fails closed**: removed and recorded at its own position |

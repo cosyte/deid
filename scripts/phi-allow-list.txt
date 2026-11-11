@@ -261,6 +261,8 @@ DOB 19900215
 DOB 20211130
 DOB 19850302
 DOB 19850303
+# The year the C-CDA guide's sample keeps of the synthetic 19900215 above (docs-content/guides-ccda.md).
+DOB 1990
 # The fixed birthTime of the C-CDA property-test template (test/ccda/property.test.ts). Invented.
 DOB 19811203
 # The two birth dates of the longitudinal date-shift fixtures (test/hl7/deidentify-hl7.test.ts).

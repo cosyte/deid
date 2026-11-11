@@ -155,7 +155,7 @@ const { document, manifest } = deidentifyHl7(parseHL7(rawMessage), { context });
 
 document.toString(); // spec-clean, de-identified HL7 wire
 // PID-5 (name), NK1/GT1/IN1/IN2 relatives, SSN, phone, MRN and account → removed;
-// DOB → year; address → safe 3-digit ZIP. OBX-5/NTE free text and Z-segments fail closed (blocked).
+// DOB → year (removed when it shows an age over 89); address → safe 3-digit ZIP. OBX-5/NTE free text and Z-segments fail closed (blocked).
 // Admit/discharge/observation/diagnosis dates → year; visit and order numbers blocked as (R).
 // Structured clinical OBX values, units, codes, and statuses survive untouched.
 ```
@@ -468,7 +468,7 @@ const { x12, manifest } = deidentifyX12(parseX12(raw), { context });
 | **`NM1`** (unknown entity code)                                                     | **fails closed**: name + id blocked                                                                                                                          |
 | **`N1` / `SBR`**                                                                    | `N1` payer/provider org retained (patient-side/unknown party fails closed); `SBR-03` group/policy **removed** under Safe Harbor, `SBR-04` group name removed |
 | **`N3` / `N4`**                                                                     | street + city **removed**, ZIP → safe 3-digit, state retained (unmapped `N4-06` location id fails closed)                                                    |
-| **`DMG-02`**, **`DTP-03`**, **`DTM-02`**                                            | dates → **year**                                                                                                                                             |
+| **`DMG-02`**, **`DTP-03`**, **`DTM-02`**                                            | dates → **year**; a `DMG-02` birth year that shows an age over 89 is **removed**                                                                             |
 | **`PER`**                                                                           | contact name + communication numbers **removed**                                                                                                             |
 | **`REF`**                                                                           | patient / member / group / SSN identifier **removed** under Safe Harbor; admin/provider reference retained; **unknown qualifier fails closed**               |
 | **Code positions**                                                                  | `NM1-01`/`08`, `N1-01`/`03`, `REF-01`, `N4-02`/`04`: a code of the element's complete 005010 list is kept; anything else **fails closed**, routing nothing   |
@@ -718,7 +718,7 @@ determination**.
 ## The design in five pieces
 
 - **Policy engine**: `safe-harbor` built in; `defineDeidPolicy()` to deviate deliberately.
-- **Five transforms**: redact, generalize (date→year, ZIP→3-digit/`000`, age→`90+`), keyed date-shift,
+- **Five transforms**: redact, generalize (date→year, an over-89 birth year removed, ZIP→3-digit/`000`; an age held as a value is not located, see Known limitations), keyed date-shift,
   keyed-HMAC pseudonymize, keyed hash.
 - **18 Safe Harbor categories**: §164.514(b)(2)(i)(A) to (R), including the open-ended catch-all (R).
 - **Fail-closed rule**: an unrecognized structure, an un-locatable identifier, or free text is

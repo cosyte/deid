@@ -267,6 +267,13 @@ A single mapped PHI-bearing field within a segment.
 
 The Safe Harbor category this field carries.
 
+##### dateOfBirth?
+
+> `readonly` `optional` **dateOfBirth?**: `boolean`
+
+For `date` fields only: `true` when the field is a **date of birth**, so a year that shows an age
+over 89 is removed rather than kept (see `GenericLocus.dateOfBirth`).
+
 ##### field
 
 > `readonly` **field**: `number`

@@ -63,6 +63,11 @@ export interface Hl7FieldRule {
    * parser-typed way to tell an SSN from an MRN inside one PID-3 list.
    */
   readonly routeByTypeCode?: boolean;
+  /**
+   * For `date` fields only: `true` when the field is a **date of birth**, so a year that shows an age
+   * over 89 is removed rather than kept (see `GenericLocus.dateOfBirth`).
+   */
+  readonly dateOfBirth?: boolean;
 }
 
 const C = SAFE_HARBOR_CATEGORIES;
@@ -77,7 +82,7 @@ const PID_RULES: readonly Hl7FieldRule[] = [
   { field: 4, category: C.MRN, mode: "id" }, // PID-4  Alternate Patient ID (CX)
   { field: 5, category: C.NAMES, mode: "redact" }, // PID-5  Patient Name (XPN~)
   { field: 6, category: C.NAMES, mode: "redact" }, // PID-6  Mother's Maiden Name (XPN): relative
-  { field: 7, category: C.DATES, mode: "date" }, // PID-7  Date/Time of Birth (TS)
+  { field: 7, category: C.DATES, mode: "date", dateOfBirth: true }, // PID-7  Date/Time of Birth (TS)
   { field: 9, category: C.NAMES, mode: "redact" }, // PID-9  Patient Alias (XPN~)
   { field: 11, category: C.GEOGRAPHIC, mode: "address" }, // PID-11 Patient Address (XAD~)
   { field: 12, category: C.GEOGRAPHIC, mode: "block" }, // PID-12 County Code: geographic < state, no clean generalization
@@ -122,7 +127,7 @@ const GT1_RULES: readonly Hl7FieldRule[] = [
   { field: 5, category: C.GEOGRAPHIC, mode: "address" }, // GT1-5  Guarantor Address (XAD~)
   { field: 6, category: C.PHONE, mode: "redact" }, // GT1-6  Guarantor Home Phone (XTN~)
   { field: 7, category: C.PHONE, mode: "redact" }, // GT1-7  Guarantor Business Phone (XTN~)
-  { field: 8, category: C.DATES, mode: "date" }, // GT1-8  Guarantor Date/Time of Birth (TS)
+  { field: 8, category: C.DATES, mode: "date", dateOfBirth: true }, // GT1-8  Guarantor Date/Time of Birth (TS)
   { field: 12, category: C.SSN, mode: "redact" }, // GT1-12 Guarantor SSN (ST)
   { field: 16, category: C.NAMES, mode: "redact" }, // GT1-16 Guarantor Employer Name (XPN~)
   { field: 17, category: C.GEOGRAPHIC, mode: "address" }, // GT1-17 Guarantor Employer Address (XAD~)
@@ -145,7 +150,7 @@ const IN1_RULES: readonly Hl7FieldRule[] = [
   { field: 10, category: C.OTHER_UNIQUE_ID, mode: "id" }, // IN1-10 Insured's Group Emp. ID (CX~)
   { field: 11, category: C.NAMES, mode: "redact" }, // IN1-11 Insured's Group Emp Name (XON~)
   { field: 16, category: C.NAMES, mode: "redact" }, // IN1-16 Name of Insured (XPN~)
-  { field: 18, category: C.DATES, mode: "date" }, // IN1-18 Insured's Date of Birth (TS)
+  { field: 18, category: C.DATES, mode: "date", dateOfBirth: true }, // IN1-18 Insured's Date of Birth (TS)
   { field: 19, category: C.GEOGRAPHIC, mode: "address" }, // IN1-19 Insured's Address (XAD~)
   { field: 36, category: C.HEALTH_PLAN_BENEFICIARY, mode: "id" }, // IN1-36 Policy Number
   { field: 49, category: C.HEALTH_PLAN_BENEFICIARY, mode: "id" }, // IN1-49 Insured's ID Number (CX~)

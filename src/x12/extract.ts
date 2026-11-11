@@ -307,6 +307,7 @@ function emitDate(
   element: number,
   category: SafeHarborCategory,
   source: X12DateFormatSource,
+  dateOfBirth = false,
 ): void {
   const value = el(seg, element);
   const format = declaredFormat(source, seg, []);
@@ -317,7 +318,13 @@ function emitDate(
   push(
     out,
     pos,
-    { path: path(pos, element), kind: "date", category, value },
+    {
+      path: path(pos, element),
+      kind: "date",
+      category,
+      ...(dateOfBirth ? { dateOfBirth: true } : {}),
+      value,
+    },
     coord(pos, [element]),
   );
 }
@@ -344,7 +351,7 @@ function emitRule(
     // no value is a valid date in no format, so it would be removed rather than kept.
     /* v8 ignore next -- the table holds a format for every date rule (DMG-02, DTP-03, DTM-02) */
     const source = X12_RULE_DATE_FORMATS.get(`${pos.segId}-${String(rule.element)}`) ?? NO_FORMAT;
-    emitDate(out, seg, pos, rule.element, rule.category, source);
+    emitDate(out, seg, pos, rule.element, rule.category, source, rule.dateOfBirth === true);
     return;
   }
   const kind: GenericLocus["kind"] = rule.mode === "zip" ? "zip" : "identifier";

@@ -129,6 +129,13 @@ A mapped PHI-bearing field within a segment: the mode and (for the direct modes)
 
 The Safe Harbor category, for the direct modes (`redact` / `date` / `zip` / `id`).
 
+##### dateOfBirth?
+
+> `readonly` `optional` **dateOfBirth?**: `boolean`
+
+For `date` fields only: `true` when the field is a **date of birth**, so a year that shows an age
+over 89 is removed rather than kept (see `GenericLocus.dateOfBirth`).
+
 ##### mode
 
 > `readonly` **mode**: [`TelecomFieldMode`](#telecomfieldmode)

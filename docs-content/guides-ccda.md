@@ -80,7 +80,7 @@ can be a drug or material name, so the body is deliberately never swept.
 
 | Participation | Loci | Transform |
 |---|---|---|
-| **recordTarget / patientRole** (+ nested `guardian`) | `id` (MRN / SSN), `addr`, `telecom`, `patient/name`, `birthTime` | name/telecom **removed**; `id` **removed** under Safe Harbor, assigning root retained (a consistent keyed surrogate only under a preset that does not claim the label); `birthTime` → **year**; `addr` → safe **3-digit ZIP** (or `000`), finer geography dropped |
+| **recordTarget / patientRole** (+ nested `guardian`) | `id` (MRN / SSN), `addr`, `telecom`, `patient/name`, `birthTime` | name/telecom **removed**; `id` **removed** under Safe Harbor, assigning root retained (a consistent keyed surrogate only under a preset that does not claim the label); `birthTime` → **year** (removed when the year shows an age over 89); `addr` → safe **3-digit ZIP** (or `000`), finer geography dropped |
 | **author / dataEnterer / informant / authenticator / legalAuthenticator / participant / custodian** | person `name`, `id`, `addr`, `telecom`, participation `time` | same category transforms: Safe Harbor removes identifiers of **relatives, employers, and household members**, not only the patient |
 | **componentOf / documentationOf** | encounter / service-event `id`, `effectiveTime` | ids acted on under the configured transform; dates → **year** |
 | **section `<text>` narrative, `nonXMLBody`** | every narrative block | **fail closed**: blocked, never regex-scrubbed |

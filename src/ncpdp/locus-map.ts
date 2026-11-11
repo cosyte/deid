@@ -46,6 +46,11 @@ export interface TelecomFieldRule {
   readonly mode: TelecomFieldMode;
   /** The Safe Harbor category, for the direct modes (`redact` / `date` / `zip` / `id`). */
   readonly category?: SafeHarborCategory;
+  /**
+   * For `date` fields only: `true` when the field is a **date of birth**, so a year that shows an age
+   * over 89 is removed rather than kept (see `GenericLocus.dateOfBirth`).
+   */
+  readonly dateOfBirth?: boolean;
 }
 
 /**
@@ -57,7 +62,7 @@ export interface TelecomFieldRule {
 const PATIENT_01: Readonly<Record<string, TelecomFieldRule>> = {
   CA: { mode: "redact", category: C.NAMES }, // 310-CA Patient First Name
   CB: { mode: "redact", category: C.NAMES }, // 311-CB Patient Last Name
-  C4: { mode: "date", category: C.DATES }, // 304-C4 Date of Birth → year
+  C4: { mode: "date", category: C.DATES, dateOfBirth: true }, // 304-C4 Date of Birth → year, or removed over 89
   CM: { mode: "block" }, // 322-CM Patient Street Address → removed
   CN: { mode: "block" }, // 323-CN Patient City → removed
   CP: { mode: "zip", category: C.GEOGRAPHIC }, // 325-CP Patient ZIP/Postal Zone → 3-digit

@@ -93,11 +93,15 @@ The library's promise is **narrow and honest**. Do **not** over-trust it:
   over a **generic locus model**, so the caller supplies each locus's `path`, `kind`, and `category`.
   The per-format locus maps (HL7 v2, C-CDA, FHIR, X12, NCPDP, DICOM), which is where "the parser knows
   where the name is" becomes automatic, live behind the matching subpath exports.
-- **DOB vs. age is not linked in the core.** Under the default policy a date generalizes to its
-  **year**, and a year is retained as a [`DEID_RESIDUAL_RETAINED`](./codes-and-categories.md#disposition-codes) residual. A birth-date _indicative of
-  an age over 89_ is **not** aggregated to `90+` by the generic core, because resolving DOB→age needs a
-  reference date the core does not have. Surface the residual and apply the age-90 rule at the format
-  layer (or via a profile) when a DOB is known to indicate age > 89.
+- **A birth year over 89 is removed, measured at the year of the call.** Under the default policy a
+  date generalizes to its **year**, recorded as a [`DEID_RESIDUAL_RETAINED`](./codes-and-categories.md#disposition-codes) residual. A **date of birth**
+  whose year is 90 or more years before the year the pass runs is removed instead, and recorded as
+  [`DEID_CATEGORY_GENERALIZED`](./codes-and-categories.md#disposition-codes). Every format adapter marks the birth dates it locates; on the
+  generic core, set `dateOfBirth: true` on a `date` locus yourself, or the year is kept however old it
+  is. An age held as a value (an HL7 v2 numeric OBX result, a FHIR `Age`, a C-CDA age observation)
+  is **not** located by any adapter and passes through unchanged: handle it yourself. See
+  [Known limitations](./limitations.md#ages-over-89) for the reference date, the year-only
+  comparison, and the birth-date positions the rule does not reach.
 - **`GEOGRAPHIC` is generalized as a ZIP.** A locus of category `GEOGRAPHIC` is treated as a ZIP code
   (initial-3-digit or `000`). Street/city/county elements should be **removed**: mark them for
   redaction (or a non-ZIP kind) rather than relying on ZIP generalization, which would keep a leading
@@ -106,7 +110,8 @@ The library's promise is **narrow and honest**. Do **not** over-trust it:
 - **Free text is block-only.** A `freetext` locus is blocked by default, no naive regex scrub (a
   false-safety hazard). A bring-your-own redaction interface is available via the `redactor` option.
 - **Date-shift is not Safe Harbor.** It is an Expert-Determination-supporting mode; a shifted real date
-  is still a date. The `safe-harbor` policy generalizes dates to year instead.
+  is still a date. The `safe-harbor` policy generalizes dates to year instead. A shifted date of birth
+  is not aggregated at 90: that rule belongs to the year generalization.
 
 The [API reference](./api/README.md) always reflects exactly what this release ships: treat it as the
 source of truth. [Codes and categories](./codes-and-categories.md) lists every fatal and disposition

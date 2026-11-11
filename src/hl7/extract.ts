@@ -303,6 +303,7 @@ function extractRule(
           path: fieldPath(type, occ, rule.field),
           kind: "date",
           category: rule.category,
+          ...(rule.dateOfBirth === true ? { dateOfBirth: true } : {}),
           value: field.value,
         },
         { segIndex: seg.absoluteIndex, field: rule.field, rep: 0, edit: "whole-field" },
