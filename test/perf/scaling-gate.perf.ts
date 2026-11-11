@@ -140,7 +140,9 @@ const fhir = (): ScalingGateOptions<string, string> => ({
   parse: fhirText,
   weigh: (text) => text.length,
   count: { n: 256, generate: (i) => fhirPatient(i) },
-  size: { inputs: 2, size: 50, generate: (i, size) => fhirBundle(i, size) },
+  // Four Bundles, not two: at two, the clean base phase measured 2.8 to 3.7 ms on a fast runner,
+  // under the 4 ms the contract needs to read a ratio, so the axis skipped. The ratio is unchanged.
+  size: { inputs: 4, size: 50, generate: (i, size) => fhirBundle(i, size) },
 });
 gate("FHIR R4", fhir, (text) => fhirText(readTextQuadratically(text, TEXT_STEP)));
 
