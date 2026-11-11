@@ -94,19 +94,25 @@ export function applyTelecom(
   // the first one's on `segments`; the entry points refuse a transmission with more than one, and the
   // one left is rebuilt from the de-identified segments, so no untransformed copy of it rides along in
   // the model, whichever of the two fields a serializer reads.
+  // The same holds for the transmission-level segments a later `@cosyte/ncpdp` keeps on
+  // `transmissionSegments` and at the head of `segments`: they are taken back from the de-identified
+  // `segments`, and the transaction keeps only its own. A model from a parser without that field, or
+  // built by hand without it, has none.
   // A model built by hand rather than by `parseTelecom` may carry no `transactions` list at all.
+  const sharedCount = original.transmissionSegments?.length ?? 0;
   const decoded: readonly TelecomDecodedTransaction[] | undefined = original.transactions;
   const first = decoded?.[0];
   const transaction: TelecomDecodedTransaction = {
     index: 0,
     byteOffset: first?.byteOffset ?? 0,
-    segments,
+    segments: segments.slice(sharedCount),
     warnings: first?.warnings ?? [],
   };
   const deidentified: TelecomTransaction = {
     ...original,
     header,
     segments,
+    transmissionSegments: segments.slice(0, sharedCount),
     transactions: [transaction],
     decodedTransactionCount: 1,
   };
