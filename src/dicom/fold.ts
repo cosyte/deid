@@ -24,8 +24,10 @@ import { SAFE_HARBOR_CATEGORIES, type SafeHarborCategory } from "../categories.j
 import { DEID_DISPOSITION_CODES, type DeidDispositionCode } from "../codes.js";
 import { ManifestBuilder, type DeidManifestEntry } from "../manifest.js";
 import type { TransformName } from "../policy.js";
+import { WITHHELD_LOCUS_TOKEN } from "../derived-token.js";
 import {
   enumerateOrFail,
+  failUnenumerableStructure,
   UnexaminedResidualBuilder,
   type UnexaminedResidual,
 } from "../residual.js";
@@ -480,6 +482,53 @@ function walkDataset(
           accounted,
           residuals,
         );
+      });
+    });
+  });
+}
+
+/**
+ * The bounded token naming one element in a refusal: its `(gggg,eeee)` form when the tag is eight hex
+ * digits, and {@link WITHHELD_LOCUS_TOKEN} otherwise, since a hand-built element can carry any string
+ * as its tag and a refusal message never prints one we cannot bound.
+ */
+function refusalTagToken(tag: string): string {
+  return /^[0-9A-Fa-f]{8}$/.test(tag) ? formatTag(tag) : WITHHELD_LOCUS_TOKEN;
+}
+
+/**
+ * Refuse a dataset holding an element that does not carry its value bytes, **before anything is
+ * delegated**.
+ *
+ * Every element `@cosyte/dicom` builds carries its value as `rawBytes`, a byte view. A copy of one made
+ * by object spread does not: from `@cosyte/dicom` 0.1.12 on `rawBytes` is an accessor over the
+ * element's private state, so the copy keeps the tag, the VR and the length but no bytes, and the
+ * delegated Annex E pass fails on it with a bare `TypeError` from inside the peer, or acts on it without
+ * ever reading a value. Neither is a decision this pass can stand behind, so a dataset, or any sequence
+ * item in it, holding such an element fails with the typed `DEID_POSITIONS_UNENUMERABLE` naming the
+ * element's place (its sequence path and its tag), never its value.
+ *
+ * The test is that `rawBytes` is a byte view; it reads nothing inside the bytes.
+ *
+ * @param dataset - The dataset the caller handed in.
+ * @throws {@link DeidError} `DEID_POSITIONS_UNENUMERABLE` when an element carries no value bytes, or a
+ *   dataset or sequence item will not yield its elements.
+ * @internal
+ */
+export function assertValueBytes(dataset: EnumerableDataset): void {
+  checkValueBytes(dataset, []);
+}
+
+function checkValueBytes(dataset: EnumerableDataset, context: readonly string[]): void {
+  const structure = context.length > 0 ? context.join("/") : ROOT_DATASET_STRUCTURE;
+  enumerateOrFail(structure, () => {
+    dataset.elements().forEach((element) => {
+      const token = refusalTagToken(element.tag);
+      if (!ArrayBuffer.isView(element.rawBytes)) {
+        failUnenumerableStructure([...context, token].join("/"));
+      }
+      element.items?.forEach((item, index) => {
+        checkValueBytes(item, [...context, `${token}[${String(index)}]`]);
       });
     });
   });

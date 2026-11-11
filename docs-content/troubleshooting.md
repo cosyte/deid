@@ -48,6 +48,15 @@ be established is refused, never permitted.
 
 The model was null/undefined or carried no `loci` array ([`EMPTY_INPUT`](./codes-and-categories.md#fatal-codes)). Pass `{ loci: [...] }`.
 
+## `deidentifyDicom` threw `DEID_POSITIONS_UNENUMERABLE` naming a tag
+
+The dataset held an element that carries no value bytes, and the message names where it sits: its
+sequence path and its tag ([`DEID_POSITIONS_UNENUMERABLE`](./codes-and-categories.md#fatal-codes)).
+The usual cause is a copy made with object spread (`{ ...element }`): from `@cosyte/dicom` 0.1.12 on,
+an element's `rawBytes` is read through an accessor, which a spread copy does not carry. Copy an
+element through the `Element` constructor from `@cosyte/dicom` instead, passing
+`rawBytes: element.rawBytes` with its other fields.
+
 ## What the manifest is safe to log, and the one thing to know about the locus
 
 Error messages carry **no PHI**: every message this library raises is a fixed sentence, and no value,

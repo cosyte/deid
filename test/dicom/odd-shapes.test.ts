@@ -10,10 +10,11 @@
 
 import { Buffer } from "node:buffer";
 
-import { Dataset, Element, parseDicom } from "@cosyte/dicom";
+import { Dataset, Element, Item, parseDicom } from "@cosyte/dicom";
 import { describe, expect, it } from "vitest";
 
-import { SAFE_HARBOR_CATEGORIES } from "../../src/index.js";
+import { DeidError, FATAL_CODES, SAFE_HARBOR_CATEGORIES } from "../../src/index.js";
+import { WITHHELD_LOCUS_TOKEN } from "../../src/derived-token.js";
 import { deidentifyDicom, deidentifyDicomBuffer } from "../../src/dicom/index.js";
 import { buildDicom, type BuildDicomOptions } from "./helpers/build-dicom.js";
 import { buildPhiDataset, pad, TS_EXPLICIT_LE, UID } from "./helpers/fixtures.js";
@@ -155,5 +156,107 @@ describe("deidentifyDicom, a tag a hand-built dataset spells out of shape", () =
     expect(manifest).toEqual([
       expect.objectContaining({ locus: "0009100 PrivateTag", disposition: "removed" }),
     ]);
+  });
+});
+
+describe("deidentifyDicom, an element copied by spreading", () => {
+  /**
+   * A copy of an element made with object spread. From `@cosyte/dicom` 0.1.12 on, `rawBytes` is an
+   * accessor over private state, so the copy carries every structural field but no value bytes, and
+   * the delegated Annex E pass would fail on it with a bare `TypeError` from inside the peer.
+   */
+  function spread(el: Element): Element {
+    return { ...el } as unknown as Element;
+  }
+
+  function refusal(run: () => unknown): DeidError {
+    try {
+      run();
+    } catch (err) {
+      if (err instanceof DeidError) return err;
+      throw err;
+    }
+    throw new Error("the pass returned instead of refusing");
+  }
+
+  const fileMeta = { transferSyntaxUID: TS_EXPLICIT_LE };
+
+  it("refuses a body element with no value bytes, naming its tag and no value", () => {
+    const modality = element("00080060", "LO", "ZZMODALITY");
+    const err = refusal(() =>
+      deidentifyDicom(
+        new Dataset({
+          warnings: [],
+          elements: new Map([["00080060", spread(modality)]]),
+          fileMeta,
+        }),
+      ),
+    );
+    expect(err.code).toBe(FATAL_CODES.DEID_POSITIONS_UNENUMERABLE);
+    expect(err.message).toContain("(0008,0060)");
+    expect(err.message).not.toContain("ZZMODALITY");
+  });
+
+  it("refuses one the profile would remove, too: the pass never decides on bytes it cannot read", () => {
+    const name = element("00100010", "LO", "ZZDOE^ZZJANE");
+    const err = refusal(() =>
+      deidentifyDicom(
+        new Dataset({ warnings: [], elements: new Map([["00100010", spread(name)]]), fileMeta }),
+      ),
+    );
+    expect(err.code).toBe(FATAL_CODES.DEID_POSITIONS_UNENUMERABLE);
+    expect(err.message).toContain("(0010,0010)");
+    expect(err.message).not.toContain("ZZDOE");
+  });
+
+  it("refuses one inside a sequence item, naming the item it sits in", () => {
+    const inner = element("00080060", "LO", "ZZMODALITY");
+    const item = new Item({
+      index: 0,
+      warnings: [],
+      elements: new Map([["00080060", spread(inner)]]),
+    });
+    const sequence = new Element({
+      tag: "00081110",
+      vr: "SQ",
+      vm: 1,
+      length: 0,
+      rawBytes: Buffer.alloc(0),
+      byteOffset: 0,
+      littleEndian: true,
+      items: [item],
+    });
+    const err = refusal(() =>
+      deidentifyDicom(
+        new Dataset({ warnings: [], elements: new Map([["00081110", sequence]]), fileMeta }),
+      ),
+    );
+    expect(err.code).toBe(FATAL_CODES.DEID_POSITIONS_UNENUMERABLE);
+    expect(err.message).toContain("(0008,1110)[0]/(0008,0060)");
+  });
+
+  it("withholds a tag that is not eight hex digits rather than print it", () => {
+    const priv = { ...spread(element("00091001", "LO", "ZZPRIVATEVALUE")), tag: "ZZTAG" };
+    const err = refusal(() =>
+      deidentifyDicom(
+        new Dataset({
+          warnings: [],
+          elements: new Map([["ZZTAG", priv as unknown as Element]]),
+          fileMeta,
+        }),
+      ),
+    );
+    expect(err.code).toBe(FATAL_CODES.DEID_POSITIONS_UNENUMERABLE);
+    expect(err.message).toContain(WITHHELD_LOCUS_TOKEN);
+    expect(err.message).not.toContain("ZZTAG");
+  });
+
+  it("passes the same element when it is the parsed one", () => {
+    const parsed = element("00080060", "LO", "CT");
+    expect(() =>
+      deidentifyDicom(
+        new Dataset({ warnings: [], elements: new Map([["00080060", parsed]]), fileMeta }),
+      ),
+    ).not.toThrow();
   });
 });
