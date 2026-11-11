@@ -131,12 +131,6 @@ export interface X12Extraction {
 interface X12LocusAccumulator {
   readonly loci: GenericLocus[];
   readonly coords: X12Coord[];
-  /**
-   * The elements a rule **decided**, keyed by segment position: the ones a coordinate writes to, plus
-   * the ones a rule reached and decided to keep (a party the scope clause does not reach, a recognized
-   * administrative `REF`, a code or date of the shape its position expects).
-   */
-  readonly named: Map<string, Set<number>>;
   /** The interchange's component and repetition separators, which a composite or repeating shape reads. */
   readonly delimiters: { readonly component: string; readonly repetition: string };
 }
@@ -146,8 +140,13 @@ interface X12LocusAccumulator {
  * Held by every segment the pass sees, inside a transaction set or in the envelope around one.
  */
 interface SegPos {
-  /** This segment's unique identity inside the interchange; the named-element sets are held under it. */
-  readonly key: string;
+  /**
+   * The elements a rule **decided** in this segment: the ones a coordinate writes to, plus the ones a
+   * rule reached and decided to keep (a party the scope clause does not reach, a recognized
+   * administrative `REF`, a code or date of the shape its position expects). Held on the segment's own
+   * position, so recording one is a set insertion and no key is built for it.
+   */
+  readonly named: Set<number>;
   /**
    * The root of every path this segment prints: the bounded `ST-01` transaction-set id (`837`), `orphan`
    * for a segment the parser found outside every transaction set, or `""` for the envelope.
@@ -232,28 +231,20 @@ function isValueBearing(seg: SegmentElements, segId: string, n: number): boolean
   return segId === FIXED_WIDTH_SEGMENT_ID ? raw.trim().length > 0 : raw.length > 0;
 }
 
-/** A segment's identity inside the interchange, the key the named-element sets are held under. */
-function segKey(pos: SegPos): string {
-  return pos.key;
-}
-
 /**
  * Record that a rule **decided** these elements of this segment: acted on them, kept them, or removed
  * them. A decided element is never an unexamined residual, and the closing sweep
  * ({@link closeSegment}) leaves it alone.
  */
-function name(out: X12LocusAccumulator, pos: SegPos, elements: readonly number[]): void {
-  const key = segKey(pos);
-  const set = out.named.get(key) ?? new Set<number>();
-  for (const element of elements) set.add(element);
-  out.named.set(key, set);
+function name(pos: SegPos, elements: readonly number[]): void {
+  for (const element of elements) pos.named.add(element);
 }
 
 /** Append a locus + its coordinate to the accumulator; the coordinate's elements are named by it. */
 function push(out: X12LocusAccumulator, pos: SegPos, locus: GenericLocus, coord: X12Coord): void {
   out.loci.push(locus);
   out.coords.push(coord);
-  name(out, pos, coord.elements);
+  name(pos,coord.elements);
 }
 
 /**
@@ -280,7 +271,7 @@ function blockElement(
   pos: SegPos,
   element: number,
 ): void {
-  name(out, pos, [element]);
+  name(pos,[element]);
   if (!has(seg, element)) return;
   push(
     out,
@@ -341,7 +332,7 @@ function emitRule(
   pos: SegPos,
   rule: X12ElementRule,
 ): void {
-  name(out, pos, [rule.element]);
+  name(pos,[rule.element]);
   if (!has(seg, rule.element)) return;
   if (rule.mode === "block") {
     blockElement(out, seg, pos, rule.element);
@@ -378,7 +369,7 @@ function emitId(
   element: number,
   category: SafeHarborCategory | undefined,
 ): void {
-  name(out, pos, [element]);
+  name(pos,[element]);
   if (!has(seg, element)) return;
   if (category === undefined) {
     blockElement(out, seg, pos, element); // unknown identifier qualifier → fail closed
@@ -406,7 +397,7 @@ function keepCodeOrBlock(
   pos: SegPos,
   element: number,
 ): void {
-  name(out, pos, [element]);
+  name(pos,[element]);
   if (!has(seg, element)) return;
   if (isRecognizedX12Code(pos.segId, element, el(seg, element))) return;
   blockElement(out, seg, pos, element);
@@ -442,7 +433,7 @@ function emitRetainedParty(
 ): void {
   // The party-role test named the role code AND the identity elements it decided to leave in place, so
   // none of them is an unexamined residual: they were retained under a rule, not passed over in silence.
-  name(out, pos, [1, ...identityElements]);
+  name(pos,[1, ...identityElements]);
   if (!identityElements.some((n) => has(seg, n))) return;
   push(
     out,
@@ -473,7 +464,7 @@ function handleNm1(out: X12LocusAccumulator, seg: X12Segment, pos: SegPos): void
 
   // Name components NM1-03..07. A subject entity redacts (category NAMES); an unknown entity fails
   // closed (blocked): an unrecognized entity could be the patient, so its name is never passed through.
-  name(out, pos, [3, 4, 5, 6, 7]);
+  name(pos,[3, 4, 5, 6, 7]);
   const nameElements = [3, 4, 5, 6, 7].filter((n) => has(seg, n));
   if (nameElements.length > 0) {
     push(
@@ -532,7 +523,7 @@ function handleRef(out: X12LocusAccumulator, seg: X12Segment, pos: SegPos): void
   // The qualifier routes REF-02 only when it passed the exact check; anything else routes as unknown.
   const disposition = classifyRefQualifier(trustedCode(seg, "REF", 1));
   if (disposition.kind === "retain") {
-    name(out, pos, [2]); // recognized administrative / provider reference
+    name(pos,[2]); // recognized administrative / provider reference
     return;
   }
   // An unknown qualifier fails closed (category R); a patient identifier is routed to its category.
@@ -584,7 +575,7 @@ function handleFreeTextSegment(
   pos: SegPos,
   elements: readonly number[],
 ): void {
-  name(out, pos, elements);
+  name(pos,elements);
   for (const n of elements) {
     if (!has(seg, n)) continue;
     push(
@@ -610,7 +601,7 @@ function handleFreeTextSegment(
  */
 function removeSegment(out: X12LocusAccumulator, seg: SegmentElements, pos: SegPos): void {
   for (let n = 0; n < seg.elements.length; n += 1) {
-    name(out, pos, [n]);
+    name(pos,[n]);
     if (!has(seg, n)) continue;
     push(
       out,
@@ -748,7 +739,7 @@ function decideComposite(
     blockElement(out, seg, pos, element);
     return;
   }
-  name(out, pos, [element]);
+  name(pos,[element]);
   for (const { component, date } of judgment.decisions) {
     // `component` is a 1-based index of a component the judgment read out of `components`.
     const value = components[component - 1] as string;
@@ -808,7 +799,7 @@ function decideByShape(
   }
   const ctx: X12ShapeContext = { ...out.delimiters, elements: seg.elements };
   if (shape.kind === "keep") {
-    if (shape.test(el(seg, element), ctx)) name(out, pos, [element]);
+    if (shape.test(el(seg, element), ctx)) name(pos,[element]);
     else blockElement(out, seg, pos, element);
     return;
   }
@@ -837,14 +828,14 @@ function closeSegment(
     removeSegment(out, seg, pos);
     return;
   }
-  name(out, pos, [0]);
+  name(pos,[0]);
   // A position the set's TR3 requires, or one a qualifier implies, left empty while a later one holds a
   // value, or a required, qualifier, code or date position whose value fails its shape: every value
   // after it was shifted by an extra or a missing separator. A number shape cannot tell a shifted date
   // or account number from an amount, so each of them is removed and recorded instead.
   const shapes = X12_ELEMENT_SHAPES[pos.segId] ?? {};
   const ctx: X12ShapeContext = { ...out.delimiters, elements: seg.elements };
-  const decided = (n: number): boolean => out.named.get(segKey(pos))?.has(n) === true;
+  const decided = (n: number): boolean => pos.named.has(n);
   // The ISA is read at fixed byte positions, and the parser refuses one whose separators are not all
   // in place, so no value in it can be shifted: each element is decided by its own shape alone.
   const fixed = pos.segId === FIXED_WIDTH_SEGMENT_ID;
@@ -908,7 +899,7 @@ function envelopePos(segId: X12EnvelopeAddress["segment"], occurrence: number): 
   // the same group even when an earlier group arrived truncated with no trailer at all.
   const segIdBracket = `${segId}[${String(occurrence)}]`;
   return {
-    key: `envelope:${segIdBracket}`,
+    named: new Set<number>(),
     stId: "",
     segId,
     segIdBracket,
@@ -949,7 +940,6 @@ export function extractX12Loci(interchange: X12Interchange): X12Extraction {
   const out: X12LocusAccumulator = {
     loci: [],
     coords: [],
-    named: new Map<string, Set<number>>(),
     delimiters: {
       component: interchange.delimiters.component,
       repetition: interchange.delimiters.repetition,
@@ -991,7 +981,7 @@ export function extractX12Loci(interchange: X12Interchange): X12Extraction {
         const n = occ.get(segId) ?? 0;
         occ.set(segId, n + 1);
         const pos: SegPos = {
-          key: `${String(groupIndex)}:${String(txIndex)}:${String(segIndex)}`,
+          named: new Set<number>(),
           stId,
           segId,
           segIdBracket: `${segId}[${String(n)}]`,
@@ -1023,7 +1013,7 @@ export function extractX12Loci(interchange: X12Interchange): X12Extraction {
     const n = orphanOcc.get(segId) ?? 0;
     orphanOcc.set(segId, n + 1);
     const pos: SegPos = {
-      key: `orphan:${String(index)}`,
+      named: new Set<number>(),
       stId: "orphan",
       segId,
       segIdBracket: `${segId}[${String(n)}]`,
@@ -1052,7 +1042,7 @@ export function extractX12Loci(interchange: X12Interchange): X12Extraction {
   const residuals = new UnexaminedResidualBuilder();
   for (const { seg, pos } of enumerated) {
     enumerateOrFail(pos.segIdBracket, () => {
-      recordUnexaminedX12Positions(residuals, seg, pos, out.named.get(segKey(pos)));
+      recordUnexaminedX12Positions(residuals, seg, pos, pos.named);
     });
   }
   return { loci: out.loci, coords: out.coords, unexaminedResiduals: residuals.build() };
@@ -1069,10 +1059,10 @@ function recordUnexaminedX12Positions(
   residuals: UnexaminedResidualBuilder,
   seg: SegmentElements,
   pos: SegPos,
-  named: ReadonlySet<number> | undefined,
+  named: ReadonlySet<number>,
 ): void {
   for (let n = 0; n < seg.elements.length; n += 1) {
-    if (named?.has(n) === true) continue;
+    if (named.has(n)) continue;
     // The closing sweep named every value-bearing element, so no input reaches the record below; it
     // stays as the independent count that would show a position a future rule forgot to decide.
     /* v8 ignore start -- every value-bearing element is decided before this count runs */
