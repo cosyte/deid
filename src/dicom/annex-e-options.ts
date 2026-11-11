@@ -7,14 +7,19 @@
  * can both do it and declare it:
  *
  * - **Clean Descriptors** (`113105`): descriptions and comments are cleaned rather than removed. The
- *   delegated pass cleans by emptying, so no text a descriptor carried survives, and the option keeps
- *   nothing Safe Harbor removes. It runs under any policy.
+ *   delegated pass cleans a text descriptor by emptying it, but it cleans a sequence in the column (the
+ *   diagnosis code sequences, Reason for Visit, Request Attributes, Reason for Requested Procedure,
+ *   Prescription Notes) by keeping it and its items, free-text Code Meaning included. This adapter
+ *   removes each such sequence itself (`./cleaned-sequences.ts`), but because the peer keeps that text
+ *   a run that claims the reserved `safe-harbor` label may not name it.
  * - **Retain Patient Characteristics** (`113108`): age, sex, size, weight, ethnic group, smoking and
  *   pregnancy status are kept. An age over 89 is a Safe Harbor identifier (category C), so a run that
  *   claims the reserved `safe-harbor` label may not name it.
  * - **Retain Device Identity** (`113109`): device serial numbers, station names, detector and gantry
- *   identifiers are kept. Those are Safe Harbor category M, so a run that claims the label may not name
- *   it either.
+ *   identifiers are kept, and so are the device's calibration, manufacture and installation dates, the
+ *   scheduled study and procedure step locations, the station location code sequences, the original
+ *   Device UID and the Manufacturer's Device Class UID. Device identifiers are Safe Harbor category M,
+ *   so a run that claims the label may not name it either.
  *
  * **Everything else is refused, never ignored.** An option the adapter does not offer, an entry that is
  * not a string, or a list that is not an array aborts the pass with `DEID_POLICY_INVALID` before
@@ -61,14 +66,17 @@ export const DICOM_ANNEX_E_OPTIONS: readonly DicomAnnexEOption[] = Object.freeze
 ]);
 
 /**
- * The offered options that keep a value Safe Harbor removes, each with the Safe Harbor identifier it
- * keeps. A run under the reserved `safe-harbor` label that names one of these is refused.
+ * The offered options that keep a value Safe Harbor removes, each with what it keeps. A run under the
+ * reserved `safe-harbor` label that names one of these is refused. Every offered option is here.
  */
-const KEEPS_WHAT_SAFE_HARBOR_REMOVES: Readonly<Partial<Record<DicomAnnexEOption, string>>> =
-  Object.freeze({
-    RetainPatientCharacteristics: "an age over 89, which is category (C)",
-    RetainDeviceIdentity: "device identifiers and serial numbers, which are category (M)",
-  });
+const KEEPS_WHAT_SAFE_HARBOR_REMOVES: Readonly<Record<DicomAnnexEOption, string>> = Object.freeze({
+  CleanDescriptors:
+    "the items of coded lists such as diagnosis codes, whose Code Meaning is free text",
+  RetainPatientCharacteristics: "an age over 89, which is category (C)",
+  RetainDeviceIdentity:
+    "device identifiers and serial numbers, which are category (M), and the device's dates " +
+    "and locations",
+});
 
 /** The reserved label only a Safe-Harbor-conforming policy may carry. */
 const SAFE_HARBOR_LABEL = "safe-harbor";
@@ -90,10 +98,12 @@ function isOffered(entry: unknown): entry is DicomAnnexEOption {
  * - A value that is not an array, or an entry that is not an offered option name: refused. The
  *   message names the entry by its position and never echoes it, so nothing a caller passed by
  *   mistake (a value pasted from a document, say) reaches an error log.
+ * - An option named twice: refused, naming the second position. A repeat is most likely a list built
+ *   wrongly, and the caller should see that rather than a run that hides it.
  * - An option that keeps what Safe Harbor removes, under a policy named exactly `safe-harbor`:
- *   refused, naming the option and the identifier it keeps.
+ *   refused, naming the option and the identifier it keeps. All three offered options do.
  *
- * A repeat is applied once. The result is in {@link DICOM_ANNEX_E_OPTIONS} order and frozen.
+ * The result is in {@link DICOM_ANNEX_E_OPTIONS} order and frozen.
  *
  * @param requested - The caller's `annexEOptions`, unchecked.
  * @param policyName - The resolved policy's name.
@@ -121,15 +131,21 @@ export function resolveAnnexEOptions(
           `set than the one named. Offered: ${DICOM_ANNEX_E_OPTIONS.join(", ")}.`,
       );
     }
+    if (named.has(entry)) {
+      refuse(
+        `annexEOptions[${String(index)}] names an option already named; nothing was ` +
+          "de-identified. Name each option once.",
+      );
+    }
     named.add(entry);
   }
   if (policyName === SAFE_HARBOR_LABEL) {
     for (const option of DICOM_ANNEX_E_OPTIONS) {
-      const keeps = KEEPS_WHAT_SAFE_HARBOR_REMOVES[option];
-      if (named.has(option) && keeps !== undefined) {
+      if (named.has(option)) {
         refuse(
           `a run under the reserved "${SAFE_HARBOR_LABEL}" label must not apply the Annex E ` +
-            `option ${option}: it keeps ${keeps}. Name the policy distinctly to retain it.`,
+            `option ${option}: it keeps ${KEEPS_WHAT_SAFE_HARBOR_REMOVES[option]}. Name the policy ` +
+            "distinctly to retain it.",
         );
       }
     }

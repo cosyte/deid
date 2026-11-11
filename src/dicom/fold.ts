@@ -135,7 +135,8 @@ export function classifyDicomCategory(keyword: string, applied: AppliedAction): 
   ) {
     return SAFE_HARBOR_CATEGORIES.GEOGRAPHIC;
   }
-  if (k.includes("date") || k.includes("time") || k.includes("birth")) {
+  // An age is filed with dates, as every other adapter files it: an age over 89 is category (C).
+  if (k.includes("date") || k.includes("time") || k.includes("birth") || k === "patientsage") {
     return SAFE_HARBOR_CATEGORIES.DATES;
   }
   if (k.includes("patientid") || k.includes("medicalrecord") || k.includes("issuerofpatient")) {

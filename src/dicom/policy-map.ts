@@ -12,7 +12,7 @@
  * closed set `./annex-e-options.ts` offers, and an option that keeps what Safe Harbor removes is refused
  * under the reserved `safe-harbor` label.
  *
- @packageDocumentation
+ * @packageDocumentation
  */
 
 import { resolvePolicy } from "../policy.js";

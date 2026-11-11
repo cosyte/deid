@@ -52,14 +52,20 @@ export interface DicomDeidOptions {
    * `(0012,0064)` by its CID 7050 term and named in `(0012,0063)`, and every attribute a Retain option
    * keeps is a `retained` manifest row.
    *
-   * - `"CleanDescriptors"`: descriptions and comments are emptied rather than removed. Allowed under
-   *   any policy.
+   * - `"CleanDescriptors"`: text descriptions and comments are emptied rather than removed, and every
+   *   sequence the option cleans (the diagnosis code sequences, Reason for Visit, Request Attributes,
+   *   Reason for Requested Procedure, Prescription Notes) is removed at the top level, because the
+   *   delegated pass keeps its items. A cleaned sequence nested inside a kept one is refused with
+   *   `DEID_FORMAT_UNSUPPORTED`. Refused under a policy named `safe-harbor`: the delegated pass keeps
+   *   coded list items, free-text Code Meaning included.
    * - `"RetainPatientCharacteristics"`: age, sex, size, weight and the other characteristics of
    *   Table E.1-1 are kept. Refused under a policy named `safe-harbor`: it keeps an age over 89.
-   * - `"RetainDeviceIdentity"`: device serial numbers, station names and device identifiers are kept.
+   * - `"RetainDeviceIdentity"`: device serial numbers, station names and device identifiers are kept,
+   *   and so are calibration, manufacture and installation dates, scheduled locations, station
+   *   location code sequences, the original Device UID and the Manufacturer's Device Class UID.
    *   Refused under a policy named `safe-harbor`: it keeps device identifiers.
    *
-   * Any other entry is refused with `DEID_POLICY_INVALID`, never ignored.
+   * Any other entry, or an option named twice, is refused with `DEID_POLICY_INVALID`, never ignored.
    *
    * @example
    * ```ts

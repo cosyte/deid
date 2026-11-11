@@ -20,8 +20,9 @@
  * **Three Annex E options a caller can name.** `annexEOptions` takes Clean Descriptors, Retain Patient
  * Characteristics and Retain Device Identity ({@link DICOM_ANNEX_E_OPTIONS}). Each is applied by the
  * delegated pass, declared by its CID 7050 term, and every attribute a Retain option keeps is a `retained`
- * row of the manifest. The two Retain options keep what Safe Harbor removes, so a run under the reserved
- * `safe-harbor` label that names one is refused; any option not offered is refused too, never ignored.
+ * row of the manifest. A sequence the pass cleans keeps its items, so this adapter removes it. Each option
+ * keeps something Safe Harbor removes, so a run under the reserved `safe-harbor` label that names one is
+ * refused; any option not offered is refused too, never ignored.
  *
  * **The declaration is machine-readable, not only prose.** Beside the De-identification Method text the
  * delegated pass writes to `(0012,0063)`, this adapter writes the **CID 7050** coded terms for the profile
@@ -61,6 +62,7 @@ import {
   serializeVerified,
   TAG_DEIDENTIFICATION_METHOD_CODE_SEQUENCE,
 } from "./method-sequence.js";
+import { removeCleanedSequences } from "./cleaned-sequences.js";
 import { resolveDicomOptions } from "./policy-map.js";
 import type {
   DicomBufferDeidResult,
@@ -114,12 +116,18 @@ function runDicomPass(
   assertValueBytes(dataset);
   const inputCarriedMethodCodes = dataset.has(TAG_DEIDENTIFICATION_METHOD_CODE_SEQUENCE);
 
-  const { dataset: deidentified, report } = dicomDeidentify(dataset, {
+  const delegated = dicomDeidentify(dataset, {
     retain: resolved.retain,
     deidentificationMethod: resolved.deidentificationMethod,
     ...(resolved.uidRoot !== undefined ? { uidRoot: resolved.uidRoot } : {}),
     ...(resolved.uidMap !== undefined ? { uidMap: resolved.uidMap } : {}),
   });
+  // A sequence the pass cleaned still holds its items, free-text Code Meaning included: remove it, and
+  // record it removed, before anything is attached, serialized or folded.
+  const { dataset: deidentified, report } = removeCleanedSequences(
+    delegated.dataset,
+    delegated.report,
+  );
 
   const result = attachMethodCodeSequence(deidentified, declaration.appliedTerms);
   const bytes = serializeVerified(result, declaration.appliedTerms, whole);
@@ -178,8 +186,11 @@ function runDicomPass(
  * @returns The de-identified dataset, the value-free manifest, the coded declaration, the warnings, and
  *   the metadata-only stance.
  * @throws {@link DeidError} `DEID_POLICY_INVALID` when `annexEOptions` names an option this adapter does
- *   not offer, or names Retain Patient Characteristics or Retain Device Identity under a policy named
- *   `safe-harbor`: both keep what Safe Harbor removes.
+ *   not offer, names one twice, or names any option under a policy named `safe-harbor`: each keeps
+ *   something Safe Harbor removes.
+ * @throws {@link DeidError} `DEID_FORMAT_UNSUPPORTED` when Clean Descriptors cleaned a sequence nested
+ *   inside a sequence the pass kept: its items would keep their text, and only a top-level sequence is
+ *   removed.
  * @throws {@link DeidError} `DEID_POSITIONS_UNENUMERABLE` when a dataset, a sequence item or the Part 10
  *   File Meta group will not yield its positions, so no honest count exists for this study, or when an
  *   element carries no value bytes (a copy of an `Element` made by object spread keeps no `rawBytes`;

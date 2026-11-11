@@ -277,6 +277,7 @@ From [De-identify an NCPDP Telecom transaction](./guides-ncpdp.md#known-limitati
 | -------------------------------------------------- | ----------------------------------------------------- | ------------------------------------------------------ |
 | Burned-in text and faces in the pixels             | Flags `burnedInAnnotationHazard`; never cleans pixels | Do not release an image on its metadata alone          |
 | Annex E options other than the three offered       | Refuses them; none named is the full Basic Profile    | Nothing: this is the stricter direction                |
+| A coded list nested in a kept sequence, with Clean Descriptors | Refuses with `DEID_FORMAT_UNSUPPORTED`, no output | Run without Clean Descriptors for that file |
 | Replacement-UID consistency across calls           | Holds within one call only                            | Pass one shared `uidMap` to every call that must agree |
 | Attributes the Annex E report does not account for | Keeps them, counted, nested sequence items included   | Filter them if your recipient may not see them         |
 

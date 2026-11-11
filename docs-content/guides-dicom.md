@@ -109,18 +109,29 @@ Three PS3.15 Annex E options can be named in `annexEOptions`. Each one is applie
 written to De-identification Method Code Sequence `(0012,0064)` by its CID 7050 term, named in
 De-identification Method `(0012,0063)`, and listed on `retained`:
 
-| Option                         | CID 7050 | What it does                                                                  | Under a policy named `safe-harbor` |
-| ------------------------------ | -------- | ----------------------------------------------------------------------------- | ---------------------------------- |
-| `CleanDescriptors`             | `113105` | Empties descriptions and comments rather than removing them                   | Allowed: it keeps nothing          |
-| `RetainPatientCharacteristics` | `113108` | Keeps age, sex, size, weight, ethnic group, smoking and pregnancy status      | Refused: it keeps an age over 89   |
-| `RetainDeviceIdentity`         | `113109` | Keeps device serial numbers, station names, detector and gantry identifiers   | Refused: it keeps device identifiers |
+| Option                         | CID 7050 | What it does                                                                                                                                                                                                                                                                                                            | Under a policy named `safe-harbor`                     |
+| ------------------------------ | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| `CleanDescriptors`             | `113105` | Empties text descriptions and comments rather than removing them, and removes each coded list in the option's column (see below)                                                                                                                                                                                        | Refused: `@cosyte/dicom` keeps coded list items        |
+| `RetainPatientCharacteristics` | `113108` | Keeps age, sex, size, weight, ethnic group, smoking and pregnancy status                                                                                                                                                                                                                                                | Refused: it keeps an age over 89                       |
+| `RetainDeviceIdentity`         | `113109` | Keeps device serial numbers, station names, detector and gantry identifiers; calibration, manufacture and installation dates; Scheduled Study Location, Scheduled Procedure Step Location and the station geographic location code sequences; the original Device UID and Manufacturer's Device Class UID, not remapped | Refused: it keeps device identifiers, dates and places |
 
-The two Retain options keep what Safe Harbor removes, so the reserved `safe-harbor` label is refused
-for them: a run under the default policy that names one throws `DEID_POLICY_INVALID` before anything is
-de-identified. Name your policy distinctly to keep them. An option that is not in the table above is
-refused the same way, never ignored. Every attribute a Retain option kept is a `retained` row of the
-manifest with `DEID_RESIDUAL_RETAINED`, so it reaches the residual inventory rather than surviving
-unmentioned.
+Every option keeps something Safe Harbor removes, so the reserved `safe-harbor` label is refused for
+each: a run under the default policy that names one throws `DEID_POLICY_INVALID` before anything is
+de-identified. Name your policy distinctly to use them. An option that is not in the table above, or
+one named twice, is refused the same way, never ignored. Every attribute a Retain option kept is a
+`retained` row of the manifest with `DEID_RESIDUAL_RETAINED`, so it reaches the residual inventory
+rather than surviving unmentioned.
+
+**Clean Descriptors and coded lists.** Table E.1-1 gives Clean Descriptors a `C` on sequences as well
+as on text: Admitting Diagnoses Code Sequence `(0008,1084)`, the diagnosis code sequences `(0008,1301)`
+to `(0008,1304)`, Reason for Visit Code Sequence `(0032,1067)`, Request Attributes Sequence
+`(0040,0275)`, Reason for Requested Procedure Code Sequence `(0040,100A)` and Prescription Notes
+Sequence `(3010,0081)`. `@cosyte/dicom` cleans such a sequence by keeping it and its items, and the
+Code Value, Coding Scheme Designator and free-text Code Meaning in each item survive. So this adapter
+removes each such sequence that sits at the top level of the dataset, and the manifest records it
+`removed`, never cleaned. One nested inside a sequence the pass keeps cannot be removed here, so the
+run throws `DEID_FORMAT_UNSUPPORTED` and returns nothing; run without the option and the Basic Profile
+removes it.
 
 ```ts runnable
 import { parseDicom } from "@cosyte/dicom";
@@ -407,7 +418,8 @@ warns rather than giving a false sense of safety.
   cleaned. The two pixel options of CID 7050 (`113101` Clean Pixel Data, `113102` Clean Recognizable
   Visual Features) are therefore always declared **withheld** and are never written to `(0012,0064)`.
 - **Three Annex E options, no more**: Clean Descriptors, Retain Patient Characteristics and Retain
-  Device Identity can be named; every other option is refused. With none named, the full Basic Profile
+  Device Identity can be named, none under a policy named `safe-harbor`; every other option is
+  refused. Clean Descriptors refuses a file with a cleaned coded list nested inside a kept sequence. With none named, the full Basic Profile
   applies (maximal removal) and every option is declared withheld.
 - **Replacement-UID referential integrity is guaranteed within one call** unless you supply a shared
   `uidMap`, in which case it reaches every call that shares it. The declared scope is on the result.

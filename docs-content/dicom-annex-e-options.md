@@ -30,25 +30,37 @@ apply honestly.
 
 Three options, named in `annexEOptions`:
 
-| Option                          | CID 7050 | What it does in this pass                                                      | Under the `safe-harbor` label           |
-| ------------------------------- | -------- | ------------------------------------------------------------------------------ | --------------------------------------- |
-| `CleanDescriptors`              | `113105` | Descriptions and comments are cleaned: a text value is emptied                | Allowed: it keeps nothing               |
-| `RetainPatientCharacteristics`  | `113108` | Age, sex, size, weight, ethnic group, smoking and pregnancy status are kept    | Refused: it keeps an age over 89        |
-| `RetainDeviceIdentity`          | `113109` | Device serial numbers, station names, detector and gantry identifiers are kept | Refused: it keeps device identifiers    |
+| Option                         | CID 7050 | What it does in this pass                                                                                                                                                                                                                                                                                                      | Under the `safe-harbor` label                          |
+| ------------------------------ | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------ |
+| `CleanDescriptors`             | `113105` | Text descriptions and comments are emptied; each coded list in the column is removed at the top level, and one nested inside a kept sequence refuses the run                                                                                                                                                                   | Refused: `@cosyte/dicom` keeps coded list items        |
+| `RetainPatientCharacteristics` | `113108` | Age, sex, size, weight, ethnic group, smoking and pregnancy status are kept                                                                                                                                                                                                                                                    | Refused: it keeps an age over 89                       |
+| `RetainDeviceIdentity`         | `113109` | Device serial numbers, station names, detector and gantry identifiers are kept; so are calibration, manufacture and installation dates, Scheduled Study Location, Scheduled Procedure Step Location, the station geographic location code sequences, the original Device UID and Manufacturer's Device Class UID, not remapped | Refused: it keeps device identifiers, dates and places |
 
 Each was chosen because the column is applied in full by `@cosyte/dicom`, one CID 7050 term names it
 exactly, and what it keeps or cleans is the same in every file. That makes three statements true at
 once: the run did what the term says, the term in De-identification Method Code Sequence `(0012,0064)`
 is the right one, and the manifest can name every attribute the option kept.
 
+**Clean Descriptors needs one step of our own.** Its column puts a `C` on sequences as well as on text:
+Admitting Diagnoses Code Sequence `(0008,1084)`, the diagnosis code sequences `(0008,1301)` to
+`(0008,1304)`, Reason for Visit Code Sequence `(0032,1067)`, Request Attributes Sequence `(0040,0275)`,
+Reason for Requested Procedure Code Sequence `(0040,100A)` and Prescription Notes Sequence
+`(3010,0081)`. `@cosyte/dicom` empties a text value it cleans, but it cleans a sequence by keeping it
+and walking its items, and an item's Code Value, Coding Scheme Designator and free-text Code Meaning
+survive. A coded list cannot be given a similar-meaning substitute here, so this adapter removes every
+sequence the pass cleaned at the top level of the dataset and records it `removed`. Removing one nested
+inside a kept sequence would mean re-encoding the sequences around it, which this adapter does not do,
+so such a file is refused with `DEID_FORMAT_UNSUPPORTED`. Because the peer keeps that text, the option
+is refused under the `safe-harbor` label too.
+
 The rules that come with them:
 
-- **The safe-harbor label is refused for an option that keeps what Safe Harbor removes.** A run under a
-  policy named exactly `safe-harbor`, the default included, that names `RetainPatientCharacteristics`
-  or `RetainDeviceIdentity` throws `DEID_POLICY_INVALID` before anything is de-identified. Name your
-  policy distinctly to keep them.
-- **An option we do not offer is refused, never ignored.** Ignoring a name would release output made
-  under a different option set than the one the caller asked for.
+- **The safe-harbor label is refused for an option that keeps what Safe Harbor removes, and each of
+  the three does.** A run under a policy named exactly `safe-harbor`, the default included, that names
+  any of them throws `DEID_POLICY_INVALID` before anything is de-identified. Name your policy
+  distinctly to use them.
+- **An option we do not offer is refused, never ignored, and so is one named twice.** Ignoring a name
+  would release output made under a different option set than the one the caller asked for.
 - **What an option keeps is in the manifest.** Every attribute a Retain option kept is a `retained` row
   with `DEID_RESIDUAL_RETAINED`, so it reaches the residual inventory an expert reads.
 - **What was applied is declared.** Each applied option is written to `(0012,0064)` by its CID 7050

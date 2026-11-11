@@ -9,8 +9,9 @@
  * Every test here is on a synthetic file built in memory, and the fail-closed half is the one that
  * matters most:
  *
- * - the two Retain options keep what Safe Harbor removes (an age over 89, a device serial number), so a
- *   run under the reserved `safe-harbor` label that names one is refused before anything is delegated;
+ * - every offered option keeps something Safe Harbor removes (coded list items, an age over 89, a device
+ *   serial number), so a run under the reserved `safe-harbor` label that names one is refused before
+ *   anything is delegated;
  * - an option the adapter does not offer, Retain UIDs or Retain Safe Private among them, is refused;
  * - an attribute an option keeps is a `retained` row of the manifest, never a silent survivor;
  * - and the identifiers no option keeps are gone from the output bytes with every option named.
@@ -205,10 +206,11 @@ describe("Retain Device Identity (113109)", () => {
 });
 
 describe("Clean Descriptors (113105)", () => {
-  // Removes rather than keeps: a cleaned descriptor is emptied, so the label may stand.
-  const made = run({ annexEOptions: ["CleanDescriptors"] });
+  // Refused under the safe-harbor label (see annex-e-clean-descriptors.test.ts), so run it under a
+  // policy that does not claim it.
+  const made = run({ policy: RESEARCH, annexEOptions: ["CleanDescriptors"] });
 
-  it("runs under the default safe-harbor policy, because it keeps nothing Safe Harbor removes", () => {
+  it("runs under a policy that does not claim the safe-harbor label", () => {
     const { result } = made();
     expect(result.retained).toEqual(["CleanDescriptors"]);
     expect(result.deidentificationMethodCodes.map((t) => t.codeValue)).toEqual([
@@ -227,7 +229,7 @@ describe("Clean Descriptors (113105)", () => {
     }
   });
 
-  it("keeps nothing, so it adds no retained row", () => {
+  it("keeps no scalar descriptor, so it adds no retained row", () => {
     const { result } = made();
     expect(result.manifest.filter((e) => e.disposition === "retained")).toEqual([]);
   });
@@ -239,13 +241,8 @@ describe("all three at once", () => {
       serializeDicom(optionDataset()),
       {
         policy: RESEARCH,
-        // Out of table order and with a repeat: the declaration is in CID 7050 order, once each.
-        annexEOptions: [
-          "RetainDeviceIdentity",
-          "CleanDescriptors",
-          "RetainPatientCharacteristics",
-          "RetainDeviceIdentity",
-        ],
+        // Out of table order: the declaration is in CID 7050 order.
+        annexEOptions: ["RetainDeviceIdentity", "CleanDescriptors", "RetainPatientCharacteristics"],
       },
     );
     expect(deidentificationMethodCodes.map((t) => t.codeValue)).toEqual([
@@ -270,6 +267,7 @@ describe("all three at once", () => {
 
 describe("fail closed: the safe-harbor label is refused for an option that keeps what it removes", () => {
   const refused: readonly DicomAnnexEOption[] = [
+    "CleanDescriptors",
     "RetainPatientCharacteristics",
     "RetainDeviceIdentity",
   ];
@@ -288,7 +286,7 @@ describe("fail closed: the safe-harbor label is refused for an option that keeps
         const thrown = thrownBy(() =>
           deidentifyDicomBuffer(serializeDicom(optionDataset()), {
             policy,
-            annexEOptions: ["CleanDescriptors", option],
+            annexEOptions: [option],
           }),
         );
         expect((thrown as DeidError).code).toBe(FATAL_CODES.DEID_POLICY_INVALID);
@@ -388,7 +386,7 @@ describe("the fold records a kept attribute by the action that kept it", () => {
     });
     expect(manifest).toEqual([
       {
-        category: "OTHER_UNIQUE_ID",
+        category: "DATES",
         transform: "retain",
         locus: "(0010,1010) Patient's Age",
         count: 1,
@@ -430,10 +428,14 @@ describe("each refusal says what was refused and why, in a fixed sentence", () =
     );
   });
 
-  it("each Retain option under the safe-harbor label, naming what it keeps", () => {
+  it("each option under the safe-harbor label, naming what it keeps", () => {
     const expected: Readonly<Record<string, string>> = {
+      CleanDescriptors:
+        "the items of coded lists such as diagnosis codes, whose Code Meaning is free text",
       RetainPatientCharacteristics: "an age over 89, which is category (C)",
-      RetainDeviceIdentity: "device identifiers and serial numbers, which are category (M)",
+      RetainDeviceIdentity:
+        "device identifiers and serial numbers, which are category (M), and the device's dates " +
+        "and locations",
     };
     for (const [option, keeps] of Object.entries(expected)) {
       const thrown = thrownBy(() =>
