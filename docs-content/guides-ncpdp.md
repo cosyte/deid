@@ -122,6 +122,11 @@ A Telecom message that carries more than one transaction is **refused** with a t
 carrying `DEID_FORMAT_UNSUPPORTED`, with no partial output. Split it and de-identify each transaction on
 its own.
 
+So is a transaction that carries more than one Patient (`01`) or Claim (`07`) segment. With no Group
+Separator in front of it, a second patient's Patient and Claim segments decode as part of the one
+transaction, and de-identifying them under the caller's one patient context would give two people one
+date-shift offset. Send each patient's claim in its own transmission, with its own context.
+
 ## Reference
 
 - [`deidentifyTelecom`](./api/@cosyte/deid/ncpdp.md#deidentifytelecom),

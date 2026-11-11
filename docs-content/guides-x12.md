@@ -220,6 +220,11 @@ segments (`PLB`, `TS3`, `TS2`), the 837 segments `CUR`, `CR5` to `CR8`, `FRM`, `
 The 837 provider taxonomy (`PRV`), other insurance indicators (`OI`) and dental `DN1` / `DN2` segments
 are kept by shape.
 
+An interchange is one patient context. An `837` names a subscriber and a dependent patient, and an
+interchange can carry claims for many patients, so this is not refused; under a **date-shift** policy
+every date in it moves by the one offset the context derives (see
+[the limitations page](./limitations.md#one-context-per-call-however-many-people-the-document-names)).
+
 ## Reference
 
 - [`deidentifyX12`](./api/@cosyte/deid/x12.md#deidentifyx12),

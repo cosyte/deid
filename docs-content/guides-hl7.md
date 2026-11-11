@@ -182,6 +182,13 @@ category each entry lands in and therefore which transform the configured policy
 - Under a **date-shift** policy, a date whose encoding that transform does not accept, including a
   legitimately reduced-precision value (year only, or year and month), is **blocked** rather than
   shifted: a recorded utility loss, never a value passed through unshifted.
+- A message is one patient context. Messages written one after another with no batch envelope parse
+  as one message with more than one `MSH` segment, and both entry points **refuse** that with
+  `DEID_FORMAT_UNSUPPORTED` rather than de-identify several messages under one context. A batch with
+  its `FHS` / `BHS` envelope is refused by `parseHL7`; split it with `splitBatch` from `@cosyte/hl7`.
+  One message that names two patients (an `ADT^A17` swap) is handled, and under a **date-shift**
+  policy both patients' dates move by the one offset the context derives (see
+  [the limitations page](./limitations.md#one-context-per-call-however-many-people-the-document-names)).
 
 The honesty line is unchanged: the output is **"Safe-Harbor-transformed per the configured policy,"**
 never "de-identified" and never "HIPAA-compliant."

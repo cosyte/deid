@@ -228,6 +228,11 @@ v2.5.1 types as a date is a stated residual; the address generalization keeps on
 3-digit ZIP, unless the profile names the §164.514(e)(2)(ii) geographic retention class described
 above.
 
+**One message per call.** Messages written one after another with no batch envelope parse as one
+message with more than one `MSH` segment; both HL7 entry points **refuse** that with
+`DEID_FORMAT_UNSUPPORTED` rather than de-identify several messages, perhaps several patients', under one
+context. Split a batch with `splitBatch` from `@cosyte/hl7` and de-identify each message on its own.
+
 **Those positions are now counted and located, which is a different thing from being cleaned.** Every
 value-bearing position a pass hands through that no locus rule names is recorded as an **unexamined
 residual** on `result.unexaminedResiduals`, with its structural locus, a count, and the fact that nothing
@@ -520,7 +525,8 @@ are unaffected.
 transaction. A message that carries more than one is **refused**: a typed `DeidError` carrying
 `DEID_FORMAT_UNSUPPORTED` (message `NCPDP_MULTI_TRANSACTION_REFUSAL_MESSAGE`), and no transformed
 message, no manifest and no partial output, so no transaction is dropped or returned untransformed.
-Split such a message and de-identify each transaction on its own.
+Split such a message and de-identify each transaction on its own. A transaction that carries more
+than one Patient or Claim segment is refused the same way: the second may be another patient's.
 
 ### De-identify a DICOM study
 

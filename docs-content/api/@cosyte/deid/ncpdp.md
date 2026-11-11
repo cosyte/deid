@@ -388,8 +388,9 @@ The de-identified Telecom stream and the value-free manifest.
 ["@cosyte/deid".DeidError](../deid.md#deiderror) `DEID_NO_KEY` when a keyed transform is required for a
 category present in the transaction but no key context was supplied;
 `DEID_FORMAT_UNSUPPORTED` when the model handed in is an ePrescribing SCRIPT message rather than
-a Telecom transaction, or a Telecom transmission that carries more than one transaction, both of
-which this adapter refuses outright rather than half-handle.
+a Telecom transaction, a Telecom transmission that carries more than one transaction, or a
+transaction that carries more than one Patient or Claim segment, all of which this adapter
+refuses outright rather than half-handle.
 
 #### Example
 
@@ -437,7 +438,8 @@ The de-identified Telecom string and the value-free manifest.
 ["@cosyte/deid".DeidError](../deid.md#deiderror) `DEID_FORMAT_UNSUPPORTED` when the text is an XML
 document, which on an NCPDP surface is ePrescribing SCRIPT: it is refused before it is parsed,
 so no partial output exists to return; and when the transmission carries more than one
-transaction, which is refused before anything is extracted.
+transaction, or a Patient or Claim segment more than once, which is refused before anything is
+extracted.
 
 #### Example
 
