@@ -92,7 +92,37 @@ run, because the demographic map has already decided `name` / `telecom` / `photo
 so a `HumanName` or an `Address` at a person-resource property that map does not list is passed
 through and counted as unexamined - the same bytes an `Organization` would have had removed.
 
+**Transform labels, opt-in.** With `transformLabels: true` the output says, inside the FHIR, what
+the pass did: each resource it changed carries the `meta.security` coding `REDACTED` from the v3
+`ObservationValue` code system, and an element R4 requires that it removed carries the Data Absent
+Reason `masked` in its place, so the resource keeps its required elements. A contained resource is
+never labeled (R4 `dom-5`); its container is. The label says that some content was filtered out,
+never that the resource is de-identified. Off by default.
+
 ## Interfaces
+
+### FhirApplyOptions
+
+Options for [applyFhir](#applyfhir).
+
+#### Example
+
+```ts
+import { type FhirApplyOptions } from "@cosyte/deid/fhir";
+
+const options: FhirApplyOptions = { transformLabels: true };
+```
+
+#### Properties
+
+##### transformLabels?
+
+> `readonly` `optional` **transformLabels?**: `boolean`
+
+Write the transform labels: the `meta.security` coding on each resource the rebuild changed, and
+a Data Absent Reason in place of a removed element R4 requires. Off by default.
+
+***
 
 ### FhirCoord
 
@@ -112,6 +142,90 @@ How to write the transformed value back.
 > `readonly` **node**: `FhirNode`
 
 The model node to rewrite (a primitive, an `Address` complex, or a property-value node to drop).
+
+***
+
+### FhirDeidOptions
+
+Options for [deidentifyFhir](#deidentifyfhir) and [deidentifyFhirJson](#deidentifyfhirjson): the core's
+["@cosyte/deid".DeidOptions](../deid.md#deidoptions) plus the FHIR-only `transformLabels`.
+
+#### Example
+
+```ts
+import { deidentifyFhirJson, type FhirDeidOptions } from "@cosyte/deid/fhir";
+
+const options: FhirDeidOptions = { transformLabels: true };
+const { json } = deidentifyFhirJson('{"resourceType":"Patient","name":[{"family":"ZZ"}]}', options);
+```
+
+#### Extends
+
+- [`DeidOptions`](../deid.md#deidoptions)
+
+#### Properties
+
+##### context?
+
+> `readonly` `optional` **context?**: [`DeidContext`](../deid.md#deidcontext)
+
+The context carrying the consumer's key, required only when the policy uses a keyed transform.
+
+###### Inherited from
+
+[`DeidOptions`](../deid.md#deidoptions).[`context`](../deid.md#context)
+
+##### policy?
+
+> `readonly` `optional` **policy?**: [`DeidPolicy`](../deid.md#deidpolicy) \| `"safe-harbor"`
+
+The policy to apply. Defaults to the built-in Safe Harbor policy.
+
+###### Inherited from
+
+[`DeidOptions`](../deid.md#deidoptions).[`policy`](../deid.md#policy)
+
+##### redactor?
+
+> `readonly` `optional` **redactor?**: [`FreeTextRedactor`](../deid.md#freetextredactor)
+
+A **consumer-supplied** free-text redactor. When present, the engine invokes it
+at each free-text locus instead of blocking, and records its output as **consumer-asserted**
+(`DEID_FREETEXT_CONSUMER_REDACTED`). The library bundles **no** redactor. **Fail-closed contract:**
+when this is omitted, or when the redactor throws or returns nothing, the free-text locus is
+**blocked** (the safe default), never emitted un-redacted. A returned redaction is trusted as the
+consumer's; the engine does not re-verify it and does not touch the structural PHI the adapters
+remove. See [FreeTextRedactor](../deid.md#freetextredactor).
+
+###### Inherited from
+
+[`DeidOptions`](../deid.md#deidoptions).[`redactor`](../deid.md#redactor)
+
+##### retainedLoci?
+
+> `readonly` `optional` **retainedLoci?**: readonly [`RetainedLocusClass`](../deid.md#retainedlocusclass)[]
+
+The **retention classes** the configured profile permits: the named groups of identifying loci a
+format adapter may pass through unchanged (each one still recorded as a residual). Build this
+with profileOptions rather than by hand; the widen-never-narrow contract on a derived
+profile is what keeps a site preset from adding one.
+
+**Absent or empty retains nothing**, so a bare options bag gets the strict treatment.
+
+###### Inherited from
+
+[`DeidOptions`](../deid.md#deidoptions).[`retainedLoci`](../deid.md#retainedloci)
+
+##### transformLabels?
+
+> `readonly` `optional` **transformLabels?**: `boolean`
+
+Mark the output as transformed, inside the FHIR. Each resource the pass changed gets the
+`meta.security` coding [FHIR\_TRANSFORMED\_SECURITY\_LABEL](#fhir_transformed_security_label) (`REDACTED`), and an element R4
+requires that the pass removed gets the Data Absent Reason [FHIR\_DATA\_ABSENT\_REASON](#fhir_data_absent_reason)
+(`masked`) in its place. A contained resource is never labeled; its container is. The label
+claims that some content was filtered out, not that the resource is de-identified. Off by
+default, so the output is unchanged unless a caller asks.
 
 ***
 
@@ -241,6 +355,34 @@ const datatype: FhirPersonalDatatype = "human-name";
 
 ## Variables
 
+### FHIR\_DATA\_ABSENT\_REASON
+
+> `const` **FHIR\_DATA\_ABSENT\_REASON**: `object`
+
+The Data Absent Reason extension the FHIR adapter writes, under `transformLabels`, in place of a
+value the pass removed where R4 requires the element (`min` of 1 or more): the R4
+`data-absent-reason` extension with the code `masked`.
+
+#### Type Declaration
+
+##### url
+
+> `readonly` **url**: `"http://hl7.org/fhir/StructureDefinition/data-absent-reason"` = `"http://hl7.org/fhir/StructureDefinition/data-absent-reason"`
+
+##### valueCode
+
+> `readonly` **valueCode**: `"masked"` = `"masked"`
+
+#### Example
+
+```ts
+import { FHIR_DATA_ABSENT_REASON } from "@cosyte/deid/fhir";
+
+FHIR_DATA_ABSENT_REASON.valueCode; // => "masked"
+```
+
+***
+
 ### FHIR\_DEMOGRAPHIC\_ELEMENTS
 
 > `const` **FHIR\_DEMOGRAPHIC\_ELEMENTS**: `Readonly`\<`Record`\<`string`, [`FhirDemographicMode`](#fhirdemographicmode)\>\>
@@ -258,6 +400,39 @@ import { FHIR_DEMOGRAPHIC_ELEMENTS } from "@cosyte/deid/fhir";
 
 FHIR_DEMOGRAPHIC_ELEMENTS.name;    // => "redact"
 FHIR_DEMOGRAPHIC_ELEMENTS.address; // => "address"
+```
+
+***
+
+### FHIR\_TRANSFORMED\_SECURITY\_LABEL
+
+> `const` **FHIR\_TRANSFORMED\_SECURITY\_LABEL**: `object`
+
+The `meta.security` coding the FHIR adapter writes, under `transformLabels`, on every resource the
+pass changed: the v3 `ObservationValue` integrity code `REDACTED`. It claims that some portion of
+the resource was filtered out and is not included, and nothing more: not that the resource is
+de-identified, anonymized or pseudonymized.
+
+#### Type Declaration
+
+##### code
+
+> `readonly` **code**: `"REDACTED"` = `"REDACTED"`
+
+##### display
+
+> `readonly` **display**: `"redacted"` = `"redacted"`
+
+##### system
+
+> `readonly` **system**: `"http://terminology.hl7.org/CodeSystem/v3-ObservationValue"` = `"http://terminology.hl7.org/CodeSystem/v3-ObservationValue"`
+
+#### Example
+
+```ts
+import { FHIR_TRANSFORMED_SECURITY_LABEL } from "@cosyte/deid/fhir";
+
+FHIR_TRANSFORMED_SECURITY_LABEL.code; // => "REDACTED"
 ```
 
 ***
@@ -302,7 +477,7 @@ regardless (their PHI is caught by the datatype rules), so this gate only govern
 
 ### applyFhir()
 
-> **applyFhir**(`resource`, `transformed`, `coords`): `FhirComplex`
+> **applyFhir**(`resource`, `transformed`, `coords`, `options?`): `FhirComplex`
 
 Rebuild a de-identified resource from the engine's transformed loci and the extractor's coordinates.
 `transformed` and `coords` are index-aligned (both preserve extraction order). Returns a fresh,
@@ -327,6 +502,12 @@ The engine's transformed loci, in extraction order.
 readonly [`FhirCoord`](#fhircoord)[]
 
 The write-back coordinates, index-aligned with `transformed`.
+
+##### options?
+
+[`FhirApplyOptions`](#fhirapplyoptions) = `{}`
+
+`transformLabels` writes the transform labels (off by default).
 
 #### Returns
 
@@ -471,10 +652,11 @@ The parsed FHIR resource to de-identify (`parseResource(json).resource`).
 
 ##### options?
 
-[`DeidOptions`](../deid.md#deidoptions) = `{}`
+[`FhirDeidOptions`](#fhirdeidoptions) = `{}`
 
 The policy and (for keyed transforms, identifier pseudonymization) the key context.
   A keyed transform with no context is a fatal `DEID_NO_KEY`, never an unkeyed fallback.
+  `transformLabels` writes the transform labels (see [FhirDeidOptions](#fhirdeidoptions)).
 
 #### Returns
 
@@ -520,7 +702,7 @@ Raw FHIR JSON text.
 
 ##### options?
 
-[`DeidOptions`](../deid.md#deidoptions) = `{}`
+[`FhirDeidOptions`](#fhirdeidoptions) = `{}`
 
 The policy and key context (see [deidentifyFhir](#deidentifyfhir)).
 

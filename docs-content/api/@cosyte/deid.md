@@ -580,6 +580,10 @@ const context = createDeidContext({ key: process.env.DEID_KEY! });
 const opts: DeidOptions = { policy: "safe-harbor", context };
 ```
 
+#### Extended by
+
+- [`FhirDeidOptions`](deid/fhir.md#fhirdeidoptions)
+
 #### Properties
 
 ##### context?

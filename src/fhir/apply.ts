@@ -32,11 +32,19 @@
  * guarantees no `_`-sibling leak, at the documented cost of not preserving them (profile-aware retention
  * is not offered).
  *
+ * **Transform labels (opt-in).** With `transformLabels`, every resource the rebuild changed (a value
+ * transformed, removed or blocked, or a primitive extension dropped) gets the `meta.security` coding
+ * `FHIR_TRANSFORMED_SECURITY_LABEL`; a contained resource is never labeled (R4 `dom-5`), and
+ * what changed inside one counts for the resource that contains it. Where the rebuild removes an
+ * element R4 requires, a Data Absent Reason (`FHIR_DATA_ABSENT_REASON`) stands in its place.
+ * Off, the rebuild is exactly as above.
+ *
  * @packageDocumentation
  */
 
 import {
   complex,
+  getProperty,
   isComplex,
   isList,
   isPrimitive,
@@ -52,6 +60,12 @@ import type { LocusKind, TransformedLocus } from "../locus.js";
 import { FHIR_KEPT_ADDRESS_PARTS } from "./locus-map.js";
 import { primitiveString, type FhirCoord, type FhirEditKind } from "./extract.js";
 import { readFhirLiteral } from "./reference.js";
+import {
+  absentPlaceholder,
+  childElementPath,
+  isRequiredElement,
+  withSecurityLabel,
+} from "./transform-labels.js";
 
 /** Sentinel returned by {@link rebuildNode} when a node is removed (dropped from its parent). @internal */
 const REMOVE = Symbol("deid.fhir.remove");
@@ -62,6 +76,36 @@ interface Edit {
   readonly edit: FhirEditKind;
   readonly kind: LocusKind;
   readonly value: string | null;
+  readonly disposition: TransformedLocus["disposition"];
+}
+
+/**
+ * Options for {@link applyFhir}.
+ *
+ * @example
+ * ```ts
+ * import { type FhirApplyOptions } from "@cosyte/deid/fhir";
+ *
+ * const options: FhirApplyOptions = { transformLabels: true };
+ * ```
+ */
+export interface FhirApplyOptions {
+  /**
+   * Write the transform labels: the `meta.security` coding on each resource the rebuild changed, and
+   * a Data Absent Reason in place of a removed element R4 requires. Off by default.
+   */
+  readonly transformLabels?: boolean;
+}
+
+/** Whether anything in the resource being rebuilt changed: the one bit its security label rests on. */
+interface ResourceMark {
+  changed: boolean;
+}
+
+/** What every step of one rebuild shares: the edits, and whether labels are written. */
+interface Walk {
+  readonly edits: ReadonlyMap<FhirNode, Edit>;
+  readonly labels: boolean;
 }
 
 /** Re-emit a primitive without its `extension` side-channel (fail-closed), keeping value + `id`. */
@@ -148,29 +192,78 @@ function rebuildLiteral(node: FhirNode, value: string | null): Rebuilt {
   return primitive(`${literal.prefix}${value}`);
 }
 
-/** Rebuild any node: apply its edit if the map named it, else structurally reconstruct its children. */
-function rebuildNode(node: FhirNode, edits: ReadonlyMap<FhirNode, Edit>): Rebuilt {
-  const edit = edits.get(node);
-  if (edit !== undefined) return applyEdit(node, edit);
+/**
+ * `true` when the rebuild left nothing of an element: it was removed, or it is a complex with no
+ * property left, or a list of nothing else. Read only with labels on, for a required element.
+ */
+function isEmptied(rebuilt: Rebuilt): boolean {
+  if (rebuilt === REMOVE) return true;
+  if (isComplex(rebuilt)) return rebuilt.properties.length === 0;
+  return isList(rebuilt) && rebuilt.items.every(isEmptied);
+}
 
-  if (isPrimitive(node)) return stripPrimitive(node);
+/** The `resourceType` a complex names, when it is a resource; read only with labels on. */
+function resourceTypeOf(node: FhirComplex): string | undefined {
+  const type = getProperty(node, "resourceType");
+  return type !== undefined && isPrimitive(type) && typeof type.value === "string"
+    ? type.value
+    : undefined;
+}
+
+/**
+ * Rebuild any node: apply its edit if the map named it, else structurally reconstruct its children.
+ * `path` is the node's definition path and `mark` the change flag of the resource it is in (both only
+ * read with labels on); `contained` is set for the items of a `contained` list.
+ */
+function rebuildNode(
+  node: FhirNode,
+  walk: Walk,
+  path: string | undefined,
+  mark: ResourceMark,
+  contained: boolean,
+): Rebuilt {
+  const edit = walk.edits.get(node);
+  if (edit !== undefined) {
+    const rebuilt = applyEdit(node, edit);
+    if (rebuilt === REMOVE || edit.disposition !== "retained") mark.changed = true;
+    return rebuilt;
+  }
+
+  if (isPrimitive(node)) {
+    const rebuilt = stripPrimitive(node);
+    if (rebuilt !== node) mark.changed = true;
+    return rebuilt;
+  }
 
   if (isList(node)) {
     const items: FhirNode[] = [];
     for (const item of node.items) {
-      const rebuilt = rebuildNode(item, edits);
+      const rebuilt = rebuildNode(item, walk, path, mark, contained);
       if (rebuilt !== REMOVE) items.push(rebuilt);
     }
     return items.length === 0 ? REMOVE : list(items); // an emptied list is dropped (FHIR forbids `[]`)
   }
 
   // complex
+  const type = walk.labels ? resourceTypeOf(node) : undefined;
+  const own = type ?? path;
+  const ownMark = type === undefined || contained ? mark : { changed: false };
   const props: FhirProperty[] = [];
   for (const prop of node.properties) {
-    const rebuilt = rebuildNode(prop.value, edits);
-    if (rebuilt !== REMOVE) props.push({ name: prop.name, value: rebuilt });
+    const childPath = own === undefined ? undefined : childElementPath(own, prop.name);
+    const rebuilt = rebuildNode(prop.value, walk, childPath, ownMark, prop.name === "contained");
+    if (
+      own !== undefined &&
+      isEmptied(rebuilt) &&
+      !isEmptied(prop.value) &&
+      isRequiredElement(own, prop.name)
+    ) {
+      props.push({ name: prop.name, value: absentPlaceholder(prop.value) });
+    } else if (rebuilt !== REMOVE) {
+      props.push({ name: prop.name, value: rebuilt });
+    }
   }
-  return complex(props);
+  return ownMark !== mark && ownMark.changed ? complex(withSecurityLabel(props)) : complex(props);
 }
 
 /**
@@ -181,6 +274,7 @@ function rebuildNode(node: FhirNode, edits: ReadonlyMap<FhirNode, Edit>): Rebuil
  * @param resource - The original parsed resource the extractor walked.
  * @param transformed - The engine's transformed loci, in extraction order.
  * @param coords - The write-back coordinates, index-aligned with `transformed`.
+ * @param options - `transformLabels` writes the transform labels (off by default).
  * @returns The de-identified resource tree.
  * @example
  * ```ts
@@ -198,15 +292,22 @@ export function applyFhir(
   resource: FhirComplex,
   transformed: readonly TransformedLocus[],
   coords: readonly FhirCoord[],
+  options: FhirApplyOptions = {},
 ): FhirComplex {
   const edits = new Map<FhirNode, Edit>();
   for (let i = 0; i < coords.length; i += 1) {
     const coord = coords[i];
     const t = transformed[i];
     if (coord === undefined || t === undefined) continue;
-    edits.set(coord.node, { edit: coord.edit, kind: t.kind, value: t.value });
+    edits.set(coord.node, {
+      edit: coord.edit,
+      kind: t.kind,
+      value: t.value,
+      disposition: t.disposition,
+    });
   }
-  const rebuilt = rebuildNode(resource, edits);
+  const walk: Walk = { edits, labels: options.transformLabels === true };
+  const rebuilt = rebuildNode(resource, walk, undefined, { changed: false }, false);
   // The root resource never rebuilds to REMOVE (its `resourceType` property is retained), but guard so a
   // pathological empty root fails closed to an empty resource rather than leaking the original.
   return rebuilt === REMOVE || !isComplex(rebuilt) ? complex([]) : rebuilt;

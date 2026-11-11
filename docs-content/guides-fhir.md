@@ -271,6 +271,51 @@ the identifier rule), and an empty one as `{}`.
   its `type` is one, its `physicalType` names nothing that removes it, and it has no `partOf` (see
   [the limitations page](./limitations.md#ages-over-89)). A physical type alone never keeps a position.
 
+## Mark the output as transformed (opt-in)
+
+By default the output carries no sign, inside the FHIR, that anything was done to it, and an element
+R4 requires can simply be missing: a `Condition.subject` whose only content was a blocked `display`
+comes out as an empty object. Pass `transformLabels: true` and the adapter writes two things the R4
+security-labels value set and the IHE De-Identification Handbook describe:
+
+- every resource the pass changed (a value transformed, removed or blocked, or a primitive extension
+  dropped) gets the `meta.security` coding `REDACTED` from
+  `http://terminology.hl7.org/CodeSystem/v3-ObservationValue`, added to any labels it already had;
+- an element R4 requires (`min` of 1 or more) that the pass removed or emptied gets the
+  `data-absent-reason` extension with the code `masked` in its place, so the resource keeps its
+  required elements. An optional element the pass removed is left out, as before.
+
+```ts runnable
+import { deidentifyFhirJson } from "@cosyte/deid/fhir";
+
+const input = JSON.stringify({
+  resourceType: "Condition",
+  code: { coding: [{ system: "http://snomed.info/sct", code: "38341003" }] },
+  subject: { display: "ZZPATIENTNAME" },
+});
+
+const { json } = deidentifyFhirJson(input, { transformLabels: true });
+const out = JSON.parse(json) as { meta: { security: { code: string }[] }; subject: unknown };
+out.meta.security.map((label) => label.code); // => ["REDACTED"]
+out.subject; // => { extension: [{ url: "http://hl7.org/fhir/StructureDefinition/data-absent-reason", valueCode: "masked" }] }
+```
+
+**What the label claims.** `REDACTED` says that some portion of the resource was filtered out and is
+not included. `masked` says that a value is not there for security or privacy reasons. That is all
+either one says.
+
+**What it does not claim.** Neither says the resource is de-identified, anonymized or pseudonymized,
+and neither is a statement about re-identification risk. The handbook also shows `ANONYED` and
+`PSEUDED`; we do not write them, because each asserts a status this pass cannot establish on its own.
+A resource with no label was not changed by the pass, which is not the same as holding no
+identifying information: a clinical resource is passed through and its values are counted as
+unexamined. A contained resource is never labeled, because R4 forbids security labels on one; what
+changed inside it counts for the resource that contains it.
+
+The option is off by default, so a call without it returns exactly what it returned before.
+`FHIR_TRANSFORMED_SECURITY_LABEL` and `FHIR_DATA_ABSENT_REASON` export the two codes for a caller
+that reads them back.
+
 ## What the leak and over-scrub tests check
 
 - **No leak.** Every seeded PHI sentinel across the person resources, the universal vectors, the nested
@@ -324,8 +369,11 @@ before you release the output, with a table of what this adapter does not cover.
 ## Reference
 
 - [`deidentifyFhir`](./api/@cosyte/deid/fhir.md#deidentifyfhir),
-  [`deidentifyFhirJson`](./api/@cosyte/deid/fhir.md#deidentifyfhirjson) and
+  [`deidentifyFhirJson`](./api/@cosyte/deid/fhir.md#deidentifyfhirjson),
+  [`FhirDeidOptions`](./api/@cosyte/deid/fhir.md#fhirdeidoptions) and
   [`FhirDeidResult`](./api/@cosyte/deid/fhir.md#fhirdeidresult)
+- [`FHIR_TRANSFORMED_SECURITY_LABEL`](./api/@cosyte/deid/fhir.md#fhir_transformed_security_label) and
+  [`FHIR_DATA_ABSENT_REASON`](./api/@cosyte/deid/fhir.md#fhir_data_absent_reason)
 - [`classifyFhirPersonalDatatype`](./api/@cosyte/deid/fhir.md#classifyfhirpersonaldatatype),
   [`categoryForIdentifierSystem`](./api/@cosyte/deid/fhir.md#categoryforidentifiersystem),
   [`PERSON_RESOURCE_TYPES`](./api/@cosyte/deid/fhir.md#person_resource_types) and
