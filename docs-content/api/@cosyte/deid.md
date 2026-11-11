@@ -2506,7 +2506,7 @@ RESTRICTED_ZIP3.has("902"); // => false
 
 ### RESTRICTED\_ZIP3\_SOURCE
 
-> `const` **RESTRICTED\_ZIP3\_SOURCE**: `Readonly`\<\{ `census`: `"2020"`; `dataset`: `"2020 Census Demographic and Housing Characteristics File, table P1, by five-digit ZCTA"`; `citation`: `"45 CFR §164.514(b)(2)(i)(B); HHS OCR, Guidance Regarding Methods for De-identification of PHI (2012), whose 2000 Census list is kept"`; \}\>
+> `const` **RESTRICTED\_ZIP3\_SOURCE**: `Readonly`\<\{ `census`: `"2020"`; `citation`: `"45 CFR §164.514(b)(2)(i)(B); HHS OCR, Guidance Regarding Methods for De-identification of PHI (2012), whose 2000 Census list is kept"`; `dataset`: `"2020 Census Demographic and Housing Characteristics File, table P1, by five-digit ZCTA"`; \}\>
 
 The Census vintage and dataset this list is grounded in, surfaced so a consumer knows exactly which
 published artifact the `000` rule is applied from.
