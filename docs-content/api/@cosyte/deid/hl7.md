@@ -12,7 +12,7 @@ this module as `@cosyte/deid/hl7`.
 **What it covers.** The structured PHI loci of **PID** (patient), **NK1** / **GT1** / **IN1** / **IN2**
 (relatives / guarantor / insured) via the cited [HL7\_LOCUS\_MAP](#hl7_locus_map). **Fail closed**
 everywhere else: a recognized segment is retained only if it is on the explicit [RETAIN\_SEGMENTS](#retain_segments)
-clinical/administrative list, so a _known_ patient-identity segment absent from the map (**MRG** prior
+clinical/administrative list, so a *known* patient-identity segment absent from the map (**MRG** prior
 name + MRN on a merge, **FAM**, **ACC**, **PEO**, **PDA**) is blocked, not passed through, and
 Z-segments / structure unknown to the parser are blocked. **OBX-5** is retained only when OBX-2
 positively types it as a structured clinical value (numeric / coded / a time of day); narrative
@@ -34,11 +34,11 @@ individual. So the employer positions the financial segments type are acted on a
 other mapped locus: the guarantor's employer name (GT1-16), address (GT1-17) and phone (GT1-18), the
 guarantor employee and employer ids (GT1-19, GT1-29), the insured's group employer id and name
 (IN1-10, IN1-11), the insured's employer name (IN2-3), the employer contact person's name and phone
-(IN2-49, IN2-50) and the insured's employer phone (IN2-64). **IN2-70** types an _organisation_ rather
+(IN2-49, IN2-50) and the insured's employer phone (IN2-64). **IN2-70** types an *organisation* rather
 than a value, so it goes through the shared party-role test ([HL7\_ORGANISATION\_PARTY\_RULES](#hl7_organisation_party_rules),
 [HL7\_PARTY\_ROLE\_TABLE](#hl7_party_role_table)) that the X12 adapter applies to an `NM1` / `N1` party, and fails closed:
 the role there is the insured's employer, which the clause names, so name and identifier both go. The
-_insurer's_ own company name, address and phone (IN1-3/4/5/7) and the coded employment status
+*insurer's* own company name, address and phone (IN1-3/4/5/7) and the coded employment status
 (GT1-20) are untouched: neither is the individual's, a relative's or an employer's identity.
 
 **PV1-19 is a CX list routed by its CX-5 identifier-type code**, exactly like PID-3: a `VN`-typed or
@@ -121,7 +121,7 @@ How to write the transformed value back.
 
 Absolute index of the segment in `Hl7Message.rawSegments`.
 
----
+***
 
 ### Hl7DateLocusRule
 
@@ -169,7 +169,7 @@ The datatype the v2.5.1 definition gives the position.
 
 The name the v2.5.1 segment (or composite) definition gives the position. Never a value.
 
----
+***
 
 ### Hl7DeidResult
 
@@ -210,7 +210,7 @@ kept by a decision, because nothing reached it; an empty list is therefore a **m
 a silence. Hand it to `buildExpertDeterminationSupportReport` alongside the manifest so the support
 report can say which of the two it is.
 
----
+***
 
 ### Hl7Extraction
 
@@ -238,7 +238,7 @@ Every **value-bearing position the pass hands through that no locus rule named**
 located. Not loci: nothing here is transformed, blocked or retained by a decision, and the list is
 the measurement of what the pass never examined (see `./positions.ts`).
 
----
+***
 
 ### Hl7ExtractOptions
 
@@ -253,7 +253,7 @@ profileOptions; **omitting it retains nothing**, which is the fail-closed defaul
 
 The retention classes the profile permits. Absent or empty keeps no identifying locus.
 
----
+***
 
 ### Hl7FieldRule
 
@@ -295,7 +295,7 @@ identifier-type code (`SS` → SSN, `MR` → MRN, `AN`/`AC` → account, `MA`/`M
 falling back to [category](#category) for an unrecognized or absent type code. This is the structural,
 parser-typed way to tell an SSN from an MRN inside one PID-3 list.
 
----
+***
 
 ### Hl7OrgPartyRule
 
@@ -326,7 +326,7 @@ HL7_ORGANISATION_PARTY_RULES["IN2"]?.[0]?.field; // => 70
 
 The role the v2.5.1 field definition types at this party; a key of [HL7\_PARTY\_ROLES](#hl7_party_roles).
 
----
+***
 
 ### Hl7RetainedFieldRule
 
@@ -373,7 +373,7 @@ carries an `MR` medical record number or an `AN` account number: both are named 
 preset. Reading the code is what stops the pass republishing, in the clear, the very identifier it
 pseudonymized at PID-3 in the same message.
 
----
+***
 
 ### Hl7SegmentDateLoci
 
@@ -432,7 +432,7 @@ import { type Hl7DateDatatype } from "@cosyte/deid/hl7";
 const dt: Hl7DateDatatype = "TS";
 ```
 
----
+***
 
 ### Hl7EditKind
 
@@ -450,7 +450,7 @@ repetition and leaves every sibling component at its own ordinal.
 slots the named parts occupy, all empty**, before writing its own component, so the street, the
 county and every other position of the address are gone whether or not a locus addressed them.
 
----
+***
 
 ### Hl7FieldMode
 
@@ -490,7 +490,7 @@ import { HL7_DATE_LOCI } from "@cosyte/deid/hl7";
 HL7_DATE_LOCI.SPM?.loci.filter((l) => l.field === 17).length; // => 2 (a date range: two components)
 ```
 
----
+***
 
 ### HL7\_DATE\_LOCUS\_VERSION
 
@@ -507,7 +507,7 @@ import { HL7_DATE_LOCUS_VERSION } from "@cosyte/deid/hl7";
 HL7_DATE_LOCUS_VERSION; // => "2.5.1"
 ```
 
----
+***
 
 ### HL7\_LOCUS\_MAP
 
@@ -526,7 +526,7 @@ import { HL7_LOCUS_MAP } from "@cosyte/deid/hl7";
 HL7_LOCUS_MAP.PID?.find((r) => r.field === 5)?.category; // => "NAMES"
 ```
 
----
+***
 
 ### HL7\_ORGANISATION\_PARTY\_RULES
 
@@ -545,7 +545,7 @@ import { HL7_ORGANISATION_PARTY_RULES, HL7_PARTY_ROLES } from "@cosyte/deid/hl7"
 HL7_ORGANISATION_PARTY_RULES["IN2"]?.[0]?.role; // => HL7_PARTY_ROLES.INSURED_EMPLOYER
 ```
 
----
+***
 
 ### HL7\_PARTY\_ROLE\_TABLE
 
@@ -572,7 +572,7 @@ classifyPartyRole(HL7_PARTY_ROLES.INSURED_EMPLOYER, HL7_PARTY_ROLE_TABLE).scope;
 // => "safe-harbor-subject" (an employer is never outside the clause)
 ```
 
----
+***
 
 ### HL7\_PARTY\_ROLES
 
@@ -580,7 +580,7 @@ classifyPartyRole(HL7_PARTY_ROLES.INSURED_EMPLOYER, HL7_PARTY_ROLE_TABLE).scope;
 
 The **roles v2.5.1 field definitions type at an organisation-typed party position**. Unlike X12,
 where `NM1-01` / `N1-01` carry an entity-identifier code on the wire, a v2 organisation position
-names its party's role in the _standard's own definition of the field_: `IN2-70` is "Insured Employer
+names its party's role in the *standard's own definition of the field*: `IN2-70` is "Insured Employer
 Organization Name and ID", so the role at that position is the insured's employer, whatever the
 organisation's name happens to be. These tokens are this library's names for those roles; they are
 never read off a document.
@@ -601,7 +601,7 @@ import { HL7_PARTY_ROLES } from "@cosyte/deid/hl7";
 HL7_PARTY_ROLES.INSURED_EMPLOYER; // => "INSURED_EMPLOYER"
 ```
 
----
+***
 
 ### HL7\_PASSED\_THROUGH\_SEGMENTS
 
@@ -628,7 +628,7 @@ HL7_PASSED_THROUGH_SEGMENTS.has("OBX"); // => true  (passed through, not retain-
 RETAIN_SEGMENTS.has("OBX"); // => false (the retain-list is unchanged)
 ```
 
----
+***
 
 ### OBX\_DATE\_VALUE\_TYPES
 
@@ -647,7 +647,7 @@ import { OBX_DATE_VALUE_TYPES } from "@cosyte/deid/hl7";
 OBX_DATE_VALUE_TYPES.has("TM"); // => false (a time of day is not an element of a date)
 ```
 
----
+***
 
 ### RETAIN\_SEGMENTS
 
@@ -665,7 +665,7 @@ RETAIN_SEGMENTS.has("OBR"); // => true  (clinical order, retained)
 RETAIN_SEGMENTS.has("MRG"); // => false (prior patient identity, fails closed)
 ```
 
----
+***
 
 ### RETAINED\_LOCUS\_RULES
 
@@ -737,7 +737,7 @@ const clean = applyHl7(msg, document.loci, coords);
 clean.toString(); // spec-clean, de-identified HL7
 ```
 
----
+***
 
 ### categoryForIdentifierType()
 
@@ -774,7 +774,7 @@ import { categoryForIdentifierType, SAFE_HARBOR_CATEGORIES } from "@cosyte/deid/
 categoryForIdentifierType("SS", SAFE_HARBOR_CATEGORIES.MRN); // => "SSN"
 ```
 
----
+***
 
 ### deidentifyHl7()
 
@@ -799,9 +799,9 @@ The parsed HL7 v2 message to de-identify.
 [`DeidOptions`](../deid.md#deidoptions) = `{}`
 
 The policy, the profile's retention classes, and (for keyed transforms, MRN /
-account / beneficiary pseudonymization) the key context. A keyed transform with no context is a
-fatal `DEID_NO_KEY`, never an unkeyed fallback. **Retention defaults to nothing**, so a bare
-options bag removes the encounter dates and identifiers rather than keeping them.
+  account / beneficiary pseudonymization) the key context. A keyed transform with no context is a
+  fatal `DEID_NO_KEY`, never an unkeyed fallback. **Retention defaults to nothing**, so a bare
+  options bag removes the encounter dates and identifiers rather than keeping them.
 
 #### Returns
 
@@ -812,7 +812,7 @@ The de-identified message and the value-free manifest.
 #### Throws
 
 DeidError `DEID_NO_KEY` when a keyed transform is required for a category present in
-the message but no key context was supplied.
+  the message but no key context was supplied.
 
 #### Example
 
@@ -827,7 +827,7 @@ const { document, manifest } = deidentifyHl7(parseHL7(raw), { context });
 // manifest records each category + locus, never a value.
 ```
 
----
+***
 
 ### extractHl7Loci()
 
@@ -860,12 +860,12 @@ The configured profile's retention classes. Omitted retains nothing (fail closed
 [`Hl7Extraction`](#hl7extraction)
 
 The loci (for the engine), their index-aligned write-back coordinates, and the unexamined
-residual positions the pass hands through.
+  residual positions the pass hands through.
 
 #### Throws
 
 DeidError `DEID_POSITIONS_UNENUMERABLE` when a segment's value-bearing positions
-cannot be enumerated: the pass fails rather than emit a zero or a partial count.
+  cannot be enumerated: the pass fails rather than emit a zero or a partial count.
 
 #### Example
 
@@ -883,49 +883,49 @@ loci.length; // number of located candidate values
 
 Re-exports [isRetainableZipCode](../deid.md#isretainablezipcode)
 
----
+***
 
 ### LIMITED\_DATA\_SET\_ADDRESS\_PARTS
 
 Re-exports [LIMITED_DATA_SET_ADDRESS_PARTS](../deid.md#limited_data_set_address_parts)
 
----
+***
 
 ### RETAINED\_LOCUS\_CLASSES
 
 Re-exports [RETAINED_LOCUS_CLASSES](../deid.md#retained_locus_classes)
 
----
+***
 
 ### RetainedLocusClass
 
 Re-exports [RetainedLocusClass](../deid.md#retainedlocusclass)
 
----
+***
 
 ### RetainedLocusPart
 
 Re-exports [RetainedLocusPart](../deid.md#retainedlocuspart)
 
----
+***
 
 ### retains
 
 Re-exports [retains](../deid.md#retains)
 
----
+***
 
 ### SAFE\_HARBOR\_CATEGORIES
 
 Re-exports [SAFE_HARBOR_CATEGORIES](../deid.md#safe_harbor_categories)
 
----
+***
 
 ### SafeHarborCategory
 
 Re-exports [SafeHarborCategory](../deid.md#safeharborcategory)
 
----
+***
 
 ### UnexaminedResidual
 

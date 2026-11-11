@@ -13,7 +13,6 @@ codec: it never touches a third-party substrate.
 
 **What it covers (Telecom vD.0).** The Patient (`01`), Prescriber (`03`), Insurance (`04`), and
 Coordination-of-Benefits (`05`) segments, plus the header's Date of Service:
-
 - **Patient (`01`)**: name (`CA`/`CB`) and phone (`CQ`) removed; street (`CM`) and city (`CN`)
   removed; ZIP (`CP`) generalized to its safe 3-digit form; date of birth (`C4`) generalized to year;
   patient id (`CY`) pseudonymized. Gender and state retained.
@@ -61,7 +60,7 @@ const tx = parseTelecom(raw);
 const result: TelecomDeidResult = deidentifyTelecom(tx, {
   context: createDeidContext({ key: process.env.DEID_KEY! }),
 });
-result.telecom; // de-identified NCPDP Telecom text
+result.telecom;  // de-identified NCPDP Telecom text
 result.manifest; // value-free audit: category + locus, never a value
 ```
 
@@ -88,7 +87,7 @@ rule named**, counted and located. A retained clinical / financial segment contr
 fields, and the fixed header contributes every position but the one Date of Service a rule reaches.
 An empty list is a **measured zero**, not a silence.
 
----
+***
 
 ### TelecomExtraction
 
@@ -116,7 +115,7 @@ Every **value-bearing field the pass hands through that no locus rule named**: t
 retained clinical / financial segment, and the positions of the transmission header that is emitted
 (the response header's own, on a response). Counted and located, never transformed.
 
----
+***
 
 ### TelecomFieldRule
 
@@ -153,7 +152,7 @@ A write-back coordinate: the structural location of one extracted locus in the t
 the fixed header's Date of Service, or the field at `fieldIndex` of the segment at `segmentIndex`.
 Carries no value.
 
----
+***
 
 ### TelecomFieldMode
 
@@ -186,7 +185,7 @@ import { NCPDP_MULTI_TRANSACTION_REFUSAL_MESSAGE } from "@cosyte/deid/ncpdp";
 NCPDP_MULTI_TRANSACTION_REFUSAL_MESSAGE.includes("more than one transaction"); // => true
 ```
 
----
+***
 
 ### NCPDP\_SCRIPT\_REFUSAL\_MESSAGE
 
@@ -204,7 +203,7 @@ import { NCPDP_SCRIPT_REFUSAL_MESSAGE } from "@cosyte/deid/ncpdp";
 NCPDP_SCRIPT_REFUSAL_MESSAGE.includes("SCRIPT"); // => true
 ```
 
----
+***
 
 ### TELECOM\_FREE\_TEXT\_FIELDS
 
@@ -223,7 +222,7 @@ import { TELECOM_FREE_TEXT_FIELDS } from "@cosyte/deid/ncpdp";
 TELECOM_FREE_TEXT_FIELDS.has("FY"); // => true (DUR free text, fails closed)
 ```
 
----
+***
 
 ### TELECOM\_LOCUS\_MAP
 
@@ -241,7 +240,7 @@ import { TELECOM_LOCUS_MAP } from "@cosyte/deid/ncpdp";
 TELECOM_LOCUS_MAP["01"]?.CB?.category; // => "NAMES"  (Patient Last Name)
 ```
 
----
+***
 
 ### TELECOM\_RETAIN\_SEGMENTS
 
@@ -268,14 +267,14 @@ import { TELECOM_RETAIN_SEGMENTS } from "@cosyte/deid/ncpdp";
 TELECOM_RETAIN_SEGMENTS.has("07"); // => true (Claim, NDC / quantity / pricing retained)
 ```
 
----
+***
 
 ### TELECOM\_SEGMENT\_RETAIN\_FIELDS
 
 > `const` **TELECOM\_SEGMENT\_RETAIN\_FIELDS**: `Readonly`\<`Record`\<`string`, `ReadonlySet`\<`string`\>\>\>
 
 The **recognized non-identifier fields** retained within each mapped PHI segment: the positive
-complement to [TELECOM\_LOCUS\_MAP](#telecom_locus_map) that closes the fail-closed frontier _inside_ a PHI segment.
+complement to [TELECOM\_LOCUS\_MAP](#telecom_locus_map) that closes the fail-closed frontier *inside* a PHI segment.
 
 A Patient / Prescriber / Insurance / COB segment carries many fields; the scrub map names only the
 identifiers it transforms. Without this list an **unmapped** field in one of those segments would ride
@@ -348,7 +347,7 @@ const { document } = deidentify({ loci }, { context });
 const clean = applyTelecom(tx, document.loci, coords); // de-identified Telecom text
 ```
 
----
+***
 
 ### deidentifyTelecom()
 
@@ -375,7 +374,7 @@ The parsed Telecom transaction (`parseTelecom(raw)`).
 [`DeidOptions`](../deid.md#deidoptions) = `{}`
 
 The policy and (for keyed transforms, identifier pseudonymization) the key context.
-A keyed transform with no context is a fatal `DEID_NO_KEY`, never an unkeyed fallback.
+  A keyed transform with no context is a fatal `DEID_NO_KEY`, never an unkeyed fallback.
 
 #### Returns
 
@@ -386,11 +385,11 @@ The de-identified Telecom stream and the value-free manifest.
 #### Throws
 
 ["@cosyte/deid".DeidError](../deid.md#deiderror) `DEID_NO_KEY` when a keyed transform is required for a
-category present in the transaction but no key context was supplied;
-`DEID_FORMAT_UNSUPPORTED` when the model handed in is an ePrescribing SCRIPT message rather than
-a Telecom transaction, a Telecom transmission that carries more than one transaction, or a
-transaction that carries more than one Patient or Claim segment, all of which this adapter
-refuses outright rather than half-handle.
+  category present in the transaction but no key context was supplied;
+  `DEID_FORMAT_UNSUPPORTED` when the model handed in is an ePrescribing SCRIPT message rather than
+  a Telecom transaction, a Telecom transmission that carries more than one transaction, or a
+  transaction that carries more than one Patient or Claim segment, all of which this adapter
+  refuses outright rather than half-handle.
 
 #### Example
 
@@ -403,7 +402,7 @@ const context = createDeidContext({ key: process.env.DEID_KEY! });
 const { telecom, manifest } = deidentifyTelecom(parseTelecom(raw), { context });
 ```
 
----
+***
 
 ### deidentifyTelecomString()
 
@@ -436,10 +435,10 @@ The de-identified Telecom string and the value-free manifest.
 #### Throws
 
 ["@cosyte/deid".DeidError](../deid.md#deiderror) `DEID_FORMAT_UNSUPPORTED` when the text is an XML
-document, which on an NCPDP surface is ePrescribing SCRIPT: it is refused before it is parsed,
-so no partial output exists to return; and when the transmission carries more than one
-transaction, or a Patient or Claim segment more than once, which is refused before anything is
-extracted.
+  document, which on an NCPDP surface is ePrescribing SCRIPT: it is refused before it is parsed,
+  so no partial output exists to return; and when the transmission carries more than one
+  transaction, or a Patient or Claim segment more than once, which is refused before anything is
+  extracted.
 
 #### Example
 
@@ -452,7 +451,7 @@ const { telecom, manifest } = deidentifyTelecomString(input, {
 });
 ```
 
----
+***
 
 ### extractTelecomLoci()
 
@@ -479,12 +478,12 @@ The parsed Telecom transaction (`parseTelecom(raw)`).
 [`TelecomExtraction`](#telecomextraction)
 
 The loci (for the engine), their index-aligned write-back coordinates, and the unexamined
-residual positions the pass hands through.
+  residual positions the pass hands through.
 
 #### Throws
 
 DeidError `DEID_POSITIONS_UNENUMERABLE` when a segment's value-bearing fields cannot
-be enumerated: the pass fails rather than emit a zero or a partial count.
+  be enumerated: the pass fails rather than emit a zero or a partial count.
 
 #### Example
 
@@ -502,13 +501,13 @@ loci.length; // number of located candidate values
 
 Re-exports [SAFE_HARBOR_CATEGORIES](../deid.md#safe_harbor_categories)
 
----
+***
 
 ### SafeHarborCategory
 
 Re-exports [SafeHarborCategory](../deid.md#safeharborcategory)
 
----
+***
 
 ### UnexaminedResidual
 
