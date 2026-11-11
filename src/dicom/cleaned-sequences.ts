@@ -66,6 +66,13 @@ function refuseNested(tag: string): never {
   );
 }
 
+/** Read one context segment into its tag and item index; `undefined` when it does not parse. */
+function parseSegment(segment: string | undefined): { tag: string; index: number } | undefined {
+  const match = SEGMENT.exec(segment ?? "");
+  // Both groups are present whenever the pattern matched.
+  return match === null ? undefined : { tag: String(match[1]), index: Number(match[2]) };
+}
+
 /**
  * Find the element a nested report row names, walking the output by its context path. `undefined`
  * when a segment does not parse or does not lead to an item.
@@ -77,9 +84,9 @@ function findNested(
 ): Element | undefined {
   let scope: Dataset = dataset;
   for (const segment of contextPath) {
-    const match = SEGMENT.exec(segment);
-    if (match === null) return undefined;
-    const item = scope.get(match[1] ?? "")?.items?.[Number(match[2])];
+    const parsed = parseSegment(segment);
+    if (parsed === undefined) return undefined;
+    const item = scope.get(parsed.tag)?.items?.[parsed.index];
     if (item === undefined) return undefined;
     scope = item;
   }
@@ -93,8 +100,8 @@ function isTopLevel(row: CleanableAttribute): boolean {
 
 /** Whether a row's context path starts inside one of the removed top-level sequences. */
 function insideRemoved(row: CleanableAttribute, removed: ReadonlySet<string>): boolean {
-  const first = SEGMENT.exec(row.contextPath?.[0] ?? "");
-  return first !== null && removed.has(first[1] ?? "");
+  const first = parseSegment(row.contextPath?.[0]);
+  return first !== undefined && removed.has(first.tag);
 }
 
 /**
@@ -119,8 +126,9 @@ export function removeCleanedSequences<A extends CleanableAttribute, R extends C
       .map((row) => row.tag),
   );
   for (const row of cleaned) {
-    if (isTopLevel(row) || insideRemoved(row, removed)) continue;
-    const element = findNested(dataset, row.contextPath ?? [], row.tag);
+    const path = row.contextPath;
+    if (path === undefined || path.length === 0 || insideRemoved(row, removed)) continue;
+    const element = findNested(dataset, path, row.tag);
     if (element === undefined || element.vr === "SQ") refuseNested(row.tag);
   }
   if (removed.size === 0) return { dataset, report };
