@@ -1,0 +1,11 @@
+---
+"@cosyte/deid": patch
+---
+
+The DICOM adapter now takes three PS3.15 Annex E options a caller can name: Clean Descriptors, Retain Patient Characteristics and Retain Device Identity.
+
+- **What changed.** `deidentifyDicom` and `deidentifyDicomBuffer` take a new `annexEOptions` list. Each option named is applied by `@cosyte/dicom`, written to De-identification Method Code Sequence `(0012,0064)` by its CID 7050 term (`113105`, `113108`, `113109`), named in De-identification Method `(0012,0063)`, listed on `retained`, and marked `applied` in `optionDeclarations`. Every attribute a Retain option kept is now a `retained` manifest row with `DEID_RESIDUAL_RETAINED`. `DICOM_ANNEX_E_OPTIONS` and the `DicomAnnexEOption` type are exported from `@cosyte/deid/dicom`.
+- **Clean Descriptors and coded lists.** `@cosyte/dicom` cleans a sequence in the option's column (the diagnosis code sequences, Reason for Visit, Request Attributes, Reason for Requested Procedure, Prescription Notes) by keeping its items, free-text Code Meaning included. So the adapter removes each such sequence at the top level of the dataset and records it `removed`; one nested inside a sequence the pass keeps refuses the run with `DEID_FORMAT_UNSUPPORTED`.
+- **Fail closed.** Each option keeps something Safe Harbor removes: coded list items, an age over 89, device identifiers with the device's dates and locations. So a run under a policy named `safe-harbor`, the default included, that names any of them throws `DEID_POLICY_INVALID` before anything is de-identified. Any other option name, an option named twice, or a value that is not a list of names is refused with the same code rather than ignored. Pixel cleaning stays out: the two pixel options are always declared withheld.
+- **Patient's Age is filed under dates.** A manifest row for Patient's Age `(0010,1010)` now carries category `DATES`, as an age does in every other adapter, where it carried `OTHER_UNIQUE_ID`. That includes the row the Basic Profile writes when it removes the age.
+- **What a caller changes.** Nothing, unless you want an option or read the category of the Patient's Age row: with `annexEOptions` absent or empty, the output bytes are what they were. To use an option, pass a policy with a name other than `safe-harbor`, for example `defineDeidPolicy({ name: "imaging-research" })`, and name the option.

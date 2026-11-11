@@ -145,8 +145,8 @@
   "engine 1,000 loci | keyed policy | deidentify": "0006dd85636be802e1cddac91688d023",
   "dicom phi dataset | default | deidentifyDicomBuffer": "e6a3c11fdeef8af6f46cb9fd00a9ec49 9d7e5b2a3c99ae431fa964ecf014cc31",
   "dicom phi dataset | default | deidentifyDicom": "e6a3c11fdeef8af6f46cb9fd00a9ec49 9d7e5b2a3c99ae431fa964ecf014cc31",
-  "dicom ct shape | default | deidentifyDicomBuffer": "d277782668c08d0091ef1a191ab66c94 5900ce0fab3cbe9118cbbbeb732c5c9d",
-  "dicom ct shape | default | deidentifyDicom": "d277782668c08d0091ef1a191ab66c94 5900ce0fab3cbe9118cbbbeb732c5c9d",
+  "dicom ct shape | default | deidentifyDicomBuffer": "d277782668c08d0091ef1a191ab66c94 f7cf37b89fc0c15486f814564a2ccbbb",
+  "dicom ct shape | default | deidentifyDicom": "d277782668c08d0091ef1a191ab66c94 f7cf37b89fc0c15486f814564a2ccbbb",
   "dicom enhanced ct shape | default | deidentifyDicomBuffer": "ec2e74250c439f34bfe0fb03aa25e733 1427311224a9125bac058cabf03e9039",
   "dicom enhanced ct shape | default | deidentifyDicom": "ec2e74250c439f34bfe0fb03aa25e733 1427311224a9125bac058cabf03e9039"
 }
