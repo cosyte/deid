@@ -91,6 +91,13 @@
  * so a `HumanName` or an `Address` at a person-resource property that map does not list is passed
  * through and counted as unexamined - the same bytes an `Organization` would have had removed.
  *
+ * **Transform labels, opt-in.** With `transformLabels: true` the output says, inside the FHIR, what
+ * the pass did: each resource it changed carries the `meta.security` coding `REDACTED` from the v3
+ * `ObservationValue` code system, and an element R4 requires that it removed carries the Data Absent
+ * Reason `masked` in its place, so the resource keeps its required elements. A contained resource is
+ * never labeled (R4 `dom-5`); its container is. The label says that some content was filtered out,
+ * never that the resource is de-identified. Off by default.
+ *
  * @packageDocumentation
  * @module @cosyte/deid/fhir
  */
@@ -102,6 +109,7 @@ import { type DeidManifestEntry } from "../manifest.js";
 import { type UnexaminedResidual } from "../residual.js";
 import { applyFhir } from "./apply.js";
 import { extractFhirLoci } from "./extract.js";
+import { FHIR_DATA_ABSENT_REASON, FHIR_TRANSFORMED_SECURITY_LABEL } from "./transform-labels.js";
 
 /**
  * The result of de-identifying a FHIR resource: the transformed resource model plus the core's
@@ -135,6 +143,30 @@ export interface FhirDeidResult {
 }
 
 /**
+ * Options for {@link deidentifyFhir} and {@link deidentifyFhirJson}: the core's
+ * {@link "@cosyte/deid".DeidOptions} plus the FHIR-only `transformLabels`.
+ *
+ * @example
+ * ```ts
+ * import { deidentifyFhirJson, type FhirDeidOptions } from "@cosyte/deid/fhir";
+ *
+ * const options: FhirDeidOptions = { transformLabels: true };
+ * const { json } = deidentifyFhirJson('{"resourceType":"Patient","name":[{"family":"ZZ"}]}', options);
+ * ```
+ */
+export interface FhirDeidOptions extends DeidOptions {
+  /**
+   * Mark the output as transformed, inside the FHIR. Each resource the pass changed gets the
+   * `meta.security` coding {@link FHIR_TRANSFORMED_SECURITY_LABEL} (`REDACTED`), and an element R4
+   * requires that the pass removed gets the Data Absent Reason {@link FHIR_DATA_ABSENT_REASON}
+   * (`masked`) in its place. A contained resource is never labeled; its container is. The label
+   * claims that some content was filtered out, not that the resource is de-identified. Off by
+   * default, so the output is unchanged unless a caller asks.
+   */
+  readonly transformLabels?: boolean;
+}
+
+/**
  * De-identify a parsed FHIR resource (or `Bundle`) under a policy (Safe Harbor by default). PHI is
  * located structurally from the `@cosyte/fhir` model: the person-resource demographics, every
  * `HumanName` and `Address` by its datatype wherever the graph carries it **outside** a person
@@ -149,6 +181,7 @@ export interface FhirDeidResult {
  * @param resource - The parsed FHIR resource to de-identify (`parseResource(json).resource`).
  * @param options - The policy and (for keyed transforms, identifier pseudonymization) the key context.
  *   A keyed transform with no context is a fatal `DEID_NO_KEY`, never an unkeyed fallback.
+ *   `transformLabels` writes the transform labels (see {@link FhirDeidOptions}).
  * @returns The de-identified resource and the value-free manifest.
  * @throws {@link "@cosyte/deid".DeidError} `DEID_NO_KEY` when a keyed transform is required for a
  *   category present in the resource but no key context was supplied.
@@ -164,10 +197,15 @@ export interface FhirDeidResult {
  * serializeResource(document); // transformed FHIR JSON
  * ```
  */
-export function deidentifyFhir(resource: FhirComplex, options: DeidOptions = {}): FhirDeidResult {
+export function deidentifyFhir(
+  resource: FhirComplex,
+  options: FhirDeidOptions = {},
+): FhirDeidResult {
   const { loci, coords, unexaminedResiduals } = extractFhirLoci(resource);
   const { document, manifest } = deidentify({ loci }, options);
-  const deidentified = applyFhir(resource, document.loci, coords);
+  const deidentified = applyFhir(resource, document.loci, coords, {
+    transformLabels: options.transformLabels === true,
+  });
   return { document: deidentified, manifest, unexaminedResiduals };
 }
 
@@ -191,7 +229,7 @@ export function deidentifyFhir(resource: FhirComplex, options: DeidOptions = {})
  */
 export function deidentifyFhirJson(
   json: string,
-  options: DeidOptions = {},
+  options: FhirDeidOptions = {},
 ): FhirDeidResult & { readonly json: string } {
   const { resource } = parseResource(json);
   const result = deidentifyFhir(resource, options);
@@ -213,6 +251,7 @@ export {
   type FhirExtraction,
   type FhirEditKind,
 } from "./extract.js";
-export { applyFhir } from "./apply.js";
+export { applyFhir, type FhirApplyOptions } from "./apply.js";
+export { FHIR_DATA_ABSENT_REASON, FHIR_TRANSFORMED_SECURITY_LABEL };
 export { type UnexaminedResidual } from "../residual.js";
 export { SAFE_HARBOR_CATEGORIES, type SafeHarborCategory } from "../categories.js";
