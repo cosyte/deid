@@ -14,6 +14,7 @@ import { afterAll, describe, expect, it } from "vitest";
 
 import {
   BUDGET_PHRASES,
+  cell,
   COLD_IMPORT_BUDGET_MS,
   collectResults,
   fetchRun,
@@ -481,5 +482,13 @@ describe("the command line", () => {
     expect(await main(["typo", PAGE], quiet, {})).toBe(2);
     expect(await main(["check"], quiet, {})).toBe(2);
     expect(await main(["fill", PAGE], quiet, {})).toBe(2);
+  });
+});
+
+describe("cell", () => {
+  it("escapes a backslash before a pipe, so neither ends the cell", () => {
+    expect(cell("a|b")).toBe("a\\|b");
+    expect(cell("a\\|b")).toBe("a\\\\\\|b");
+    expect(cell("plain")).toBe("plain");
   });
 });

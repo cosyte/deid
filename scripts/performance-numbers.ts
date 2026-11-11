@@ -235,8 +235,14 @@ function notMeasured(reason: string): string {
   return `not measured: ${reason}`;
 }
 
-function cell(text: string): string {
-  return text.replace(/\|/g, "\\|");
+/**
+ * Text made safe for one Markdown table cell: a backslash and a pipe are escaped, backslash first.
+ *
+ * @example
+ * cell("a|b"); // => "a\\|b"
+ */
+export function cell(text: string): string {
+  return text.replace(/\\/g, "\\\\").replace(/\|/g, "\\|");
 }
 
 /** The row cells of one measured case. */
