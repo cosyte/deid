@@ -161,6 +161,16 @@ describe("deidentifyCcda, structured per-category behavior", () => {
     );
   });
 
+  it("suppresses a ZIP whose prefix only the 2020 Census restricts (author 20500) to 000", () => {
+    // 205 held 44 people in the 2020 Census; the HHS 2000 list did not name it.
+    const { wire, manifest } = deid("ccd");
+    expect(wire).not.toContain("<postalCode>205</postalCode>");
+    expect(wire.match(/<postalCode>000<\/postalCode>/g)).toHaveLength(2);
+    expect(manifest.find((m) => m.locus.includes("author/assignedAuthor/addr"))?.code).toBe(
+      D.DEID_CATEGORY_GENERALIZED,
+    );
+  });
+
   it("generalizes header participation + encounter dates to their year", () => {
     const { manifest } = deid("ccd");
     const dateLoci = manifest.filter((m) => m.category === C.DATES);
