@@ -12,7 +12,7 @@ description: "Install @cosyte/deid and the parser packages for the formats you t
 builds with per-condition type declarations, so it works from either module system without
 configuration.
 
-> **Status:** `0.1`, published to npm. The command below installs the current release.
+> **Status:** `0.2`, published to npm. The command below installs the current release.
 > `npm view @cosyte/deid version` is the authority on which one that is.
 
 ## Prerequisites

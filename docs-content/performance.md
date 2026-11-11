@@ -2,7 +2,7 @@
 id: performance
 title: Performance
 sidebar_label: Performance
-description: "What the performance standard measures on a Cosyte package, what we measure on @cosyte/deid today (nothing yet), and where the numbers will appear."
+description: "How we measure @cosyte/deid: the benchmark suite in bench/, the budgets, the scaling gate on every pull request, and the latest reading on a GitHub runner."
 ---
 
 # Performance
@@ -14,35 +14,79 @@ performance standard in
 [cosyte/config's decision records](https://github.com/cosyte/config/tree/main/documentation/decisions).
 The numbers for the current release are in [Current numbers](#current-numbers) below.
 
-## What we measure today
+## What we measure
 
-Nothing yet. `@cosyte/deid` has no benchmark and no performance regression test in its repository,
-so we make no claim about how fast it is or how much memory it uses. Until it has one, every number
-in [Current numbers](#current-numbers) reads "not measured for this release", with that reason.
+Three instruments, all in the repository, all on synthetic input built in code by
+`bench/shapes.mjs`. No file is read and no patient data is involved, so a run is the same anywhere.
 
-## What the measurement will cover
+- **The benchmark suite**, `bench/deid.bench.mjs`, on `@cosyte/bench`, against the built entries a
+  consumer imports. Each format (HL7 v2, FHIR R4, C-CDA, X12 837P, DICOM) has two benchmarks: text
+  in, text out (parse, transform and write, what a consumer runs), and the adapter alone on a model
+  parsed beforehand. The policy engine has two more, on the format-agnostic locus model: the
+  built-in Safe Harbor policy, and a keyed policy that pseudonymizes, shifts dates and hashes
+  through HMAC. Every benchmark runs at the size a feed sends all day and at sizes well past it:
+  up to a batch of 1,000 HL7 v2 messages (1.6 MiB), a FHIR Bundle of 10,000 entries (5.8 MiB), a
+  C-CDA document of 1,000 results (640 KiB), an X12 interchange of 5,000 claims (2.7 MiB), an
+  Enhanced CT of 200 frames (100 MiB), and 100,000 loci. A reading gives throughput, latency at
+  the 50th, 95th and 99th percentiles, allocations per call, peak heap, a long run for leaks, and
+  the cold import with every file it loads and its gzip size.
+- **The budgets**, `bench/budgets.mjs`, read from a reading: peak heap under 20 times the input for
+  a dense shape (HL7 v2, FHIR, C-CDA, X12 and the engine, many small values); peak memory under 3
+  times the input for DICOM, whose bytes are almost all Pixel Data (read from the resident peak in
+  the profile, since a Buffer is outside the V8 heap); throughput, in bytes a second, not falling
+  by more than half from a shape's smallest size to its largest; and a cold import under 15 ms for
+  each published entry, read by `bench/imports.mjs`. The budgets are advisory: a miss is a number
+  to act on, not a red check.
+- **The scaling gate**, `test/perf/scaling-gate.perf.ts`, run by `pnpm test:perf` in the
+  `ci / scaling-gate` job on every pull request. For each format adapter and the policy engine it
+  asks one question: does the cost of a pass grow faster than its input? It times 4 times the
+  inputs (the count axis) and inputs 4 times longer (the size axis), and fails when either ratio
+  passes the ceiling the shared contract fixes, 8 for a 4 times step. Each gate has a self-check
+  that runs the same pass with its input read the wrong way (quadratically) and proves the gate
+  fails on it at exactly these sizes. A gate does not see a constant-factor slowdown; the base
+  against head comparison below is the instrument for that.
 
-When the package is brought under the performance standard, its benchmark will measure what the
-standard asks of every package:
-
-- **Throughput**: by document size.
-- **Latency**: the 50th, 95th and 99th percentiles of a single pass.
-- **Memory**: peak heap and allocations over a long run.
-- **Import time and bundle size** of the root entry point and of each subpath.
-
-Its inputs will be synthetic, like every fixture in this repository, so a run is the same anywhere
-and no patient data is involved.
+On a pull request, the `ci / bench-compare` job times the suite on the base build and the head
+build, interleaved on one runner, at each format's smallest size and the engine's. It is advisory
+and never fails. The Bench workflow (`.github/workflows/bench.yml`) takes a full reading, the
+budgets, the cold import of each entry and a profile on GitHub-hosted runners, one job per format.
+It runs on demand and on a pull request that changes `bench/` or the workflow.
 
 ## What these numbers are not
 
-- **Not a guarantee for every input.** A document much larger or more deeply nested than the
+- **Not a promise for every input.** A document much larger or more deeply nested than the
   benchmark's inputs is not characterized by them.
 - **Not a comparison with other libraries.** That is a separate suite with its own written method.
 - **Not a behavior contract.** Nothing here changes what a pass removes, keeps or records.
+- **Not comparable across jobs.** Each format's reading runs in its own job on its own runner;
+  each reading names the machine it ran on.
+
+## Latest reading on a GitHub runner
+
+Pending: the reading for this section is being taken by the Bench workflow.
 
 ## Run the benchmarks yourself
 
-There is no benchmark to run yet. When one is added, this section will give the command.
+Build first: the suite measures the built package.
+
+```bash
+pnpm build
+pnpm bench:reading --out bench-results/reading.json
+pnpm bench:reading --only "HL7 v2: text in, text out" --out bench-results/hl7.json
+pnpm bench:budgets bench-results/reading.json
+pnpm bench:imports
+pnpm bench:profile --out bench-results/profile
+pnpm test:perf
+```
+
+A base against head comparison, with the base built in another checkout:
+
+```bash
+pnpm bench:compare --base ../deid-base/bench/target.mjs --head bench/target.mjs
+```
+
+A reading on a shared or busy machine is noisy. Take a reading you mean to compare on a GitHub
+runner, through the Bench workflow.
 
 ## Current numbers
 

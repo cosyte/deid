@@ -38,7 +38,7 @@ but **inverts the reflex**: where a parser is liberal on input, a de-identifier 
 
 ## Status
 
-The 0.1 line, published on npm. Below 1.0, a breaking change raises the minor version
+The 0.2 line, published on npm. Below 1.0, a breaking change raises the minor version
 and the changelog says what broke. This release ships the **format-agnostic core** plus six format
 bindings: the **HL7 v2 adapter** (`@cosyte/deid/hl7`), the **C-CDA adapter**
 (`@cosyte/deid/ccda`), the **FHIR R4 adapter** (`@cosyte/deid/fhir`), the **X12 EDI adapter**
@@ -153,7 +153,7 @@ import { createDeidContext } from "@cosyte/deid";
 const context = createDeidContext({ key: process.env.DEID_KEY! });
 const { document, manifest } = deidentifyHl7(parseHL7(rawMessage), { context });
 
-document.toString(); // spec-clean, de-identified HL7 wire
+document.toString(); // spec-clean, transformed HL7 wire
 // PID-5 (name), NK1/GT1/IN1/IN2 relatives, SSN, phone, MRN and account → removed;
 // DOB → year (removed when it shows an age over 89); address → safe 3-digit ZIP. OBX-5/NTE free text and Z-segments fail closed (blocked).
 // Admit/discharge/observation/diagnosis dates → year; visit and order numbers blocked as (R).
@@ -221,7 +221,7 @@ The classification is structural and version-fixed: an eight-digit numeric resul
 
 **Known limitations (this release).** Free text is block-by-default (no built-in scrub; opt-in BYO
 redaction: see [Free text](#free-text-block-by-default--byo-redaction)); every **non-date** field of a
-retained segment that the carve-outs do not name is **not** de-identified, which still includes the
+retained segment that the carve-outs do not name is **not** transformed, which still includes the
 _provider_ names in PV1-7/8 and OBR-16, the guarantor's employer organization name at GT1-51, and the
 date components carried inside a person-name or address composite; a position only a version other than
 v2.5.1 types as a date is a stated residual; the address generalization keeps only the Safe Harbor
@@ -285,7 +285,7 @@ import { createDeidContext } from "@cosyte/deid";
 const context = createDeidContext({ key: process.env.DEID_KEY! });
 const { document, manifest } = deidentifyCcda(parseCcda(xml), { context });
 
-document.toString(); // spec-clean, de-identified C-CDA XML
+document.toString(); // spec-clean, transformed C-CDA XML
 // recordTarget/guardian/author/informant/custodian names, telecom, ids, addresses, birthTime, and
 // participation/encounter dates → transformed; section narrative <text> and unknown elements fail
 // closed. Coded clinical entries (codes, values, units, statuses, dosing periods) survive untouched.
@@ -306,7 +306,7 @@ or material name, not a person.
 **Known limitations (this release).** Narrative is block-by-default (no built-in scrub; opt-in BYO
 redaction: see [Free text](#free-text-block-by-default--byo-redaction)); within the **retained**
 clinical body, entry service _dates_, entry _ids_, in-entry _performer_ names, and _family-history_
-relative demographics are **not** de-identified (mirroring the HL7 adapter's boundary); the document
+relative demographics are **not** transformed (mirroring the HL7 adapter's boundary); the document
 `id`/`code`/`title` envelope is retained (like HL7's MSH).
 
 ### De-identify a FHIR R4 resource
@@ -330,7 +330,7 @@ const context = createDeidContext({ key: process.env.DEID_KEY! });
 const { resource } = parseResource(json);
 const { document, manifest } = deidentifyFhir(resource, { context });
 
-serializeResource(document); // spec-clean, de-identified FHIR JSON
+serializeResource(document); // spec-clean, transformed FHIR JSON
 // Patient/RelatedPerson/Practitioner/Person names, telecom, photo → removed; address → safe 3-digit ZIP;
 // birthDate + every date → year; identifiers removed under Safe Harbor (surrogated by system only
 // under a preset that does not claim the label).
@@ -465,7 +465,7 @@ import { createDeidContext } from "@cosyte/deid";
 
 const context = createDeidContext({ key: process.env.DEID_KEY! });
 const { x12, manifest } = deidentifyX12(parseX12(raw), { context });
-// `x12` is the de-identified interchange; `manifest` is the value-free audit.
+// `x12` is the transformed interchange; `manifest` is the value-free audit.
 ```
 
 | Locus                                                                               | Handling                                                                                                                                                     |

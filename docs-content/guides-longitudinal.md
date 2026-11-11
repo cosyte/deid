@@ -7,7 +7,7 @@ description: "Keep one patient linkable across documents with a keyed registry, 
 
 # Keep a patient linkable across documents
 
-Research and analytics need a de-identified record that stays **linkable**: the same patient across a
+Research and analytics need a transformed record that stays **linkable**: the same patient across a
 whole corpus of documents must map to the same pseudonyms and the same shifted dates, so a longitudinal
 history holds together, while absolute calendar positions and real identifiers are gone. This is the
 job of the **registry** (`createDeidRegistry`).
@@ -81,7 +81,7 @@ identifiers (study/series/instance UIDs, GUIDs) you thread across files.
   is what keeps the corpus linkable. The check counts bytes, not randomness, so a short phrase padded
   to 16 characters passes it and is still guessable.
 - **Rotation is intentional linkage breakage.** A new key deterministically produces _different_
-  offsets and _different_ pseudonyms, so a corpus de-identified under a rotated key **no longer links**
+  offsets and _different_ pseudonyms, so a corpus transformed under a rotated key **no longer links**
   to records made under the old key. Rotate to sever linkage; keep the key to preserve it. The library
   holds **no persistent key store**: key custody and lifetime are yours.
 

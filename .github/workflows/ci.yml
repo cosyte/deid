@@ -124,8 +124,14 @@ jobs:
   # (RD1, RD2, PF1): the README against the house skeleton and npm's size limit
   # (`pnpm check:readme`), the CLAUDE.md card against its spec (`pnpm check:claude-card`), and the
   # package description against the catalog that ships in script-utils (`pnpm check:catalog`), and
-  # the script wiring against @cosyte/process (`pnpm check:process`). The context, `documents`, is
-  # required by the `ci-required-checks` ruleset: rename the job and the ruleset together.
+  # the script wiring against @cosyte/process (`pnpm check:process`). The last step checks the docs:
+  # `pnpm check:docs-content` (script-utils' `cosyte-docs-content`) holds docs-content/ to the
+  # docs-content standard (the sidebar, front matter, required pages, links into the reference), and
+  # `pnpm check:docs-reference` (@cosyte/process's `cosyte-docs-reference --check`) fails when the
+  # API reference committed in docs-content/api/ differs from what the TSDoc of the root and every
+  # subpath in `exports` generates, or when an export has no TSDoc summary. After changing a public
+  # export or its comment, run `pnpm docs:reference` and commit the pages. The context, `documents`,
+  # is required by the `ci-required-checks` ruleset: rename the job and the ruleset together.
   documents:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -145,3 +151,5 @@ jobs:
         run: pnpm check:catalog
       - name: The scripts delegate to @cosyte/process
         run: pnpm check:process
+      - name: The docs follow the standard and the API reference matches the source
+        run: pnpm check:docs-content && pnpm check:docs-reference

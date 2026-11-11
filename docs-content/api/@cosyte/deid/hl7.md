@@ -183,7 +183,7 @@ import { parseHL7 } from "@cosyte/hl7";
 import { deidentifyHl7 } from "@cosyte/deid/hl7";
 
 const result: Hl7DeidResult = deidentifyHl7(parseHL7(raw), {});
-result.document.toString(); // de-identified HL7 wire
+result.hl7; // transformed HL7 wire, the same text as result.document.toString()
 ```
 
 #### Properties
@@ -193,6 +193,13 @@ result.document.toString(); // de-identified HL7 wire
 > `readonly` **document**: `Hl7Message`
 
 The de-identified message: a fresh, independent Hl7Message; the input is never mutated.
+
+##### hl7
+
+> `readonly` **hl7**: `string`
+
+The de-identified message as HL7 v2 text: exactly `document.toString()`, the wire the round-trip
+check read back. Use it rather than writing `document` again.
 
 ##### manifest
 
@@ -442,8 +449,8 @@ How the applier writes a transformed locus back onto the cloned raw tree. `none`
 it is the coordinate of a locus the profile's retention set kept, which must stay byte-identical
 (a whole-field write would flatten its components and repetitions into a single value).
 
-`date-field` and `date-component` are the two units a date locus can have: the first rewrites the
-date component of **one repetition** of a field, the second rewrites **one component** of one
+`date-field` and `date-component` are the two units a date locus can have: the first rewrites **one
+repetition** of a field to the reduced date alone, the second rewrites **one component** of one
 repetition and leaves every sibling component at its own ordinal.
 
 `address-part` is the §164.514(e)(2)(ii) unit: it **reduces the address repetition to the five XAD
@@ -462,8 +469,10 @@ How the extractor turns a mapped HL7 field into loci and how the applier writes 
   licence). One locus per field; the field is cleared (or, under a deviating policy, replaced).
 - `date`: a whole-field date/timestamp (DOB, death date). One locus per field; generalized to year.
 - `id`, a repeating identifier field (CX list: MRN / account / member id). **One locus per
-  repetition** so each identifier gets its own consistent surrogate; only the id-number component
-  (CX.1) is replaced, the assigning authority / type code are retained.
+  repetition** so each identifier gets its own consistent surrogate. The id-number component (CX.1)
+  is replaced; the assigning authority (CX.4) is kept as it arrived and counted as an unexamined
+  residual; the type code (CX.5) is kept only when HL7 Table 0203 defines it; every other component
+  is removed. A repetition with no number that holds anything else is blocked.
 - `address`: a structured address (XAD). **One locus per repetition**; the Safe Harbor 3-digit-ZIP
   generalization is applied and every finer geographic component (street / city / county) is dropped.
 - `block`: a geographic or other identifier with no clean structured generalization (county code,
@@ -734,7 +743,7 @@ const msg = parseHL7(raw);
 const { loci, coords } = extractHl7Loci(msg);
 const { document } = deidentify({ loci }, { context });
 const clean = applyHl7(msg, document.loci, coords);
-clean.toString(); // spec-clean, de-identified HL7
+clean.toString(); // spec-clean, transformed HL7
 ```
 
 ***
@@ -812,7 +821,8 @@ The de-identified message and the value-free manifest.
 #### Throws
 
 DeidError `DEID_NO_KEY` when a keyed transform is required for a category present in
-  the message but no key context was supplied.
+  the message but no key context was supplied; `DEID_FORMAT_UNSUPPORTED` when the message carries
+  more than one `MSH` segment (several messages read as one), refused before anything is extracted.
 
 #### Example
 
@@ -825,6 +835,53 @@ const context = createDeidContext({ key: process.env.DEID_KEY! });
 const { document, manifest } = deidentifyHl7(parseHL7(raw), { context });
 // document.get("PID.5.1") === undefined  (name removed)
 // manifest records each category + locus, never a value.
+```
+
+***
+
+### deidentifyHl7String()
+
+> **deidentifyHl7String**(`raw`, `options?`): [`Hl7DeidResult`](#hl7deidresult)
+
+Convenience: parse raw HL7 v2 text, de-identify it, and return the de-identified wire, the
+transformed message and the value-free manifest in one call. Parse warnings are not part of the
+de-identification contract and are discarded here; call `parseHL7` directly if you need them.
+
+#### Parameters
+
+##### raw
+
+`string`
+
+One HL7 v2 message as text.
+
+##### options?
+
+[`DeidOptions`](../deid.md#deidoptions) = `{}`
+
+The policy, retention classes and key context (see [deidentifyHl7](#deidentifyhl7)).
+
+#### Returns
+
+[`Hl7DeidResult`](#hl7deidresult)
+
+The de-identified wire on `hl7`, the transformed message and the value-free manifest.
+
+#### Throws
+
+DeidError `DEID_OUTPUT_INVALID` when the transformed message does not round-trip
+  through its parser; `DEID_NO_KEY` when a keyed transform is required but no key context was
+  supplied; `DEID_FORMAT_UNSUPPORTED` when the text holds more than one `MSH` segment. Whatever `parseHL7` throws for text it cannot read is thrown as it is.
+
+#### Example
+
+```ts
+import { deidentifyHl7String } from "@cosyte/deid/hl7";
+import { createDeidContext } from "@cosyte/deid";
+
+const { hl7, manifest } = deidentifyHl7String(raw, {
+  context: createDeidContext({ key: process.env.DEID_KEY! }),
+});
 ```
 
 ***

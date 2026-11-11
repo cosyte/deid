@@ -312,13 +312,13 @@ Two things follow, and the second is the one that surprises people:
   An **id written anywhere else** is passed through and counted as an unexamined position:
   `meta.versionId`, `meta.source`, a `Bundle.link.url` (a search link can carry a query on an
   identifier), an `Attachment.url`, any other uri, url or canonical, and an element's own `id`. Under
-  the Safe Harbor default the stand-ins are **per call**, so the same resource de-identified in two
+  the Safe Harbor default the stand-ins are **per call**, so the same resource transformed in two
   calls gets two unrelated ids and one call's references do not resolve in another call's output;
   linkage across calls needs a keyed policy, which does not claim Safe Harbor. And a removed
   reference leaves the rest of its `Reference` in place, an empty one as `{}`.
 
 Vendor-proprietary loci absent from public specs are deferred, **not invented**: a quirk is encoded
-only when a real de-identified document grounds it.
+only when a real document, its identifiers removed, grounds it.
 
 <a id="generated-leak-property"></a>
 
@@ -364,7 +364,7 @@ needs any of them gone must remove it after the pass.
   default by a sequence number counted in the order the distinct trace numbers are met in one call,
   the same one for the same trace number, so a trace a response echoes in the same interchange still
   matches the request's. It is computed from nothing about the trace number and means nothing outside
-  the call, so a response de-identified in a separate call no longer matches its request. A `TRN` with
+  the call, so a response transformed in a separate call no longer matches its request. A `TRN` with
   no trace type code (`TRN-01`) loses everything after it instead. The originating company id and its
   supplemental code (`TRN-03`, `TRN-04`) are kept when each is one value of printable text of the
   element's length; a value holding the component or the repetition separator is no single value and

@@ -229,7 +229,7 @@ function applyAddressZip(field: MutField, rep: number, t: TransformedLocus): voi
  * const { loci, coords } = extractHl7Loci(msg);
  * const { document } = deidentify({ loci }, { context });
  * const clean = applyHl7(msg, document.loci, coords);
- * clean.toString(); // spec-clean, de-identified HL7
+ * clean.toString(); // spec-clean, transformed HL7
  * ```
  */
 export function applyHl7(

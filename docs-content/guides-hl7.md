@@ -154,7 +154,7 @@ A date the pass reduces is written back alone: a component after it in the same 
 of precision, or anything else written there) is removed with the original date. A date position whose
 date is empty but which holds a value in a later component or subcomponent is blocked and recorded.
 
-## The two guarantees
+## What the leak and over-scrub tests check
 
 - **No leak.** Every seeded PHI sentinel across PID/NK1/GT1/IN1/IN2, the encounter dates and order
   identifiers, every other date inside a retained segment, the free-text loci, and Z-segments is gone

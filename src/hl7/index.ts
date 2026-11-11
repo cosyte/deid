@@ -103,7 +103,7 @@ import { extractHl7Loci } from "./extract.js";
  * import { deidentifyHl7 } from "@cosyte/deid/hl7";
  *
  * const result: Hl7DeidResult = deidentifyHl7(parseHL7(raw), {});
- * result.hl7; // de-identified HL7 wire, the same text as result.document.toString()
+ * result.hl7; // transformed HL7 wire, the same text as result.document.toString()
  * ```
  */
 export interface Hl7DeidResult {

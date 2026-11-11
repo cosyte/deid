@@ -112,7 +112,7 @@ the root's own position (`component/structuredBody/.../observation/id@root`). Th
 is decided as before: transformed in the header, kept and counted in the body and on the document's
 own ids. A root the header did not replace is left where it was: on a body `<id>` it is kept and
 counted, and on the document `<id>` and `<setId>` with an extension it is kept and counted with the
-extension. A document de-identified in two calls gets two unrelated stand-ins for the same root.
+extension. A document transformed in two calls gets two unrelated stand-ins for the same root.
 
 ## How to read a C-CDA locus path
 
@@ -150,7 +150,7 @@ Three scoping notes, because each is easy to over-read:
 - An index says two positions were **distinct**, not what stood at either. The path is still
   value-free: no narrative, no identifier, no value.
 
-## The two guarantees
+## What the leak and over-scrub tests check
 
 - **No leak.** Every seeded PHI sentinel across the header participations and the section narrative is
   gone from the serialized output. An unmapped element that could carry PHI is blocked, never passed
@@ -164,7 +164,7 @@ Three scoping notes, because each is easy to over-read:
 - Narrative is **block-only**: there is no built-in NLP scrub.
 - Within the **retained** clinical body, entry-level service **dates** (`effectiveTime`), entry **ids**,
   in-entry **performer** names, and **family-history** relative demographics are **not**
-  de-identified: exactly mirroring the HL7 v2 adapter's retained-clinical-segment boundary. Forgetting one fails
+  transformed: exactly mirroring the HL7 v2 adapter's retained-clinical-segment boundary. Forgetting one fails
   **safe** (retained in a coded entry), never leaked, because the leak surface for this release is the
   header and the narrative.
 - The document `id` / `code` / `title` envelope is retained (like HL7's MSH). The address generalization

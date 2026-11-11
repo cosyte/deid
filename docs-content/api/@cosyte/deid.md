@@ -2774,7 +2774,7 @@ SAFE_HARBOR_PROFILE.standard; // => "safe-harbor"
 
 ### VERSION
 
-> `const` **VERSION**: `string` = `"0.1.5"`
+> `const` **VERSION**: `string` = `"0.2.10"`
 
 Library version string, synced with `package.json#version` at release time.
 
