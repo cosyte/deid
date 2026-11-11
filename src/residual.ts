@@ -94,7 +94,11 @@ export interface UnexaminedResidual {
  * @internal
  */
 export class UnexaminedResidualBuilder {
-  private readonly entries = new Map<string, UnexaminedResidual>();
+  /** Each record while it is still counted; {@link build} freezes them. */
+  private readonly entries = new Map<
+    string,
+    { -readonly [K in keyof UnexaminedResidual]: UnexaminedResidual[K] }
+  >();
 
   /**
    * Record one value-bearing position no locus rule named. Pass `undefined` (or an empty string) as the
@@ -109,22 +113,22 @@ export class UnexaminedResidualBuilder {
   public record(locus: string | undefined): void {
     const empty = locus === undefined || locus.length === 0;
     const key = empty ? WITHHELD_LOCUS_TOKEN : locus;
-    const withheld = empty || key.includes(WITHHELD_LOCUS_TOKEN);
     const existing = this.entries.get(key);
     if (existing === undefined) {
       this.entries.set(key, {
         locus: key,
         count: 1,
         examined: false,
-        locusWithheld: withheld,
+        locusWithheld: empty || key.includes(WITHHELD_LOCUS_TOKEN),
         code: DEID_DISPOSITION_CODES.DEID_POSITION_UNEXAMINED,
       });
       return;
     }
-    this.entries.set(key, { ...existing, count: existing.count + 1 });
+    // A record a previous build froze has been handed out: count on a copy, never under its holder.
+    if (Object.isFrozen(existing)) this.entries.set(key, { ...existing, count: existing.count + 1 });
+    else existing.count += 1;
   }
 
-  /** How many positions have been recorded so far, counts included. A measured number, never an estimate. */
   public get total(): number {
     let total = 0;
     for (const entry of this.entries.values()) total += entry.count;

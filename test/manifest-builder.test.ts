@@ -1,5 +1,5 @@
 /**
- * The manifest builder aggregates identical rows into one entry with a running count and keeps the
+ * The manifest builder (and the unexamined-residual builder beside it) aggregates identical rows into one entry with a running count and keeps the
  * order rows were first seen in. It finds a row by its locus and compares the rest of the row field
  * by field, so these pin what a row is: two rows that differ in any of category, transform,
  * disposition, code or role never share an entry, and an entry already handed out by `build` never
@@ -8,8 +8,13 @@
 
 import { describe, expect, it } from "vitest";
 
-import { DEID_DISPOSITION_CODES, SAFE_HARBOR_CATEGORIES as C } from "../src/index.js";
+import {
+  DEID_DISPOSITION_CODES,
+  SAFE_HARBOR_CATEGORIES as C,
+  WITHHELD_LOCUS_TOKEN,
+} from "../src/index.js";
 import { ManifestBuilder } from "../src/manifest.js";
+import { UnexaminedResidualBuilder } from "../src/residual.js";
 
 const REMOVED = {
   category: C.NAMES,
@@ -88,5 +93,30 @@ describe("ManifestBuilder", () => {
       ["PID-5", DEID_DISPOSITION_CODES.DEID_LOCUS_BLOCKED, 2],
       ["PID-11", DEID_DISPOSITION_CODES.DEID_CATEGORY_REMOVED, 3],
     ]);
+  });
+});
+
+describe("UnexaminedResidualBuilder", () => {
+  it("counts a repeated locus on its first record and keeps first-seen order", () => {
+    const b = new UnexaminedResidualBuilder();
+    for (const locus of ["PV1-7", "OBR-16", "PV1-7", undefined, ""]) b.record(locus);
+    const built = b.build();
+    expect(built.map((r) => [r.locus, r.count, r.locusWithheld])).toEqual([
+      ["PV1-7", 2, false],
+      ["OBR-16", 1, false],
+      [WITHHELD_LOCUS_TOKEN, 2, true],
+    ]);
+    expect(b.total).toBe(5);
+    expect(built.every((r) => Object.isFrozen(r))).toBe(true);
+  });
+
+  it("a record added after build counts on a copy, never on the record already handed out", () => {
+    const b = new UnexaminedResidualBuilder();
+    b.record("PV1-7");
+    const first = b.build();
+    b.record("PV1-7");
+    b.record("PV1-7");
+    expect(first[0]?.count).toBe(1);
+    expect(b.build()[0]?.count).toBe(3);
   });
 });
