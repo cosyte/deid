@@ -1,0 +1,31 @@
+name: Measure (temporary)
+
+# Temporary: two fresh full mutation runs on different shard counts (so neither reads the other's
+# incremental results) and one nightly property run, measured on this branch before the floor is
+# set. Removed again in a commit of its own before the pull request merges.
+
+on:
+  push:
+    branches: [test/testing-standard]
+
+permissions:
+  contents: read
+
+jobs:
+  mutation-a:
+    uses: cosyte/.github/.github/workflows/weekly-mutation.yml@398cd4ded647dddd9f2e220ceb042840f59e1426 # the release of 398cd4ded647
+    with:
+      mutate-cmd: "pnpm mutate:full"
+      shard-count: 8
+      report-name: mutation-report-a
+  mutation-b:
+    uses: cosyte/.github/.github/workflows/weekly-mutation.yml@398cd4ded647dddd9f2e220ceb042840f59e1426 # the release of 398cd4ded647
+    with:
+      mutate-cmd: "pnpm mutate:full"
+      shard-count: 7
+      report-name: mutation-report-b
+  properties:
+    uses: cosyte/.github/.github/workflows/nightly-properties.yml@398cd4ded647dddd9f2e220ceb042840f59e1426 # the release of 398cd4ded647
+    with:
+      test-cmd: "pnpm test:property"
+      property-runs: "10000"
