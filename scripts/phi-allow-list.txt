@@ -499,3 +499,19 @@ NAME ZZREFGIV
 NAME ZZWARD
 NAME ZZROOM
 NAME ZZBED
+
+# --- Synthetic second-patient tokens for the one-context refusals ---
+# test/ncpdp/repeated-segment-refusal.test.ts appends a second patient's Patient and Claim segments
+# to the Telecom fixture; test/hl7/one-context-many-patients.test.ts writes two patients' PID
+# segments inline. Every name and id is ZZ-tagged and invented, and both birth dates are invented.
+NAME ZZSECONDFIRST
+NAME ZZSECONDLAST
+ID ZZSECONDPATID
+DOB 19700101
+NAME ZZONELAST
+NAME ZZONEFIRST
+NAME ZZTWOLAST
+NAME ZZTWOFIRST
+ID ZZMRNONE
+ID ZZMRNTWO
+DOB 19700610
