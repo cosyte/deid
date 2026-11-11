@@ -87,8 +87,8 @@ although no key of yours derived it.
 
 ## What is located, and how it is transformed
 
-The **Basic Application Level Confidentiality Profile** is authoritative for what happens to each tag. The
-default `safe-harbor` policy applies it in full, with no Retain/Clean deviations:
+The **Basic Application Level Confidentiality Profile** is authoritative for what happens to each tag. With
+no Annex E option named, the pass applies it in full, with no Retain/Clean deviations:
 
 | Locus                                                        | Handling                                                                                        |
 | ------------------------------------------------------------ | ----------------------------------------------------------------------------------------------- |
@@ -102,6 +102,103 @@ default `safe-harbor` policy applies it in full, with no Retain/Clean deviations
 
 The output carries the mandated `Patient Identity Removed = YES` marker and a De-identification Method
 naming the profile and the policy.
+
+## Apply an Annex E option
+
+Three PS3.15 Annex E options can be named in `annexEOptions`. Each one is applied by `@cosyte/dicom`,
+written to De-identification Method Code Sequence `(0012,0064)` by its CID 7050 term, named in
+De-identification Method `(0012,0063)`, and listed on `retained`:
+
+| Option                         | CID 7050 | What it does                                                                  | Under a policy named `safe-harbor` |
+| ------------------------------ | -------- | ----------------------------------------------------------------------------- | ---------------------------------- |
+| `CleanDescriptors`             | `113105` | Empties descriptions and comments rather than removing them                   | Allowed: it keeps nothing          |
+| `RetainPatientCharacteristics` | `113108` | Keeps age, sex, size, weight, ethnic group, smoking and pregnancy status      | Refused: it keeps an age over 89   |
+| `RetainDeviceIdentity`         | `113109` | Keeps device serial numbers, station names, detector and gantry identifiers   | Refused: it keeps device identifiers |
+
+The two Retain options keep what Safe Harbor removes, so the reserved `safe-harbor` label is refused
+for them: a run under the default policy that names one throws `DEID_POLICY_INVALID` before anything is
+de-identified. Name your policy distinctly to keep them. An option that is not in the table above is
+refused the same way, never ignored. Every attribute a Retain option kept is a `retained` row of the
+manifest with `DEID_RESIDUAL_RETAINED`, so it reaches the residual inventory rather than surviving
+unmentioned.
+
+```ts runnable
+import { parseDicom } from "@cosyte/dicom";
+import { defineDeidPolicy } from "@cosyte/deid";
+import { deidentifyDicom } from "@cosyte/deid/dicom";
+
+// A small synthetic Part 10 file in Explicit VR Little Endian, built here so the sample runs.
+type El = [group: number, element: number, vr: string, value: string];
+function part10(elements: El[]): Buffer {
+  const encode = ([group, element, vr, text]: El): Buffer => {
+    const pad = text.length % 2 === 0 ? "" : vr === "UI" ? "\0" : " ";
+    const value = Buffer.from(text + pad, "latin1");
+    const head = Buffer.alloc(vr === "OB" ? 12 : 8);
+    head.writeUInt16LE(group, 0);
+    head.writeUInt16LE(element, 2);
+    head.write(vr, 4, "latin1");
+    if (vr === "OB") head.writeUInt32LE(value.length, 8);
+    else head.writeUInt16LE(value.length, 6);
+    return Buffer.concat([head, value]);
+  };
+  const syntax: El = [0x0002, 0x0010, "UI", "1.2.840.10008.1.2.1"];
+  return Buffer.concat([Buffer.alloc(128), Buffer.from("DICM"), ...[syntax, ...elements].map(encode)]);
+}
+
+const dataset = parseDicom(
+  part10([
+    [0x0010, 0x0010, "PN", "ZZFAMILY^ZZGIVEN"],
+    [0x0010, 0x1010, "AS", "042Y"],
+    [0x0010, 0x1030, "DS", "71.5"],
+  ]),
+);
+
+// A policy that does not claim the safe-harbor label, so a Retain option may run under it.
+const research = defineDeidPolicy({ name: "imaging-research" });
+const result = deidentifyDicom(dataset, {
+  policy: research,
+  annexEOptions: ["RetainPatientCharacteristics"],
+});
+
+result.retained; // => ["RetainPatientCharacteristics"]
+result.deidentificationMethodCodes.map((term) => term.codeValue); // => ["113100", "113108"]
+result.dataset.get("00101010")?.rawBytes.toString("latin1"); // => "042Y"
+result.dataset.get("00100010")?.rawBytes.length; // => 0
+result.manifest.filter((entry) => entry.disposition === "retained").map((entry) => entry.locus); // => ["(0010,1010) Patient's Age", "(0010,1030) Patient's Weight"]
+```
+
+Under the default policy, the same option is refused:
+
+```ts runnable throws
+import { parseDicom } from "@cosyte/dicom";
+import { deidentifyDicom } from "@cosyte/deid/dicom";
+
+// A small synthetic Part 10 file in Explicit VR Little Endian, built here so the sample runs.
+type El = [group: number, element: number, vr: string, value: string];
+function part10(elements: El[]): Buffer {
+  const encode = ([group, element, vr, text]: El): Buffer => {
+    const pad = text.length % 2 === 0 ? "" : vr === "UI" ? "\0" : " ";
+    const value = Buffer.from(text + pad, "latin1");
+    const head = Buffer.alloc(vr === "OB" ? 12 : 8);
+    head.writeUInt16LE(group, 0);
+    head.writeUInt16LE(element, 2);
+    head.write(vr, 4, "latin1");
+    if (vr === "OB") head.writeUInt32LE(value.length, 8);
+    else head.writeUInt16LE(value.length, 6);
+    return Buffer.concat([head, value]);
+  };
+  const syntax: El = [0x0002, 0x0010, "UI", "1.2.840.10008.1.2.1"];
+  return Buffer.concat([Buffer.alloc(128), Buffer.from("DICM"), ...[syntax, ...elements].map(encode)]);
+}
+
+const dataset = parseDicom(part10([[0x0010, 0x1010, "AS", "093Y"]]));
+
+// Throws DEID_POLICY_INVALID: the safe-harbor label may not keep an age over 89.
+deidentifyDicom(dataset, { annexEOptions: ["RetainPatientCharacteristics"] });
+```
+
+[Which Annex E options the DICOM adapter offers](./dicom-annex-e-options.md) records why these three,
+why the others wait, and why pixel cleaning stays out.
 
 ## The coded declaration: what a machine reads instead of a sentence
 
@@ -309,9 +406,9 @@ warns rather than giving a false sense of safety.
 - **Metadata only**: pixels are never inspected; a burned-in-annotation hazard is *flagged*, never
   cleaned. The two pixel options of CID 7050 (`113101` Clean Pixel Data, `113102` Clean Recognizable
   Visual Features) are therefore always declared **withheld** and are never written to `(0012,0064)`.
-- **No Retain/Clean deviations**: the full Basic Profile always applies (maximal removal).
-  Expert-Determination retain options are **not** offered, so every Annex E option is declared
-  withheld.
+- **Three Annex E options, no more**: Clean Descriptors, Retain Patient Characteristics and Retain
+  Device Identity can be named; every other option is refused. With none named, the full Basic Profile
+  applies (maximal removal) and every option is declared withheld.
 - **Replacement-UID referential integrity is guaranteed within one call** unless you supply a shared
   `uidMap`, in which case it reaches every call that shares it. The declared scope is on the result.
 
@@ -324,6 +421,7 @@ before you release the output, with a table of what this adapter does not cover.
   [`deidentifyDicomBuffer`](./api/@cosyte/deid/dicom.md#deidentifydicombuffer),
   [`DicomDeidOptions`](./api/@cosyte/deid/dicom.md#dicomdeidoptions) and
   [`DicomDeidResult`](./api/@cosyte/deid/dicom.md#dicomdeidresult)
+- [Which Annex E options the DICOM adapter offers](./dicom-annex-e-options.md)
 - [`DicomOptionDeclaration`](./api/@cosyte/deid/dicom.md#dicomoptiondeclaration),
   [`CID_7050`](./api/@cosyte/deid/dicom.md#cid_7050) and
   [`DicomUidReferentialIntegrity`](./api/@cosyte/deid/dicom.md#dicomuidreferentialintegrity)

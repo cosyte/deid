@@ -41,6 +41,8 @@ type AppliedAction = "removed" | "emptied" | "dummied" | "uid-remapped" | "clean
 interface ReportAttribute {
   readonly tag: string;
   readonly keyword: string;
+  /** The resolved single Table E.1-1 action code (`K` keep, `X` remove, ...). */
+  readonly action: string;
   readonly applied: AppliedAction;
   readonly contextPath?: readonly string[];
 }
@@ -176,9 +178,13 @@ function formatLocus(tag: string, keyword: string, contextPath?: readonly string
 }
 
 /**
- * Fold a `@cosyte/dicom` de-identification report into the unified value-free manifest. Attributes the
- * Annex E pass **kept** are omitted (nothing was acted on); removed private tags are recorded as redactions
- * under the catch-all category (they are removed unless a known-safe retain list keeps them).
+ * Fold a `@cosyte/dicom` de-identification report into the unified value-free manifest. An attribute
+ * whose resolved action is `K` and that the pass **kept** is recorded as **retained**
+ * (`DEID_RESIDUAL_RETAINED`), so a value a Retain option kept reaches the residual inventory rather than
+ * surviving unmentioned; no Basic Profile row of Table E.1-1 says `K`, so such a row exists only when a
+ * Retain option kept the attribute. A sequence kept so its items could be walked (a `U` the wire sends as
+ * `SQ`) is omitted, because its items are reported on their own. Removed private tags are recorded as
+ * redactions under the catch-all category (they are removed unless a known-safe retain list keeps them).
  *
  * @param report - The value-free report returned by `@cosyte/dicom`'s `deidentify`.
  * @returns The manifest entries in locus order, counts aggregated.
@@ -188,7 +194,18 @@ export function foldReport(report: FoldableReport): readonly DeidManifestEntry[]
   const builder = new ManifestBuilder();
 
   for (const attr of report.attributes) {
-    if (attr.applied === "kept") continue;
+    if (attr.applied === "kept") {
+      if (attr.action === "K") {
+        builder.add({
+          category: classifyDicomCategory(attr.keyword, attr.applied),
+          transform: "retain",
+          locus: formatLocus(attr.tag, attr.keyword, attr.contextPath),
+          disposition: "retained",
+          code: DEID_DISPOSITION_CODES.DEID_RESIDUAL_RETAINED,
+        });
+      }
+      continue;
+    }
     const mapped = APPLIED_MAP[attr.applied];
     builder.add({
       category: classifyDicomCategory(attr.keyword, attr.applied),

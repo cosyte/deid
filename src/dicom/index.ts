@@ -13,9 +13,15 @@
  * reaches DICOM data **only** through `@cosyte/dicom`'s own `parseDicom` / `deidentify` / `serializeDicom`
  * surface: it never touches a third-party substrate and never inspects bytes directly.
  *
- * **Fail closed.** The default `safe-harbor` policy applies the **full Basic Profile with no Retain/Clean
+ * **Fail closed.** With no option named, the run applies the **full Basic Profile with no Retain/Clean
  * deviations**: every private tag is removed, every UID is consistently remapped, and no identifying metadata
  * is retained. The output is **"Safe-Harbor-transformed per the configured policy"**, never "de-identified".
+ *
+ * **Three Annex E options a caller can name.** `annexEOptions` takes Clean Descriptors, Retain Patient
+ * Characteristics and Retain Device Identity ({@link DICOM_ANNEX_E_OPTIONS}). Each is applied by the
+ * delegated pass, declared by its CID 7050 term, and every attribute a Retain option keeps is a `retained`
+ * row of the manifest. The two Retain options keep what Safe Harbor removes, so a run under the reserved
+ * `safe-harbor` label that names one is refused; any option not offered is refused too, never ignored.
  *
  * **The declaration is machine-readable, not only prose.** Beside the De-identification Method text the
  * delegated pass writes to `(0012,0063)`, this adapter writes the **CID 7050** coded terms for the profile
@@ -49,7 +55,6 @@ import {
   foldReport,
   foldWarnings,
 } from "./fold.js";
-import { BASIC_PROFILE_CODE_VALUE, resolveMethodDeclaration } from "./method-codes.js";
 import {
   attachMethodCodeSequence,
   INPUT_METHOD_CODE_SEQUENCE_DROPPED_WARNING,
@@ -99,17 +104,18 @@ function runDicomPass(
   options: DicomDeidOptions,
   whole: boolean,
 ): { readonly result: DicomDeidResult; readonly bytes: Buffer } {
+  // Resolved before anything is delegated: an option the adapter does not offer, one the policy's label
+  // forbids, or a profile or option the vocabulary cannot name refuses the pass here, with no dataset
+  // and no bytes produced.
   const resolved = resolveDicomOptions(options);
-  // Resolved before anything is delegated: a profile or option the vocabulary cannot name refuses the
-  // pass here, with no dataset and no bytes produced.
-  const declaration = resolveMethodDeclaration(BASIC_PROFILE_CODE_VALUE, resolved.retain);
+  const { declaration } = resolved;
   // An element with no value bytes (a copy made by object spread) is refused here, typed, rather than
   // reaching the delegated pass, which fails on it with the peer's own TypeError or acts on it unread.
   assertValueBytes(dataset);
   const inputCarriedMethodCodes = dataset.has(TAG_DEIDENTIFICATION_METHOD_CODE_SEQUENCE);
 
   const { dataset: deidentified, report } = dicomDeidentify(dataset, {
-    retain: [],
+    retain: resolved.retain,
     deidentificationMethod: resolved.deidentificationMethod,
     ...(resolved.uidRoot !== undefined ? { uidRoot: resolved.uidRoot } : {}),
     ...(resolved.uidMap !== undefined ? { uidMap: resolved.uidMap } : {}),
@@ -167,9 +173,13 @@ function runDicomPass(
  * {@link DicomDeidResult.uidReferentialIntegrity}.
  *
  * @param dataset - The parsed dataset (`parseDicom(bytes)`).
- * @param options - The policy and (for cross-file UID consistency) a shared `uidMap` / `uidRoot`.
+ * @param options - The policy, the Annex E options to apply (none by default), and (for cross-file UID
+ *   consistency) a shared `uidMap` / `uidRoot`.
  * @returns The de-identified dataset, the value-free manifest, the coded declaration, the warnings, and
  *   the metadata-only stance.
+ * @throws {@link DeidError} `DEID_POLICY_INVALID` when `annexEOptions` names an option this adapter does
+ *   not offer, or names Retain Patient Characteristics or Retain Device Identity under a policy named
+ *   `safe-harbor`: both keep what Safe Harbor removes.
  * @throws {@link DeidError} `DEID_POSITIONS_UNENUMERABLE` when a dataset, a sequence item or the Part 10
  *   File Meta group will not yield its positions, so no honest count exists for this study, or when an
  *   element carries no value bytes (a copy of an `Element` made by object spread keeps no `rawBytes`;
@@ -203,8 +213,10 @@ export function deidentifyDicom(dataset: Dataset, options: DicomDeidOptions = {}
  * {@link DicomBufferDeidResult.burnedInAnnotationHazard} before persisting or sharing the bytes.
  *
  * @param bytes - Raw DICOM Part 10 bytes.
- * @param options - The policy and (for cross-file UID consistency) a shared `uidMap` / `uidRoot`.
+ * @param options - The policy, the Annex E options to apply (none by default), and (for cross-file UID
+ *   consistency) a shared `uidMap` / `uidRoot`.
  * @returns The de-identified Part 10 bytes and the value-free audit.
+ * @throws {@link DeidError} `DEID_POLICY_INVALID` as {@link deidentifyDicom} does.
  * @example
  * ```ts
  * import { deidentifyDicomBuffer } from "@cosyte/deid/dicom";
@@ -235,6 +247,7 @@ export function deidentifyDicomBuffer(
 }
 
 export { BURNED_IN_ANNOTATION_CODE } from "./fold.js";
+export { DICOM_ANNEX_E_OPTIONS, type DicomAnnexEOption } from "./annex-e-options.js";
 export { INPUT_METHOD_CODE_SEQUENCE_DROPPED_CODE } from "./method-sequence.js";
 export {
   CID_7050,
