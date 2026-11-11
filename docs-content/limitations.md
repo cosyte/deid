@@ -334,12 +334,24 @@ Each is pinned by a test that fails the day it stops being true.
   length. A procedure code (`SV1-01`, `SV2-02`, `SV3-01`) is kept when it has the shape its qualifier
   gives it, which for a qualifier with no published code shape is 1 to 48 letters and digits. And a
   party whose role keeps it (a provider, a service location) keeps its name and identifier elements as
-  they arrived, a repetition inside its identifier included. A `REF-02` under an administrative
-  qualifier the adapter keeps (a payer claim number, an authorization or referral number, an
-  ambulatory patient group) is kept whatever it holds. A `REF` that names a party's own number (a
-  state license, a tax id, a provider number, a National Provider Identifier) is kept only when the
-  last party before it in the transaction set is one its role keeps; after the individual, a
-  relative, an employer, an unknown party, or no party, it is removed and recorded.
+  they arrived, a repetition inside its identifier included.
+- **X12 claim, authorization, referral and classification numbers are kept, and each ties to one
+  person's visit.** A `REF-02` under an administrative qualifier the adapter keeps is kept whatever it
+  holds: the payer claim control and claim numbers (`F8`, `D9`, `1K`), the line item control numbers
+  (`6R`, `FJ`), the prior authorization, referral, authorization and predetermination numbers (`G1`,
+  `9F`, `BB`, `G3`), the repriced claim numbers (`9A`, `9C`), and the classification codes (`APC`,
+  `1S`, `RB`) among them. None is a name or a member id, but each identifies one claim or one
+  authorization, and so one person's visit, to anyone who holds the payer's or the provider's records.
+  A caller who needs them gone must remove them after the pass.
+- **An X12 party number is kept only under a party its role keeps.** A `REF` that names a party's own
+  number (a state license `0B`, a tax id `TJ`, an `EI`, a National Provider Identifier `HPI`, the
+  provider numbers `1A` to `1D`, `1G`, `1J`, `G2`, `N5`, `N7`, `D3`, `EW`, `X4`, `LU`, and the payer,
+  payee, submitter, receiver and claim office numbers `2U`, `PQ`, `EO`, `EV`, `FY`) is kept only when
+  the last `NM1` or `N1` before it in its section is a party whose role keeps it, such as a provider. A
+  section starts at the transaction set, at every `HL`, and at every member `INS` of an 834. After the
+  individual, a relative, an employer, an unknown party, or no party in its section, it is removed and
+  recorded. That over-removes a well-formed value the TR3 places before any party, such as the 835
+  receiver id (`REF*EV`) in the header.
 - **C-CDA:** in the header, a coded element the allow-list recognizes (`administrativeGenderCode`,
   `maritalStatusCode` and the others) keeps its `@code` and its `@displayName` as they arrived, and a
   person-role `<id>` keeps its `@root`.

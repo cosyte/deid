@@ -134,17 +134,20 @@ interface X12LocusAccumulator {
   /** The interchange's component and repetition separators, which a composite or repeating shape reads. */
   readonly delimiters: { readonly component: string; readonly repetition: string };
   /**
-   * For each transaction set (`group:transaction`), whether the last `NM1` / `N1` party in it is one its
-   * role keeps (outside the scope clause). A provider identity `REF` is kept only under such a party.
+   * For each transaction set (`group:transaction`), whether the last `NM1` / `N1` party in its current
+   * section (since the last `HL`, or `INS` in an 834) is one its role keeps. A party-number `REF` is
+   * kept only under such a party.
    */
   readonly partyKept: Map<string, boolean>;
 }
 
 /**
  * The `REF-01` qualifiers that name a person's or an organisation's OWN number: a license, a tax id, a
- * provider number. Kept as a provider reference only when the last party in the transaction set is one
- * its role keeps; after the individual, a relative, an employer, an unknown party, or no party at all,
- * the number may be the individual's own, so it is removed and recorded.
+ * provider number, and the payer, payee, submitter, receiver and claim office numbers. Kept only when
+ * the last party in its section is one its role keeps; after the individual, a relative, an employer,
+ * an unknown party, or no party at all, the number may be the individual's own (a payee or a submitter
+ * can be a person), so it is removed and recorded. A section starts at the transaction set, at every
+ * `HL`, and at every `INS` of an 834 (a member), so a party in an earlier section never vouches for it.
  */
 const PARTY_IDENTITY_REF_QUALIFIERS: ReadonlySet<string> = new Set<string>([
   "0B", // State License Number
@@ -154,14 +157,19 @@ const PARTY_IDENTITY_REF_QUALIFIERS: ReadonlySet<string> = new Set<string>([
   "1D", // Medicaid Provider Number
   "1G", // Provider UPIN Number
   "1J", // Facility ID Number
+  "2U", // Payer Identification Number
   "D3", // NCPDP Pharmacy Number
   "EI", // Employer's Identification Number
+  "EO", // Submitter Identification Number
+  "EV", // Receiver Identification Number
   "EW", // Mammography Certification Number
+  "FY", // Claim Office Number
   "G2", // Provider Commercial Number
   "HPI", // National Provider Identifier
   "LU", // Location Number
   "N5", // Provider Plan Network Identification Number
   "N7", // Facility Network Identification Number
+  "PQ", // Payee Identification
   "TJ", // Federal Taxpayer's Identification Number
   "X4", // Clinical Laboratory Improvement Amendment Number
 ]);
@@ -666,6 +674,10 @@ function removeSegment(out: X12LocusAccumulator, seg: SegmentElements, pos: SegP
 /** Dispatch one segment through the X12 PHI rules. */
 function handleSegment(out: X12LocusAccumulator, seg: X12Segment, pos: SegPos): void {
   const id = pos.segId;
+  // A new hierarchical level, or a new member in an 834, starts a section of its own: no party before
+  // it vouches for a party number inside it.
+  if (id === "HL" || (id === "INS" && pos.stId === "834"))
+    out.partyKept.delete(transactionKey(pos));
   if (id === "NM1") {
     handleNm1(out, seg, pos);
     return;

@@ -196,14 +196,12 @@ export function pass(raw: string): PassOutcome {
     );
     const rowLoci = new Set(result.manifest.map((m) => m.locus.replace(/^[^/]*\//, "")));
     return {
-      // A party its role kept, or a `REF` the adapter kept by its administrative qualifier: the
-      // qualifier is on the retained list and REF-02 has no manifest row, so no rule removed it.
+      // A party its role kept, or a `REF` kept on purpose (see `adminReferenceKept`).
       decidedKeep: (s) => {
         const at = segmentOf(raw, terminator, element, s);
         if (keptParties.has(at)) return true;
         if (!at.startsWith("REF[")) return false;
-        const qualifier = segmentText(raw, terminator, s).split(element)[1] ?? "";
-        return classifyRefQualifier(qualifier).kind === "retain" && !rowLoci.has(`${at}-2`);
+        return adminReferenceKept(raw, terminator, element, s, keptParties, rowLoci);
       },
       output: result.x12,
       manifest: result.manifest,
@@ -249,9 +247,73 @@ export const X12_PINS: readonly Pin[] = [
   },
 ];
 
-/** The text of the body segment holding the sentinel. */
-function segmentText(raw: string, terminator: string, sentinel: string): string {
-  return raw.split(terminator).find((seg) => seg.includes(sentinel)) ?? "";
+/**
+ * The `REF-01` qualifiers that name a party's own number, written out here on purpose rather than
+ * imported, so a qualifier dropped from the adapter's list is not dropped from the pin with it.
+ */
+const PARTY_NUMBER_QUALIFIERS: ReadonlySet<string> = new Set([
+  "0B",
+  "1A",
+  "1B",
+  "1C",
+  "1D",
+  "1G",
+  "1J",
+  "2U",
+  "D3",
+  "EI",
+  "EO",
+  "EV",
+  "EW",
+  "FY",
+  "G2",
+  "HPI",
+  "LU",
+  "N5",
+  "N7",
+  "PQ",
+  "TJ",
+  "X4",
+]);
+
+/**
+ * Whether the `REF` holding the sentinel is one the adapter keeps on purpose, read from the INPUT and
+ * the manifest, never from the position alone:
+ *
+ * - its `REF-01` is a qualifier the adapter retains, and no rule recorded its `REF-02`; and
+ * - when that qualifier names a party's own number, the last `NM1` / `N1` before it in its section is
+ *   a party whose role the manifest records as kept. A section starts at the transaction set, at every
+ *   `HL`, and at every `INS` of an 834, so a party in an earlier section never vouches for it.
+ *
+ * So a party number after the individual, an unknown party or no party is never pinned: if the
+ * adapter keeps one, the property fails.
+ */
+function adminReferenceKept(
+  raw: string,
+  terminator: string,
+  element: string,
+  sentinel: string,
+  keptParties: ReadonlySet<string>,
+  rowLoci: ReadonlySet<string>,
+): boolean {
+  const counts = new Map<string, number>();
+  let st = "";
+  let lastPartyKept = false;
+  for (const seg of raw.split(terminator)) {
+    const parts = seg.split(element);
+    const id = parts[0]?.trim() ?? "";
+    const occ = counts.get(id) ?? 0;
+    counts.set(id, occ + 1);
+    if (id === "ST") st = parts[1] ?? "";
+    if (id === "ST" || id === "HL" || (id === "INS" && st === "834")) lastPartyKept = false;
+    if (id === "NM1" || id === "N1") lastPartyKept = keptParties.has(`${id}[${String(occ)}]`);
+    if (!seg.includes(sentinel)) continue;
+    const qualifier = (parts[1] ?? "").toUpperCase();
+    if (classifyRefQualifier(qualifier).kind !== "retain") return false;
+    if (rowLoci.has(`REF[${String(occ)}]-2`)) return false;
+    return !PARTY_NUMBER_QUALIFIERS.has(qualifier) || lastPartyKept;
+  }
+  return false;
 }
 
 /**

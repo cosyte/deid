@@ -105,8 +105,9 @@ describe("HL7 v2: a date field keeps only the date it was reduced to", () => {
   it("a date component whose date is empty but which holds a value in a subcomponent is blocked", () => {
     // SPM-17, the collection date range: its start (component 1) is a date position of its own.
     const spm = ["SPM", "1", ...Array<string>(15).fill(""), "&ZQLKSPMD00X^20200102"];
-    const { wire } = hl7(spm.join("|"));
+    const { wire, rows } = hl7(spm.join("|"));
     expect(wire).not.toContain("ZQLKSPMD00X");
+    expect(rows).toContain(`SPM-17[0].1 ${D.DEID_LOCUS_BLOCKED}`);
   });
 
   it("a date field whose date is empty but which holds a value elsewhere is blocked", () => {
@@ -115,38 +116,82 @@ describe("HL7 v2: a date field keeps only the date it was reduced to", () => {
   });
 });
 
-describe("X12: a provider identity reference is kept only under a party its role keeps", () => {
+describe("X12: a party's own reference number is kept only under a party its role keeps", () => {
   // Found by the X12 property on seed -614318039: `REF*0B*<value>` in a 270, kept with no party before
-  // it. 0B (a state license number) and the other provider identity qualifiers name a person's own
-  // number when the party they follow is the individual, or when no party says whose they are.
-  const isa =
+  // it. A REF that names a party's own number (a license, a tax id, a provider, payer, payee,
+  // submitter or receiver number) is the individual's own when the party it follows is the individual,
+  // a relative or an employer, or when no party says whose it is.
+  const envelope = (gs: string, st: string, guide: string): string =>
     "ISA*00*          *00*          *ZZ*A              *ZZ*A              *000101*0000*^*00501*000000001*0*P*:~" +
-    "GS*HS*A*A*20000101*0000*1*X*005010X279A1~ST*270*0001*005010X279A1~";
-  function x12(body: string): { out: string; rows: string[] } {
+    `GS*${gs}*A*A*20000101*0000*1*X*${guide}~ST*${st}*0001*${guide}~`;
+  function x12(body: string, st = "270"): { out: string; rows: string[] } {
+    const head =
+      st === "834" ? envelope("BE", "834", "005010X220A1") : envelope("HS", "270", "005010X279A1");
     const count = body.split("~").length + 1;
-    const r = deidentifyX12String(`${isa}${body}SE*${String(count)}*0001~GE*1*1~IEA*1*000000001~`, {
-      context: ctx,
-    });
+    const r = deidentifyX12String(
+      `${head}${body}SE*${String(count)}*0001~GE*1*1~IEA*1*000000001~`,
+      { context: ctx },
+    );
     return { out: r.x12, rows: r.manifest.map((m) => `${m.locus} ${m.code}`) };
   }
 
-  it("with no party before it, the reference is removed", () => {
-    const { out, rows } = x12("REF*0B*ZQLKREFA00X~");
+  const PARTY_NUMBERS = [
+    "0B",
+    "1A",
+    "1B",
+    "1C",
+    "1D",
+    "1G",
+    "1J",
+    "2U",
+    "D3",
+    "EI",
+    "EO",
+    "EV",
+    "EW",
+    "FY",
+    "G2",
+    "HPI",
+    "LU",
+    "N5",
+    "N7",
+    "PQ",
+    "TJ",
+    "X4",
+  ];
+  const BEFORE: readonly (readonly [string, string])[] = [
+    ["after the patient's own party", "NM1*IL*1*ZZFAMILY~"],
+    ["after a party that is not a provider (an employer)", "N1*36*ZZEMPLOYER~"],
+    ["after a party whose role is not recognised", "NM1*XQ9*2*ZZORG~"],
+    ["with no party before it", ""],
+  ];
+  const CASES = PARTY_NUMBERS.flatMap((q) => BEFORE.map(([label, party]) => [q, label, party]));
+
+  it.each(CASES)("a %s reference %s is removed and recorded", (qualifier, _label, party) => {
+    const { out, rows } = x12(`${party ?? ""}REF*${qualifier ?? ""}*ZQLKREFA00X~`);
     expect(out).not.toContain("ZQLKREFA00X");
     expect(rows).toContain(`270/REF[0]-2 ${D.DEID_LOCUS_BLOCKED}`);
   });
 
-  it.each(["0B", "TJ", "EI", "1G", "HPI"])(
-    "after the individual's own party, a %s reference is removed",
-    (qualifier) => {
-      expect(x12(`NM1*IL*1*ZZFAMILY~REF*${qualifier}*ZQLKREFB01X~`).out).not.toContain(
-        "ZQLKREFB01X",
-      );
+  it.each(PARTY_NUMBERS)(
+    "a %s reference after a party its role keeps (a provider) is kept",
+    (q) => {
+      expect(x12(`NM1*1P*2*ZZORG~REF*${q}*ZQLKREFC02X~`).out).toContain("ZQLKREFC02X");
     },
   );
 
-  it("after a party its role keeps (a provider), the reference is still kept", () => {
-    expect(x12("NM1*1P*2*ZZORG~REF*0B*ZQLKREFC02X~").out).toContain("ZQLKREFC02X");
+  it("a new HL level starts a new section: a provider before it does not vouch for the REF", () => {
+    const { out, rows } = x12("NM1*1P*2*ZZORG~HL*2*1*22*0~REF*0B*ZQLKREFE04X~");
+    expect(out).not.toContain("ZQLKREFE04X");
+    expect(rows).toContain(`270/REF[0]-2 ${D.DEID_LOCUS_BLOCKED}`);
+    // A provider inside the new level still vouches for its own REF.
+    expect(x12("HL*2*1*22*0~NM1*1P*2*ZZORG~REF*0B*ZQLKREFF05X~").out).toContain("ZQLKREFF05X");
+  });
+
+  it("in an 834, a member's INS starts a new section: the header's party does not vouch for it", () => {
+    const { out, rows } = x12("NM1*1P*2*ZZORG~INS*Y*18*030*XN*A~REF*0B*ZQLKREFG06X~", "834");
+    expect(out).not.toContain("ZQLKREFG06X");
+    expect(rows).toContain(`834/REF[0]-2 ${D.DEID_LOCUS_BLOCKED}`);
   });
 
   it("an administrative reference is kept by its qualifier alone, as before", () => {
