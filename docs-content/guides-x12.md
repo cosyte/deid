@@ -291,6 +291,9 @@ interchange can carry claims for many patients, so this is not refused; under a 
 every date in it moves by the one offset the context derives (see
 [the limitations page](./limitations.md#one-context-per-call-however-many-people-the-document-names)).
 
+[What the caller still owns](./what-the-caller-still-owns.md) lists the duties that stay with you
+before you release the output, with a table of what this adapter does not cover.
+
 ## Reference
 
 - [`deidentifyX12`](./api/@cosyte/deid/x12.md#deidentifyx12),

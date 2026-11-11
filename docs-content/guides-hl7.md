@@ -163,7 +163,7 @@ date is empty but which holds a value in a later component or subcomponent is bl
 - **No over-scrub.** Structured clinical OBX values, units, LOINC/coded observation identifiers,
   reference ranges, result statuses, times of day (`TM`), and every component of a composite that is not
   itself a date are retained byte-identical: the de-identifier never degenerates into a
-  blanket-blanking "safe but useless" scrubber. The narrowings of that guarantee are stated rather than
+  blanket-blanking "safe but useless" scrubber. The narrowings of that check are stated rather than
   implied, and there are two, both of them dates: an OBX-5 whose OBX-2 types it as a **date** is a date,
   and is acted on and recorded like any other, so a structured OBX value is retained byte-identical
   **except** for that date-typed subset; and the OBX segment's own date/time fields (OBX-12, OBX-14,
@@ -209,6 +209,9 @@ date is empty but which holds a value in a later component or subcomponent is bl
 
 The honesty line is unchanged: the output is **"Safe-Harbor-transformed per the configured policy,"**
 never "de-identified" and never "HIPAA-compliant."
+
+[What the caller still owns](./what-the-caller-still-owns.md) lists the duties that stay with you
+before you release the output, with a table of what this adapter does not cover.
 
 ## Reference
 

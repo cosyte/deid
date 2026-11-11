@@ -2,7 +2,7 @@
 id: guides-freetext
 title: Redact free text with your own detector
 sidebar_label: Free text
-description: "Free text is blocked by default; bring your own redactor to transform it, and see what the library does and does not guarantee."
+description: "Free text is blocked by default; bring your own redactor to transform it, and see what the library does and does not check."
 ---
 
 # Redact free text with your own detector

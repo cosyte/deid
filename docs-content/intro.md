@@ -56,7 +56,7 @@ const { document, manifest } = deidentify(
         path: "PID-19",
         kind: "identifier",
         category: SAFE_HARBOR_CATEGORIES.SSN,
-        value: "900-00-0001",
+        value: "900000001",
       },
     ],
   },
@@ -66,7 +66,7 @@ const { document, manifest } = deidentify(
 document.loci[0]?.value; // => null
 manifest[0]?.category; // => "SSN"
 manifest[0]?.locus; // => "PID-19"
-JSON.stringify(manifest).includes("900-00-0001"); // => false
+JSON.stringify(manifest).includes("900000001"); // => false
 ```
 
 The value is removed, and the manifest records the category and the locus, never the value.
@@ -80,3 +80,5 @@ The value is removed, and the manifest records the category and the locus, never
 - [How the library works](./concepts-archetype.md): the policy engine, the transforms, and fail-closed.
 - [Known limitations and honesty](./limitations.md): read it before you rely on the library for
   anything that leaves your control.
+- [What the caller still owns](./what-the-caller-still-owns.md): the duties that stay with you
+  before you release output, and what each adapter does not cover.

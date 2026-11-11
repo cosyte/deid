@@ -137,6 +137,9 @@ Separator in front of it, a second patient's Patient and Claim segments decode a
 transaction, and de-identifying them under the caller's one patient context would give two people one
 date-shift offset. Send each patient's claim in its own transmission, with its own context.
 
+[What the caller still owns](./what-the-caller-still-owns.md) lists the duties that stay with you
+before you release the output, with a table of what this adapter does not cover.
+
 ## Reference
 
 - [`deidentifyTelecom`](./api/@cosyte/deid/ncpdp.md#deidentifytelecom),
