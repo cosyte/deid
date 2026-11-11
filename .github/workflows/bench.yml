@@ -9,9 +9,12 @@ name: Bench
 # largest, and a CPU and a sampled heap profile of the hottest paths.
 #
 # On demand, and on a pull request that changes the bench or this file, so a change to what is
-# measured is measured where it will be read. ADVISORY: it fails only when it cannot measure (a
-# suite that does not load, a process that dies, a results file that does not match the schema),
-# never on a number, and it is never a required check. The numbers are kept as artifacts and shown
+# measured is measured where it will be read. And on a push to main that changes package.json, which
+# every release commit does: the release fills the "Current numbers" section of
+# docs-content/performance.md from this run's artifacts on the release commit
+# (scripts/performance-numbers.ts, `pnpm pack:docs:release`), so its artifact names are read there.
+# ADVISORY: it fails only when it cannot measure (a suite that does not load, a process that dies, a
+# results file that does not match the schema), never on a number, and it is never a required check. The numbers are kept as artifacts and shown
 # in each job's summary.
 #
 # One reading job per format, side by side, so the reading finishes inside a pull request's wait:
@@ -21,14 +24,20 @@ name: Bench
 
 on:
   workflow_dispatch: {}
+  push:
+    branches: [main]
+    paths:
+      - "package.json"
   pull_request:
     branches: [main]
     paths:
       - "bench/**"
       - ".github/workflows/bench.yml"
 
+# A push to main is grouped by its commit, so a later push never cancels the reading a release
+# waits for; a pull request's runs still replace each other.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.event_name == 'push' && github.sha || github.ref }}
   cancel-in-progress: true
 
 permissions:

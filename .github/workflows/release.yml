@@ -36,4 +36,8 @@ jobs:
     uses: cosyte/.github/.github/workflows/release.yml@c0db8d8e5927269820de4401b3b5ad6141854b76 # workflows-2026-11-08-c0db8d8e5927
     with:
       package-name: "@cosyte/deid"
+      # Fills the "Current numbers" section of docs-content/performance.md from the Bench run on the
+      # release commit, in this checkout only, then packs the docs artifacts as `pnpm pack:docs` does
+      # (scripts/performance-numbers.ts). It never fails the release over a missing number.
+      pack-docs-cmd: "pnpm pack:docs:release"
     secrets: inherit
