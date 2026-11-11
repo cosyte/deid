@@ -17,7 +17,9 @@
     "x12",
     "ncpdp",
     "dicom",
-    "typescript"
+    "typescript",
+    "anonymization",
+    "redaction"
   ],
   "homepage": "https://docs.cosyte.com/deid",
   "bugs": {
