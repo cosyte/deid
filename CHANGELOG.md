@@ -1,5 +1,49 @@
 # Changelog
 
+## 0.2.11
+
+### Patch Changes
+
+- 00d435b: The DICOM adapter now takes three PS3.15 Annex E options a caller can name: Clean Descriptors, Retain Patient Characteristics and Retain Device Identity.
+
+  - **What changed.** `deidentifyDicom` and `deidentifyDicomBuffer` take a new `annexEOptions` list. Each option named is applied by `@cosyte/dicom`, written to De-identification Method Code Sequence `(0012,0064)` by its CID 7050 term (`113105`, `113108`, `113109`), named in De-identification Method `(0012,0063)`, listed on `retained`, and marked `applied` in `optionDeclarations`. Every attribute a Retain option kept is now a `retained` manifest row with `DEID_RESIDUAL_RETAINED`. `DICOM_ANNEX_E_OPTIONS` and the `DicomAnnexEOption` type are exported from `@cosyte/deid/dicom`.
+  - **Clean Descriptors and coded lists.** `@cosyte/dicom` cleans a sequence in the option's column (the diagnosis code sequences, Reason for Visit, Request Attributes, Reason for Requested Procedure, Prescription Notes) by keeping its items, free-text Code Meaning included. So the adapter removes each such sequence at the top level of the dataset and records it `removed`; one nested inside a sequence the pass keeps refuses the run with `DEID_FORMAT_UNSUPPORTED`.
+  - **Fail closed.** Each option keeps something Safe Harbor removes: coded list items, an age over 89, device identifiers with the device's dates and locations. So a run under a policy named `safe-harbor`, the default included, that names any of them throws `DEID_POLICY_INVALID` before anything is de-identified. Any other option name, an option named twice, or a value that is not a list of names is refused with the same code rather than ignored. Pixel cleaning stays out: the two pixel options are always declared withheld.
+  - **Patient's Age is filed under dates.** A manifest row for Patient's Age `(0010,1010)` now carries category `DATES`, as an age does in every other adapter, where it carried `OTHER_UNIQUE_ID`. That includes the row the Basic Profile writes when it removes the age.
+  - **What a caller changes.** Nothing, unless you want an option or read the category of the Patient's Age row: with `annexEOptions` absent or empty, the output bytes are what they were. To use an option, pass a policy with a name other than `safe-harbor`, for example `defineDeidPolicy({ name: "imaging-research" })`, and name the option.
+
+- ff7bbb7: The DICOM adapter now refuses a dataset holding an element copied by object spread with its own typed error, instead of failing with a bare TypeError from inside the parser.
+
+  - **What changed.** From `@cosyte/dicom` 0.1.12 on, an element's `rawBytes` is read through an accessor, so a copy made with `{ ...element }` keeps the tag, the VR and the length but carries no value bytes. Handed such a copy, `deidentifyDicom` used to fail with `TypeError: Cannot read properties of undefined` from inside `@cosyte/dicom`, or, for an attribute the profile removes, act on it without reading it. It now throws a `DeidError` with the code `DEID_POSITIONS_UNENUMERABLE` before anything is delegated, naming where the element sits (its sequence path and its tag) and never its value. A sequence item holding such a copy is refused the same way.
+  - **What a caller changes.** Copy an element through the `Element` constructor from `@cosyte/dicom`, passing `rawBytes: element.rawBytes` with its other fields, rather than with object spread. A dataset `parseDicom` returns, and one built from such elements, de-identifies exactly as before.
+  - **Supported Node versions.** Unchanged: Node 22 and later. Our CI now runs the test suite on Linux, Windows and macOS on Node 22, 24 and 26, and under Bun.
+
+- 7023434: The type declarations' comments now describe output in the package's own words, and the FHIR adapter's overview says free text is blocked, as the code does. No behavior changes.
+
+  - **FHIR free text.** The `@cosyte/deid/fhir` overview said an `Observation.valueString` and an `Annotation.text` are retained. They are not: a `note`, a `contentString` and an uncoded `valueString` are blocked and recorded as `DEID_FREETEXT_BLOCKED` unless a redactor you supply returns its own text, and the narrative `text.div` is blocked at any depth. The comment now says so. What a pass removes, keeps or records is unchanged.
+  - **Wording.** The `@example` comments on the HL7 v2, C-CDA, FHIR, X12 and NCPDP results and appliers called their output "de-identified". They now call it transformed, the label the package gives its output (`OUTPUT_LABEL`). The README's samples and status (the 0.2 line) follow.
+  - Nothing a caller writes needs to change.
+
+- 465f62e: The FHIR adapter can now mark its output as transformed: an opt-in `meta.security` label on each resource it changed, and a Data Absent Reason where it removed a required element.
+
+  - **What changed.** `deidentifyFhir` and `deidentifyFhirJson` take a new `transformLabels` option (the new `FhirDeidOptions` type, which extends `DeidOptions`), and `applyFhir` takes it as a fourth argument (`FhirApplyOptions`). With it on, each resource the pass changed gets the `meta.security` coding `REDACTED` from `http://terminology.hl7.org/CodeSystem/v3-ObservationValue`, added to any labels already there, and an element R4 requires that the pass removed or emptied gets the `data-absent-reason` extension with the code `masked` in its place. A contained resource is never labeled; its container is. `FHIR_TRANSFORMED_SECURITY_LABEL` and `FHIR_DATA_ABSENT_REASON` export the two codes.
+  - **What the label claims.** `REDACTED` says some of the resource was filtered out. It does not say the resource is de-identified, anonymized or pseudonymized.
+  - **What a caller changes.** Nothing: the option is off by default, and without it the output is what it was. To use it, pass `{ transformLabels: true }`.
+
+- 4154d71: The six parser peer ranges now start at the lowest release our CI runs the whole test suite on, instead of admitting every 0.1 release.
+
+  - **Narrowed peer ranges.** `@cosyte/hl7` moves from `^0.1.0` to `^0.1.8`, `@cosyte/ccda` to `^0.1.6`, `@cosyte/fhir` to `^0.1.8`, `@cosyte/x12` to `^0.1.10`, `@cosyte/ncpdp` to `^0.1.6` and `@cosyte/dicom` to `^0.1.11`. Each is still optional, and each still admits every later 0.1 release. The NCPDP floor is the release whose decode the transaction count refusal reads.
+  - **Upgrading from an older parser.** A project that pins a parser below its new floor gets a peer conflict from npm (ERESOLVE) or a peer warning from pnpm and yarn when it installs this version. Move that parser to a release in its range, for example `npm install @cosyte/hl7@^0.1.8`; no code change is needed. Narrowing a range can stop an install that resolved before, which we release as a patch while the package is below 1.0.
+  - **Both ends tested.** A new workflow installs all six parsers at the lowest release each range admits, then at the highest published one, and runs the whole suite on each: the lowest on every pull request, both on every change to main and nightly.
+  - **Tested parser releases.** The tests and benchmarks now run on `@cosyte/hl7` 0.1.12, `@cosyte/ccda` 0.1.11, `@cosyte/fhir` 0.1.13, `@cosyte/x12` 0.1.13, `@cosyte/ncpdp` 0.1.7 and `@cosyte/dicom` 0.1.13. The output-equivalence digests are unchanged on these releases, so no de-identified output, manifest row or unexamined residual moves.
+
+- c015210: The restricted three-digit ZIP list now follows the 2020 Census, so six more prefixes become `000` under Safe Harbor.
+
+  - **Six prefixes added.** `202`, `204`, `205`, `369`, `753` and `772` each held 20,000 people or fewer in the 2020 Census (table P1 of the Demographic and Housing Characteristics File, by five-digit ZCTA, summed by the first three digits). A ZIP starting with one of them is now generalized to `000` where it kept its three digits before, and its manifest row is `DEID_CATEGORY_GENERALIZED` instead of `DEID_RESIDUAL_RETAINED`.
+  - **None removed.** The 17 prefixes the HHS guidance lists from the 2000 Census all stay, including the five (`063`, `790`, `830`, `831`, `890`) that are over 20,000 in 2020, so no ZIP that became `000` before keeps its prefix now. `RESTRICTED_ZIP3` holds 23 prefixes.
+  - **`RESTRICTED_ZIP3_SOURCE`.** `census` is now `"2020"` (it was `"2000"`), a new `dataset` field names the Census table, and `citation` names the regulation and the HHS guidance whose list is kept. A caller that compared `census` to `"2000"` must compare to `"2020"`.
+  - **What a caller sees.** Output changes only for a ZIP in one of the six added prefixes. The limitations page says where the list comes from and how it is rebuilt from a newer census.
+
 ## 0.2.10
 
 ### Patch Changes
