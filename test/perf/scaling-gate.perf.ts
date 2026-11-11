@@ -93,20 +93,27 @@ function expectMeasured(report: ReturnType<typeof scalingGate>): void {
   expect(report.size.status, report.size.diagnostic).toBe("measured");
 }
 
-/** One gate and its self-check, the self-check on the same options the gate runs. */
+/**
+ * One gate and its self-check, the self-check on the same options the gate runs. Each sizes its own
+ * phases (`selfSize`): a rep runs as many passes over the base corpus as it takes to reach 20 ms, so
+ * a fixture that a fast runner finishes under the 4 ms phase floor is measured rather than skipped,
+ * and the ratio the gate reads is unchanged. The floor, the ceiling and the self-check stay as they
+ * are.
+ */
 function gate<TInput, TResult>(
   name: string,
   options: () => ScalingGateOptions<TInput, TResult>,
   regressedParse: (input: TInput) => TResult,
   equals?: (a: TResult, b: TResult) => boolean,
 ): void {
+  const sized = (): ScalingGateOptions<TInput, TResult> => ({ ...options(), selfSize: true });
   describe(`the scaling gate: ${name}`, () => {
     it("has not acquired a complexity regression on either axis", () => {
-      expectMeasured(scalingGate(options()));
+      expectMeasured(scalingGate(sized()));
     });
 
     it("has fixtures large enough for that gate to fail", () => {
-      const report = assertScalingGateFires(options(), {
+      const report = assertScalingGateFires(sized(), {
         regressedParse,
         ...(equals === undefined ? {} : { equals }),
       });

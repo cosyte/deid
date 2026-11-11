@@ -120,6 +120,7 @@ export function deidentifyCcda(doc: CcdaDocument, options: DeidOptions = {}): Cc
     /* de-id re-parses spec-clean source; parse warnings are not part of the de-id contract */
   });
   const root = dom.documentElement;
+  /* v8 ignore if -- parseSecureXml refuses a source with no root element (NOT_WELL_FORMED_XML) before it returns, so it never hands back a document without one; kept so a parser that ever did is refused, not walked */
   if (root === null) {
     throw new DeidError(
       FATAL_CODES.EMPTY_INPUT,
@@ -134,8 +135,9 @@ export function deidentifyCcda(doc: CcdaDocument, options: DeidOptions = {}): Cc
   // `@xmldom/xmldom` nodes serialize through `toString()` (verified round-trip); the interface makes
   // that override explicit so the serialize is not read as a base Object stringification.
   const serializable: { toString(): string } = root;
-  const serialized = serializable.toString();
-  const xml = serialized.startsWith("<?xml") ? serialized : `${XML_DECLARATION}\n${serialized}`;
+  // The root element serializes without the XML declaration, which belongs to the document, not to
+  // the element, so the declaration is always put back in front of it.
+  const xml = `${XML_DECLARATION}\n${serializable.toString()}`;
   return { document: parseCcda(xml), manifest, unexaminedResiduals };
 }
 

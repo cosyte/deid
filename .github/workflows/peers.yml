@@ -16,8 +16,12 @@ name: Peer range ends
 # a red digest at one end names a peer release that moves de-identified output: that is a finding
 # to name in a changeset, never a reason to drop the digests from this job.
 #
-# It runs on every pull request, with no `paths:` filter, because a peer publishing moves the latest
-# end with no commit here, and nightly for the same reason. It is advisory: not a required check.
+# WHEN. The `lowest` end runs on every pull request, with no `paths:` filter, since a change here can
+# stop working against the oldest release a range admits. The `latest` end runs on a push to main,
+# nightly and on demand, never on a pull request: a peer publishing moves that end with no commit
+# here, so on a pull request it would turn every open one red at once for a release none of them
+# touched. A red `latest` on main or overnight names the release to take up in a change of its own.
+# It is advisory: not a required check.
 
 on:
   push:
@@ -41,7 +45,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        end: ["lowest", "latest"]
+        # The `latest` end only off pull requests: see WHEN above.
+        end: ${{ fromJSON(github.event_name == 'pull_request' && '["lowest"]' || '["lowest", "latest"]') }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:

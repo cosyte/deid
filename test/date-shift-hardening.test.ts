@@ -17,6 +17,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import { createDeidContext, dateShift, DeidError, FATAL_CODES } from "../src/index.js";
+import { RUNTIME } from "./helpers/runtime.js";
 
 const ctx = createDeidContext({ key: "shift-key-synthetic-hmac-key", patientId: "patient-1" });
 
@@ -41,21 +42,28 @@ describe("date-shift is timezone-independent (nit #1)", () => {
     expect(out).toMatch(/^\d{4}-\d{2}-\d{2}T09:15:00\.123-08:00$/);
   });
 
-  it("produces byte-identical output under two different host timezones", () => {
-    // The strongest proof: run the shift in a child process (via tsx, against source) under two very
-    // different zones and require an identical result. Would have differed under the old local parse.
-    const runner = fileURLToPath(new URL("./helpers/run-date-shift.ts", import.meta.url));
-    const tsxBin = fileURLToPath(new URL("../node_modules/.bin/tsx", import.meta.url));
-    const run = (tz: string): string =>
-      execFileSync(tsxBin, [runner], {
-        env: { ...process.env, TZ: tz },
-        encoding: "utf8",
-      }).trim();
-    const kolkata = run("Asia/Kolkata"); // UTC+05:30
-    const honolulu = run("Pacific/Honolulu"); // UTC-10:00
-    expect(kolkata).toBe(honolulu);
-    expect(kolkata).toMatch(/^\d{4}-\d{2}-\d{2}T00:30:00$/); // guard against a vacuous empty pass
-  });
+  // Skipped under Deno: the child is the `tsx` launcher, a Node program, and the deno job takes
+  // Node off PATH. The two cases above prove the same calendar arithmetic in process there.
+  it.skipIf(RUNTIME === "deno")(
+    "produces byte-identical output under two different host timezones",
+    () => {
+      // The strongest proof: run the shift in a child process (via tsx, against source) under two very
+      // different zones and require an identical result. Would have differed under the old local parse.
+      const runner = fileURLToPath(new URL("./helpers/run-date-shift.ts", import.meta.url));
+      const tsxBin = fileURLToPath(new URL("../node_modules/.bin/tsx", import.meta.url));
+      // On Windows the `.bin` entry is a `.cmd` file, which only a shell starts.
+      const run = (tz: string): string =>
+        execFileSync(tsxBin, [runner], {
+          env: { ...process.env, TZ: tz },
+          encoding: "utf8",
+          shell: process.platform === "win32",
+        }).trim();
+      const kolkata = run("Asia/Kolkata"); // UTC+05:30
+      const honolulu = run("Pacific/Honolulu"); // UTC-10:00
+      expect(kolkata).toBe(honolulu);
+      expect(kolkata).toMatch(/^\d{4}-\d{2}-\d{2}T00:30:00$/); // guard against a vacuous empty pass
+    },
+  );
 });
 
 describe("date-shift maxShiftDays:0 fails closed (nit #2)", () => {

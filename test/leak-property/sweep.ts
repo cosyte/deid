@@ -21,41 +21,21 @@
  * printed and must show that sentinels were placed and handled, not merely refused; and each adapter's
  * file carries a tamper case, a sentinel put back into a real output, that the same sweep must catch.
  *
- * **Runs and seeds.** `DEID_LEAK_RUNS` sets the run count (100 by default, the pull request budget;
- * the nightly workflow sets 10,000) and `DEID_LEAK_SEED` replays one seed. Each property prints its
- * seed before it runs, and fast-check prints the seed and the path of a failing case, so any failure
- * is reproducible from the log alone.
+ * **Runs and seeds.** The shared property settings (`../helpers/property.ts`): `COSYTE_PROPERTY_RUNS`
+ * sets the run count (100 by default, the pull request budget; the nightly workflow sets 10,000),
+ * `COSYTE_PROPERTY_SEED` replays one seed and `COSYTE_PROPERTY_PATH` one failing case of it. Each
+ * property prints its seed before it runs, and a failure prints the seed and the path of the failing
+ * case, so any failure is reproducible from the log alone.
  *
  * Every sentinel is a synthetic token (`ZQLK`, `ZQV` or `Zqv` and generated letters); nothing here is real
  * data.
  */
 
+import { assertProperty } from "@cosyte/test-utils";
 import fc from "fast-check";
 
 import { type UnexaminedResidual } from "../../src/residual.js";
-
-/** The run count: about 100 on a pull request, 10,000 in the nightly workflow. */
-export const LEAK_RUNS: number = readPositiveInt("DEID_LEAK_RUNS", 100);
-
-/** Read a positive integer from the environment, or fall back to the default. */
-function readPositiveInt(name: string, fallback: number): number {
-  const raw = process.env[name];
-  if (raw === undefined || raw.length === 0) return fallback;
-  const n = Number(raw);
-  if (!Number.isSafeInteger(n) || n <= 0) throw new Error(`${name} must be a positive integer`);
-  return n;
-}
-
-/** The seed for one property: `DEID_LEAK_SEED` when set, a fresh one otherwise. */
-export function leakSeed(): number {
-  const raw = process.env["DEID_LEAK_SEED"];
-  if (raw !== undefined && raw.length > 0) {
-    const n = Number(raw);
-    if (!Number.isSafeInteger(n)) throw new Error("DEID_LEAK_SEED must be an integer");
-    return n | 0;
-  }
-  return (Date.now() ^ Math.floor(Math.random() * 0x7fffffff)) | 0;
-}
+import { propertyRun } from "../helpers/property.js";
 
 /** The shape a sentinel was placed in, for the tally and the failure message. */
 export type LeakShape =
@@ -195,10 +175,14 @@ export function silentRunReasons(tally: LeakTally): string[] {
 }
 
 /** One line for the log: the seed, the runs and the tally. */
-export function describeRun(name: string, seed: number, tally: LeakTally): string {
+export function describeRun(
+  name: string,
+  run: { readonly seed: number; readonly numRuns: number },
+  tally: LeakTally,
+): string {
   const shapes = [...tally.shapes.entries()].map(([s, n]) => `${s}=${String(n)}`).join(" ");
   return (
-    `[leak-property] ${name}: seed=${String(seed)} runs=${String(LEAK_RUNS)} ` +
+    `[leak-property] ${name}: seed=${String(run.seed)} runs=${String(run.numRuns)} ` +
     `cases=${String(tally.cases)} placed=${String(tally.placed)} removed=${String(tally.removed)} ` +
     `residual=${String(tally.residual)} pinned=${String(tally.pinned)} ` +
     `refused=${String(tally.refused)} ${shapes}`
@@ -258,18 +242,18 @@ export function runLeakProperty<T>(
   arbitrary: fc.Arbitrary<T>,
   check: (value: T, tally: LeakTally) => string[],
 ): LeakTally {
-  const seed = leakSeed();
+  // The seed and the depth are printed before the run, so a run that hangs or dies still names them.
+  const run = propertyRun(`leak-property ${name}`);
   const tally = newTally();
-  // Printed before the run, so a run that hangs or dies still names its seed.
-  process.stdout.write(`[leak-property] ${name}: seed=${String(seed)} runs=${String(LEAK_RUNS)}\n`);
-  fc.assert(
+  assertProperty(
+    `leak-property ${name}`,
     fc.property(arbitrary, (value) => {
       const violations = check(value, tally);
       if (violations.length > 0) throw new Error(violations.join("\n"));
     }),
-    { seed, numRuns: LEAK_RUNS },
+    { seed: run.seed },
   );
-  process.stdout.write(`${describeRun(name, seed, tally)}\n`);
+  process.stdout.write(`${describeRun(name, run, tally)}\n`);
   const reasons = silentRunReasons(tally);
   if (reasons.length > 0) throw new Error(`${name} ran silently: ${reasons.join("; ")}`);
   return tally;

@@ -17,15 +17,14 @@ From the repo root, in this order, with the pinned pnpm 10 first on PATH (AGENTS
 ```sh
 pnpm install --frozen-lockfile
 pnpm typecheck && pnpm lint && pnpm format:check && pnpm phi-scan
-pnpm test && pnpm test:coverage && pnpm build && pnpm attw
+pnpm test && pnpm test:coverage && pnpm quality:check --base origin/main && pnpm build && pnpm attw
 pnpm smoke && pnpm examples && pnpm check:test-selection && pnpm check:docs-reference
 pnpm check:no-emdash && pnpm check:no-internal-refs && pnpm check:docs-content
 pnpm check:readme && pnpm check:claude-card && pnpm check:catalog && pnpm check:process
 ```
 
-The first nine are the shared `ci / verify` ladder, on Node 22, 24, and 26. `smoke`, `examples`,
-`test-selection` and `documents` have their own jobs; the dash, attw and internal-refs gates are
-script-utils'.
+All up to `attw` but `quality:check` (the `coverage-ratchet` job) are `ci / verify`, on three
+systems; `smoke`, `examples`, `test-selection` and `documents` have their own jobs.
 
 ## Hazard
 

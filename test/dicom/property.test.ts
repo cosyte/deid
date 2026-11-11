@@ -18,6 +18,7 @@ import { describe, expect, it } from "vitest";
 import { deidentifyDicom } from "../../src/dicom/index.js";
 import { buildDicom, type BuildDicomElement } from "./helpers/build-dicom.js";
 import { pad, TS_EXPLICIT_LE } from "./helpers/fixtures.js";
+import { checkProperty } from "../helpers/property.js";
 
 /** A tagged synthetic sentinel: obviously fake, never realistic. */
 const sentinelText = fc
@@ -48,7 +49,8 @@ const phiElement: fc.Arbitrary<BuildDicomElement & { readonly sentinel: string }
 
 describe("fail-safe: never throws, never leaks a sentinel (fuzz)", () => {
   it("de-identifies an arbitrary PHI-laden dataset without throwing, and no sentinel survives", () => {
-    fc.assert(
+    checkProperty(
+      "de-identifies an arbitrary PHI-laden dataset without throwing, and no sentinel survives",
       fc.property(fc.array(phiElement, { minLength: 0, maxLength: 20 }), (elements) => {
         const buf = buildDicom({
           transferSyntax: TS_EXPLICIT_LE,
@@ -65,7 +67,6 @@ describe("fail-safe: never throws, never leaks a sentinel (fuzz)", () => {
         const flat = JSON.stringify(result.manifest);
         for (const e of elements) expect(flat.includes(e.sentinel)).toBe(false);
       }),
-      { numRuns: 200 },
     );
   });
 
@@ -76,7 +77,8 @@ describe("fail-safe: never throws, never leaks a sentinel (fuzz)", () => {
         const g = (group | 1).toString(16).padStart(4, "0"); // force odd (private) group
         return { tag: `${g}1001`, vr: "LO" as const, value: pad(sentinel), sentinel };
       });
-    fc.assert(
+    checkProperty(
+      "tolerates arbitrary private-group elements and always strips their values",
       fc.property(fc.array(privateElement, { minLength: 1, maxLength: 8 }), (elements) => {
         const buf = buildDicom({
           transferSyntax: TS_EXPLICIT_LE,
@@ -85,14 +87,14 @@ describe("fail-safe: never throws, never leaks a sentinel (fuzz)", () => {
         const out = serializeDicom(deidentifyDicom(parseDicom(buf)).dataset).toString("latin1");
         for (const e of elements) expect(out.includes(e.sentinel)).toBe(false);
       }),
-      { numRuns: 100 },
     );
   });
 });
 
 describe("consistency: UID remapping is deterministic across arbitrary corpora", () => {
   it("maps a given source UID to the same replacement in every document (shared cache)", () => {
-    fc.assert(
+    checkProperty(
+      "maps a given source UID to the same replacement in every document (shared cache)",
       fc.property(
         fc.array(fc.integer({ min: 1, max: 9999 }), { minLength: 2, maxLength: 6 }),
         (suffixes) => {
@@ -117,14 +119,14 @@ describe("consistency: UID remapping is deterministic across arbitrary corpora",
           expect(replacements.size).toBe(1);
         },
       ),
-      { numRuns: 50 },
     );
   });
 });
 
 describe("immutability", () => {
   it("never mutates the input dataset under arbitrary input", () => {
-    fc.assert(
+    checkProperty(
+      "never mutates the input dataset under arbitrary input",
       fc.property(fc.array(phiElement, { minLength: 1, maxLength: 10 }), (elements) => {
         const buf = buildDicom({
           transferSyntax: TS_EXPLICIT_LE,
@@ -136,7 +138,6 @@ describe("immutability", () => {
         const after = serializeDicom(ds);
         expect(Buffer.compare(before, after)).toBe(0);
       }),
-      { numRuns: 100 },
     );
   });
 });

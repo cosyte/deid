@@ -43,6 +43,7 @@ import type { Buffer } from "node:buffer";
 import { deidentify as dicomDeidentify, parseDicom, type Dataset } from "@cosyte/dicom";
 
 import {
+  assertValueBytes,
   BURNED_IN_ANNOTATION_CODE,
   deriveUnexaminedResiduals,
   foldReport,
@@ -102,6 +103,9 @@ function runDicomPass(
   // Resolved before anything is delegated: a profile or option the vocabulary cannot name refuses the
   // pass here, with no dataset and no bytes produced.
   const declaration = resolveMethodDeclaration(BASIC_PROFILE_CODE_VALUE, resolved.retain);
+  // An element with no value bytes (a copy made by object spread) is refused here, typed, rather than
+  // reaching the delegated pass, which fails on it with the peer's own TypeError or acts on it unread.
+  assertValueBytes(dataset);
   const inputCarriedMethodCodes = dataset.has(TAG_DEIDENTIFICATION_METHOD_CODE_SEQUENCE);
 
   const { dataset: deidentified, report } = dicomDeidentify(dataset, {
@@ -167,7 +171,9 @@ function runDicomPass(
  * @returns The de-identified dataset, the value-free manifest, the coded declaration, the warnings, and
  *   the metadata-only stance.
  * @throws {@link DeidError} `DEID_POSITIONS_UNENUMERABLE` when a dataset, a sequence item or the Part 10
- *   File Meta group will not yield its positions, so no honest count exists for this study.
+ *   File Meta group will not yield its positions, so no honest count exists for this study, or when an
+ *   element carries no value bytes (a copy of an `Element` made by object spread keeps no `rawBytes`;
+ *   copy one through the `Element` constructor instead).
  * @throws {@link DeidError} `DEID_DECLARATION_UNNAMEABLE` when a profile or an Annex E option in play has
  *   no naming term in CID 7050, so the coded declaration could only be an approximation.
  * @throws {@link DeidError} `DEID_OUTPUT_INVALID` when the coded declaration cannot be read back out of

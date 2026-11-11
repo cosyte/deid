@@ -57,6 +57,7 @@ import { deidentifyX12String } from "../../src/x12/index.js";
 import { deidentifyTelecomString } from "../../src/ncpdp/index.js";
 import { deidentifyDicom } from "../../src/dicom/index.js";
 import { ALL_SENTINELS, buildPhiDataset, CLINICAL, UID } from "../dicom/helpers/fixtures.js";
+import { checkProperty } from "../helpers/property.js";
 
 const FIX = (fmt: string, file: string): string =>
   readFileSync(join(import.meta.dirname, "..", "fixtures", fmt, file), "utf8");
@@ -1312,7 +1313,8 @@ describe("pipeline fuzz, mutated fixtures never leak and always terminate", () =
   // de-identifier's own fail-closed behavior from parser-framing robustness.
   for (const t of targets) {
     it(`${t.name}: any truncation (prefix) never leaks a full seeded sentinel`, () => {
-      fc.assert(
+      checkProperty(
+        `${t.name}: any truncation (prefix) never leaks a full seeded sentinel`,
         fc.property(fc.nat({ max: t.raw.length }), (cut) => {
           let out: string;
           try {
@@ -1325,7 +1327,6 @@ describe("pipeline fuzz, mutated fixtures never leak and always terminate", () =
           }
           return true;
         }),
-        { numRuns: 200 },
       );
     });
   }
@@ -1335,7 +1336,8 @@ describe("pipeline fuzz, mutated fixtures never leak and always terminate", () =
   // only that the pipeline TERMINATES with a string or a bounded throw, never a hang / OOM / non-Error.
   for (const t of targets) {
     it(`${t.name}: arbitrary byte-flips terminate with a string or a bounded rejection`, () => {
-      fc.assert(
+      checkProperty(
+        `${t.name}: arbitrary byte-flips terminate with a string or a bounded rejection`,
         fc.property(
           fc.nat({ max: Math.max(0, t.raw.length - 1) }),
           fc.integer({ min: 0, max: 255 }),
@@ -1351,7 +1353,6 @@ describe("pipeline fuzz, mutated fixtures never leak and always terminate", () =
             }
           },
         ),
-        { numRuns: 200 },
       );
     });
   }
