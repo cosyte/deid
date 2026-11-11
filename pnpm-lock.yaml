@@ -24,23 +24,23 @@ importers:
         specifier: ^0.1.1
         version: 0.1.1
       '@cosyte/ccda':
-        specifier: ^0.1.6
-        version: 0.1.6
-      '@cosyte/dicom':
         specifier: ^0.1.11
-        version: 0.1.11
+        version: 0.1.11(fast-check@4.10.2)
+      '@cosyte/dicom':
+        specifier: ^0.1.13
+        version: 0.1.13
       '@cosyte/eslint-config':
         specifier: ^0.1.4
         version: 0.1.4(eslint@10.14.0)(typescript@5.9.3)
       '@cosyte/fhir':
-        specifier: ^0.1.8
-        version: 0.1.8
+        specifier: ^0.1.13
+        version: 0.1.13(fast-check@4.10.2)
       '@cosyte/hl7':
-        specifier: ^0.1.8
-        version: 0.1.8(fast-check@4.10.2)
+        specifier: ^0.1.12
+        version: 0.1.12(fast-check@4.10.2)
       '@cosyte/ncpdp':
-        specifier: ^0.1.6
-        version: 0.1.6
+        specifier: ^0.1.7
+        version: 0.1.7
       '@cosyte/prettier-config':
         specifier: ^0.1.2
         version: 0.1.2
@@ -63,8 +63,8 @@ importers:
         specifier: ^0.1.3
         version: 0.1.3(@vitest/coverage-v8@5.1.0)(vite@8.3.6(@types/node@22.20.1)(esbuild@0.28.2)(tsx@4.23.15))(vitest@5.1.0)
       '@cosyte/x12':
-        specifier: ^0.1.10
-        version: 0.1.10(fast-check@4.10.2)
+        specifier: ^0.1.13
+        version: 0.1.13(fast-check@4.10.2)
       '@types/node':
         specifier: ^22.0.0
         version: 22.20.1
@@ -205,12 +205,17 @@ packages:
     engines: {node: '>=22.15.0'}
     hasBin: true
 
-  '@cosyte/ccda@0.1.6':
-    resolution: {integrity: sha512-3ZheOAuUufIVWo5oTdLayb6ClJYV72lWcmg865cPD2IQyh/CtFVcKsb7s3jfbEVxOX7xMCp9DOv7g470vhkMRg==}
+  '@cosyte/ccda@0.1.11':
+    resolution: {integrity: sha512-4+wQazB6SbIZom8dBC0mWJqjHa6BJjHd2/WeiBXGn5YBaspa4a0948+VLGodA15yUL26Xx4H6S0wF4dlBs4P7A==}
     engines: {node: '>=22.0.0'}
+    peerDependencies:
+      fast-check: ^4.0.0
+    peerDependenciesMeta:
+      fast-check:
+        optional: true
 
-  '@cosyte/dicom@0.1.11':
-    resolution: {integrity: sha512-dlP0wC742pbXR0Y02i3Y7khq0cAQBPzEJAZiefaTPs7FTGokeJ5TYFa0D1Z9s+qhvvUjGlujysWlq+n18T6TAg==}
+  '@cosyte/dicom@0.1.13':
+    resolution: {integrity: sha512-5AwnJc6Ps0r2/qz7ohrfj3i+xQ/ACuo3yWWvdksQMowMqWvOHezG3tJCMjUw5Ax6OfSrq4odfd7wfxDbo1x2fA==}
     engines: {node: '>=22.0.0'}
 
   '@cosyte/eslint-config@0.1.4':
@@ -220,12 +225,8 @@ packages:
       eslint: ^9.0.0 || ^10.0.0
       typescript: '>=5.0.0'
 
-  '@cosyte/fhir@0.1.8':
-    resolution: {integrity: sha512-3jZxM1OS84o+TyyBkF8JZfmC89PzgrJp3xskOXPh7l9lgBB3vSwEYz2eCbeJIWzjULlWU9PKfiFJLmSlT8jCJg==}
-    engines: {node: '>=22.0.0'}
-
-  '@cosyte/hl7@0.1.8':
-    resolution: {integrity: sha512-5xlmD818oeuSKUkSB283RsR/l/qmfXhyZ+PcnULIu/BXXcz+2CP3k2S9bi8ysS9UOqMRLOEpa0hXoTZWKo0+sw==}
+  '@cosyte/fhir@0.1.13':
+    resolution: {integrity: sha512-ygZTkC57Q0h4ZMbZhXQxpFJbWYVrZ6HmncTFYOUlx+kQHzFdVgPI/prhFMi+Y0MKpiqb+qUf1wjpur3+fUeOkA==}
     engines: {node: '>=22.0.0'}
     peerDependencies:
       fast-check: ^4.0.0
@@ -233,8 +234,17 @@ packages:
       fast-check:
         optional: true
 
-  '@cosyte/ncpdp@0.1.6':
-    resolution: {integrity: sha512-tlzvkMhCvXezi54g9nMd6SCfM5BT+vspn/4p1T90zkTXpBcYMMJWhHmWBpxyu9qRm+bHByNKHKMkDCFMXOBP/g==}
+  '@cosyte/hl7@0.1.12':
+    resolution: {integrity: sha512-yxlth3ivO6oDwbG2sDlp0EGDrInczkWWHF/BVM9NTPd07a6Szs8QvV5Ma/l9n3gE/KC+lReOERWJ9EL3NrLzTw==}
+    engines: {node: '>=22.0.0'}
+    peerDependencies:
+      fast-check: ^4.0.0
+    peerDependenciesMeta:
+      fast-check:
+        optional: true
+
+  '@cosyte/ncpdp@0.1.7':
+    resolution: {integrity: sha512-jcbPL1xxfSJ4F875Ax7Klmc8UyHidZepToJYBWz0Noi6fLiHaoXVfulOWCNEv+uCX6Dp/Tp5NIW0uguNDZ3SKA==}
     engines: {node: '>=22.0.0'}
 
   '@cosyte/prettier-config@0.1.2':
@@ -271,8 +281,8 @@ packages:
       vite: ^6.0.0 || ^7.0.0 || ^8.0.0
       vitest: ^4.0.0 || ^5.0.0
 
-  '@cosyte/x12@0.1.10':
-    resolution: {integrity: sha512-4XRNKE3/JzSq8lsYpxAkcrQLYVKgCmAfLI62J9Pzm76EcLTc6pD1qHkISRSeWcHuchlo89EjGPkKfjAPFCcueA==}
+  '@cosyte/x12@0.1.13':
+    resolution: {integrity: sha512-F67uRasz7Dr4WmVOoaEYtOD/KO48v1Q6k+DQNh/BErXL1F2pR7DfyWxibNuHJrS7QI54IwgZSRu1zP0MWm8Pbg==}
     engines: {node: '>=22.0.0'}
     peerDependencies:
       fast-check: ^4.0.0
@@ -561,9 +571,6 @@ packages:
 
   '@manypkg/get-packages@1.1.3':
     resolution: {integrity: sha512-fo+QhuU3qE/2TQMQmbVMqaQ6EWbMhi4ABWP+O4AM1NqPBuy0OrApV5LO6BrrgnhtAHS2NH6RrVk9OL181tTi8A==}
-
-  '@nodable/entities@3.0.0':
-    resolution: {integrity: sha512-8L9xFeTYKhm49xfIypoe2W5wV1m/3Z58kT+7kR9A8OyFxcPduI4VmxaUMQyKYrRjUoLLSXv6EKKID5Tvj9cUVw==}
 
   '@nodelib/fs.scandir@2.1.5':
     resolution: {integrity: sha512-vq24Bq3ym5HEQm2NKCr3yXDwjc7vTsEThRDnkp2DK9p1uqLR+DHurm/NOTo0KG7HYHU7eppKZj3MyqYuMBf62g==}
@@ -984,9 +991,6 @@ packages:
   any-promise@1.3.0:
     resolution: {integrity: sha512-7UvmKalWRt1wgjL1RrGxoSJW/0QZFIegpeGvZG9kjp8vrRu55XTHbwnqq2GpXm9uLbcuhxm3IqX9OB4MZR1b2A==}
 
-  anynum@1.0.1:
-    resolution: {integrity: sha512-N6//FLET/tXYNM/F6ABca1oH6fWB+KlTt909Le28WMDBk8oaT4vY17DCrwg2MvmuqUKt3Ni4N5dGJ/EoBgcO6A==}
-
   are-docs-informative@0.1.1:
     resolution: {integrity: sha512-sqRsNQBwbKLRX0jV5Cu5uzmtflf892n4Vukz7T659ebL4pz3mpOqCMU7lxMoBTFwnp10E3YB5ZcyHM41W5bcDA==}
     engines: {node: '>=18'}
@@ -1253,13 +1257,6 @@ packages:
   fast-levenshtein@2.0.6:
     resolution: {integrity: sha512-DCXu6Ifhqcks7TZKY3Hxp3y6qphY5SJZmrWMDrKcERSOXWQdMhU9Ig/PYrzyw/ul9jOIyh0N4M0tbC5hodg8dw==}
 
-  fast-xml-builder@1.3.0:
-    resolution: {integrity: sha512-F74cZEdCvuw9P41GAC3rod4X04jjWGM1JPEv/GWSqFTWLsdyMSBMBMlm9Hk3GLBgLBbdBNY8yee0pQh2RBVESQ==}
-
-  fast-xml-parser@5.10.1:
-    resolution: {integrity: sha512-IEMIf7298kXuZSRFoGfMYrl7is8LpavODgbNz1cwIudv7KwVFnuU+UsMporfq6PD6aXSlawZlARiA3UywCTfMw==}
-    hasBin: true
-
   fastq@1.20.1:
     resolution: {integrity: sha512-GGToxJ/w1x32s/D2EKND7kTil4n8OVk/9mycTc4VDza13lOvpUZTGX3mFSCtV9ksdGBVzvsyAVLM6mHFThxXxw==}
 
@@ -1390,9 +1387,6 @@ packages:
   is-subdir@1.2.0:
     resolution: {integrity: sha512-2AT6j+gXe/1ueqbW6fLZJiIw3F8iXGJtt0yDrZaBhAZEG1raiTxKWU+IPqMCzQAXOUCKdA4UDMgacKH25XG2Cw==}
     engines: {node: '>=4'}
-
-  is-unsafe@2.0.0:
-    resolution: {integrity: sha512-2LdV822R+wmI86unXA93WCFpL6g+av8ynWk0nrHyJqGop5VoocYsSLFgN8jrfalT6iGeLNM4KXuVSsULP53kEA==}
 
   is-windows@1.0.2:
     resolution: {integrity: sha512-eXK1UInq2bPmjyX6e3VHIzMLobc4J94i4AWn+Hpq3OU5KkrRC96OAcR3PRJ/pGu6m8TRnBHP9dkXQVsT/COVIA==}
@@ -1661,10 +1655,6 @@ packages:
     resolution: {integrity: sha512-ak9Qy5Q7jYb2Wwcey5Fpvg2KoAc/ZIhLSLOSBmRmygPsGwkVVt0fZa0qrtMz+m6tJTAHfZQ8FnmB4MG4LWy7/w==}
     engines: {node: '>=8'}
 
-  path-expression-matcher@1.6.2:
-    resolution: {integrity: sha512-enSlaiat05iasnzmgNxRj8reFdj3puY2QpNgP1aPIaVfT6nn9ICuPoFlKHk8EN22HcwewshO+mN2DGbkCEOtqQ==}
-    engines: {node: '>=14.0.0'}
-
   path-key@3.1.1:
     resolution: {integrity: sha512-ojmeN0qd+y0jszEtoY48r0Peq5dwMEkIlCOu6Q5f41lfkswXuKtYrhgoTpLnyIcHm24Uhqx+5Tqm2InSwLhE6Q==}
     engines: {node: '>=8'}
@@ -1862,9 +1852,6 @@ packages:
   strip-bom@3.0.0:
     resolution: {integrity: sha512-vavAMRXOgBVNF6nyEEmL3DBK19iRpDcoIwW+swQ+CbGiu7lju6t+JklA1MHweoWtadgt4ISVUsXLyDq34ddcwA==}
     engines: {node: '>=4'}
-
-  strnum@2.4.1:
-    resolution: {integrity: sha512-M9eUSMT2dCB2cTNPG7UYj6KuK7RJR2SN2+yCV/fTW3xzTCS6EaGZ5pSMgDIjB7r8zSfTGk+dvvn9rTjpVS9Mwg==}
 
   sucrase@3.35.1:
     resolution: {integrity: sha512-DhuTmvZWux4H1UOnWMB3sk0sbaCVOoQZjv8u1rDoTV0HTdGem9hkAZtl4JZy8P2z4Bg0nT+YMeOFyVr4zcG5Tw==}
@@ -2095,10 +2082,6 @@ packages:
     resolution: {integrity: sha512-YVGIj2kamLSTxw6NsZjoBxfSwsn0ycdesmc4p+Q21c5zPuZ1pl+NfxVdxPtdHvmNVOQ6XSYG4AUtyt/Fi7D16Q==}
     engines: {node: '>=10'}
 
-  xml-naming@0.3.0:
-    resolution: {integrity: sha512-ghig2TBE/H11aOVgmahA3MhimvkBr6JIYknH/Dhdk10nXwdbIqBJsbfMxpvFPG8bAw77gN29aQWvKpmVoPlvPQ==}
-    engines: {node: '>=16.0.0'}
-
   y18n@5.0.8:
     resolution: {integrity: sha512-0pfFzegeDWJHJIAmTLRP2DwHjdF5s7jo9tuztdQxAhINCdvS+3nGINqPd00AphqJR/0LhANUS6/+7SCb98YOfA==}
     engines: {node: '>=10'}
@@ -2319,11 +2302,13 @@ snapshots:
 
   '@cosyte/bench@0.1.1': {}
 
-  '@cosyte/ccda@0.1.6':
+  '@cosyte/ccda@0.1.11(fast-check@4.10.2)':
     dependencies:
       '@xmldom/xmldom': 0.9.12
+    optionalDependencies:
+      fast-check: 4.10.2
 
-  '@cosyte/dicom@0.1.11': {}
+  '@cosyte/dicom@0.1.13': {}
 
   '@cosyte/eslint-config@0.1.4(eslint@10.14.0)(typescript@5.9.3)':
     dependencies:
@@ -2336,15 +2321,15 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@cosyte/fhir@0.1.8': {}
-
-  '@cosyte/hl7@0.1.8(fast-check@4.10.2)':
+  '@cosyte/fhir@0.1.13(fast-check@4.10.2)':
     optionalDependencies:
       fast-check: 4.10.2
 
-  '@cosyte/ncpdp@0.1.6':
-    dependencies:
-      fast-xml-parser: 5.10.1
+  '@cosyte/hl7@0.1.12(fast-check@4.10.2)':
+    optionalDependencies:
+      fast-check: 4.10.2
+
+  '@cosyte/ncpdp@0.1.7': {}
 
   '@cosyte/prettier-config@0.1.2': {}
 
@@ -2396,7 +2381,7 @@ snapshots:
       vite: 8.3.6(@types/node@22.20.1)(esbuild@0.28.2)(tsx@4.23.15)
       vitest: 5.1.0(@types/node@22.20.1)(@vitest/coverage-v8@5.1.0)(vite@8.3.6(@types/node@22.20.1)(esbuild@0.28.2)(tsx@4.23.15))
 
-  '@cosyte/x12@0.1.10(fast-check@4.10.2)':
+  '@cosyte/x12@0.1.13(fast-check@4.10.2)':
     optionalDependencies:
       fast-check: 4.10.2
 
@@ -2607,8 +2592,6 @@ snapshots:
       fs-extra: 8.1.0
       globby: 11.1.0
       read-yaml-file: 1.1.0
-
-  '@nodable/entities@3.0.0': {}
 
   '@nodelib/fs.scandir@2.1.5':
     dependencies:
@@ -2925,8 +2908,6 @@ snapshots:
 
   any-promise@1.3.0: {}
 
-  anynum@1.0.1: {}
-
   are-docs-informative@0.1.1: {}
 
   argparse@1.0.10:
@@ -3218,20 +3199,6 @@ snapshots:
 
   fast-levenshtein@2.0.6: {}
 
-  fast-xml-builder@1.3.0:
-    dependencies:
-      path-expression-matcher: 1.6.2
-      xml-naming: 0.3.0
-
-  fast-xml-parser@5.10.1:
-    dependencies:
-      '@nodable/entities': 3.0.0
-      fast-xml-builder: 1.3.0
-      is-unsafe: 2.0.0
-      path-expression-matcher: 1.6.2
-      strnum: 2.4.1
-      xml-naming: 0.3.0
-
   fastq@1.20.1:
     dependencies:
       reusify: 1.1.0
@@ -3349,8 +3316,6 @@ snapshots:
   is-subdir@1.2.0:
     dependencies:
       better-path-resolve: 1.0.0
-
-  is-unsafe@2.0.0: {}
 
   is-windows@1.0.2: {}
 
@@ -3585,8 +3550,6 @@ snapshots:
 
   path-exists@4.0.0: {}
 
-  path-expression-matcher@1.6.2: {}
-
   path-key@3.1.1: {}
 
   path-type@4.0.0: {}
@@ -3771,10 +3734,6 @@ snapshots:
 
   strip-bom@3.0.0: {}
 
-  strnum@2.4.1:
-    dependencies:
-      anynum: 1.0.1
-
   sucrase@3.35.1:
     dependencies:
       '@jridgewell/gen-mapping': 0.3.13
@@ -3946,8 +3905,6 @@ snapshots:
       ansi-styles: 4.3.0
       string-width: 4.2.3
       strip-ansi: 6.0.1
-
-  xml-naming@0.3.0: {}
 
   y18n@5.0.8: {}
 

@@ -32,14 +32,18 @@ The root entry point is the format-agnostic core. Each format adapter is a subpa
 the model of the matching Cosyte parser, which is an **optional peer dependency**: install the ones
 for the formats you handle, and nothing else is pulled in.
 
-| Format        | Import from          | Install beside it |
-| ------------- | -------------------- | ----------------- |
-| HL7 v2        | `@cosyte/deid/hl7`   | `@cosyte/hl7`     |
-| C-CDA         | `@cosyte/deid/ccda`  | `@cosyte/ccda`    |
-| FHIR R4       | `@cosyte/deid/fhir`  | `@cosyte/fhir`    |
-| X12 EDI       | `@cosyte/deid/x12`   | `@cosyte/x12`     |
-| NCPDP Telecom | `@cosyte/deid/ncpdp` | `@cosyte/ncpdp`   |
-| DICOM         | `@cosyte/deid/dicom` | `@cosyte/dicom`   |
+| Format        | Import from          | Install beside it | Lowest release supported |
+| ------------- | -------------------- | ----------------- | ------------------------ |
+| HL7 v2        | `@cosyte/deid/hl7`   | `@cosyte/hl7`     | 0.1.8                    |
+| C-CDA         | `@cosyte/deid/ccda`  | `@cosyte/ccda`    | 0.1.6                    |
+| FHIR R4       | `@cosyte/deid/fhir`  | `@cosyte/fhir`    | 0.1.8                    |
+| X12 EDI       | `@cosyte/deid/x12`   | `@cosyte/x12`     | 0.1.10                   |
+| NCPDP Telecom | `@cosyte/deid/ncpdp` | `@cosyte/ncpdp`   | 0.1.6                    |
+| DICOM         | `@cosyte/deid/dicom` | `@cosyte/dicom`   | 0.1.11                   |
+
+Each peer range starts at the lowest release our CI installs and passes the whole test suite on, and
+admits every later 0.1 release. If npm reports a peer conflict, update the parser within its 0.1
+line, for example `npm install @cosyte/hl7@^0.1.8`.
 
 ```bash
 npm install @cosyte/deid @cosyte/hl7

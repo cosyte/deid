@@ -4,7 +4,8 @@ Our de-identification library for Node.js and TypeScript, published to npm under
 public repository. It takes a document parsed by one of the `@cosyte/*` parsers (HL7 v2, C-CDA,
 FHIR R4, X12, NCPDP Telecom, and DICOM) and returns a copy transformed per the configured policy,
 plus a value-free manifest of what was done where. No runtime dependencies; the parsers are
-optional peers (`^0.1`), installed from npm for the tests.
+optional peers, each range starting at the release the lowest-peers job proves
+(`test/peer-ranges.test.ts`), installed from npm for the tests.
 
 @AGENTS.md
 

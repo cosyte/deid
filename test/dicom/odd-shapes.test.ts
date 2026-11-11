@@ -10,7 +10,7 @@
 
 import { Buffer } from "node:buffer";
 
-import { Dataset, parseDicom, type Element } from "@cosyte/dicom";
+import { Dataset, Element, parseDicom } from "@cosyte/dicom";
 import { describe, expect, it } from "vitest";
 
 import { SAFE_HARBOR_CATEGORIES } from "../../src/index.js";
@@ -31,14 +31,25 @@ function element(tag: string, vr: "UI" | "LO", value: string): Element {
   return el;
 }
 
-/** A copy of an element that reports a different tag, as a hand-built element can. */
+/**
+ * A copy of an element that reports a different tag, as a hand-built element can. It is built through
+ * the `Element` constructor from the parsed element's own fields: from `@cosyte/dicom` 0.1.12 on,
+ * `rawBytes` is an accessor over private state, which a copy of the own properties does not carry.
+ */
 function retagged(el: Element, tag: string): Element {
-  const copy = Object.create(
-    Object.getPrototypeOf(el) as object,
-    Object.getOwnPropertyDescriptors(el),
-  ) as Element;
-  Object.defineProperty(copy, "tag", { value: tag });
-  return copy;
+  return new Element({
+    tag,
+    vr: el.vr,
+    vm: el.vm,
+    length: el.length,
+    rawBytes: el.rawBytes,
+    byteOffset: el.byteOffset,
+    littleEndian: el.littleEndian,
+    ...(el.privateCreator === undefined ? {} : { privateCreator: el.privateCreator }),
+    ...(el.specificCharacterSet === undefined
+      ? {}
+      : { specificCharacterSet: el.specificCharacterSet }),
+  });
 }
 
 function residualLoci(result: { readonly unexaminedResiduals: readonly { locus: string }[] }) {

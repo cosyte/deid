@@ -1,0 +1,79 @@
+name: Peer range ends
+
+# Installs every parser peer at one end of its range in turn, the lowest version each range admits
+# and the highest published one, and runs the full suite against them.
+#
+# WHY. Every other job installs the versions the lockfile pins, so it proves one point of each range
+# and says nothing about the rest. The six peers were declared `^0.1.0` while the tests ran on later
+# releases only, so a consumer on an older release got a pairing no job had ever run. Each range now
+# starts at the release the `lowest` end installs and passes the full suite on
+# (`test/peer-ranges.test.ts` holds `package.json` to those floors), and the `latest` end also fails
+# when the release npm tags `latest` is outside a range (`scripts/peer-ends.ts`), so a release the
+# range does not take is reported here first.
+#
+# WHAT IT RUNS. `pnpm test`, the whole suite: the leak corpus, the generated leak properties and the
+# output-equivalence digests included. The digests pin the bytes the lockfile's releases produce, so
+# a red digest at one end names a peer release that moves de-identified output: that is a finding
+# to name in a changeset, never a reason to drop the digests from this job.
+#
+# It runs on every pull request, with no `paths:` filter, because a peer publishing moves the latest
+# end with no commit here, and nightly for the same reason. It is advisory: not a required check.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # 06:47 UTC. An odd minute: GitHub delays scheduled runs at the start of every hour.
+    - cron: "47 6 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  peers:
+    strategy:
+      fail-fast: false
+      matrix:
+        end: ["lowest", "latest"]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Resolve the ${{ matrix.end }} end of every peer range
+        env:
+          END: ${{ matrix.end }}
+        run: pnpm exec tsx scripts/peer-ends.ts "$END" > "$RUNNER_TEMP/peers.txt"
+
+      - name: Install the ${{ matrix.end }} peers
+        run: |
+          cat "$RUNNER_TEMP/peers.txt"
+          mapfile -t specs < "$RUNNER_TEMP/peers.txt"
+          test "${#specs[@]}" -eq 6
+          pnpm add --save-dev --save-exact "${specs[@]}"
+          for spec in "${specs[@]}"; do
+            name="${spec%@*}"
+            want="${spec##*@}"
+            got="$(node -p "require('./node_modules/$name/package.json').version")"
+            echo "installed $name $got"
+            test "$got" = "$want"
+          done
+
+      - name: Run the full suite
+        run: pnpm test
