@@ -5,11 +5,13 @@
  * The results documents here are built in code: invented machine data in the results schema, no
  * clinical content at all.
  */
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
+import { readResults } from "@cosyte/bench";
 import { afterAll, describe, expect, it } from "vitest";
 
 import {
@@ -22,11 +24,13 @@ import {
   findTypedNumbers,
   formatBytes,
   formatMs,
+  GH_TIMEOUT_MS,
   main,
   NUMBERS_HEADING,
   PLACEHOLDER,
   publishedEntries,
   renderNumbers,
+  runGh,
   type ReleaseIo,
   type SuiteShape,
   waitMinutes,
@@ -183,6 +187,15 @@ describe("findTypedNumbers", () => {
     ["ran 2.14 times as fast", "2.14 times as fast"],
     ["a 1.5x slowdown", "1.5x"],
     ["1,200 ops/s", "1,200 ops/s"],
+    ["a call took 2.5 milliseconds", "2.5 milliseconds"],
+    ["a call took 1 millisecond", "1 millisecond"],
+    ["p50 of 206 microseconds", "206 microseconds"],
+    ["a timer step of 40 nanoseconds", "40 nanoseconds"],
+    ["2000 calls/s on one core", "2000 calls/s"],
+    ["1,200 ops/sec", "1,200 ops/sec"],
+    ["2,000 calls per second", "2,000 calls per second"],
+    ["about 300 per second", "300 per second"],
+    ["3 MB per second", "3 MB per second"],
   ])("finds the number in %j", (line, text) => {
     expect(findTypedNumbers(line).map((f) => f.text)).toContain(text);
   });
@@ -201,6 +214,8 @@ describe("findTypedNumbers", () => {
     "Node.js 22 on commit 8273ab7, runner 43030470989",
     "fails when a ratio passes 8 for a 4 times step",
     "`ORU^R01` from `ES2022`",
+    "a batch of 1,000 calls, then 20 calls more",
+    "throughput, in bytes a second",
   ])("leaves a count, a ratio or a name alone: %j", (line) => {
     expect(findTypedNumbers(line)).toEqual([]);
   });
@@ -259,7 +274,7 @@ describe("fillPage", () => {
 
 describe("renderNumbers", () => {
   it("gives every case and entry a row, measured or named as not measured", () => {
-    const collected = collectResults(resultsDir());
+    const collected = collectResults(resultsDir(), readResults);
     expect(collected.readings).toHaveLength(1);
     expect(collected.imports).toHaveLength(1);
     expect(collected.unreadable.map((u) => u.file)).toEqual(["bench-imports/broken.json"]);
@@ -292,7 +307,7 @@ describe("renderNumbers", () => {
   });
 
   it("says why when the run left nothing", () => {
-    const text = renderNumbers(collectResults(join(scratch, "absent")), SUITE, {
+    const text = renderNumbers(collectResults(join(scratch, "absent"), readResults), SUITE, {
       commit: "abcdef0123456789",
       missing: "no Bench run started on the release commit",
       entries: ENTRIES,
@@ -303,7 +318,7 @@ describe("renderNumbers", () => {
   });
 
   it("names the commits the results measured when they are not the release commit", () => {
-    const text = renderNumbers(collectResults(resultsDir()), SUITE, {
+    const text = renderNumbers(collectResults(resultsDir(), readResults), SUITE, {
       commit: "1234567000",
       missing: "the Bench run had not finished",
       entries: ENTRIES,
@@ -312,11 +327,27 @@ describe("renderNumbers", () => {
     expect(text).toContain("Not everything was measured: the Bench run had not finished.");
   });
 
+  it("escapes the reason a results file was not read, so it cannot break the page", () => {
+    const { readings, imports } = collectResults(resultsDir(), readResults);
+    const text = renderNumbers(
+      {
+        readings,
+        imports,
+        unreadable: [{ file: "a.json", reason: "expected {value} at <here> a|b \\ end" }],
+      },
+      SUITE,
+      { commit: "abcdef0", entries: ENTRIES },
+    );
+    expect(text).toContain(
+      "A results file was not read, `a.json`: expected \\{value\\} at \\<here\\> a\\|b \\\\ end.",
+    );
+  });
+
   it("covers every case the real suite defines, so a new benchmark gets a row", async () => {
     const suite = (
       (await import(pathToFileURL(resolve("bench/deid.bench.mjs")).href)) as { default: SuiteShape }
     ).default;
-    const text = renderNumbers(collectResults(resultsDir()), suite, {
+    const text = renderNumbers(collectResults(resultsDir(), readResults), suite, {
       commit: "abcdef0",
       entries: publishedEntries(
         JSON.parse(readFileSync("package.json", "utf8")) as { exports: Record<string, unknown> },
@@ -478,6 +509,31 @@ describe("the command line", () => {
     expect(readFileSync(page, "utf8")).toBe("# No numbers section\n");
   });
 
+  it("release leaves the placeholder, warns and exits 0 when @cosyte/bench will not load", async () => {
+    const page = pageCopy();
+    const before = readFileSync(page, "utf8");
+    const lines: string[] = [];
+    const broken: ReleaseIo = {
+      ...quiet,
+      log: (line) => lines.push(line),
+      loadBench: () => Promise.reject(new Error("Cannot find package '@cosyte/bench'")),
+    };
+    expect(await main(["release", page], broken, { RUNNER_TEMP: scratch })).toBe(0);
+    expect(readFileSync(page, "utf8")).toBe(before);
+    expect(lines.join("\n")).toContain(
+      "::warning::performance-numbers: the \"Current numbers\" section was not filled: Cannot find package '@cosyte/bench'",
+    );
+  });
+
+  it("loads nothing but Node.js built-ins before the guarded path, so a load failure is caught", () => {
+    const source = readFileSync("scripts/performance-numbers.ts", "utf8");
+    const loaded = [...source.matchAll(/^import\s+(?!type\b)[^;]*?from\s+"([^"]+)";/gms)].map(
+      (m) => m[1],
+    );
+    expect(loaded.length).toBeGreaterThan(0);
+    expect(loaded.filter((from) => !from?.startsWith("node:"))).toEqual([]);
+  });
+
   it("refuses a command it does not know, or a missing argument", async () => {
     expect(await main(["typo", PAGE], quiet, {})).toBe(2);
     expect(await main(["check"], quiet, {})).toBe(2);
@@ -491,4 +547,55 @@ describe("cell", () => {
     expect(cell("a\\|b")).toBe("a\\\\\\|b");
     expect(cell("plain")).toBe("plain");
   });
+});
+
+describe("runGh", () => {
+  it("gives every gh call a timeout well under the release's wait", () => {
+    const seen: { file: string; args: readonly string[]; timeout: unknown; killSignal: unknown }[] =
+      [];
+    const out = runGh(["api", "x"], (file, args, options) => {
+      seen.push({ file, args, timeout: options.timeout, killSignal: options.killSignal });
+      return "ok";
+    });
+    expect(out).toBe("ok");
+    expect(seen).toEqual([
+      { file: "gh", args: ["api", "x"], timeout: GH_TIMEOUT_MS, killSignal: "SIGKILL" },
+    ]);
+    expect(GH_TIMEOUT_MS).toBeGreaterThan(0);
+    expect(GH_TIMEOUT_MS).toBeLessThanOrEqual(5 * 60_000);
+  });
+});
+
+describe("pack:docs:release", () => {
+  it.skipIf(process.platform === "win32")(
+    "puts the committed page back even when packing the docs fails",
+    () => {
+      const scripts = (
+        JSON.parse(readFileSync("package.json", "utf8")) as { scripts: Record<string, string> }
+      ).scripts;
+      const command = scripts["pack:docs:release"];
+      expect(command).toBeDefined();
+      const bin = join(scratch, `bin-${String(Math.random()).slice(2)}`);
+      mkdirSync(bin);
+      const log = join(bin, "calls.log");
+      const stub = (name: string, code: number): void => {
+        const path = join(bin, name);
+        writeFileSync(path, `#!/bin/sh\necho "${name} $*" >> "${log}"\nexit ${String(code)}\n`);
+        chmodSync(path, 0o755);
+      };
+      stub("tsx", 0);
+      stub("cosyte-process", 3);
+      stub("git", 0);
+      const run = spawnSync("/bin/sh", ["-c", command ?? ""], {
+        env: { PATH: `${bin}:/usr/bin:/bin` },
+        encoding: "utf8",
+      });
+      expect(run.status).not.toBe(0);
+      expect(readFileSync(log, "utf8").trim().split("\n")).toEqual([
+        "tsx scripts/performance-numbers.ts release docs-content/performance.md",
+        "cosyte-process pack-docs",
+        "git checkout -- docs-content/performance.md",
+      ]);
+    },
+  );
 });

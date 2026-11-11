@@ -31,10 +31,13 @@
  * then packs the docs and puts the committed page back. A run that is
  * missing, failed to list or never finished is named as the reason in the section. It exits 0 in
  * every case, so the GitHub release and the docs rebuild are never held back by a number; an
- * unexpected error leaves the placeholder and prints a warning to the job log.
+ * unexpected error leaves the placeholder and prints a warning to the job log. That includes a
+ * module that will not load: this file loads only Node.js built-ins up front, and `@cosyte/bench`
+ * and the suite are loaded inside the guarded path. Every `gh` call has a timeout
+ * (`GH_TIMEOUT_MS`), so a hung call cannot hold the release job.
  */
 
-import { execFileSync } from "node:child_process";
+import { execFileSync, type ExecFileSyncOptionsWithStringEncoding } from "node:child_process";
 import {
   existsSync,
   mkdtempSync,
@@ -47,7 +50,10 @@ import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-import { readResults, type CaseReading, type ResultsDocument } from "@cosyte/bench";
+import type { CaseReading, ResultsDocument, readResults } from "@cosyte/bench";
+
+/** Reads one results file's text; `readResults` from `@cosyte/bench`, loaded when it is needed. */
+export type ReadResults = typeof readResults;
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -85,7 +91,7 @@ export interface TypedNumber {
  * and multiples of a budget ("20 times the input") carry no such unit and are not matched.
  */
 const MEASURED =
-  /(?<![\w.])\d[\d,]*(?:\.\d+)?(?:\s|&nbsp;)*(?:(?:ns|us|µs|μs|ms|s|sec|secs|seconds?|minutes?|B|kB|KB|KiB|MB|MiB|GB|GiB|ops)(?:\/s)?(?![\w/])|%|x(?![\w])|times\s+(?:as\s+(?:fast|slow)|faster|slower))/g;
+  /(?<![\w.])\d[\d,]*(?:\.\d+)?(?:\s|&nbsp;)*(?:(?:[A-Za-z]+(?:\s|&nbsp;)+)?per(?:\s|&nbsp;)+(?:second|sec|s)(?![\w/])|(?:ns|us|µs|μs|ms|s|sec|secs|seconds?|minutes?|nanoseconds?|microseconds?|milliseconds?|B|kB|KB|KiB|MB|MiB|GB|GiB|ops)(?:\/s(?:ec)?)?(?![\w/])|calls\/s(?:ec)?(?![\w/])|%|x(?![\w])|times\s+(?:as\s+(?:fast|slow)|faster|slower))/g;
 
 /**
  * Every number in a measured unit on a page, budgets aside.
@@ -169,19 +175,20 @@ function jsonFiles(dir: string): string[] {
 }
 
 /**
- * Every results file under `dir`, at any depth.
+ * Every results file under `dir`, at any depth, each read with `read` (`readResults` from
+ * `@cosyte/bench`).
  *
  * @example
- * collectResults("/no/such/dir").readings.length; // => 0
+ * collectResults("/no/such/dir", readResults).readings.length; // => 0
  */
-export function collectResults(dir: string): Collected {
+export function collectResults(dir: string, read: ReadResults): Collected {
   const readings: ResultsDocument[] = [];
   const imports: ResultsDocument[] = [];
   const unreadable: { file: string; reason: string }[] = [];
   for (const path of jsonFiles(dir)) {
     let doc: ResultsDocument;
     try {
-      doc = readResults(readFileSync(path, "utf8"));
+      doc = read(readFileSync(path, "utf8"));
     } catch (error) {
       const reason = error instanceof Error ? (error.message.split("\n")[0] ?? "") : "unreadable";
       unreadable.push({ file: relative(dir, path).split(sep).join("/"), reason });
@@ -236,13 +243,15 @@ function notMeasured(reason: string): string {
 }
 
 /**
- * Text made safe for one Markdown table cell: a backslash and a pipe are escaped, backslash first.
+ * Text made safe for one Markdown table cell, or a line of MDX prose: a backslash is escaped
+ * first, then a pipe, a brace and an angle bracket, so none ends the cell or opens an expression
+ * or a tag.
  *
  * @example
  * cell("a|b"); // => "a\\|b"
  */
 export function cell(text: string): string {
-  return text.replace(/\\/g, "\\\\").replace(/\|/g, "\\|");
+  return text.replace(/\\/g, "\\\\").replace(/[|{}<>]/g, (c) => `\\${c}`);
 }
 
 /** The row cells of one measured case. */
@@ -342,7 +351,10 @@ export function renderNumbers(collected: Collected, suite: SuiteShape, meta: Ren
   );
   if (meta.missing !== undefined) out.push(`Not everything was measured: ${meta.missing}.`, "");
   for (const bad of collected.unreadable) {
-    out.push(`A results file was not read, \`${bad.file}\`: ${bad.reason}.`, "");
+    out.push(
+      `A results file was not read, \`${bad.file.replace(/`/g, "'")}\`: ${cell(bad.reason)}.`,
+      "",
+    );
   }
 
   const all = [...collected.readings, ...collected.imports];
@@ -452,13 +464,25 @@ function loadEntries(): [string, string][] {
   );
 }
 
+/** What this script uses from `@cosyte/bench`. */
+export interface BenchModule {
+  readonly readResults: ReadResults;
+}
+
+/** Loads `@cosyte/bench` when it is needed, so a load failure is an error `release` can catch. */
+export async function loadBench(): Promise<BenchModule> {
+  return await import("@cosyte/bench");
+}
+
 /** Fill `page` in place from the results under `results`. */
 export async function fillFile(
   page: string,
   results: string,
   meta: Omit<RenderMeta, "entries">,
+  load: () => Promise<BenchModule> = loadBench,
 ): Promise<void> {
-  const body = renderNumbers(collectResults(results), await loadSuite(), {
+  const { readResults } = await load();
+  const body = renderNumbers(collectResults(results, readResults), await loadSuite(), {
     ...meta,
     entries: loadEntries(),
   });
@@ -472,6 +496,8 @@ export interface ReleaseIo {
   readonly sleep: (ms: number) => Promise<void>;
   readonly now: () => number;
   readonly log: (line: string) => void;
+  /** Loads `@cosyte/bench`; `loadBench` when it is not given. */
+  readonly loadBench?: () => Promise<BenchModule>;
 }
 
 /** The Bench run found for a commit, and where its artifacts were put, or why there are none. */
@@ -626,11 +652,16 @@ export async function main(
         repo === undefined || repo === ""
           ? { results: into, missing: "the release ran outside GitHub Actions" }
           : await fetchRun(repo, commit, into, minutes, io);
-      await fillFile(page, found.results, {
-        commit,
-        ...(found.run === undefined ? {} : { run: found.run }),
-        ...(found.missing === undefined ? {} : { missing: found.missing }),
-      });
+      await fillFile(
+        page,
+        found.results,
+        {
+          commit,
+          ...(found.run === undefined ? {} : { run: found.run }),
+          ...(found.missing === undefined ? {} : { missing: found.missing }),
+        },
+        io.loadBench ?? loadBench,
+      );
       io.log(`performance-numbers: filled ${page} for ${commit.slice(0, 7)}`);
     } catch (error) {
       io.log(
@@ -642,14 +673,45 @@ export async function main(
   return usage();
 }
 
+/**
+ * The longest one `gh` call may take, well under the 45 minutes `release` waits for the Bench run:
+ * a hung call is killed and reported as a listing or a download that failed.
+ */
+export const GH_TIMEOUT_MS = 3 * 60_000;
+
+/** Runs `gh` with `args` and returns its standard output; throws when it fails or times out. */
+export function runGh(
+  args: readonly string[],
+  exec: (
+    file: string,
+    args: readonly string[],
+    options: ExecFileSyncOptionsWithStringEncoding,
+  ) => string = execFileSync,
+): string {
+  return exec("gh", args, {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "inherit"],
+    timeout: GH_TIMEOUT_MS,
+    killSignal: "SIGKILL",
+  });
+}
+
 const realIo: ReleaseIo = {
-  gh: (args) =>
-    execFileSync("gh", args, { encoding: "utf8", stdio: ["ignore", "pipe", "inherit"] }),
+  gh: (args) => runGh(args),
   sleep: (ms) => new Promise((done) => setTimeout(done, ms)),
   now: () => Date.now(),
   log: (line) => process.stdout.write(`${line}\n`),
 };
 
 if (process.argv[1] !== undefined && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  process.exitCode = await main(process.argv.slice(2), realIo, process.env);
+  const argv = process.argv.slice(2);
+  try {
+    process.exitCode = await main(argv, realIo, process.env);
+  } catch (error) {
+    if (argv[0] !== "release") throw error;
+    realIo.log(
+      `::warning::performance-numbers: the "Current numbers" section was not filled: ${error instanceof Error ? error.message : String(error)}`,
+    );
+    process.exitCode = 0;
+  }
 }
