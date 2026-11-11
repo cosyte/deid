@@ -11,7 +11,7 @@
  * `cleaned`. Left alone, a caller would get the text of a diagnosis in output whose manifest says the
  * list was cleaned.
  *
- * **So this module removes each such sequence from the returned dataset, and says so.** A `C` cannot
+ * **So each such sequence is removed from the returned dataset, and the report says so.** A `C` cannot
  * make a similar-meaning substitute for a coded list here, so removal is the only honest clean. The
  * report is rewritten to match: the sequence's own row becomes `removed`, and every row for a position
  * inside it is dropped, because that position is no longer in the output. The rule keys on what the pass
@@ -28,7 +28,7 @@
  * @packageDocumentation
  */
 
-import { Dataset, type Element } from "@cosyte/dicom";
+import type { Dataset, Element } from "@cosyte/dicom";
 
 import { DeidError, FATAL_CODES } from "../codes.js";
 
@@ -52,7 +52,8 @@ const SEGMENT = /^([0-9A-F]{8})\[(\d+)\]$/;
  * one Table E.1-1 names, since only a row of the table carries a `C`, so it is never document text.
  */
 function formatTag(tag: string): string {
-  return `(${tag.slice(0, 4).toLowerCase()},${tag.slice(4, 8).toLowerCase()})`;
+  const lower = tag.toLowerCase();
+  return `(${lower.slice(0, 4)},${lower.slice(4, 8)})`;
 }
 
 /** The typed, value-free refusal for a cleaned sequence this module cannot remove. */
@@ -68,7 +69,8 @@ function refuseNested(tag: string): never {
 
 /** Read one context segment into its tag and item index; `undefined` when it does not parse. */
 function parseSegment(segment: string | undefined): { tag: string; index: number } | undefined {
-  const match = SEGMENT.exec(segment ?? "");
+  // An absent segment reads as the text "undefined", which no segment matches.
+  const match = SEGMENT.exec(String(segment));
   // Both groups are present whenever the pattern matched.
   return match === null ? undefined : { tag: String(match[1]), index: Number(match[2]) };
 }
@@ -105,12 +107,15 @@ function insideRemoved(row: CleanableAttribute, removed: ReadonlySet<string>): b
 }
 
 /**
- * Remove every sequence the delegated pass reported `cleaned`, and rewrite its report to match.
+ * Find every sequence the delegated pass reported `cleaned`, and rewrite its report to match.
+ *
+ * The dataset is not rebuilt here: the tags come back so the one rebuild of the root that attaches
+ * `(0012,0064)` drops them (`attachMethodCodeSequence`), and nothing returned can still hold them.
  *
  * @param dataset - The dataset the delegated pass returned.
  * @param report - The report it returned with it.
- * @returns A fresh dataset without those sequences, and the report with each one `removed` and every
- *   row inside one dropped. Both are the inputs, unchanged, when the pass cleaned no sequence.
+ * @returns The top-level tags to remove, and the report with each one `removed` and every row inside
+ *   one dropped. The report is the input itself when the pass cleaned no sequence.
  * @throws {@link DeidError} `DEID_FORMAT_UNSUPPORTED` when a cleaned sequence sits inside a sequence
  *   the pass kept, or a cleaned position cannot be found in the output.
  * @internal
@@ -118,7 +123,7 @@ function insideRemoved(row: CleanableAttribute, removed: ReadonlySet<string>): b
 export function removeCleanedSequences<A extends CleanableAttribute, R extends CleanableReport<A>>(
   dataset: Dataset,
   report: R,
-): { readonly dataset: Dataset; readonly report: R } {
+): { readonly removed: ReadonlySet<string>; readonly report: R } {
   const cleaned = report.attributes.filter((row) => row.applied === "cleaned");
   const removed = new Set(
     cleaned
@@ -131,23 +136,11 @@ export function removeCleanedSequences<A extends CleanableAttribute, R extends C
     const element = findNested(dataset, path, row.tag);
     if (element === undefined || element.vr === "SQ") refuseNested(row.tag);
   }
-  if (removed.size === 0) return { dataset, report };
+  if (removed.size === 0) return { removed, report };
 
   const attributes = report.attributes.flatMap((row): A[] => {
     if (insideRemoved(row, removed)) return [];
     return isTopLevel(row) && removed.has(row.tag) ? [{ ...row, applied: "removed" }] : [row];
   });
-  return {
-    dataset: new Dataset({
-      warnings: [],
-      elements: new Map(
-        dataset
-          .elements()
-          .filter((element) => !removed.has(element.tag))
-          .map((element) => [element.tag, element]),
-      ),
-      ...(dataset.fileMeta !== undefined ? { fileMeta: dataset.fileMeta } : {}),
-    }),
-    report: { ...report, attributes },
-  };
+  return { removed, report: { ...report, attributes } };
 }

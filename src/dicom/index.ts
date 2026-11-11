@@ -122,14 +122,11 @@ function runDicomPass(
     ...(resolved.uidRoot !== undefined ? { uidRoot: resolved.uidRoot } : {}),
     ...(resolved.uidMap !== undefined ? { uidMap: resolved.uidMap } : {}),
   });
-  // A sequence the pass cleaned still holds its items, free-text Code Meaning included: remove it, and
-  // record it removed, before anything is attached, serialized or folded.
-  const { dataset: deidentified, report } = removeCleanedSequences(
-    delegated.dataset,
-    delegated.report,
-  );
+  // A sequence the pass cleaned still holds its items, free-text Code Meaning included: it is dropped
+  // when the root is rebuilt below, and recorded removed, before anything is serialized or folded.
+  const { removed, report } = removeCleanedSequences(delegated.dataset, delegated.report);
 
-  const result = attachMethodCodeSequence(deidentified, declaration.appliedTerms);
+  const result = attachMethodCodeSequence(delegated.dataset, declaration.appliedTerms, removed);
   const bytes = serializeVerified(result, declaration.appliedTerms, whole);
 
   const warnings: readonly DicomDeidWarning[] = Object.freeze([

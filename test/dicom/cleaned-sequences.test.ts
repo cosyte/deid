@@ -6,7 +6,7 @@
  * what is removed, what the rewritten report says, and when the pass is refused instead.
  */
 
-import { Dataset, type parseDicom } from "@cosyte/dicom";
+import type { parseDicom } from "@cosyte/dicom";
 import { describe, expect, it } from "vitest";
 
 import { DeidError, FATAL_CODES } from "../../src/index.js";
@@ -64,23 +64,21 @@ function refusal(call: () => unknown): DeidError | undefined {
 }
 
 describe("removeCleanedSequences", () => {
-  it("returns the inputs themselves when no sequence was cleaned", () => {
-    const input = dataset();
+  it("returns the report itself, and nothing to remove, when no sequence was cleaned", () => {
     const report = rows(
       { tag: "00081030", applied: "cleaned" }, // a cleaned scalar is not a sequence
       { tag: "00081030", applied: "cleaned", contextPath: ["00283010[0]"] }, // nor nested
       { tag: "00081030", applied: "cleaned", contextPath: ["00283010[10]"] }, // in item ten
       { tag: "00081084", applied: "kept" },
     );
-    const out = removeCleanedSequences(input, report);
-    expect(out.dataset).toBe(input);
+    const out = removeCleanedSequences(dataset(), report);
+    expect([...out.removed]).toEqual([]);
     expect(out.report).toBe(report);
   });
 
   it("removes a cleaned top-level sequence, a row with an empty path counting as top level", () => {
-    const input = dataset();
     const out = removeCleanedSequences(
-      input,
+      dataset(),
       rows(
         { tag: "00081084", applied: "cleaned", contextPath: [] },
         { tag: "00080104", applied: "kept", contextPath: ["00081084[0]"] },
@@ -89,29 +87,12 @@ describe("removeCleanedSequences", () => {
         { tag: "00081084", applied: "kept", contextPath: ["00283010[0]"] },
       ),
     );
-    expect(out.dataset.has("00081084")).toBe(false);
-    expect(out.dataset.has("00283010")).toBe(true);
-    expect(out.dataset.fileMeta).toBe(input.fileMeta);
-    expect(out.dataset.warnings).toEqual([]);
+    expect([...out.removed]).toEqual(["00081084"]);
     expect(out.report.attributes).toEqual([
       { tag: "00081084", applied: "removed", contextPath: [] },
       { tag: "00283010", applied: "kept" },
       { tag: "00081084", applied: "kept", contextPath: ["00283010[0]"] },
     ]);
-  });
-
-  it("keeps a dataset with no File Meta without one", () => {
-    const bare = new Dataset({
-      warnings: [],
-      elements: new Map(
-        dataset()
-          .elements()
-          .map((element) => [element.tag, element]),
-      ),
-    });
-    const out = removeCleanedSequences(bare, rows({ tag: "00081084", applied: "cleaned" }));
-    expect(out.dataset.fileMeta).toBeUndefined();
-    expect(out.dataset.has("00081084")).toBe(false);
   });
 
   it("refuses a cleaned sequence nested inside a kept one, naming its tag", () => {
@@ -133,7 +114,7 @@ describe("removeCleanedSequences", () => {
   it("refuses a cleaned position it cannot find: a bad segment, a missing item or tag", () => {
     for (const contextPath of [
       ["00283010"],
-      ["00283010[1]"],
+      ["00283010[11]"], // there are eleven items, 0 to 10
       ["00289999[0]"],
       ["x00283010[0]"], // a segment is read whole, never found inside a longer string
       ["00283010[0]x"],

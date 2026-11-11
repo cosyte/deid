@@ -273,15 +273,18 @@ export function buildMethodCodeSequenceElement(
  * one act, so no item can survive by being one this code did not think to look at.
  *
  * The input's parse warnings are dropped with it, for the reason the adapter already drops them: they
- * describe the bytes as they were before anything was removed.
+ * describe the bytes as they were before anything was removed. So is every top-level tag in `dropped`:
+ * the sequences the pass cleaned but kept the items of (`./cleaned-sequences.ts`).
  *
  * @internal
  */
 export function attachMethodCodeSequence(
   dataset: Dataset,
   terms: readonly DicomCodedTerm[],
+  dropped: ReadonlySet<string>,
 ): Dataset {
   const elements = new Map(dataset.elements().map((element) => [element.tag, element]));
+  for (const tag of dropped) elements.delete(tag);
   elements.set(
     TAG_DEIDENTIFICATION_METHOD_CODE_SEQUENCE,
     buildMethodCodeSequenceElement(terms, bodyEncoding(dataset)),
