@@ -315,6 +315,9 @@ warns rather than giving a false sense of safety.
 - **Replacement-UID referential integrity is guaranteed within one call** unless you supply a shared
   `uidMap`, in which case it reaches every call that shares it. The declared scope is on the result.
 
+[What the caller still owns](./what-the-caller-still-owns.md) lists the duties that stay with you
+before you release the output, with a table of what this adapter does not cover.
+
 ## Reference
 
 - [`deidentifyDicom`](./api/@cosyte/deid/dicom.md#deidentifydicom),
