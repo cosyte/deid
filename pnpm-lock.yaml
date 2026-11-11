@@ -39,8 +39,8 @@ importers:
         specifier: ^0.1.8
         version: 0.1.8(fast-check@4.10.2)
       '@cosyte/ncpdp':
-        specifier: ^0.1.1
-        version: 0.1.1
+        specifier: ^0.1.6
+        version: 0.1.6
       '@cosyte/prettier-config':
         specifier: ^0.1.2
         version: 0.1.2
@@ -233,8 +233,8 @@ packages:
       fast-check:
         optional: true
 
-  '@cosyte/ncpdp@0.1.1':
-    resolution: {integrity: sha512-uFtHsDfa0wEa6LgpfrOdCTCmQ7CG3quoJa32tu6Eq9zHcsZuGyDxIB/Cv+YjQzigGmbmR4+ciOwI48uBcRURZA==}
+  '@cosyte/ncpdp@0.1.6':
+    resolution: {integrity: sha512-tlzvkMhCvXezi54g9nMd6SCfM5BT+vspn/4p1T90zkTXpBcYMMJWhHmWBpxyu9qRm+bHByNKHKMkDCFMXOBP/g==}
     engines: {node: '>=22.0.0'}
 
   '@cosyte/prettier-config@0.1.2':
@@ -2342,7 +2342,7 @@ snapshots:
     optionalDependencies:
       fast-check: 4.10.2
 
-  '@cosyte/ncpdp@0.1.1':
+  '@cosyte/ncpdp@0.1.6':
     dependencies:
       fast-xml-parser: 5.10.1
 

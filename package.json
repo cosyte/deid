@@ -208,7 +208,7 @@
     "@cosyte/eslint-config": "^0.1.4",
     "@cosyte/fhir": "^0.1.8",
     "@cosyte/hl7": "^0.1.8",
-    "@cosyte/ncpdp": "^0.1.1",
+    "@cosyte/ncpdp": "^0.1.6",
     "@cosyte/prettier-config": "^0.1.2",
     "@cosyte/process": "^0.1.7",
     "@cosyte/script-utils": "^0.1.8",

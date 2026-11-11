@@ -175,6 +175,7 @@ describe("NCPDP Telecom RESPONSE: the header the pass actually emits is the one 
       kind: "response",
       header: { ...real.header, binNumber: "999999", dateOfService: "20260115" },
       segments: real.segments,
+      transmissionSegments: real.transmissionSegments,
       transactions: real.transactions,
       transactionCount: real.transactionCount,
       decodedTransactionCount: real.decodedTransactionCount,
