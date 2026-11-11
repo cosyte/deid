@@ -553,11 +553,19 @@ function sweepPersonalDatatypes(
   path: string,
   elementPath: string,
 ): boolean {
+  // Read on demand: most nodes are classified by their own shape before the position is consulted,
+  // and each answer is a lookup on the element path, so none is computed that no decision reads.
   const position: SweepPosition = {
     typedElementName: TYPED_PERSONAL_ELEMENT_NAMES.has(name) ? name : undefined,
-    primitiveConforms: primitiveConformsAt(name, elementPath),
-    contactName: isContactDetailName(elementPath),
-    contact: isContactElement(elementPath),
+    get primitiveConforms() {
+      return primitiveConformsAt(name, elementPath);
+    },
+    get contactName() {
+      return isContactDetailName(elementPath);
+    },
+    get contact() {
+      return isContactElement(elementPath);
+    },
   };
   const items = isList(value) ? value.items : [value];
   const actions = items.map((item) => personalAction(item, position));
