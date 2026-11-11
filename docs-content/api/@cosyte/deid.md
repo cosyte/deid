@@ -2488,8 +2488,9 @@ OUTPUT_LABEL; // => "Safe-Harbor-transformed per the configured policy"
 
 > `const` **RESTRICTED\_ZIP3**: `ReadonlySet`\<`string`\>
 
-The 17 restricted three-digit ZIP prefixes (population ≤ 20,000 per 2000 Census). A ZIP whose first
-three digits are in this set is generalized to `000`; any other prefix retains its three digits.
+The 23 restricted three-digit ZIP prefixes: the 18 whose 2020 Census population is 20,000 or fewer,
+plus the 5 more the HHS guidance lists from the 2000 Census. A ZIP whose first three digits are in
+this set is generalized to `000`; any other prefix retains its three digits.
 
 #### Example
 
@@ -2497,6 +2498,7 @@ three digits are in this set is generalized to `000`; any other prefix retains i
 import { RESTRICTED_ZIP3 } from "@cosyte/deid";
 
 RESTRICTED_ZIP3.has("036"); // => true
+RESTRICTED_ZIP3.has("369"); // => true
 RESTRICTED_ZIP3.has("902"); // => false
 ```
 
@@ -2504,17 +2506,17 @@ RESTRICTED_ZIP3.has("902"); // => false
 
 ### RESTRICTED\_ZIP3\_SOURCE
 
-> `const` **RESTRICTED\_ZIP3\_SOURCE**: `Readonly`\<\{ `census`: `"2000"`; `citation`: `"HHS OCR, Guidance Regarding Methods for De-identification of PHI (2012); 45 CFR §164.514(b)(2)(i)(B)"`; \}\>
+> `const` **RESTRICTED\_ZIP3\_SOURCE**: `Readonly`\<\{ `census`: `"2020"`; `citation`: `"45 CFR §164.514(b)(2)(i)(B); HHS OCR, Guidance Regarding Methods for De-identification of PHI (2012), whose 2000 Census list is kept"`; `dataset`: `"2020 Census Demographic and Housing Characteristics File, table P1, by five-digit ZCTA"`; \}\>
 
-The Census vintage this list is grounded in, surfaced so a consumer knows exactly which published
-artifact the `000` rule is applied from.
+The Census vintage and dataset this list is grounded in, surfaced so a consumer knows exactly which
+published artifact the `000` rule is applied from.
 
 #### Example
 
 ```ts
 import { RESTRICTED_ZIP3_SOURCE } from "@cosyte/deid";
 
-RESTRICTED_ZIP3_SOURCE.census; // => "2000"
+RESTRICTED_ZIP3_SOURCE.census; // => "2020"
 ```
 
 ***

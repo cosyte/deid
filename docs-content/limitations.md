@@ -575,6 +575,49 @@ the collision bound). What that leaves:
 
 A caller building loci by hand bounds a position with `GenericLocus.maxLength`; the same rule applies.
 
+<a id="restricted-zip3"></a>
+
+## The restricted three-digit ZIP list: where it comes from
+
+§164.514(b)(2)(i)(B) keeps the first three digits of a ZIP code only when, according to the current
+publicly available Census data, the area formed by every ZIP code with those three digits holds more
+than 20,000 people; otherwise the three digits become `000`. `RESTRICTED_ZIP3` is the list of prefixes
+that become `000`, and `RESTRICTED_ZIP3_SOURCE` names where it comes from.
+
+The list follows the **2020 Census**, the most recent decennial count. We read table P1 (total
+population) of the 2020 Demographic and Housing Characteristics File for every five-digit ZIP Code
+Tabulation Area (ZCTA) from the Census Bureau's data.census.gov, summed the ZCTAs that share their
+first three digits, and kept the prefixes at 20,000 people or fewer. That gives 18 prefixes, and the
+2010 Census (Summary File 1, table P1, read the same way) gives the same 18:
+
+| Prefix | 2020 population | Prefix | 2020 population | Prefix | 2020 population |
+| ------ | --------------: | ------ | --------------: | ------ | --------------: |
+| `036`  |          13,153 | `205`  |              44 | `772`  |           4,280 |
+| `059`  |           3,352 | `369`  |          17,596 | `821`  |             392 |
+| `102`  |          15,082 | `556`  |          16,415 | `823`  |          14,702 |
+| `202`  |               0 | `692`  |           8,626 | `878`  |          17,364 |
+| `203`  |             772 | `753`  |               0 | `879`  |          16,082 |
+| `204`  |              60 | `893`  |          10,701 | `884`  |          16,740 |
+
+The list also keeps the 17 prefixes the HHS guidance on de-identification (2012) names from the 2000
+Census. Five of those are over 20,000 people in the 2020 Census (`063`, `790`, `830`, `831`, `890`);
+they stay on the list so that no ZIP an earlier release reduced to `000` keeps its prefix now. The
+list is 23 prefixes in all. Keeping the five costs some precision in those areas and never keeps a
+prefix the 2020 Census restricts.
+
+Two limits follow. A ZCTA approximates the area a ZIP code serves rather than matching it, and a ZIP
+code with no ZCTA of its own (a post office box code, for one) counts toward no prefix. A prefix whose
+ZCTAs hold no residents, such as `202` and `753`, shows 0 people and is restricted. And the
+list is a fixed export, not an option: a caller who must apply a different list, for example a newer
+census, cannot pass one in today.
+
+**Updating it.** When the Census Bureau publishes a newer count, read total population by five-digit
+ZCTA for the whole country (the Census Data API, or the matching table on data.census.gov), sum by
+the first three digits, and take every prefix at 20,000 or fewer. Change `RESTRICTED_ZIP3` and
+`RESTRICTED_ZIP3_SOURCE` in `src/restricted-zip.ts` and the pinned list in
+`test/restricted-zip.test.ts` together; the change ships in a release whose notes name each prefix
+added or removed, since it changes what a caller's output keeps.
+
 <a id="policy-profiles"></a>
 
 ## Policy profiles, and the Limited Data Set caveat

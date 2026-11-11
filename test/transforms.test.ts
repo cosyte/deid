@@ -49,7 +49,8 @@ describe("generalizeZip, the mandatory ZIP-000 threshold", () => {
     expect(generalizeZip("10001-1234")?.value).toBe("100");
   });
   it("maps every restricted (<20k population) prefix to 000, fully suppressed", () => {
-    // The 17 cited restricted prefixes (HHS 2012 guidance, 2000 Census).
+    // The 17 prefixes the HHS 2012 guidance cites (2000 Census); test/restricted-zip.test.ts pins
+    // the whole list, which adds the 2020 Census prefixes.
     const restricted = [
       "036",
       "059",
