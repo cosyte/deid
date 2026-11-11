@@ -174,10 +174,12 @@ function corpusDigests(): Record<string, string> {
     for (const [name, text] of HL7_INPUTS) {
       out[`hl7 ${name} | ${optionName} | deidentifyHl7`] = attempt(() => {
         const result = deidentifyHl7(parseHL7(text), options());
+        // The wire on `hl7` was added by the performance work: it must be the document's own text.
+        if (result.hl7 !== result.document.toString()) return "hl7 is not the document's wire";
         return [
           digest(result.document.toString()),
           digest(stable(result.document.toJSON())),
-          rest(result, ["document"]),
+          rest(result, ["document", "hl7"]),
         ].join(" ");
       });
     }
@@ -189,7 +191,7 @@ function corpusDigests(): Record<string, string> {
           continue;
         }
         const result = deidentifyHl7(entry.message, options());
-        parts.push(result.document.toString(), stable(result.manifest));
+        parts.push(result.hl7, stable(result.manifest));
       }
       return digest(parts.join("\n"));
     });

@@ -66,8 +66,12 @@ function keyedOptions(pkg) {
 export function deidentifyHl7Batch(pkg, text) {
   const out = [];
   for (const entry of pkg.hl7.splitBatch(text).messages) {
-    // A message the parser refuses is not de-identified; the shapes never carry one.
-    if (entry.ok) out.push(pkg.deidHl7.deidentifyHl7(entry.message).document.toString());
+    // A message the parser refuses is not de-identified; the shapes never carry one. The wire the
+    // adapter wrote is `hl7`; a build from before it existed is written here instead.
+    if (entry.ok) {
+      const result = pkg.deidHl7.deidentifyHl7(entry.message);
+      out.push(result.hl7 ?? result.document.toString());
+    }
   }
   return out.join("");
 }

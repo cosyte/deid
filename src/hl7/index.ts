@@ -103,12 +103,17 @@ import { extractHl7Loci } from "./extract.js";
  * import { deidentifyHl7 } from "@cosyte/deid/hl7";
  *
  * const result: Hl7DeidResult = deidentifyHl7(parseHL7(raw), {});
- * result.document.toString(); // de-identified HL7 wire
+ * result.hl7; // de-identified HL7 wire, the same text as result.document.toString()
  * ```
  */
 export interface Hl7DeidResult {
   /** The de-identified message: a fresh, independent {@link Hl7Message}; the input is never mutated. */
   readonly document: Hl7Message;
+  /**
+   * The de-identified message as HL7 v2 text: exactly `document.toString()`, the wire the round-trip
+   * check read back. Use it rather than writing `document` again.
+   */
+  readonly hl7: string;
   /** The value-free audit of every action, in locus order (never a value, never a key). */
   readonly manifest: readonly DeidManifestEntry[];
   /**
@@ -155,16 +160,42 @@ export function deidentifyHl7(msg: Hl7Message, options: DeidOptions = {}): Hl7De
   );
   const { document, manifest } = deidentify({ loci }, options);
   const deidentified = applyHl7(msg, document.loci, coords);
-  assertRoundTrips(deidentified);
-  return { document: deidentified, manifest, unexaminedResiduals };
+  const hl7 = writeRoundTripped(deidentified);
+  return { document: deidentified, hl7, manifest, unexaminedResiduals };
 }
 
 /**
- * Fail closed on the **shape** of the output: the transformed message must serialize, its own parser
- * must be able to read what was written, and reading it must be **stable**, so what a downstream
- * reader sees is what this pass emitted. A pass that emptied a locus and left a message its own reader
- * reads differently cannot say what a downstream reader will make of the values still in it, so it
- * throws rather than return a partially transformed document.
+ * Convenience: parse raw HL7 v2 text, de-identify it, and return the de-identified wire, the
+ * transformed message and the value-free manifest in one call. Parse warnings are not part of the
+ * de-identification contract and are discarded here; call `parseHL7` directly if you need them.
+ *
+ * @param raw - One HL7 v2 message as text.
+ * @param options - The policy, retention classes and key context (see {@link deidentifyHl7}).
+ * @returns The de-identified wire on `hl7`, the transformed message and the value-free manifest.
+ * @throws {@link DeidError} `DEID_OUTPUT_INVALID` when the transformed message does not round-trip
+ *   through its parser; `DEID_NO_KEY` when a keyed transform is required but no key context was
+ *   supplied. Whatever `parseHL7` throws for text it cannot read is thrown as it is.
+ * @example
+ * ```ts
+ * import { deidentifyHl7String } from "@cosyte/deid/hl7";
+ * import { createDeidContext } from "@cosyte/deid";
+ *
+ * const { hl7, manifest } = deidentifyHl7String(raw, {
+ *   context: createDeidContext({ key: process.env.DEID_KEY! }),
+ * });
+ * ```
+ */
+export function deidentifyHl7String(raw: string, options: DeidOptions = {}): Hl7DeidResult {
+  return deidentifyHl7(parseHL7(raw), options);
+}
+
+/**
+ * Write the transformed message once and fail closed on the **shape** of what was written: its own
+ * parser must be able to read it, and reading it must be **stable**, so what a downstream reader sees
+ * is what this pass emitted. A pass that emptied a locus and left a message its own reader reads
+ * differently cannot say what a downstream reader will make of the values still in it, so it throws
+ * rather than return a partially transformed document. The wire it wrote is returned, so a caller
+ * that wants the text never writes the message a second time.
  *
  * Stability, not byte-equality, is the test, and the difference is deliberate: the serializer strips
  * an insignificant trailing empty field, so a wire this adapter emits can be one canonicalization step
@@ -172,14 +203,20 @@ export function deidentifyHl7(msg: Hl7Message, options: DeidOptions = {}): Hl7De
  * is the honest invariant: read the emitted wire, write it back, and reading that again must produce
  * the same bytes. A structure that re-reads differently never reaches one.
  *
+ * The check reads the wire once and writes it back once. When that write reproduces the wire, the
+ * wire is already the fixed point (reading it again would read the same text), so nothing more is
+ * done; only a wire one canonicalization step away is read and written a second time to find out
+ * whether the canonical form is stable.
+ *
  * The diagnostic is value-free, like every other one on this path: it names the failure, never the
  * message.
  */
-function assertRoundTrips(document: Hl7Message): void {
+function writeRoundTripped(document: Hl7Message): string {
+  const wire = document.toString();
   let stable: boolean;
   try {
-    const canonical = parseHL7(document.toString()).toString();
-    stable = parseHL7(canonical).toString() === canonical;
+    const canonical = parseHL7(wire).toString();
+    stable = canonical === wire || parseHL7(canonical).toString() === canonical;
   } catch {
     stable = false;
   }
@@ -189,6 +226,7 @@ function assertRoundTrips(document: Hl7Message): void {
       "the de-identified HL7 v2 message did not round-trip through its parser; no document is returned",
     );
   }
+  return wire;
 }
 
 export {
