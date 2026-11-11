@@ -180,7 +180,7 @@ describe("C-CDA: the patient birthTime", () => {
     const { document, manifest } = deidentifyCcda(parseCcda(xml("19200215")), { context: ctx });
     const out = document.toString();
     expect(out).not.toContain("1920");
-    expect(out).toContain("<birthTime/>");
+    expect(out).toContain('<birthTime nullFlavor="MSK"/>');
     const locus = manifest.find((m) => m.locus.endsWith("/patient/birthTime"))?.locus ?? "";
     expectAggregated(manifest, locus);
   });

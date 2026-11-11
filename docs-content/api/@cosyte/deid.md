@@ -1228,6 +1228,24 @@ const locus: GenericLocus = {
 
 #### Properties
 
+##### ageUnit?
+
+> `readonly` `optional` **ageUnit?**: `string`
+
+The **unit** of an `age` locus whose value is a **number held in a field that holds a number**: an
+HL7 v2 `NM` result, a FHIR `Quantity.value`, a CDA `PQ` `@value`. The unit is the document's own
+(`"a"`, `"mo"`, `"wk"`, `"d"`, a spelled-out `"years"`), and `""` when the document gives none,
+which is read as years.
+
+Present, it changes what the `generalize` transform writes. The `"90+"` category cannot be written
+into a number, so an age over 89 (measured in years after reading the unit) is **removed** and
+recorded as `DEID_CATEGORY_GENERALIZED`; an age of 89 or under is kept **exactly as written** and
+recorded as a residual; an age whose value or unit cannot be read is blocked. Under `date-shift`
+the age is kept and recorded as a residual: a shift keeps every interval, and an age is one.
+
+Absent (the default) an `age` locus takes the `"90+"` generalization as before. The format
+adapters set it on the ages they locate; a caller building loci by hand sets it on its own.
+
 ##### category?
 
 > `readonly` `optional` **category?**: [`SafeHarborCategory`](#safeharborcategory)
@@ -1965,7 +1983,9 @@ A date was shifted by a deterministic per-patient offset (interval-preserving).
 
 > `readonly` **DEID\_CATEGORY\_GENERALIZED**: `"DEID_CATEGORY_GENERALIZED"` = `"DEID_CATEGORY_GENERALIZED"`
 
-A category was generalized to a fully non-identifying form (ZIP → `000`, age → `90+`).
+A category was generalized to a fully non-identifying form: a ZIP whose area is restricted → `000`,
+an age over 89 → `90+`, or, where a field cannot hold `90+`, an age over 89 or a birth year that
+shows one removed.
 
 ##### DEID\_CATEGORY\_HASHED
 

@@ -719,6 +719,143 @@ function ncpdpCase(): CorpusCase {
   };
 }
 
+// ── Ages over 89, birth dates and positions the maps missed (HL7 v2, FHIR, C-CDA) ────────────────────
+/**
+ * The positions no other fixture in this corpus carries: an age held as a number (an HL7 v2 OBX age,
+ * a FHIR `Age` and age-coded `valueQuantity`, a C-CDA age observation), birth dates no rule marked
+ * (`NK1-16`, an OBX birth-date result, `FamilyMemberHistory.bornDate`, a relative's `birthTime`), the
+ * NK1 employee number and organisation, the v2.7 telecoms, and a residence's `Location.position`. The
+ * person over 89 was born in 1920 and is 97.25 years old; an age of 45.5 beside it must survive.
+ */
+const MISSED_SENTINELS: readonly string[] = ["1920", "97.25"];
+
+function hl7MissedCase(): CorpusCase {
+  const ctx = createDeidContext({ key: "hl7-missed-corpus-synthetic-key", patientId: "p-hl7-m" });
+  const nk1 = ["NK1", "1", "ZZNKFAMILY^ZZNKGIVEN", "SPO"];
+  nk1[12] = "ZZNKEMPNO01^^^ZZEMPAUTH^EI";
+  nk1[13] = "ZZNKORGNAME^^^^^^^^^ZZNKORGID";
+  nk1[16] = "19200301";
+  nk1[40] = "^PRN^PH^^1^555^0000041";
+  nk1[41] = "^WPN^PH^^1^555^0000042";
+  const raw = hl7Wire("adt-a01")
+    .split("\r")
+    .map((line) => {
+      if (line.startsWith("NK1|")) return Array.from(nk1, (v) => v ?? "").join("|");
+      if (line.startsWith("PID|")) {
+        return `${line}${"|".repeat(40 - line.split("|").length + 1)}^PRN^PH^^1^555^0000040`;
+      }
+      return line;
+    })
+    .concat([
+      "OBX|1|NM|30525-0^Age^LN|1|97.25|a^year^UCUM|||||F",
+      "OBX|2|NM|21612-7^Age - Reported^LN|1|45.5|a^year^UCUM|||||F",
+      "OBX|3|DT|21112-8^Birth date^LN|1|19200301||||||F",
+    ])
+    .join("\r");
+  const { document, manifest, unexaminedResiduals } = deidentifyHl7(parseHL7(raw), {
+    context: ctx,
+  });
+  return {
+    name: "hl7-ages-and-missed-positions",
+    deidWire: document.toString(),
+    manifest,
+    unexaminedResiduals,
+    originalWire: raw,
+    sentinels: [
+      ...MISSED_SENTINELS,
+      "ZZNKEMPNO01",
+      "ZZNKORGNAME",
+      "ZZNKORGID",
+      "0000040",
+      "0000041",
+      "0000042",
+    ],
+    survivors: ["45.5", "30525-0", "21112-8", "SPO", "a^year^UCUM"],
+  };
+}
+
+function fhirMissedCase(): CorpusCase {
+  const ctx = createDeidContext({ key: "fhir-missed-corpus-synthetic-key", patientId: "p-fhir-m" });
+  const ucum = { unit: "a", system: "http://unitsofmeasure.org", code: "a" };
+  const resource = (r: object): object => ({ resource: r });
+  const raw = JSON.stringify({
+    resourceType: "Bundle",
+    type: "collection",
+    entry: [
+      resource({
+        resourceType: "FamilyMemberHistory",
+        status: "completed",
+        bornDate: "1920-03-01",
+        ageAge: { value: 97.25, ...ucum },
+        condition: [{ code: { text: "ZZCONDITIONTEXT" }, onsetAge: { value: 45.5, ...ucum } }],
+      }),
+      resource({
+        resourceType: "Observation",
+        status: "final",
+        code: { coding: [{ system: "http://loinc.org", code: "30525-0" }] },
+        valueQuantity: { value: 97.25, ...ucum },
+      }),
+      resource({
+        resourceType: "Location",
+        status: "active",
+        type: [
+          {
+            coding: [
+              { system: "http://terminology.hl7.org/CodeSystem/v3-RoleCode", code: "PTRES" },
+            ],
+          },
+        ],
+        position: { longitude: -71.0589, latitude: 42.3601 },
+      }),
+    ],
+  });
+  const { document, manifest, unexaminedResiduals } = deidentifyFhir(parseResource(raw).resource, {
+    context: ctx,
+  });
+  return {
+    name: "fhir-ages-and-missed-positions",
+    deidWire: serializeResource(document),
+    manifest,
+    unexaminedResiduals,
+    originalWire: raw,
+    sentinels: [...MISSED_SENTINELS, "42.3601", "71.0589"],
+    survivors: ["45.5", "30525-0", "PTRES", "ZZCONDITIONTEXT", "completed"],
+  };
+}
+
+function ccdaMissedCase(): CorpusCase {
+  const ctx = createDeidContext({ key: "ccda-missed-corpus-synthetic-key", patientId: "p-ccda-m" });
+  const sct = "2.16.840.1.113883.6.96";
+  const age = (value: string): string =>
+    `<entryRelationship typeCode="SUBJ" inversionInd="true"><observation classCode="OBS" moodCode="EVN">` +
+    `<code code="445518008" codeSystem="${sct}"/><statusCode code="completed"/>` +
+    `<value xsi:type="PQ" value="${value}" unit="a"/></observation></entryRelationship>`;
+  const familyHistory =
+    `<component><section><code code="10157-6" codeSystem="2.16.840.1.113883.6.1"/>` +
+    `<entry><organizer classCode="CLUSTER" moodCode="EVN"><statusCode code="completed"/>` +
+    `<subject><relatedSubject classCode="PRS"><code code="FTH" codeSystem="2.16.840.1.113883.5.111"/>` +
+    `<subject><birthTime value="19200301"/></subject></relatedSubject></subject>` +
+    `<component><observation classCode="OBS" moodCode="EVN"><code code="64572001" codeSystem="${sct}"/>` +
+    `<value xsi:type="CD" code="22298006" codeSystem="${sct}"/>${age("97.25")}${age("45.5")}` +
+    `</observation></component></organizer></entry></section></component>`;
+  const raw = FIX("ccda", "ccd.xml").replace(
+    "</structuredBody>",
+    `${familyHistory}</structuredBody>`,
+  );
+  const { document, manifest, unexaminedResiduals } = deidentifyCcda(parseCcda(raw), {
+    context: ctx,
+  });
+  return {
+    name: "ccda-ages-and-missed-positions",
+    deidWire: document.toString(),
+    manifest,
+    unexaminedResiduals,
+    originalWire: raw,
+    sentinels: [...MISSED_SENTINELS],
+    survivors: ['value="45.5"', "22298006", "FTH", "2951-2"],
+  };
+}
+
 // ── DICOM (metadata-only, delegated PS3.15 Annex E) ───────────────────────────────────────────────
 function dicomCase(): CorpusCase {
   const original = serializeDicom(buildPhiDataset()).toString("latin1");
@@ -750,6 +887,9 @@ const CASES: readonly CorpusCase[] = [
   x12PremiumCase(),
   ncpdpCase(),
   dicomCase(),
+  hl7MissedCase(),
+  fhirMissedCase(),
+  ccdaMissedCase(),
 ];
 
 /** The one leak sweep every gate uses: deliberately the SAME function the tamper test attacks. */

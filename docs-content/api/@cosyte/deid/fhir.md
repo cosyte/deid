@@ -186,7 +186,7 @@ listed here.
 
 ### FhirEditKind
 
-> **FhirEditKind** = `"drop"` \| `"set-primitive"` \| `"address"`
+> **FhirEditKind** = `"drop"` \| `"set-primitive"` \| `"address"` \| `"age"`
 
 How the applier rewrites one extracted locus onto a fresh copy of the node it came from:
 
@@ -198,6 +198,9 @@ How the applier rewrites one extracted locus onto a fresh copy of the node it ca
   pseudonymized `Identifier.value`); a `null` transform result degrades to `drop`.
 - `address`: rebuild an `Address` complex, keeping `state`/`country` and the generalized 3-digit
   `postalCode`, dropping every finer geographic component.
+- `age`: the `value` of a `Quantity` that holds an age. The number is kept exactly as it arrived when
+  the pass kept the age, and dropped otherwise: an age over 89, one the pass could not read, or a
+  surrogate a custom policy computed, since a decimal is never written back as a string.
 
 ***
 

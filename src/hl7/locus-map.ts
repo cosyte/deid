@@ -14,7 +14,8 @@
  * exactly that reason: an employer name riding through a retained guarantor or insurance segment is the
  * same leak wearing an organisation's clothes.
  *
- * Field positions are grounded in the HL7 v2.5.1 segment definitions (PID, NK1, GT1, IN1, IN2). Only the
+ * Field positions are grounded in the HL7 v2.5.1 segment definitions (PID, NK1, GT1, IN1, IN2), plus the
+ * v2.7 telecommunication fields (`PID-40`, `NK1-40`, `NK1-41`) that v2.7 adds beside them. Only the
  * well-known PHI-bearing fields are mapped; a field absent from this map inside a **mapped** segment is
  * a recognized non-identifier position (e.g. PID-8 sex, PID-15 language, GT1-20 employment status) and
  * is **retained untouched** (the over-scrub guard). Genuinely unrecognized structure: Z-segments and
@@ -94,21 +95,32 @@ const PID_RULES: readonly Hl7FieldRule[] = [
   { field: 21, category: C.MRN, mode: "id" }, // PID-21 Mother's Identifier (CX): relative
   { field: 23, category: C.GEOGRAPHIC, mode: "block" }, // PID-23 Birth Place (ST): geographic
   { field: 29, category: C.DATES, mode: "date" }, // PID-29 Patient Death Date/Time (TS)
+  { field: 40, category: C.PHONE, mode: "redact" }, // PID-40 Patient Telecommunication Information (XTN~, v2.7)
 ];
 
 /**
  * **NK1: Next of Kin / Associated Parties.** Relatives and contacts.
+ *
+ * `NK1-12` and `NK1-13` carry the associated party's employee number and, when the party is an
+ * organisation (an employer, say), its name and identifier; `NK1-16` is the relative's date of birth.
+ * `NK1-40` and `NK1-41` are the v2.7 telecommunication fields that take over from `NK1-5`, `NK1-6` and
+ * `NK1-31`, so a v2.7 sender puts the same numbers there.
  */
 const NK1_RULES: readonly Hl7FieldRule[] = [
   { field: 2, category: C.NAMES, mode: "redact" }, // NK1-2  Name (XPN~)
   { field: 4, category: C.GEOGRAPHIC, mode: "address" }, // NK1-4  Address (XAD~)
   { field: 5, category: C.PHONE, mode: "redact" }, // NK1-5  Phone Number (XTN~)
   { field: 6, category: C.PHONE, mode: "redact" }, // NK1-6  Business Phone Number (XTN~)
+  { field: 12, category: C.OTHER_UNIQUE_ID, mode: "id" }, // NK1-12 Next of Kin / Associated Parties Employee Number (CX)
+  { field: 13, category: C.NAMES, mode: "redact" }, // NK1-13 Organization Name - NK1 (XON~)
+  { field: 16, category: C.DATES, mode: "date", dateOfBirth: true }, // NK1-16 Date/Time of Birth (TS)
   { field: 30, category: C.NAMES, mode: "redact" }, // NK1-30 Contact Person's Name (XPN~)
   { field: 31, category: C.PHONE, mode: "redact" }, // NK1-31 Contact Person's Phone (XTN~)
   { field: 32, category: C.GEOGRAPHIC, mode: "address" }, // NK1-32 Contact Person's Address (XAD~)
   { field: 33, category: C.SSN, mode: "redact" }, // NK1-33 Next of Kin/Associated Party's SSN
   { field: 37, category: C.MRN, mode: "id" }, // NK1-37 Contact Person Social Security Number / identifiers (CX)
+  { field: 40, category: C.PHONE, mode: "redact" }, // NK1-40 Next of Kin Telecommunication Information (XTN, v2.7)
+  { field: 41, category: C.PHONE, mode: "redact" }, // NK1-41 Contact Person's Telecommunication Information (XTN, v2.7)
 ];
 
 /**

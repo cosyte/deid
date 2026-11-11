@@ -138,7 +138,7 @@ located, never transformed.
 
 ### CcdaEditKind
 
-> **CcdaEditKind** = `"clear-element"` \| `"clear-telecom"` \| `"id"` \| `"date-value"` \| `"address"` \| `"block"` \| `"block-text"`
+> **CcdaEditKind** = `"clear-element"` \| `"clear-telecom"` \| `"id"` \| `"date-value"` \| `"age-value"` \| `"address"` \| `"block"` \| `"block-text"`
 
 How the applier writes one transformed locus back onto the CDA DOM node it came from.
 

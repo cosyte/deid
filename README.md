@@ -718,7 +718,7 @@ determination**.
 ## The design in five pieces
 
 - **Policy engine**: `safe-harbor` built in; `defineDeidPolicy()` to deviate deliberately.
-- **Five transforms**: redact, generalize (date→year, an over-89 birth year removed, ZIP→3-digit/`000`; an age held as a value is not located, see Known limitations), keyed date-shift,
+- **Five transforms**: redact, generalize (date→year, an over-89 birth year or age held as a number removed, ZIP→3-digit/`000`), keyed date-shift,
   keyed-HMAC pseudonymize, keyed hash.
 - **18 Safe Harbor categories**: §164.514(b)(2)(i)(A) to (R), including the open-ended catch-all (R).
 - **Fail-closed rule**: an unrecognized structure, an un-locatable identifier, or free text is

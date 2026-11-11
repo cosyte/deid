@@ -31,6 +31,7 @@
 
 import { type Hl7Message, type Segment } from "@cosyte/hl7";
 
+import { isAgeCode, isBirthDateCode, type ObservationCodeSystem } from "../age-codes.js";
 import { SAFE_HARBOR_CATEGORIES } from "../categories.js";
 import { safeLocusToken } from "../derived-token.js";
 import type { GenericLocus } from "../locus.js";
@@ -550,6 +551,7 @@ function dateLocus(
   field: number,
   rep: number,
   component: number | undefined,
+  dateOfBirth = false,
 ): PositionedLocus | undefined {
   // A field-granular date is the first component of its repetition (a `TS` field's date part); a
   // component-granular one is the component the enumeration names. Empty or absent: no locus, no
@@ -564,6 +566,7 @@ function dateLocus(
       path: datePath(type, occ, field, rep, component),
       kind: "date",
       category: SAFE_HARBOR_CATEGORIES.DATES,
+      ...(dateOfBirth ? { dateOfBirth: true } : {}),
       value,
     },
     coord: {
@@ -628,6 +631,46 @@ function extractRetainedSegment(
 }
 
 /**
+ * The code system an HL7 v2 coded element names in its coding-system component (HL7 Table 0396), as
+ * the shared age and birth-date code sets know it. LOINC is `LN`, SNOMED CT is `SCT` (and the older
+ * `SNM`/`SNM3`); an empty component states no system.
+ */
+function hl7CodeSystem(name: string): ObservationCodeSystem {
+  return HL7_CODE_SYSTEMS.get(name.toUpperCase()) ?? "other";
+}
+
+/** The HL7 v2 coding-system names (and OIDs) {@link hl7CodeSystem} recognizes. */
+const HL7_CODE_SYSTEMS: ReadonlyMap<string, ObservationCodeSystem> = new Map([
+  ["", "unstated"],
+  ["LN", "loinc"],
+  ["LOINC", "loinc"],
+  ["2.16.840.1.113883.6.1", "loinc"],
+  ["SCT", "snomed"],
+  ["SNM", "snomed"],
+  ["SNM3", "snomed"],
+  ["SNOMEDCT", "snomed"],
+  ["2.16.840.1.113883.6.96", "snomed"],
+]);
+
+/**
+ * The (system, code) pairs `OBX-3` names: the identifier (components 1 and 3) and the alternate
+ * identifier (components 4 and 6). A code is read only where it is present.
+ */
+function obxCodes(seg: Segment): { system: ObservationCodeSystem; code: string }[] {
+  const pairs: { system: ObservationCodeSystem; code: string }[] = [];
+  for (const [code, system] of [
+    [1, 3],
+    [4, 6],
+  ] as const) {
+    const value = componentValue(seg, 3, 0, code);
+    if (value.length > 0) {
+      pairs.push({ system: hl7CodeSystem(componentValue(seg, 3, 0, system)), code: value });
+    }
+  }
+  return pairs;
+}
+
+/**
  * Collect the OBX-5 locus: the one position whose datatype the **message** declares. `OBX-2` types the
  * value, so no table is consulted; a `DR` makes the locus component-granular (range start, range end)
  * and the other date types make it the field, one locus per repetition either way. A positively-typed
@@ -645,17 +688,39 @@ function collectObxValueLoci(
   examined.field(5);
   if (!hasContent(seg, 5)) return;
   const valueType = seg.field(2).value.toUpperCase();
+  const codes = obxCodes(seg);
   // A date/time value type is the message declaring a date locus: act on it under the policy rather
-  // than passing a full-precision patient-related date through as a structured clinical value.
+  // than passing a full-precision patient-related date through as a structured clinical value. An
+  // OBX-3 that codes the result as a birth date makes it one, so a year showing an age over 89 goes.
   if (OBX_DATE_VALUE_TYPES.has(valueType)) {
+    const dateOfBirth = codes.some(({ system, code }) => isBirthDateCode(system, code));
     const reps = seg.field(5).repetitions.length;
     for (let rep = 0; rep < reps; rep += 1) {
       const components = valueType === "DR" ? DR_DATE_COMPONENTS : [undefined];
       for (const component of components) {
-        const positioned = dateLocus(seg, "OBX", occ, 5, rep, component);
+        const positioned = dateLocus(seg, "OBX", occ, 5, rep, component, dateOfBirth);
         if (positioned !== undefined) found.push(positioned);
       }
     }
+    return;
+  }
+  // A numeric result that OBX-3 codes as an AGE is an age held as a number: §164.514(b)(2)(i)(C)
+  // aggregates one over 89, so it is handed to the engine with its unit (OBX-6, component 1) rather
+  // than surviving as a clinical value. Every other numeric result keeps the over-scrub guard below.
+  if (valueType === "NM" && codes.some(({ system, code }) => isAgeCode(system, code))) {
+    found.push({
+      field: 5,
+      rep: 0,
+      component: 0,
+      locus: {
+        path: fieldPath("OBX", occ, 5),
+        kind: "age",
+        category: SAFE_HARBOR_CATEGORIES.DATES,
+        ageUnit: componentValue(seg, 6, 0, 1),
+        value: seg.field(5).value,
+      },
+      coord: { segIndex: seg.absoluteIndex, field: 5, rep: 0, edit: "whole-field" },
+    });
     return;
   }
   // Over-scrub guard: a positively-typed structured clinical value (NM / coded / time of day) survives.

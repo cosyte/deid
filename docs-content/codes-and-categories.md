@@ -38,7 +38,7 @@ residual, never the value acted on.
 | Code                              | Records                                                                                                                                         |
 | --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
 | `DEID_CATEGORY_REMOVED`           | the value was removed outright                                                                                                                  |
-| `DEID_CATEGORY_GENERALIZED`       | the value was generalized to a fully non-identifying form (a ZIP to `000`, a birth year that shows an age over 89 removed, a caller-built `age` locus over 89 to `90+`; no adapter locates an age held as a value)                                                     |
+| `DEID_CATEGORY_GENERALIZED`       | the value was generalized to a fully non-identifying form (a ZIP to `000`, a birth year that shows an age over 89 removed, an age over 89 held as a number removed, a caller-built `age` locus with no `ageUnit` over 89 to `90+`)                                                     |
 | `DEID_CATEGORY_PSEUDONYMIZED`     | the value was replaced by a consistent keyed surrogate                                                                                          |
 | `DEID_CATEGORY_DATE_SHIFTED`      | a date was shifted by the patient's deterministic offset                                                                                        |
 | `DEID_CATEGORY_HASHED`            | the value was replaced by a keyed one-way digest                                                                                                |
@@ -57,7 +57,7 @@ that need your key.
 | Transform      | What it does                                                                                                         | Keyed |
 | -------------- | -------------------------------------------------------------------------------------------------------------------- | ----- |
 | `redact`       | removes the value                                                                                                    | no    |
-| `generalize`   | reduces precision by the locus kind: a date to its year (a birth year that shows an age over 89 removed), a ZIP to its first three digits or `000`, a caller-built `age` locus over 89 to `90+` (no adapter locates an age held as a value) | no    |
+| `generalize`   | reduces precision by the locus kind: a date to its year (a birth year that shows an age over 89 removed), a ZIP to its first three digits or `000`, an age over 89 held as a number removed, a caller-built `age` locus with no `ageUnit` over 89 to `90+` | no    |
 | `date-shift`   | shifts every date of a patient by one deterministic offset, keeping intervals                                        | yes   |
 | `pseudonymize` | replaces an identifier with a consistent keyed HMAC-SHA-256 surrogate                                                | yes   |
 | `hash`         | replaces a value with a keyed one-way digest                                                                         | yes   |

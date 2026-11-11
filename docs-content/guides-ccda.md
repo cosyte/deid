@@ -76,15 +76,18 @@ how to pass one.
 
 PHI is located at the CDA **header participations**: the patient and every party the standard attaches
 to the document. A `<name>` there is always a person or organization; a `<name>` in the clinical body
-can be a drug or material name, so the body is deliberately never swept.
+can be a drug or material name, so the body is deliberately never swept for names. In the body the
+pass reads only narrative, every `<birthTime>` and the value of an age observation.
 
 | Participation | Loci | Transform |
 |---|---|---|
-| **recordTarget / patientRole** (+ nested `guardian`) | `id` (MRN / SSN), `addr`, `telecom`, `patient/name`, `birthTime` | name/telecom **removed**; `id` **removed** under Safe Harbor, assigning root retained (a consistent keyed surrogate only under a preset that does not claim the label); `birthTime` → **year** (removed when the year shows an age over 89); `addr` → safe **3-digit ZIP** (or `000`), finer geography dropped |
+| **recordTarget / patientRole** (+ nested `guardian`) | `id` (MRN / SSN), `addr`, `telecom`, `patient/name`, `birthTime` | name/telecom **removed**; `id` **removed** under Safe Harbor, assigning root retained (a consistent keyed surrogate only under a preset that does not claim the label); `birthTime` → **year** (removed, with `nullFlavor="MSK"`, when the year shows an age over 89); `addr` → safe **3-digit ZIP** (or `000`), finer geography dropped |
 | **author / dataEnterer / informant / authenticator / legalAuthenticator / participant / custodian** | person `name`, `id`, `addr`, `telecom`, participation `time` | same category transforms: Safe Harbor removes identifiers of **relatives, employers, and household members**, not only the patient |
 | **componentOf / documentationOf** | encounter / service-event `id`, `effectiveTime` | ids acted on under the configured transform; dates → **year** |
 | **section `<text>` narrative, `nonXMLBody`** | every narrative block | **fail closed**: blocked, never regex-scrubbed |
 | **unknown / `sdtc` / foreign elements carrying a value** | any value-bearing element that is neither mapped PHI nor recognized coded structure | **fail closed**: blocked |
+| **structuredBody `birthTime`** (a relative's in a family history, the subject of an entry) | `birthTime` `@value`, and each bound of an interval | → **year**; **removed** with `nullFlavor="MSK"` when the year shows an age over 89 |
+| **structuredBody age observation** (`code` names an age, such as SNOMED CT `445518008`) | the `PQ` `value` (or each bound of an `IVL_PQ`), its unit read from `@unit` | over 89 **removed** with `nullFlavor="MSK"`; 89 or under kept exactly as written; recorded either way (see [the limitations page](./limitations.md#ages-over-89)) |
 | **structuredBody clinical entries** (codes, values, units, statuses, dosing periods) | n/a | **retained untouched** (the over-scrub guard) |
 
 An `id`'s Safe Harbor category is read from its assigning-authority `root` OID: the SSN OID

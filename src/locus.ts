@@ -102,6 +102,22 @@ export interface GenericLocus {
    * birth dates they locate; a caller building loci by hand sets it on its own.
    */
   readonly dateOfBirth?: boolean;
+  /**
+   * The **unit** of an `age` locus whose value is a **number held in a field that holds a number**: an
+   * HL7 v2 `NM` result, a FHIR `Quantity.value`, a CDA `PQ` `@value`. The unit is the document's own
+   * (`"a"`, `"mo"`, `"wk"`, `"d"`, a spelled-out `"years"`), and `""` when the document gives none,
+   * which is read as years.
+   *
+   * Present, it changes what the `generalize` transform writes. The `"90+"` category cannot be written
+   * into a number, so an age over 89 (measured in years after reading the unit) is **removed** and
+   * recorded as `DEID_CATEGORY_GENERALIZED`; an age of 89 or under is kept **exactly as written** and
+   * recorded as a residual; an age whose value or unit cannot be read is blocked. Under `date-shift`
+   * the age is kept and recorded as a residual: a shift keeps every interval, and an age is one.
+   *
+   * Absent (the default) an `age` locus takes the `"90+"` generalization as before. The format
+   * adapters set it on the ages they locate; a caller building loci by hand sets it on its own.
+   */
+  readonly ageUnit?: string;
   /** The value at the locus. Consumed by the engine, never copied into the manifest. */
   readonly value: string;
 }

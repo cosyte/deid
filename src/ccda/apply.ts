@@ -78,6 +78,27 @@ function applyAddress(el: Element, value: string | null): void {
   }
 }
 
+/**
+ * The `nullFlavor` written where a value was removed: `MSK`, "masked", the HL7 v3 flavor for a value
+ * the sender has and withholds for privacy. CDA requires an element to carry a value or a
+ * `nullFlavor`, so a removed date of birth or age reads as withheld rather than as malformed. Written
+ * on a date of birth and an age; any other removed date is left as it was before this marker existed.
+ */
+const REMOVED_NULL_FLAVOR = "MSK";
+
+/** `true` for a `<birthTime>` or one of its interval bounds: a date of birth. */
+function isBirthTime(el: Element): boolean {
+  if (el.localName === "birthTime") return true;
+  const parent = el.parentNode as Element | null;
+  return parent !== null && parent.localName === "birthTime";
+}
+
+/** Remove an element's `@value` and mark it with {@link REMOVED_NULL_FLAVOR}. */
+function removeValue(el: Element): void {
+  el.removeAttribute("value");
+  el.setAttribute("nullFlavor", REMOVED_NULL_FLAVOR);
+}
+
 /** Fail closed on an unrecognized element: strip its direct text and value-bearing attrs (keep children). */
 function applyBlock(el: Element): void {
   removeDirectText(el);
@@ -131,8 +152,14 @@ export function applyCcda(
         applyId(node, t.value);
         break;
       case "date-value":
-        if (t.value === null) node.removeAttribute("value");
+        if (t.value === null && isBirthTime(node)) removeValue(node);
+        else if (t.value === null) node.removeAttribute("value");
         else node.setAttribute("value", t.value);
+        break;
+      case "age-value":
+        // A kept age is the number exactly as it arrived. Anything else goes: an age over 89, one the
+        // pass could not read, or a surrogate a custom policy computed, which a `PQ` cannot hold.
+        if (t.value === null || t.value !== node.getAttribute("value")) removeValue(node);
         break;
       case "address":
         applyAddress(node, t.value);

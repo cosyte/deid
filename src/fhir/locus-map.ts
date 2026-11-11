@@ -36,6 +36,15 @@
  * @packageDocumentation
  */
 
+import {
+  getProperty,
+  isComplex,
+  isList,
+  isPrimitive,
+  type FhirComplex,
+  type FhirNode,
+} from "@cosyte/fhir";
+
 import { SAFE_HARBOR_CATEGORIES, type SafeHarborCategory } from "../categories.js";
 
 const C = SAFE_HARBOR_CATEGORIES;
@@ -436,3 +445,116 @@ export function isFhirDateValue(value: string): boolean {
 
 /** The Safe Harbor category carried by a PHI-bearing FHIR date locus. @internal */
 export const FHIR_DATE_CATEGORY: SafeHarborCategory = C.DATES;
+
+/**
+ * The element names R4 types as an **`Age`** wherever they occur: the `Age` arms of the choice
+ * elements that hold a person's age. `Condition.onsetAge` and `abatementAge`, `AllergyIntolerance`
+ * and `FamilyMemberHistory.condition.onsetAge`, `FamilyMemberHistory.ageAge` and `deceasedAge`,
+ * `Procedure.performedAge`, the `timingAge` of a `RequestGroup` or `PlanDefinition` action, and the
+ * open `valueAge` of `Task` and `Parameters` (an `Extension.valueAge` never reaches here: every
+ * extension value is blocked first). The `value` of each is an age held as a number.
+ *
+ * @internal
+ */
+export const FHIR_AGE_ELEMENTS: ReadonlySet<string> = new Set<string>([
+  "onsetAge",
+  "abatementAge",
+  "ageAge",
+  "deceasedAge",
+  "performedAge",
+  "timingAge",
+  "valueAge",
+]);
+
+/**
+ * The element names R4 types as a **`Range` of ages**: `FamilyMemberHistory.ageRange` and
+ * `deceasedRange`, the `onsetRange` and `abatementRange` of `Condition`, `AllergyIntolerance` and
+ * `FamilyMemberHistory.condition`, and `Procedure.performedRange`. R4 documents each as an age range,
+ * so each bound's `value` is an age held as a number.
+ *
+ * @internal
+ */
+export const FHIR_AGE_RANGE_ELEMENTS: ReadonlySet<string> = new Set<string>([
+  "ageRange",
+  "deceasedRange",
+  "onsetRange",
+  "abatementRange",
+  "performedRange",
+]);
+
+/**
+ * The element names R4 defines only as a **date of birth**: `birthDate` on the person resources and
+ * `FamilyMemberHistory.bornDate`. A year that shows an age over 89 is removed from either, and a year
+ * alone is located and recorded like a full date. `bornPeriod` and `bornString`, the other arms of
+ * `born[x]`, are handled by the extractor beside the ages.
+ *
+ * @internal
+ */
+export const FHIR_BIRTH_DATE_ELEMENTS: ReadonlySet<string> = new Set<string>([
+  "birthDate",
+  "bornDate",
+]);
+
+/** The v3 RoleCode system `Location.type` names a patient's residence in (`PTRES`). */
+const V3_ROLE_CODE_SYSTEM = "http://terminology.hl7.org/CodeSystem/v3-RoleCode";
+
+/** The location-physical-type system `Location.physicalType` names a house in (`ho`). */
+const PHYSICAL_TYPE_SYSTEM = "http://terminology.hl7.org/CodeSystem/location-physical-type";
+
+/** A node's items: a list's own, a single node as one, nothing for an absent one. */
+function items(node: FhirNode | undefined): readonly FhirNode[] {
+  if (node === undefined) return [];
+  return isList(node) ? node.items : [node];
+}
+
+/** A complex's property as a string, or `""` when it is absent or not a string primitive. */
+function stringProperty(complex: FhirComplex, name: string): string {
+  const node = getProperty(complex, name);
+  return node !== undefined && isPrimitive(node) && typeof node.value === "string"
+    ? node.value
+    : "";
+}
+
+/**
+ * The `(system, code)` pairs of every `Coding` that carries a code, in a `CodeableConcept` or a list
+ * of them. A shape that is not a `CodeableConcept` or a `Coding` contributes nothing.
+ *
+ * @internal
+ */
+export function codings(concept: FhirNode | undefined): { system: string; code: string }[] {
+  const pairs: { system: string; code: string }[] = [];
+  for (const cc of items(concept)) {
+    if (!isComplex(cc)) continue;
+    for (const c of items(getProperty(cc, "coding"))) {
+      if (!isComplex(c)) continue;
+      const code = stringProperty(c, "code");
+      if (code !== "") pairs.push({ system: stringProperty(c, "system"), code });
+    }
+  }
+  return pairs;
+}
+
+/**
+ * `true` when a `Location` **may be a patient's residence**, so its `position` (latitude and longitude)
+ * is geography finer than a State and is removed:
+ *
+ * - its `type` carries `PTRES` (v3 RoleCode, patient's residence), or
+ * - its `physicalType` carries `ho` (location-physical-type, house), or
+ * - it carries **no coded `type` and no coded `physicalType` at all**: the pass cannot tell a home from
+ *   a clinic, and it fails closed.
+ *
+ * A Location coded only as something else (a hospital, a ward, a building) keeps its position, which
+ * locates a facility rather than a person. A coding with no system is read in the system its element
+ * is bound to.
+ *
+ * @param location - The `Location` resource complex.
+ * @internal
+ */
+export function locationMayBeResidence(location: FhirComplex): boolean {
+  const types = codings(getProperty(location, "type"));
+  const physical = codings(getProperty(location, "physicalType"));
+  const isIn = (system: string, bound: string): boolean => system === "" || system === bound;
+  if (types.some((c) => c.code === "PTRES" && isIn(c.system, V3_ROLE_CODE_SYSTEM))) return true;
+  if (physical.some((c) => c.code === "ho" && isIn(c.system, PHYSICAL_TYPE_SYSTEM))) return true;
+  return types.length === 0 && physical.length === 0;
+}
