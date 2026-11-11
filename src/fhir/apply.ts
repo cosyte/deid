@@ -98,10 +98,13 @@ export interface FhirApplyOptions {
 }
 
 /**
- * What changed in the resource being rebuilt, one entry per change: the security label rests on it
+ * What changed in the resource being rebuilt, the node of each change: the security label rests on it
  * being non-empty. `undefined` above the first resource, where a change belongs to no resource.
  */
-type ResourceMark = boolean[] | undefined;
+type ResourceMark = FhirNode[] | undefined;
+
+/** The definition path above the first resource: no element path starts from it. */
+const ABOVE_RESOURCES = "";
 
 /** Re-emit a primitive without its `extension` side-channel (fail-closed), keeping value + `id`. */
 function stripPrimitive(node: FhirPrimitive): FhirNode {
@@ -239,13 +242,13 @@ function rebuildLabeled(
   const edit = edits.get(node);
   if (edit !== undefined) {
     const rebuilt = applyEdit(node, edit);
-    if (rebuilt === REMOVE || edit.disposition !== "retained") mark?.push(true);
+    if (rebuilt === REMOVE || edit.disposition !== "retained") mark?.push(node);
     return rebuilt;
   }
 
   if (isPrimitive(node)) {
     const rebuilt = stripPrimitive(node);
-    if (rebuilt !== node) mark?.push(true);
+    if (rebuilt !== node) mark?.push(node);
     return rebuilt;
   }
 
@@ -326,7 +329,7 @@ export function applyFhir(
   }
   const rebuilt =
     options.transformLabels === true
-      ? rebuildLabeled(resource, edits, "", undefined, false)
+      ? rebuildLabeled(resource, edits, ABOVE_RESOURCES, undefined, false)
       : rebuildNode(resource, edits);
   // The root resource never rebuilds to REMOVE (its `resourceType` property is retained), but guard so a
   // pathological empty root fails closed to an empty resource rather than leaking the original.
