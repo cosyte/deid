@@ -37,8 +37,8 @@ output holds, not only that the pass did not throw.
 ## How each one runs
 
 - **Unit tests, the corpus, properties, fuzzing and doc samples** run in one Vitest suite on every
-  pull request and on `main`, on Linux, Windows and macOS on Node 22, 24 and 26, and under Bun and
-  Deno. Every property and fuzz target runs 100 cases there and 10,000 in a nightly workflow, and
+  pull request and on `main`, on Linux, Windows and macOS on Node 22, 24 and 26, and under Bun.
+  Every property and fuzz target runs 100 cases there and 10,000 in a nightly workflow, and
   draws a new seed on every run, so a run can find a case an earlier run missed. Each prints its seed
   before it runs; `COSYTE_PROPERTY_RUNS` sets the case count, and a failure prints the
   `COSYTE_PROPERTY_SEED` and `COSYTE_PROPERTY_PATH` that replay it, already shrunk.

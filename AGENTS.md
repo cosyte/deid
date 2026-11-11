@@ -21,7 +21,7 @@ pnpm test
 
 A pull request is ready when these pass, in this order. CI runs the first ten on Linux, Windows and
 macOS on Node 22, 24, and 26 (`quality:check` in its own `coverage-ratchet` job), and the suite
-under Bun and Deno.
+under Bun.
 
 ```sh
 pnpm install --frozen-lockfile
