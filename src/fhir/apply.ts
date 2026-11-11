@@ -19,6 +19,9 @@
  *   pseudonymized `Identifier.value`); a `null` result degrades to a drop.
  * - `address`: the `Address` complex is rebuilt to `state` + `country` + the generalized 3-digit
  *   `postalCode`, dropping every finer geographic component.
+ * - `age`: the `value` of an age `Quantity` is kept exactly as it arrived when the pass kept the age,
+ *   and dropped otherwise (an age over 89, an age it could not read, or a surrogate a custom policy
+ *   computed, which a number cannot hold).
  *
  * **Primitive-extension guard.** A FHIR primitive can carry an `extension` (the JSON `_`-sibling) that
  * holds PHI (`_birthDate.extension[…]`). The structural walk does not descend that side-channel, so the
@@ -45,7 +48,7 @@ import {
 
 import type { LocusKind, TransformedLocus } from "../locus.js";
 import { FHIR_KEPT_ADDRESS_PARTS } from "./locus-map.js";
-import type { FhirCoord, FhirEditKind } from "./extract.js";
+import { primitiveString, type FhirCoord, type FhirEditKind } from "./extract.js";
 
 /** Sentinel returned by {@link rebuildNode} when a node is removed (dropped from its parent). @internal */
 const REMOVE = Symbol("deid.fhir.remove");
@@ -112,6 +115,13 @@ function applyEdit(node: FhirNode, edit: Edit): Rebuilt {
       return edit.value === null ? REMOVE : primitive(edit.value);
     case "address":
       return isComplex(node) ? rebuildAddress(node, edit.value) : REMOVE;
+    case "age":
+      // A kept age is the number exactly as it arrived, rebuilt like every primitive the pass
+      // re-emits, so a decimal stays a decimal. Anything else goes: an age over 89, one the pass could
+      // not read, and a surrogate a custom policy computed, which a number field cannot hold.
+      return isPrimitive(node) && edit.value !== null && edit.value === primitiveString(node)
+        ? primitive(node.value)
+        : REMOVE;
   }
 }
 

@@ -83,6 +83,57 @@ export function birthYearShowsAgeOver89(year: string, referenceYear: number): bo
 }
 
 /**
+ * Years per unit an age may be written in: the UCUM codes for a year, a month, a week, a day, an hour
+ * and a minute (the mean Julian and Gregorian forms included), and the spelled-out words a producer
+ * writes when it gives no UCUM code. Matched without regard to case. An empty unit is a year: an age
+ * observation that states no unit is read as the unit an age is given in by default.
+ */
+const YEARS_PER_UNIT: ReadonlyMap<string, number> = new Map([
+  ["", 1],
+  ["a", 1],
+  ["a_j", 1],
+  ["a_g", 1],
+  ["ann", 1],
+  ["y", 1],
+  ["yr", 1],
+  ["yrs", 1],
+  ["year", 1],
+  ["years", 1],
+  ["mo", 1 / 12],
+  ["mo_j", 1 / 12],
+  ["mo_g", 1 / 12],
+  ["month", 1 / 12],
+  ["months", 1 / 12],
+  ["wk", 7 / 365.25],
+  ["week", 7 / 365.25],
+  ["weeks", 7 / 365.25],
+  ["d", 1 / 365.25],
+  ["day", 1 / 365.25],
+  ["days", 1 / 365.25],
+  ["h", 1 / 8766],
+  ["hour", 1 / 8766],
+  ["hours", 1 / 8766],
+  ["min", 1 / 525960],
+]);
+
+/**
+ * An age written as a number in a unit, in **years**, or `null` when it cannot be read: the value is
+ * not a plain non-negative decimal, or the unit is not one {@link YEARS_PER_UNIT} names. A caller fails
+ * closed on `null`.
+ *
+ * @param value - The age as the document writes it (`"93"`, `"18"`, `"45.5"`).
+ * @param unit - The unit as the document writes it (`"a"`, `"mo"`, `"years"`, or `""` for none).
+ * @returns The age in years, or `null`.
+ * @internal
+ */
+export function ageInYears(value: string, unit: string): number | null {
+  if (!/^\s*\+?(?:\d+(?:\.\d*)?|\.\d+)\s*$/.test(value)) return null;
+  const perUnit = YEARS_PER_UNIT.get(unit.trim().toLowerCase());
+  if (perUnit === undefined) return null;
+  return Number(value) * perUnit;
+}
+
+/**
  * Generalize a ZIP code to its safe form (§164.514(b)(2)(i)(B)): the initial three digits, or `000`
  * when those three digits name an area with ≤ 20,000 people (the cited restricted list). Fails closed
  * (`null`) when three leading digits cannot be read.

@@ -169,6 +169,19 @@ not mistaken for a date, so it survives.
   HL7 OBX-5 typed `ST`, which the sibling HL7 adapter also fails closed on; a structured `valueQuantity`
   / `valueCodeableConcept` / `valueDateTime` result is retained).
 - The narrative **`text.div`** is blocked at any depth (resource-, section-, entry-level).
+- An **age held as a number** is located: an `Age` (`Condition.onsetAge`, `FamilyMemberHistory.ageAge`
+  and `deceasedAge`, `Procedure.performedAge`, and the other `Age` arms), each bound of an age `Range`,
+  and an `Observation.valueQuantity`, `valueInteger` or `valueRange` whose `code` names an age (LOINC
+  `30525-0`, among others). Over 89
+  the quantity's `value` is **removed** and its unit kept; 89 or under it is kept exactly as written,
+  and the manifest records it either way (see [the limitations page](./limitations.md#ages-over-89)).
+- `FamilyMemberHistory.bornDate`, each bound of `bornPeriod`, `bornString` and an
+  `Observation.valueDateTime` coded as a birth date (LOINC `21112-8`) are **dates of birth**, like
+  `birthDate`: a year that shows an age over 89 is removed.
+- **`Location.position`** is removed, as geography finer than a State, unless the Location carries a
+  facility `type` code (a hospital, an emergency room, a pharmacy, ...) in v3 RoleCode, every coding on
+  its `type` is one, its `physicalType` names nothing that removes it, and it has no `partOf` (see
+  [the limitations page](./limitations.md#ages-over-89)). A physical type alone never keeps a position.
 
 ## The two guarantees
 

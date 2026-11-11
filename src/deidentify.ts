@@ -43,7 +43,7 @@ import {
   pseudonymize,
   type GeneralizeOutcome,
 } from "./transforms/index.js";
-import { birthYearShowsAgeOver89 } from "./transforms/generalize.js";
+import { ageInYears, birthYearShowsAgeOver89 } from "./transforms/generalize.js";
 
 /**
  * Options for {@link deidentify}.
@@ -181,8 +181,8 @@ function requireContext(context: DeidContext | undefined, transform: TransformNa
 }
 
 /**
- * Build the outcome for a **date of birth whose year shows an age over 89**: the year is removed
- * rather than kept. §164.514(b)(2)(i)(C) aggregates such an age into a single category of 90 or older,
+ * Build the outcome for a **date of birth whose year shows an age over 89**, or an age over 89 held as
+ * a number: the value is removed rather than kept. §164.514(b)(2)(i)(C) aggregates such an age into a single category of 90 or older,
  * and none of the formats has a field beside the birth date to write that category into, so the
  * aggregate a recipient reads is the absence of the year. The manifest says so with
  * `DEID_CATEGORY_GENERALIZED`: nothing of the value remains, so it is never a residual.
@@ -201,6 +201,57 @@ function birthYearAggregated(locus: GenericLocus, category: SafeHarborCategory):
   };
 }
 
+/**
+ * The outcome for an **age held as a number** (an `age` locus carrying an `ageUnit`), under the two
+ * transforms that treat it differently from any other value, or `undefined` to let the ordinary
+ * transform run.
+ *
+ * - `generalize`: the `"90+"` category cannot be written into a number, so an age over 89 is removed
+ *   and recorded as generalized ({@link birthYearAggregated} is the same outcome for a birth year); an
+ *   age of 89 or under is kept exactly as written ({@link keptAge}); an age it cannot read is blocked.
+ * - `date-shift`: the age is kept ({@link keptAge}). A shift moves every date of a patient by
+ *   one offset so intervals survive, and an age is an interval, so the shifted age is the age itself.
+ */
+function numericAgeOutcome(
+  transform: TransformName,
+  locus: GenericLocus,
+  category: SafeHarborCategory,
+  ageUnit: string,
+): LocusOutcome | undefined {
+  if (transform !== "generalize" && transform !== "date-shift") return undefined;
+  const years = ageInYears(locus.value, ageUnit);
+  if (years === null) {
+    return blocked(locus.path, category, DEID_DISPOSITION_CODES.DEID_LOCUS_BLOCKED);
+  }
+  if (transform === "date-shift") return keptAge(locus, category, transform);
+  if (years > 89) return birthYearAggregated(locus, category);
+  return keptAge(locus, category, transform);
+}
+
+/**
+ * The outcome for an age held as a number that the pass **keeps exactly as written**, under either
+ * transform that keeps one: the disposition is `retained`, because nothing about the value changed,
+ * and the code is `DEID_RESIDUAL_RETAINED`, because a kept age is a residual a determiner reads. The
+ * transform names which rule decided to keep it.
+ */
+function keptAge(
+  locus: GenericLocus,
+  category: SafeHarborCategory,
+  transform: TransformName,
+): LocusOutcome {
+  return {
+    value: locus.value,
+    disposition: "retained",
+    manifest: {
+      category,
+      transform,
+      locus: locus.path,
+      disposition: "retained",
+      code: DEID_DISPOSITION_CODES.DEID_RESIDUAL_RETAINED,
+    },
+  };
+}
+
 /** Apply a policy transform to a classified, non-free-text locus. */
 function applyTransform(
   transform: TransformName,
@@ -209,6 +260,10 @@ function applyTransform(
   context: DeidContext | undefined,
   referenceYear: number,
 ): LocusOutcome {
+  if (locus.kind === "age" && locus.ageUnit !== undefined) {
+    const outcome = numericAgeOutcome(transform, locus, category, locus.ageUnit);
+    if (outcome !== undefined) return outcome;
+  }
   switch (transform) {
     case "redact":
       return {

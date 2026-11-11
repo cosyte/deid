@@ -312,11 +312,15 @@ residual. A birth year under that line keeps its year and its residual row exact
   valid date in any of them, and DICOM's own Patient's Age `(0010,1010)` is removed by the Basic
   Profile. So the field is emptied. A recipient who sees a date of birth with no year, where every
   other date kept its year, can read it as 90 or older, and nothing narrower than that.
-- **Where it applies.** HL7 v2 `PID-7`, the guarantor's `GT1-8` and the insured's `IN1-18`; every
-  C-CDA `<birthTime>` (a bound of one given as an interval included); FHIR `birthDate`, a year-only
-  `birthDate` included; X12 `DMG-02`; NCPDP Telecom `304-C4`. DICOM `(0010,0030)` Patient's Birth Date is
-  emptied for everyone by the delegated Annex E Basic Profile, so no year survives there to aggregate.
-  A date that is not a date of birth (a death date, a service date) keeps its year however old.
+- **Where it applies.** HL7 v2 `PID-7`, the next of kin's `NK1-16`, the guarantor's `GT1-8` and the
+  insured's `IN1-18`, and an OBX date result whose `OBX-3` codes it as a birth date (LOINC `21112-8`);
+  every C-CDA `<birthTime>`, in the header or in the clinical body (a relative's in a family history),
+  a bound of one given as an interval included; FHIR `birthDate` and `FamilyMemberHistory.bornDate`
+  (each year-only included), each bound of `FamilyMemberHistory.bornPeriod`, `bornString` read for
+  its leading year (and blocked when it has none), and an `Observation.valueDateTime` coded `21112-8`;
+  X12 `DMG-02`; NCPDP Telecom `304-C4`. DICOM `(0010,0030)` Patient's Birth Date is emptied for
+  everyone by the delegated Annex E Basic Profile, so no year survives there to aggregate. A date that
+  is not a date of birth (a death date, a service date) keeps its year however old.
 - **The reference date is the year the pass runs.** The age is measured against the UTC year of the
   call, not against a date in the document (`MSH-7`, `ISA-09`, the C-CDA `effectiveTime`, the NCPDP
   date of service). A document's date is earlier than the call in every ordinary case, so measuring
@@ -329,33 +333,86 @@ residual. A birth year under that line keeps its year and its residual row exact
 - **The generic core needs the marker.** On the root entry, set `dateOfBirth: true` on a `date` locus
   for the engine to apply the rule; a locus without it keeps its year however old. A policy that
   date-shifts or retains dates does not aggregate either: the rule is part of the year generalization.
-- **A removed C-CDA `birthTime` is written empty.** The `value` attribute is dropped and no
-  `nullFlavor` is added, so the element reads `<birthTime/>`, the same as a date the pass blocks. A
-  receiver that requires a value or a `nullFlavor` on `birthTime` will reject it as it stands.
+- **A removed C-CDA `birthTime` carries `nullFlavor="MSK"`.** The `value` attribute is dropped and
+  `nullFlavor="MSK"` (masked: the sender has the value and withholds it) is written in its place, so
+  the element reads `<birthTime nullFlavor="MSK"/>`, on a bound of an interval as on the element. A
+  date that is not a date of birth and that the pass blocks is still written with no `value` and no
+  `nullFlavor`, as before.
 
-**An age held as a value is not found or aggregated.** No adapter locates an age written as a number,
-so an age over 89 passes through unchanged under every policy, `safe-harbor` included. The
-`generalize` transform turns an age over 89 into `90+` only for a locus a caller builds by hand with
-`kind: "age"`; no adapter emits one. Examples of ages that are kept as they arrive:
+### An age held as a number
 
-- an HL7 v2 numeric result such as `OBX|1|NM|30525-0^Age^LN||93|a`: OBX-5 typed `NM` (or another
-  numeric or coded type) is a structured clinical value and is retained;
-- a FHIR age: `Observation.valueQuantity` in years, `Condition.onsetAge`,
-  `FamilyMemberHistory.ageAge`;
-- a C-CDA age observation in the clinical body, which is retained untouched.
+An age written as a number is located and aggregated too. Under a policy that generalizes dates, an
+age over 89 is **removed** and recorded as `DEID_CATEGORY_GENERALIZED` with the disposition `removed`;
+an age of 89 or under is kept **exactly as written**, with the disposition `retained` and the code
+`DEID_RESIDUAL_RETAINED`, the same row a date-shift policy writes for a kept age. The ages located are:
 
-Finding and aggregating these is the caller's job: read the ages your documents carry and band or
-remove every one over 89 before the output leaves your control.
+- an HL7 v2 OBX result typed `NM` whose `OBX-3` (identifier or alternate identifier) codes it as an
+  age, for example `OBX|1|NM|30525-0^Age^LN||93|a`. `OBX-5` is emptied and `OBX-6` keeps the unit;
+- a FHIR `Age`: `Condition.onsetAge` and `abatementAge`, `FamilyMemberHistory.ageAge`, `deceasedAge`
+  and `condition.onsetAge`, `AllergyIntolerance.onsetAge`, `Procedure.performedAge`, an action's
+  `timingAge`, and an open `valueAge`; each bound of an age `Range` (`ageRange`, `deceasedRange`,
+  `onsetRange`, `abatementRange`, `performedRange`); and an `Observation.valueQuantity`,
+  `valueInteger` (read as years) or each bound of a `valueRange` (or a component's) whose `code` names
+  an age. The quantity's `value` (or the integer) is dropped and its unit, system and code stay;
+- a C-CDA observation in the clinical body whose `code` names an age (the Age Observation's SNOMED CT
+  `445518008`, among others), its `PQ` `value`, or each bound of an `IVL_PQ`. The `value` attribute is
+  dropped and `nullFlavor="MSK"` is written in its place.
 
-**Birth dates the pass does not treat as birth dates.** Three positions carry a birth date the rule
-above never reaches, so an over-89 year can survive in each:
+The codes read as an age are LOINC `30525-0`, `21612-7`, `29553-5`, `21611-9` and `63900-5`, and
+SNOMED CT `445518008` and `397659008`. A code with no stated system is matched against both lists.
 
-- **HL7 v2 `NK1-16`**, the next of kin's date of birth, is not in the `NK1` field map. It leaves the
-  pass untouched, counted as an unexamined residual rather than reduced or removed.
-- **An HL7 v2 OBX result typed as a date that holds a birth date.** OBX-5 typed `DT` or `TS` is cut to
-  its year like any date, but nothing marks it as a birth date, so a year over 89 is kept.
-- **A relative's birth date in a C-CDA family history** sits in the clinical body, which the pass does
-  not read, so it is never located at all.
+- **The aggregate is the absence of the number.** A `90+` cannot be written into a number field (an
+  HL7 v2 `NM`, a FHIR decimal, a CDA `PQ`), so the number is removed rather than replaced.
+- **The unit is read.** An age in months, weeks, days, hours or minutes (UCUM `mo`, `wk`, `d`, `h`,
+  `min`, or the word) is converted to years before the comparison; an age with no unit is read as
+  years. An age whose unit is none of those, or whose value is not a plain number, is **blocked**.
+- **Over 89 means more than 89 years.** An age of 89.5 years is over 89 and is removed.
+- **A date-shift policy keeps every age.** A shift moves all of a patient's dates by one offset so
+  intervals survive, and an age is an interval, so the shifted age is the age itself: it is kept and
+  recorded as a residual. A custom policy that pseudonymizes or hashes dates writes its surrogate into
+  an HL7 v2 `OBX-5`, and removes the FHIR or C-CDA number, which cannot hold one.
+- **Residual: ages these rules do not read.** An age written as text (FHIR `ageString`,
+  `deceasedString`, `onsetString`, an HL7 v2 OBX typed `ST`, which is blocked as free text anyway), an
+  HL7 v2 OBX age typed `SN` (structured numeric) or any other structured type than `NM`, an age-coded
+  FHIR `valueRatio`, and an age under a code outside the lists above all pass as before. A caller who builds
+  loci by hand gets the rule by setting `ageUnit` on an `age` locus; without it the `generalize`
+  transform turns an age over 89 into `90+`.
+
+### Positions the maps now name, and what is still a residual
+
+The HL7 v2 map names `NK1-12` (the associated party's employee number, blocked as the (R) catch-all),
+`NK1-13` (the party's organisation name and identifier, removed as a name) and the v2.7
+telecommunication fields `PID-40`, `NK1-40` and `NK1-41` (removed as phone numbers). `NK1-33` is now
+read as the associated party's identifiers (one locus per repetition, as `PID-2` is) and `NK1-37`
+as the contact person's Social Security number; the map had the two the other way round.
+
+FHIR removes `Location.position`, recorded as geographic and blocked, unless the Location is
+positively a fixed facility. **A facility Location must carry a facility `type` code to keep its
+position.** It keeps it only when all of these hold:
+
+- `type` carries at least one concept, and every coding on it is v3 RoleCode (by its URI or its OID
+  `2.16.840.1.113883.5.111`) and one of `HOSP`, `ER`, `ICU`, `OR`, `PHARM`, `LAB`, `HU`, `SNF`,
+  `PSYCHF`, `RH`, `CHR`. A Location with no `type` never keeps its position. The ambulance and
+  mobile-unit codes (`AMB`, `MBL`) are not on the list: the vehicle may be parked at a home.
+- `physicalType` can only remove it, never keep it. Building, wing, ward, level, corridor, room and
+  bed describe physical form, which a house has too, so they leave the decision to `type`; `ho`
+  (house), any other code, an unknown system, a coding with no system and an uncoded concept remove
+  it.
+- The Location has no `partOf`. What it is part of is not known within the resource, so any `partOf`
+  removes the position.
+
+Anything else removes it: `PTRES`, a local or unknown system, a coding with no system, an uncoded
+concept, a list that mixes a facility code with anything else. A facility coded with a code or in a
+system outside those lists, or one that is part of another Location, loses its position too, which is
+the over-removal this rule accepts. What the rule still cannot see: free text that contradicts the
+code, such as a `name`, `description` or `type.text` reading "patient home" beside a `HOSP` code, and a
+`Coding.display` that contradicts its own code. The code decides, and a Location coded `HOSP` keeps its
+position whatever its text says. A `geolocation` extension is removed by the extension rule wherever it
+sits, and inside an `Address` by the address reduction.
+
+Still not named, and so handed through and counted as unexamined residuals: `NK1-26` (the associated
+party's mother's maiden name) and `NK1-38` (its birth place). Any other field of a mapped segment that
+the maps do not list is handed through the same way.
 
 <a id="policy-profiles"></a>
 

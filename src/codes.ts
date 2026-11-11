@@ -157,7 +157,11 @@ export type FatalCode = (typeof FATAL_CODES)[keyof typeof FATAL_CODES];
 export const DEID_DISPOSITION_CODES = {
   /** A category was removed outright (redaction). */
   DEID_CATEGORY_REMOVED: "DEID_CATEGORY_REMOVED",
-  /** A category was generalized to a fully non-identifying form (ZIP → `000`, age → `90+`). */
+  /**
+   * A category was generalized to a fully non-identifying form: a ZIP whose area is restricted → `000`,
+   * an age over 89 → `90+`, or, where a field cannot hold `90+`, an age over 89 or a birth year that
+   * shows one removed.
+   */
   DEID_CATEGORY_GENERALIZED: "DEID_CATEGORY_GENERALIZED",
   /** A category was replaced by a consistent keyed-HMAC surrogate (pseudonymization). */
   DEID_CATEGORY_PSEUDONYMIZED: "DEID_CATEGORY_PSEUDONYMIZED",

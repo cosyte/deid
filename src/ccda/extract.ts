@@ -21,6 +21,7 @@
 
 import { attr, childElements, children, text, xsiType } from "@cosyte/ccda";
 
+import { isAgeCode, type ObservationCodeSystem } from "../age-codes.js";
 import { SAFE_HARBOR_CATEGORIES } from "../categories.js";
 import { WITHHELD_LOCUS_TOKEN, isWithheldToken, safeLocusToken } from "../derived-token.js";
 import type { GenericLocus } from "../locus.js";
@@ -60,7 +61,14 @@ const XSI_NS = "http://www.w3.org/2001/XMLSchema-instance";
 
 /** How the applier writes one transformed locus back onto the CDA DOM node it came from. */
 export type CcdaEditKind =
-  "clear-element" | "clear-telecom" | "id" | "date-value" | "address" | "block" | "block-text";
+  | "clear-element"
+  | "clear-telecom"
+  | "id"
+  | "date-value"
+  | "age-value"
+  | "address"
+  | "block"
+  | "block-text";
 
 /**
  * A write-back coordinate: a direct handle to the DOM node one extracted locus came from, plus how to
@@ -135,7 +143,8 @@ interface CcdaLocusAccumulator {
  * Only the two `clear-*` edits qualify, because only they call the applier's `removeAllChildren`. The
  * others each hand something below the element through: `address` **keeps** the state / country children
  * ({@link CCDA_KEPT_ADDRESS_PARTS}) verbatim, `block` and `block-text` remove the element's own text
- * nodes and leave every child element where it was, and `id` / `date-value` rewrite one attribute.
+ * nodes and leave every child element where it was, and `id` / `date-value` / `age-value`
+ * rewrite one attribute.
  */
 const EDIT_REMOVES_EVERY_CHILD_NODE: Readonly<Record<CcdaEditKind, boolean>> = {
   "clear-element": true,
@@ -145,6 +154,7 @@ const EDIT_REMOVES_EVERY_CHILD_NODE: Readonly<Record<CcdaEditKind, boolean>> = {
   "block-text": false,
   id: false,
   "date-value": false,
+  "age-value": false,
 };
 
 /** Append a locus + its coordinate to the accumulator, recording what its edit reaches below the node. */
@@ -519,6 +529,57 @@ function sweep(out: CcdaLocusAccumulator, el: Element, path: string): void {
   }
 }
 
+/** The code system a CDA `@codeSystem` OID names, as the shared age code set knows it. */
+function cdaCodeSystem(oid: string | undefined): ObservationCodeSystem {
+  if (oid === undefined || oid === "") return "unstated";
+  if (oid === "2.16.840.1.113883.6.1") return "loinc";
+  if (oid === "2.16.840.1.113883.6.96") return "snomed";
+  return "other";
+}
+
+/** `true` when an `<observation>`'s own `<code>` names an age (the C-CDA Age Observation, a LOINC age). */
+function isAgeObservation(observation: Element): boolean {
+  return children(observation, "code").some((code) => {
+    const value = attr(code, "code");
+    return value !== undefined && isAgeCode(cdaCodeSystem(attr(code, "codeSystem")), value);
+  });
+}
+
+/** Emit one age locus for an element carrying a `PQ` `@value`, with its `@unit`. */
+function pushAge(out: CcdaLocusAccumulator, el: Element, path: string): void {
+  nameAttributes(out, el, ["value", "unit"]);
+  const value = attr(el, "value");
+  if (value === undefined) return;
+  push(
+    out,
+    {
+      path,
+      kind: "age",
+      category: SAFE_HARBOR_CATEGORIES.DATES,
+      ageUnit: attr(el, "unit") ?? "",
+      value,
+    },
+    { node: el, edit: "age-value" },
+  );
+}
+
+/**
+ * Extract the age loci of an age observation: its `<value>` given as a `PQ` (`@value` and `@unit`),
+ * or as an `IVL_PQ` whose `low` / `high` / `center` bounds carry one each. An age held as a number,
+ * which §164.514(b)(2)(i)(C) aggregates over 89.
+ */
+function actAgeObservation(out: CcdaLocusAccumulator, observation: Element, path: string): void {
+  for (const { el, path: seg } of childSegments(observation)) {
+    if (el.namespaceURI !== V3_NS || el.localName !== "value") continue;
+    const valuePath = join(path, seg);
+    nameAttributeNS(out, el, XSI_NS, "type");
+    pushAge(out, el, valuePath);
+    for (const bound of ["low", "high", "center"] as const) {
+      for (const c of children(el, bound)) pushAge(out, c, join(valuePath, bound));
+    }
+  }
+}
+
 /**
  * Fail closed on **every** narrative `<text>` element anywhere in the body: section-level, nested
  * subsection, and entry-level alike, while retaining all coded clinical structure (codes, values,
@@ -544,6 +605,21 @@ function blockNarrative(out: CcdaLocusAccumulator, el: Element, path: string): v
         { node: child, edit: "clear-element" },
       );
       continue; // do not descend into a blocked narrative block
+    }
+    if (child.namespaceURI === V3_NS && (child.localName ?? "") === "birthTime") {
+      // A person's date of birth in the body: a relative's in a family history, the subject's of an
+      // entry. The same rule as the header's, so a year that shows an age over 89 goes.
+      actDate(out, child, childPath, true);
+      continue;
+    }
+    if (
+      child.namespaceURI === V3_NS &&
+      (child.localName ?? "") === "observation" &&
+      isAgeObservation(child)
+    ) {
+      // An age observation's value is an age held as a number. Its narrative and nested entries are
+      // still reached by the descent below.
+      actAgeObservation(out, child, childPath);
     }
     // Descend to reach nested / entry-level narrative, over segments composed exactly as the header
     // sweep composes its own ({@link childSegments}). This descent runs over the clinical body, which

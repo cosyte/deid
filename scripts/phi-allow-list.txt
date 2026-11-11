@@ -517,3 +517,10 @@ NAME ZZTWOFIRST
 ID ZZMRNONE
 ID ZZMRNTWO
 DOB 19700610
+
+# --- Synthetic birth dates over 89 for the age and birth-date rules ---
+# test/ages-over-89.test.ts and the corpus case for ages and missed positions in
+# test/corpus/leak-corpus.test.ts write a C-CDA birthTime for a person born in 1920, the year the
+# rule must remove. Both dates are invented.
+DOB 19200301
+DOB 19200215

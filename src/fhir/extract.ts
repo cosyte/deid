@@ -44,6 +44,7 @@ import {
   type FhirPrimitive,
 } from "@cosyte/fhir";
 
+import { isAgeCode, isBirthDateCode, type ObservationCodeSystem } from "../age-codes.js";
 import { SAFE_HARBOR_CATEGORIES } from "../categories.js";
 import { isWithheldToken, safeLocusToken } from "../derived-token.js";
 import type { GenericLocus } from "../locus.js";
@@ -55,6 +56,9 @@ import {
 import { isRetainableZipCode } from "../retention.js";
 import { carriesFhirPersonalEvidence, classifyFhirPersonalDatatype } from "./datatype.js";
 import {
+  FHIR_AGE_ELEMENTS,
+  FHIR_AGE_RANGE_ELEMENTS,
+  FHIR_BIRTH_DATE_ELEMENTS,
   FHIR_DATE_CATEGORY,
   FHIR_DEMOGRAPHIC_ELEMENTS,
   FHIR_KEPT_ADDRESS_PARTS,
@@ -65,7 +69,9 @@ import {
   categoryForIdentifierSystem,
   isContactDetailName,
   isContactElement,
+  codings,
   isFhirDateValue,
+  locationMayBeResidence,
 } from "./locus-map.js";
 
 /**
@@ -79,8 +85,11 @@ import {
  *   pseudonymized `Identifier.value`); a `null` transform result degrades to `drop`.
  * - `address`: rebuild an `Address` complex, keeping `state`/`country` and the generalized 3-digit
  *   `postalCode`, dropping every finer geographic component.
+ * - `age`: the `value` of a `Quantity` that holds an age. The number is kept exactly as it arrived when
+ *   the pass kept the age, and dropped otherwise: an age over 89, one the pass could not read, or a
+ *   surrogate a custom policy computed, since a decimal is never written back as a string.
  */
-export type FhirEditKind = "drop" | "set-primitive" | "address";
+export type FhirEditKind = "drop" | "set-primitive" | "address" | "age";
 
 /**
  * A write-back coordinate: a direct handle to the exact model node one extracted locus came from, plus
@@ -149,8 +158,12 @@ function elementSegment(name: string, position: number): string {
   return isWithheldToken(token) ? idx(token, position) : token;
 }
 
-/** The string form of a primitive value (`FhirDecimal` → its exact lexical text). `""` when absent. */
-function primitiveString(p: FhirPrimitive): string {
+/**
+ * The string form of a primitive value (`FhirDecimal` → its exact lexical text). `""` when absent.
+ *
+ * @internal
+ */
+export function primitiveString(p: FhirPrimitive): string {
   const v = p.value;
   if (v === undefined) return "";
   if (typeof v === "string") return v;
@@ -315,6 +328,67 @@ function handleAddresses(out: FhirLocusAccumulator, value: FhirNode, path: strin
       { node: item, edit: "address" },
     );
   });
+}
+
+/** The code system a FHIR `Coding.system` URI names, as the shared age and birth-date code sets know it. */
+function fhirCodeSystem(system: string): ObservationCodeSystem {
+  if (system === "") return "unstated";
+  if (system === "http://loinc.org") return "loinc";
+  if (system === "http://snomed.info/sct") return "snomed";
+  return "other";
+}
+
+/** What a complex's own `code` says its value is: an age, a date of birth, or neither. */
+type CodedAs = "age" | "birth-date" | undefined;
+
+/**
+ * Read a complex's `code` (a `CodeableConcept`) and say whether any of its codings names an age or a
+ * date of birth. This is how an `Observation`, or one of its `component`s, says what its `value[x]`
+ * holds: an age-coded `valueQuantity` is an age, a birth-date-coded `valueDateTime` a date of birth.
+ */
+function codedAs(complex: FhirComplex): CodedAs {
+  for (const { system, code } of codings(getProperty(complex, "code"))) {
+    const named = fhirCodeSystem(system);
+    if (isAgeCode(named, code)) return "age";
+    if (isBirthDateCode(named, code)) return "birth-date";
+  }
+  return undefined;
+}
+
+/** A primitive's string value, or `""` when the property is absent or is not a primitive. */
+function primitiveProperty(complex: FhirComplex, name: string): string {
+  const node = getProperty(complex, name);
+  return node !== undefined && isPrimitive(node) ? primitiveString(node) : "";
+}
+
+/**
+ * Emit the age locus of a `Quantity` that holds an age: its `value`, with the unit read from the UCUM
+ * `code` (or the human `unit` when there is no code). Returns `true` when it emitted one. A quantity
+ * with no `value` has no age to act on, and one whose `value` is not a primitive is blocked whole.
+ *
+ * The quantity's other properties are left to the ordinary walk by the caller, so an extension inside
+ * it is still blocked and its unit, system and code are still measured.
+ */
+function emitAge(out: FhirLocusAccumulator, quantity: FhirComplex, path: string): void {
+  const valueNode = getProperty(quantity, "value");
+  if (valueNode === undefined) return;
+  const valuePath = join(path, "value");
+  if (!isPrimitive(valueNode)) {
+    blockNode(out, valueNode, valuePath);
+    return;
+  }
+  const code = primitiveProperty(quantity, "code");
+  push(
+    out,
+    {
+      path: valuePath,
+      kind: "age",
+      category: FHIR_DATE_CATEGORY,
+      ageUnit: code !== "" ? code : primitiveProperty(quantity, "unit"),
+      value: primitiveString(valueNode),
+    },
+    { node: valueNode, edit: "age" },
+  );
 }
 
 /** Handle a mapped person demographic element (redact whole, or generalize an address). */
@@ -612,6 +686,122 @@ function sweepPersonalDatatypes(
   return true;
 }
 
+/** The bounds of a `Range`, each a `Quantity`. */
+const RANGE_BOUNDS: readonly string[] = ["low", "high"];
+/** The properties of a range the age rule decides itself, so the walk of the rest skips them. */
+const RANGE_BOUNDS_DECIDED: ReadonlySet<string> = new Set(RANGE_BOUNDS);
+/** The property of an age quantity the age rule decides itself. */
+const AGE_DECIDED: ReadonlySet<string> = new Set(["value"]);
+/** No property decided ahead of the walk. */
+const NONE_DECIDED: ReadonlySet<string> = new Set();
+
+/** What the complex a property sits in says about the property, read once per complex. */
+interface ParentFacts {
+  /** The complex is a `Coding`, so its `display` is a coded term rather than a person label. */
+  readonly parentIsCoding: boolean;
+  /** What the complex's own `code` says its `value[x]` holds. */
+  readonly codedAs: CodedAs;
+  /** The complex is a `Location` that may be a patient's residence (see `locationMayBeResidence`). */
+  readonly residence: boolean;
+}
+
+/**
+ * The rules for an **age held as a number**, a **date of birth no name rule reaches**, and the
+ * **position of a residence**. Returns `true` when one of them took the property.
+ *
+ * - An element R4 types as an `Age` (`Condition.onsetAge`, `FamilyMemberHistory.ageAge`, ...) and an
+ *   age-coded `valueQuantity`: the quantity's `value` becomes an age locus, and the rest of the
+ *   quantity is walked as before.
+ * - An `Age` range (`FamilyMemberHistory.ageRange`, `Condition.onsetRange`, ...) and an age-coded
+ *   `valueRange`: each bound alike. An age-coded `valueInteger` is an age in years.
+ * - `FamilyMemberHistory.bornPeriod`: each bound is a date of birth. `bornString`: a date of birth
+ *   written as text, generalized to its leading year when it has one and blocked when it has none.
+ * - `Location.position` on a Location that may be a residence: removed whole, as geography finer than
+ *   a State. The value handed to the engine is empty, so no transform can keep any of it.
+ */
+function handleAgesAndBirthDates(
+  out: FhirLocusAccumulator,
+  name: string,
+  value: FhirNode,
+  path: string,
+  personCtx: boolean,
+  parent: ParentFacts,
+  elementPath: string,
+): boolean {
+  // The age's own `value` is decided here, so the walk of the rest of the quantity skips it.
+  const walkAge = (quantity: FhirComplex, at: string): void => {
+    emitAge(out, quantity, at);
+    walkComplex(out, quantity, at, personCtx, elementPath, AGE_DECIDED);
+  };
+  if (
+    isComplex(value) &&
+    (FHIR_AGE_ELEMENTS.has(name) || (name === "valueQuantity" && parent.codedAs === "age"))
+  ) {
+    walkAge(value, path);
+    return true;
+  }
+  if (name === "valueInteger" && parent.codedAs === "age" && isPrimitive(value)) {
+    // An age-coded integer result: a whole number of years, with no unit to read.
+    push(
+      out,
+      {
+        path,
+        kind: "age",
+        category: FHIR_DATE_CATEGORY,
+        ageUnit: "",
+        value: primitiveString(value),
+      },
+      { node: value, edit: "age" },
+    );
+    return true;
+  }
+  if (
+    isComplex(value) &&
+    (FHIR_AGE_RANGE_ELEMENTS.has(name) || (name === "valueRange" && parent.codedAs === "age"))
+  ) {
+    for (const bound of RANGE_BOUNDS) {
+      const quantity = getProperty(value, bound);
+      if (quantity !== undefined && isComplex(quantity)) walkAge(quantity, join(path, bound));
+    }
+    walkComplex(out, value, path, personCtx, elementPath, RANGE_BOUNDS_DECIDED);
+    return true;
+  }
+  if (isComplex(value) && name === "bornPeriod") {
+    const decided = new Set<string>();
+    for (const bound of ["start", "end"]) {
+      const date = getProperty(value, bound);
+      if (date !== undefined && isPrimitive(date) && dateEmit(out, date, join(path, bound), true)) {
+        decided.add(bound);
+      }
+    }
+    walkComplex(out, value, path, personCtx, elementPath, decided);
+    return true;
+  }
+  if (name === "bornString" && isStringPrimitive(value)) {
+    push(
+      out,
+      {
+        path,
+        kind: "date",
+        category: FHIR_DATE_CATEGORY,
+        dateOfBirth: true,
+        value: primitiveString(value),
+      },
+      { node: value, edit: "set-primitive" },
+    );
+    return true;
+  }
+  if (name === "position" && parent.residence) {
+    push(
+      out,
+      { path, kind: "zip", category: SAFE_HARBOR_CATEGORIES.GEOGRAPHIC, value: "" },
+      { node: value, edit: "drop" },
+    );
+    return true;
+  }
+  return false;
+}
+
 /**
  * Dispatch one property of a complex through the FHIR PHI rules.
  *
@@ -624,9 +814,10 @@ function handleProperty(
   path: string,
   personCtx: boolean,
   isPersonTop: boolean,
-  parentIsCoding: boolean,
+  parent: ParentFacts,
   elementPath: string,
 ): void {
+  const { parentIsCoding } = parent;
   if (name === "resourceType") {
     // Retained (structural), and NAMED: the walk reads it to derive the person/clinical role at every
     // resource boundary, so the discriminant is a position the pass examined rather than one it missed.
@@ -669,12 +860,17 @@ function handleProperty(
     handleDemographic(out, name, value, path);
     return;
   }
+  if (handleAgesAndBirthDates(out, name, value, path, personCtx, parent, elementPath)) return;
   // Outside a person resource the DATATYPE decides: a `HumanName` or an `Address` is acted on wherever
   // the graph put it, so coverage stops depending on whether a producer shaped the document the way
   // the person map expected.
   if (!personCtx && sweepPersonalDatatypes(out, name, value, path, elementPath)) return;
-  // A date-shaped primitive anywhere is a PHI date → generalized (fail closed on dates).
-  if (isPrimitive(value) && dateEmit(out, value, path, name === "birthDate")) return;
+  // A date-shaped primitive anywhere is a PHI date → generalized (fail closed on dates). A date of
+  // birth by name, or a value its own observation codes as one, is marked so an over-89 year goes.
+  const dateOfBirth =
+    FHIR_BIRTH_DATE_ELEMENTS.has(name) ||
+    (name === "valueDateTime" && parent.codedAs === "birth-date");
+  if (isPrimitive(value) && dateEmit(out, value, path, dateOfBirth)) return;
   // Fail-closed person sweep: a bare unrecognized string at a person resource's top level is blocked.
   if (isPersonTop && isStringPrimitive(value) && !RECOGNIZED_PERSON_ELEMENTS.has(name)) {
     blockNode(out, value, path);
@@ -696,6 +892,8 @@ function handleProperty(
  *   list index (`CapabilityStatement.messaging.endpoint`). It starts again at every `resourceType`
  *   boundary, so a contained resource or a Bundle entry has its own. It is only ever compared with a
  *   fixed set and never reaches the manifest, which takes `path`.
+ * @param decided - Properties a rule already decided before the walk (an age quantity's `value`), so
+ *   the walk does not reach them a second time.
  */
 function walkComplex(
   out: FhirLocusAccumulator,
@@ -703,13 +901,19 @@ function walkComplex(
   path: string,
   personCtx: boolean,
   elementPath: string,
+  decided: ReadonlySet<string> = NONE_DECIDED,
 ): void {
   const rt = resourceType(complex);
   const ownPath = rt ?? elementPath;
   const ctx = rt !== undefined ? PERSON_RESOURCE_TYPES.has(rt) : personCtx;
   const isPersonTop = rt !== undefined && ctx; // fail-closed scalar block only at a person resource root
-  const parentIsCoding = isCodingComplex(complex);
+  const parent: ParentFacts = {
+    parentIsCoding: isCodingComplex(complex),
+    codedAs: codedAs(complex),
+    residence: rt === "Location" && locationMayBeResidence(complex),
+  };
   complex.properties.forEach((prop, i) => {
+    if (decided.has(prop.name)) return;
     // The rule dispatch reads the RAW name (a set lookup can never interpolate it); only the path
     // segment is bounded, because that is the one that reaches the manifest.
     handleProperty(
@@ -719,7 +923,7 @@ function walkComplex(
       join(path, elementSegment(prop.name, i)),
       ctx,
       isPersonTop,
-      parentIsCoding,
+      parent,
       `${ownPath}.${prop.name}`,
     );
   });
@@ -788,6 +992,7 @@ const EDIT_REACH: Readonly<Record<FhirEditKind, "replaces-node" | "rebuilds-addr
   drop: "replaces-node",
   "set-primitive": "replaces-node",
   address: "rebuilds-address",
+  age: "replaces-node",
 };
 
 /** What the enumeration carries down the tree: the pass's decisions, and whether a value was decided. */
