@@ -51,8 +51,8 @@ importers:
         specifier: ^0.1.11
         version: 0.1.11
       '@cosyte/test-utils':
-        specifier: ^0.1.4
-        version: 0.1.4(fast-check@4.10.2)
+        specifier: ^0.1.5
+        version: 0.1.5(fast-check@4.10.2)
       '@cosyte/tsconfig':
         specifier: ^0.1.2
         version: 0.1.2
@@ -464,8 +464,8 @@ packages:
     engines: {node: '>=22.14'}
     hasBin: true
 
-  '@cosyte/test-utils@0.1.4':
-    resolution: {integrity: sha512-HPn9orWg6PvUJNdRjyOWvnuzUQ2wB2Z5PZuec0263BdA2tToC71dSakbSv0+H5CVhF6FZqVVjoM71i3Q5hgByg==}
+  '@cosyte/test-utils@0.1.5':
+    resolution: {integrity: sha512-mRtD3vHthHYCsKKNwrtiJK+Y5BI02eItUay94NOGskl8CESJb2/Z07rtdxzX0rseisWpAt79xDowG/DnDKLc7w==}
     engines: {node: '>=22.0.0'}
     peerDependencies:
       fast-check: ^3.0.0 || ^4.0.0
@@ -3299,7 +3299,7 @@ snapshots:
 
   '@cosyte/script-utils@0.1.11': {}
 
-  '@cosyte/test-utils@0.1.4(fast-check@4.10.2)':
+  '@cosyte/test-utils@0.1.5(fast-check@4.10.2)':
     dependencies:
       fast-check: 4.10.2
 
