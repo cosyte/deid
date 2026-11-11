@@ -31,7 +31,7 @@
 
 import fc from "fast-check";
 
-import { type UnexaminedResidual } from "../../src/index.js";
+import { type UnexaminedResidual } from "../../src/residual.js";
 
 /** The run count: about 100 on a pull request, 10,000 in the nightly workflow. */
 export const LEAK_RUNS: number = readPositiveInt("DEID_LEAK_RUNS", 100);

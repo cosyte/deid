@@ -16,4 +16,4 @@ The property also finds values kept on purpose because they have the shape their
 
 What a caller sees: HL7 v2 output bytes change only for an identifier or a date that carried those extra components (the output bytes of our committed fixtures are unchanged); the HL7 v2 residual inventory gains the assigning authority positions; a FHIR person resource loses an `implicitRules`, a `language` that is not a language tag, and any string at a structure position; a FHIR transaction entry loses its conditional headers. Nothing in the public API changes.
 
-FHIR resource id replacement, also in this release, has no opt-out: no option keeps resource ids. It costs about 7 percent on a single Patient: FHIR R4 text in and text out for one Patient of about 1 KiB went from 40.31 to 43.31 microseconds on the GitHub runner.
+FHIR resource id replacement, released in 0.2.7, has no opt-out: no option keeps resource ids. It costs about 7 percent on a single Patient: FHIR R4 text in and text out for one Patient of about 1 KiB went from 40.31 to 43.31 microseconds on the GitHub runner.
