@@ -312,6 +312,16 @@ identifying information: a clinical resource is passed through and its values ar
 unexamined. A contained resource is never labeled, because R4 forbids security labels on one; what
 changed inside it counts for the resource that contains it.
 
+**What it leaves as it was.** Three things in the output do not change with the option:
+
+- A Reference or a list item the pass emptied is written as an empty object (`{}`). Without the
+  option that is so everywhere; with it, the Data Absent Reason replaces it only where R4 requires
+  the element and nothing else is left there, so an optional Reference, or one item of a list that
+  keeps other items, is still `{}`.
+- An extension whose value the pass blocked keeps its `url` and nothing else.
+- Security labels already on the input, such as Data Segmentation for Privacy labels, pass through
+  unchanged: the pass neither reads nor enforces them, and `REDACTED` is added after them.
+
 The option is off by default, so a call without it returns exactly what it returned before.
 `FHIR_TRANSFORMED_SECURITY_LABEL` and `FHIR_DATA_ABSENT_REASON` export the two codes for a caller
 that reads them back.

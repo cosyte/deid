@@ -569,6 +569,28 @@ describe("the Data Absent Reason", () => {
     });
   });
 
+  it("removes an optional list once every item is dropped, rather than keep it empty", () => {
+    const a = complex([{ name: "family", value: primitive("ZZFAMILYA") }]);
+    const b = complex([{ name: "family", value: primitive("ZZFAMILYB") }]);
+    const resource = complex([
+      { name: "resourceType", value: primitive("Patient") },
+      { name: "name", value: list([a, b]) },
+      { name: "gender", value: primitive("unknown") },
+    ]);
+    const out = applyFhir(
+      resource,
+      [removed("a"), removed("b")],
+      [
+        { node: a, edit: "drop" },
+        { node: b, edit: "drop" },
+      ],
+      { transformLabels: true },
+    );
+    // Read the model, not the JSON: an empty list and no list serialize alike.
+    expect(getProperty(out, "name")).toBeUndefined();
+    expect(out.properties.map((p) => p.name)).toEqual(["resourceType", "meta", "gender"]);
+  });
+
   it("writes a complex absent item for a list that is not all primitives", () => {
     const target = list([primitive("zz"), complex([{ name: "display", value: primitive("ZZ") }])]);
     const resource = complex([
