@@ -715,8 +715,9 @@ function ncpdpCase(): CorpusCase {
       "ZZPATEMAIL",
       "ZZPRESCRIBERNAME",
     ],
-    // Distinctive survivors only: the NDC, payer, and pharmacy IDs (bare 441/1985 could recur).
-    survivors: ["00071015527", "PAYERID99", "PHARM123"],
+    // Distinctive survivors only: the NDC and pharmacy IDs (bare 441/1985 could recur). The fixture's
+    // other payer id is letters and digits, which the pass no longer keeps (only five or six digits).
+    survivors: ["00071015527", "PHARM123"],
   };
 }
 

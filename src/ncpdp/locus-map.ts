@@ -96,7 +96,7 @@ const PRESCRIBER_03: Readonly<Record<string, TelecomFieldRule>> = {
  * The **Coordination of Benefits / Other Payments segment (`05`)** field map. The other-payer
  * cardholder id and group id are the *patient's* identifiers at another payer (PHI); the other-payer
  * date is a date of the individual's coverage. The other-payer id itself (`340-7C`) is a payer
- * identifier, not the patient's, and is retained.
+ * identifier, not the patient's, and is retained when it has the form of one (five or six digits).
  */
 const COB_05: Readonly<Record<string, TelecomFieldRule>> = {
   NU: { mode: "id", category: C.HEALTH_PLAN_BENEFICIARY }, // 356-NU Other Payer Cardholder ID
@@ -177,13 +177,14 @@ export const TELECOM_SEGMENT_RETAIN_FIELDS: Readonly<Record<string, ReadonlySet<
       "4C", // Coordination Of Benefits / Other Payments Count
       "5C", // Other Payer Coverage Type
       "6C", // Other Payer ID Qualifier
-      "7C", // Other Payer ID (a payer identifier, not the patient's)
+      "7C", // Other Payer ID (a payer identifier, not the patient's), kept only as five or six digits
       "HC", // Other Payer Amount Paid Qualifier
       "DV", // Other Payer Amount Paid (monetary)
       "6E", // Other Payer-Patient Responsibility Amount Qualifier
       "7E", // Other Payer-Patient Responsibility Amount (monetary)
       "NT", // Other Payer ID Count
-      "MH", // Other Payer Processor Control Number (plan routing, not the patient)
+      // Not "MH", the Other Payer Processor Control Number: up to ten letters or digits with no format
+      // that tells a plan's routing code from a short name, so it is removed with the unlisted fields.
     ]),
   });
 

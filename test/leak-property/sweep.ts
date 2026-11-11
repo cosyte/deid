@@ -26,7 +26,8 @@
  * seed before it runs, and fast-check prints the seed and the path of a failing case, so any failure
  * is reproducible from the log alone.
  *
- * Every sentinel is a synthetic token (`ZQLK` and capitals); nothing here is or resembles real data.
+ * Every sentinel is a synthetic token (`ZQLK`, `ZQV` or `Zqv` and generated letters); nothing here is real
+ * data.
  */
 
 import fc from "fast-check";
@@ -91,8 +92,10 @@ export interface PassOutcome {
   /** `true` when the pass refused the document with a documented fatal: nothing was released. */
   readonly refused: boolean;
   /**
-   * For a pin that rests on a decision the manifest records (an X12 party its role keeps): whether
-   * that decision was taken for the structure holding the sentinel. Absent means never.
+   * For a pin: whether the adapter's keep of the structure holding the sentinel is one the pin names,
+   * read from the parsed input, the output or the manifest (an X12 party the manifest records as kept
+   * by its role, a C-CDA code kept in the shape of a code), never from where the generator meant to
+   * put it. Absent means never.
    */
   readonly decidedKeep?: (sentinel: string) => boolean;
 }
@@ -104,7 +107,10 @@ export interface PassOutcome {
  * the count; it never counts one as removed.
  */
 export interface Pin {
-  /** Whether a placement is at a pinned position, read from where the generator put it. */
+  /**
+   * Whether a placement is kept in a pinned shape, read from where the parsed input holds it and what
+   * the pass did there (`PassOutcome.decidedKeep`), never from where the generator meant to put it.
+   */
   readonly applies: (placement: Placement, outcome: PassOutcome) => boolean;
 }
 
@@ -200,16 +206,47 @@ export function describeRun(name: string, seed: number, tally: LeakTally): strin
 }
 
 /**
- * A sentinel token: `ZQLK`, four generated capitals, then a two-digit index and `X`. Capitals only,
- * so it needs no escape in any format and cannot read as a date, a number or a code.
+ * The stem of a case's sentinels, in one of four forms, each chosen as often as the others:
+ *
+ * - `ZQLK` and four generated capitals: the sentinel adds a two-digit index and `X`
+ *   (`ZQLKABCD00X`, 11 characters with digits), which cannot read as a date, a number or a code;
+ * - `ZQV` and two generated capitals: the sentinel adds one capital for its index (`ZQVABA`), six
+ *   capitals, the shape of a short code or a payer id;
+ * - `Zqv` and two generated small letters: the sentinel adds one small letter (`Zqvaba`), the shape of
+ *   a short name such as `Smith`;
+ * - `Zqv-` and a capital and a small letter: the sentinel adds one small letter (`Zqv-Aba`), the shape
+ *   of a hyphenated name such as `Mary-Ann`.
+ *
+ * The short forms exist because a value kept on its shape is found only by a value of that shape: a
+ * check that keeps any short run of letters never meets an 11-character sentinel with digits in it.
+ * Every form is letters (and one hyphen) only, so it needs no escape in any format. No short sentinel
+ * is part of a long one (six letters in a row never fit the long form's four generated ones), and the
+ * sentinels of one case all have the same length, so none is part of another.
  */
 export const sentinelStem: fc.Arbitrary<string> = fc
-  .stringMatching(/^[A-Z]{4}$/)
-  .map((s) => `ZQLK${s}`);
+  .tuple(fc.constantFrom("long", "upper", "title", "hyphen"), fc.stringMatching(/^[A-Z]{4}$/))
+  .map(([form, s]) => {
+    if (form === "upper") return `ZQV${s.slice(0, 2)}`;
+    if (form === "title") return `Zqv${s.slice(0, 2).toLowerCase()}`;
+    if (form === "hyphen") return `Zqv-${s.charAt(0)}${s.charAt(1).toLowerCase()}`;
+    return `ZQLK${s}`;
+  });
 
-/** The `index`-th sentinel of a case from its stem. */
+/**
+ * The stem itself, or, when it holds a character the document reserves (a generated delimiter that
+ * happens to be a hyphen), the same stem with that character dropped: still a short run of letters,
+ * now one the writer need not escape.
+ */
+export function stemAvoiding(stem: string, reserved: string): string {
+  return [...stem].filter((c) => !reserved.includes(c)).join("");
+}
+
+/** The `index`-th sentinel of a case from its stem (see {@link sentinelStem} for the forms). */
 export function sentinelAt(stem: string, index: number): string {
-  return `${stem}${String(index).padStart(2, "0")}X`;
+  if (stem.startsWith("ZQLK")) return `${stem}${String(index).padStart(2, "0")}X`;
+  if (index < 0 || index > 25) throw new Error("a short sentinel takes an index from 0 to 25");
+  const letter = String.fromCharCode(65 + index);
+  return stem.startsWith("ZQV") ? `${stem}${letter}` : `${stem}${letter.toLowerCase()}`;
 }
 
 /**

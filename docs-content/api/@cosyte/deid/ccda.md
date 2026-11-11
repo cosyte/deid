@@ -161,7 +161,9 @@ How the extractor turns a mapped C-CDA element into a locus and how the applier 
   intervals are **not** dates and are excluded (they live in the clinical body, never swept).
 - `id`: an `<id root= extension=>` at a person role (MRN / SSN / member / account). Pseudonymized:
   only the id value component is replaced (assigning-authority root retained), with an SSN-rooted id
-  routed to the SSN category (redacted): the structural, parser-typed knife-edge.
+  routed to the SSN category (redacted): the structural, parser-typed knife-edge. An `<id>` with no
+  extension, or an empty one, is identified by its root alone, so the root is replaced, by the same
+  value wherever it appears in the document.
 
 ## Variables
 
@@ -187,7 +189,8 @@ normal walk (blocked / redacted), never passed through because their parent was 
 The **document-envelope** elements: direct children of `ClinicalDocument` that carry no direct
 patient/relative Safe Harbor identifier and are retained untouched, exactly as HL7 v2's MSH envelope
 is. The document `effectiveTime` is handled separately (it is a service-related
-date → generalized); everything here is passed through.
+date → generalized), and so are the document's own `id` and `setId` when they carry no extension
+(their root is then the identifier, and it is replaced); everything else here is passed through.
 
 #### Example
 

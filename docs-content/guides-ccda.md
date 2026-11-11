@@ -81,7 +81,7 @@ pass reads only narrative, every `<birthTime>` and the value of an age observati
 
 | Participation | Loci | Transform |
 |---|---|---|
-| **recordTarget / patientRole** (+ nested `guardian`) | `id` (MRN / SSN), `addr`, `telecom`, `patient/name`, `birthTime` | name/telecom **removed**; `id` **removed** under Safe Harbor, assigning root retained (a consistent keyed surrogate only under a preset that does not claim the label); `birthTime` → **year** (removed, with `nullFlavor="MSK"`, when the year shows an age over 89); `addr` → safe **3-digit ZIP** (or `000`), finer geography dropped |
+| **recordTarget / patientRole** (+ nested `guardian`) | `id` (MRN / SSN), `addr`, `telecom`, `patient/name`, `birthTime` | name/telecom **removed**; `id` extension **removed** under Safe Harbor, assigning root retained (a consistent keyed surrogate only under a preset that does not claim the label); an `id` with no extension has its root **replaced** (see below); `birthTime` → **year** (removed, with `nullFlavor="MSK"`, when the year shows an age over 89); `addr` → safe **3-digit ZIP** (or `000`), finer geography dropped |
 | **author / dataEnterer / informant / authenticator / legalAuthenticator / participant / custodian** | person `name`, `id`, `addr`, `telecom`, participation `time` | same category transforms: Safe Harbor removes identifiers of **relatives, employers, and household members**, not only the patient |
 | **componentOf / documentationOf** | encounter / service-event `id`, `effectiveTime` | ids acted on under the configured transform; dates → **year** |
 | **section `<text>` narrative, `nonXMLBody`** | every narrative block | **fail closed**: blocked, never regex-scrubbed |
@@ -95,6 +95,17 @@ An `id`'s Safe Harbor category is read from its assigning-authority `root` OID: 
 medical record number category, so the parser's typing, not a guess, decides which transform the
 configured policy applies to each. A dosing-period `effectiveTime` (`PIVL_TS` / `EIVL_TS`) is a
 duration, not a calendar date, and is never generalized.
+
+An `<id>` with **no extension**, or an empty one, is identified by its `root` alone, so the root is
+the identifier and is **replaced**, never kept: in every header participation and in the document's
+own `<id>` and `<setId>`. Under the Safe Harbor default the replacement is a stand-in in the root's
+shape (an OID under `2.25`, a UUID, or a plain token) counted from 1 in the order the distinct roots
+are met in one call, recorded as `DEID_IDENTIFIER_SUBSTITUTED`; under a keyed preset it is the keyed
+surrogate. The same root gets the same replacement throughout the document, so a `setId` that repeats
+the `id`, an author named in two participations, and a clinical body `<id>` carrying a root the header
+replaced all still match. Any other body `<id>` is a clinical record's own id and is kept and counted
+as an unexamined residual; so are the document `<id>` and `<setId>` when they have an extension. A
+document de-identified in two calls gets two unrelated stand-ins for the same root.
 
 ## How to read a C-CDA locus path
 

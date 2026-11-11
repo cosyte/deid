@@ -22,7 +22,7 @@
 import { attr, childElements, children, text, xsiType } from "@cosyte/ccda";
 
 import { isAgeCode, type ObservationCodeSystem } from "../age-codes.js";
-import { SAFE_HARBOR_CATEGORIES } from "../categories.js";
+import { SAFE_HARBOR_CATEGORIES, type SafeHarborCategory } from "../categories.js";
 import { WITHHELD_LOCUS_TOKEN, isWithheldToken, safeLocusToken } from "../derived-token.js";
 import type { GenericLocus } from "../locus.js";
 import {
@@ -129,6 +129,12 @@ interface CcdaLocusAccumulator {
   readonly coords: CcdaCoord[];
   /** What each rule named, recorded at the decision site, keyed by the element the decision was about. */
   readonly named: Map<Element, NamedPositions>;
+  /**
+   * Every `<id>` root the pass replaced because the `<id>` had no extension (the root alone is the
+   * identifier), with the category it was replaced under. The body reads it, so an `<id>` there that
+   * carries the same root gets the same replacement and the link between the two still holds.
+   */
+  readonly replacedRoots: Map<string, SafeHarborCategory>;
 }
 
 /**
@@ -380,19 +386,71 @@ function actAddr(out: CcdaLocusAccumulator, el: Element, path: string): void {
   );
 }
 
-/** Extract a person-role `<id>` locus: pseudonymized (SSN-rooted → redacted); assigning root retained. */
+/** `true` when an `<id>` carries no extension, or an empty one: its root alone is the identifier. */
+function isExtensionless(el: Element): boolean {
+  return (attr(el, "extension") ?? "").length === 0;
+}
+
+/**
+ * Replace the root of an extension-less `<id>`: in CDA's `II` datatype a root with no extension is
+ * itself the unique identifier. It is marked as a referenced identifier, so the engine writes a
+ * replacement rather than removing it (an `<id>` with neither part would no longer say what it
+ * identifies), and the same root gets the same replacement throughout the document, so two places
+ * that name the same thing still name the same thing. The first category a root is replaced under is
+ * the one every later occurrence of it takes, so a keyed policy writes one surrogate for it too.
+ */
+function replaceRoot(
+  out: CcdaLocusAccumulator,
+  el: Element,
+  path: string,
+  root: string,
+  category: SafeHarborCategory,
+): void {
+  const settled = out.replacedRoots.get(root) ?? category;
+  out.replacedRoots.set(root, settled);
+  push(
+    out,
+    { path, kind: "identifier", category: settled, referencedId: true, value: root },
+    { node: el, edit: "id" },
+  );
+}
+
+/**
+ * Extract a person-role `<id>` locus. With an extension, the extension is the identifier and is
+ * transformed (an SSN-rooted id is redacted), and the root, the assigning authority, is kept. With no
+ * extension, or an empty one, the root is the identifier and is replaced ({@link replaceRoot}).
+ */
 function actId(out: CcdaLocusAccumulator, el: Element, path: string): void {
   // The id rule reads the assigning authority and the id value, and the applier rewrites one of them.
   nameAttributes(out, el, ["root", "extension"]);
   const root = attr(el, "root");
-  const ext = attr(el, "extension");
-  const value = ext !== undefined ? ext : (root ?? "");
-  if (value.length === 0) return; // nullFlavor-only id, nothing to transform
+  if (isExtensionless(el)) {
+    if (root === undefined || root.length === 0) return; // nullFlavor-only id, nothing to transform
+    replaceRoot(out, el, path, root, categoryForIdRoot(root));
+    return;
+  }
   push(
     out,
-    { path, kind: "identifier", category: categoryForIdRoot(root), value },
+    {
+      path,
+      kind: "identifier",
+      category: categoryForIdRoot(root),
+      value: attr(el, "extension") ?? "",
+    },
     { node: el, edit: "id" },
   );
+}
+
+/**
+ * The document's own `<id>` and `<setId>`: an extension-less one is replaced like a person-role one
+ * ({@link replaceRoot}), as an identifier of category (R), so a `setId` that repeats the `id` still
+ * repeats it. One with an extension is left as the envelope always was, and counted.
+ */
+function actEnvelopeId(out: CcdaLocusAccumulator, el: Element, path: string): void {
+  const root = attr(el, "root");
+  if (!isExtensionless(el) || root === undefined || root.length === 0) return;
+  nameAttributes(out, el, ["root", "extension"]);
+  replaceRoot(out, el, path, root, SAFE_HARBOR_CATEGORIES.OTHER_UNIQUE_ID);
 }
 
 /**
@@ -606,6 +664,17 @@ function blockNarrative(out: CcdaLocusAccumulator, el: Element, path: string): v
       );
       continue; // do not descend into a blocked narrative block
     }
+    if (child.namespaceURI === V3_NS && (child.localName ?? "") === "id") {
+      // An extension-less `<id>` naming a root the header replaced is the same identifier: it gets the
+      // same replacement, so the link holds and the root does not survive here. Any other `<id>` in the
+      // body is a clinical record id and is handed through and counted, as the body always was.
+      const root = attr(child, "root");
+      const category = root === undefined ? undefined : out.replacedRoots.get(root);
+      if (root !== undefined && category !== undefined && isExtensionless(child)) {
+        nameAttributes(out, child, ["root", "extension"]);
+        replaceRoot(out, child, childPath, root, category);
+      }
+    }
     if (child.namespaceURI === V3_NS && (child.localName ?? "") === "birthTime") {
       // A person's date of birth in the body: a relative's in a family history, the subject's of an
       // entry. The same rule as the header's, so a year that shows an age over 89 goes.
@@ -685,7 +754,11 @@ export function extractCcdaLoci(root: Element): CcdaExtraction {
     loci: [],
     coords: [],
     named: new Map<Element, NamedPositions>(),
+    replacedRoots: new Map<string, SafeHarborCategory>(),
   };
+  // The body is walked after the header, so every root the header replaces is known when the body
+  // meets the same root. CDA puts the body last anyway; this holds for a document that does not.
+  const bodies: { el: Element; path: string }[] = [];
   for (const { el, path } of childSegments(root)) {
     if (el.namespaceURI !== V3_NS) {
       blockUnknown(out, el, path);
@@ -697,17 +770,22 @@ export function extractCcdaLoci(root: Element): CcdaExtraction {
       actDate(out, el, path); // the document (service-related) date
       continue;
     }
+    if (ln === "id" || ln === "setId") {
+      actEnvelopeId(out, el, path); // the document's own identifier, replaced when it has no extension
+      continue;
+    }
     // Document envelope: the STRUCTURE is retained (like HL7's MSH), which names no position inside it,
     // so its own values are enumerated below rather than passing through in silence.
     if (CCDA_ENVELOPE_ELEMENTS.has(ln)) continue;
     if (ln === "component") {
-      handleBody(out, el, path);
+      bodies.push({ el, path });
       continue;
     }
     // Every header participation (and any unknown top-level element) → the fail-closed person sweep.
     blockUnknown(out, el, path);
     sweep(out, el, path);
   }
+  for (const { el, path } of bodies) handleBody(out, el, path);
 
   const residuals = new UnexaminedResidualBuilder();
   const rootName = safeLocusToken(root.localName ?? "", "xmlName");

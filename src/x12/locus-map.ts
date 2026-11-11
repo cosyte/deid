@@ -743,7 +743,7 @@ export const X12_RETAIN_SEGMENTS: ReadonlySet<string> = new Set<string>([
   // Eligibility / benefit (271)
   "EB", // Eligibility or Benefit Information (coded)
   "EQ", // Eligibility or Benefit Inquiry
-  "TRN", // Trace (reassociation trace, payer/provider control, not patient-derived)
+  "TRN", // Trace: its trace number (TRN-02) is replaced, the originating company ids decided by shape
   "AAA", // Request Validation
   "INS", // Insured Benefit (relationship / maintenance codes)
   "HD", // Health Coverage (coverage codes)

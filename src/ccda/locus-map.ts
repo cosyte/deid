@@ -53,7 +53,8 @@ export const CCDA_KEPT_ADDRESS_PARTS: ReadonlySet<string> = new Set<string>(["st
  * The **document-envelope** elements: direct children of `ClinicalDocument` that carry no direct
  * patient/relative Safe Harbor identifier and are retained untouched, exactly as HL7 v2's MSH envelope
  * is. The document `effectiveTime` is handled separately (it is a service-related
- * date → generalized); everything here is passed through.
+ * date → generalized), and so are the document's own `id` and `setId` when they carry no extension
+ * (their root is then the identifier, and it is replaced); everything else here is passed through.
  *
  * @example
  * ```ts
@@ -66,12 +67,12 @@ export const CCDA_ENVELOPE_ELEMENTS: ReadonlySet<string> = new Set<string>([
   "realmCode",
   "typeId",
   "templateId",
-  "id", // document instance id (envelope, like MSH-10), not the patient's id
+  "id", // document instance id: replaced when it has no extension (the root is then the id)
   "code",
   "title",
   "confidentialityCode",
   "languageCode",
-  "setId",
+  "setId", // document set id: replaced when it has no extension, like the document id
   "versionNumber",
 ]);
 
@@ -90,7 +91,9 @@ export const CCDA_ENVELOPE_ELEMENTS: ReadonlySet<string> = new Set<string>([
  *   `<birthTime>` is a date of birth: a year that shows an age over 89 is removed, not kept.
  * - `id`: an `<id root= extension=>` at a person role (MRN / SSN / member / account). Pseudonymized:
  *   only the id value component is replaced (assigning-authority root retained), with an SSN-rooted id
- *   routed to the SSN category (redacted): the structural, parser-typed knife-edge.
+ *   routed to the SSN category (redacted): the structural, parser-typed knife-edge. An `<id>` with no
+ *   extension, or an empty one, is identified by its root alone, so the root is replaced, by the same
+ *   value wherever it appears in the document.
  */
 export type CcdaElementMode = "name" | "telecom" | "addr" | "date" | "id";
 

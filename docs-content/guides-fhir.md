@@ -201,14 +201,20 @@ the identifier rule), and an empty one as `{}`.
 
 - A bare **string** at a person resource's top level is **blocked** unless it is a code the pass can
   check: a `gender` in the R4 `AdministrativeGender` value set (`male`, `female`, `other`, `unknown`)
-  or a `language` shaped as a language tag. A vendor `<Patient>`-level field, a string where R4 puts a
+  or a `language` that is a language tag in canonical form whose primary subtag is one of the 184
+  two-letter ISO 639-1 codes the library lists (`en`, `es-419`, `zh-Hant-TW`). A short name such as
+  `Smith` or `Mary-Ann` in `language`, a three-letter primary subtag, a variant, extension or
+  private-use part, and other casing (`EN-us`) are removed. A vendor `<Patient>`-level field, a string where R4 puts a
   structure (`link`, `contact`, `managingOrganization`), a gender outside the value set, and an
   `implicitRules` URI are all removed and recorded (an open-ended allow-list can never satisfy Safe
   Harbor's open-ended category (R)). A date there is decided by the date rule first.
 - The conditional headers of a **`Bundle.entry.request`** (`ifNoneExist`, `ifMatch`, `ifNoneMatch`)
   are **blocked** whatever they hold: a search string such as `identifier=system|value` or `_id=value`
   carries an identifier, and an entity tag carries a server's version id. The entry keeps its method
-  and its url (read as above), so a conditional create becomes an unconditional one.
+  and its url (read as above), so a conditional create becomes an unconditional one. **Loading the
+  output into a server can therefore create duplicates:** where the input asked the server to create
+  a resource only if none matched, the output creates one every time, and an update that carried
+  `ifMatch` loses the version check that guarded it.
 - A **`display` that is not on a `Coding`** is a Reference person-label and is **blocked**, including a
   display-only (`{ display }`) or type+display reference that names no `reference`/`identifier` target. A
   Coding is identified positively (a `code`/`system` sibling), so `Coding.display` (a coded term) is

@@ -42,7 +42,11 @@ output holds, not only that the pass did not throw.
   path that replay a failure.
 - **The generated leak property** runs about 100 cases per adapter in that suite, and 10,000 per
   adapter in a nightly workflow. Each run prints its seed first; `DEID_LEAK_RUNS` sets the case count
-  and `DEID_LEAK_SEED` replays a seed.
+  and `DEID_LEAK_SEED` replays a seed. Its values come in a long form (11 capitals and digits) and
+  three short letter-only forms shaped like a code, a surname and a hyphenated name, so a check that
+  keeps any short run of letters is found too. Each value's position is read back from the parsed
+  input, and each keep it pins is matched on the shape the input gives it, never on where the
+  generator meant to put it.
 - **The coverage gate** runs with the suite. A floor that is not met fails the pull request, and a
   floor only rises: a line no input can reach carries a comment naming why, never a lower number.
 - **The test-selection check, the examples and the smoke test** run as their own CI jobs on every

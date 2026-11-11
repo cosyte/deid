@@ -122,15 +122,21 @@ describe("every adapter emits the same transformed document, byte for byte", () 
   // THE FHIR DIGEST MOVED ONCE, DELIBERATELY. Every resource id, fullUrl and reference id is replaced
   // by a per-call stand-in, so the FHIR document changes at exactly those positions. The other five
   // adapters' digests are unmoved.
+  //
+  // THE C-CDA AND NCPDP DIGESTS MOVED ONCE, DELIBERATELY. The fixture's custodian organization `<id>`
+  // has no extension, so its root is the identifier: it was removed and is now replaced by a stand-in
+  // (`2.25.1`). The fixture's other payer id (`05/7C`, `PAYERID99`) is letters and digits, which the
+  // pass no longer keeps (only five or six digits), so it is removed and recorded; the NCPDP manifest
+  // below gains its row. The other four digests are unmoved.
   it("the six adapters' transformed documents are unchanged", () => {
     expect(transformedDocumentDigests()).toMatchInlineSnapshot(`
       {
-        "ccda": "152ba0fce5feff3fa707d6c25c868ee9",
+        "ccda": "504776ed802d5ff310349b136ef02b0c",
         "dicom": "2b394aad0215ba5dff5c19cf18c49802",
         "fhir": "9fc5255a8e8ac924da7090e2c56bcf0f",
         "hl7": "b0e71b72dd6f4078c43d1d7b767ef843",
         "hl7-encounter": "7aef4fa7fa7ed2ffd1ce4c05158e4773",
-        "ncpdp": "e8a8259ce46ed5764268f2c0a51dbfc5",
+        "ncpdp": "5bcb7ed60430babbbe494ecf729d36b6",
         "x12": "7afec841b7487faa5774697142fb8514",
       }
     `);
@@ -533,6 +539,7 @@ describe("the other five adapters produce the same manifests, in the same order"
         "04/CC",
         "04/CD",
         "04/2A",
+        "05/7C",
         "05/NU",
         "05/MJ",
         "05/E8",

@@ -302,7 +302,11 @@ Two things follow, and the second is the one that surprises people:
   [the FHIR guide](./guides-fhir.md#resource-ids-and-references)). A literal the pass cannot read,
   and an absolute reference to a server no `fullUrl` in the input names, is removed, and so is every
   conditional header of a `Bundle.entry.request` (`ifNoneExist`, `ifMatch`, `ifNoneMatch`), which can
-  carry an identifier in a search string or a version id in an entity tag. Four things are
+  carry an identifier in a search string or a version id in an entity tag. A transaction Bundle sent
+  to a server after the pass therefore creates its resources unconditionally: where the input asked
+  the server to create a resource only if none matched (`ifNoneExist`), the output asks it to create
+  one every time, so loading the output into a server that already holds the resources can create
+  duplicates. Four things are
   not covered. The **server base** of an absolute `fullUrl`, and of an absolute reference to that same
   server, is kept verbatim: it names the server, and a base that carries anything else carries it out.
   An **id written anywhere else** is passed through and counted as an unexamined position:
@@ -324,14 +328,46 @@ Our test suite carries a generated leak property for each of the six adapters: i
 synthetic values at generated positions and in generated shapes (a plain string where a structure is
 expected, an extra repetition or component, a value in a code or qualifier position, a nested
 structure) and checks that each one is removed, or is counted on `unexaminedResiduals` at its own
-position. The cases below are values it finds kept that are neither. Each is a value kept on purpose
-because it has the shape its position expects, so a value that has that shape is kept whatever it is.
-Each is pinned by a test that fails the day it stops being true.
+position, read back from where the parsed input holds it. The values come in four forms: an
+11-character run of capitals and digits, and three short ones of letters only, shaped like a short
+code (`ZQVABA`), a surname (`Zqvaba`) and a hyphenated name (`Zqv-Aba`), because a value kept on its
+shape is found only by a value of that shape. The cases below are values it finds kept that are
+neither removed nor counted. Each is a value kept on purpose because it has the shape its position
+expects, so a value that has that shape is kept whatever it is. Each is pinned by a test that reads the
+shape from the input and fails the day the keep stops being true.
+
+**Identifiers that survive, and why.** Every case below is an identifier, or can hold one, and leaves
+in the output as it arrived:
+
+- an HL7 v2 identifier's assigning authority (CX.4), counted;
+- an X12 originating company id and its supplemental code (`TRN-03`, `TRN-04`), a code-shaped
+  procedure code, a provider's or payer's own name and numbers, and the claim, authorization,
+  referral and classification numbers listed below, none of them counted;
+- a C-CDA header code and display name and the assigning-authority root of an `<id>` that has an
+  extension, not counted, and the document's own `id` and `setId` when they have an extension,
+  counted;
+- a C-CDA clinical body `<id>`, counted, unless its root is one the header replaced;
+- a FHIR person resource's `language` that is a two-letter code on the list, written in small letters
+  (`li`, `bo` and `ng` are languages, and as surnames written that way they are kept);
+- an NCPDP Telecom other payer id of five or six digits.
+
+Each is kept because removing it would remove a value the format needs that is not the individual's
+in a conforming document (an organization's id, a code, a clinical record's own id), and because the
+pass cannot tell such a value from an identifier that happens to have the same shape. A caller who
+needs any of them gone must remove it after the pass.
 
 - **HL7 v2:** none. An identifier's assigning authority (CX.4) is kept as it arrived, and it is
   counted as an unexamined residual at its own component.
-- **X12:** a trace number (`TRN-02` to `TRN-04`) is kept when it is printable text of the element's
-  length. A procedure code (`SV1-01`, `SV2-02`, `SV3-01`) is kept when it has the shape its qualifier
+- **X12:** a trace number (`TRN-02`) is assigned per transaction, so in an eligibility, claim status
+  or services review inquiry it is assigned per patient. It is **replaced**: under the Safe Harbor
+  default by a sequence number counted in the order the distinct trace numbers are met in one call,
+  the same one for the same trace number, so a trace a response echoes in the same interchange still
+  matches the request's. It is computed from nothing about the trace number and means nothing outside
+  the call, so a response de-identified in a separate call no longer matches its request. A `TRN` with
+  no trace type code (`TRN-01`) loses everything after it instead. The originating company id and its
+  supplemental code (`TRN-03`, `TRN-04`) are kept when each is one value of printable text of the
+  element's length; a value holding the component or the repetition separator is no single value and
+  is removed, here and at every position kept as a bounded run of printable text. A procedure code (`SV1-01`, `SV2-02`, `SV3-01`) is kept when it has the shape its qualifier
   gives it, which for a qualifier with no published code shape is 1 to 48 letters and digits. And a
   party whose role keeps it (a provider, a service location) keeps its name and identifier elements as
   they arrived, a repetition inside its identifier included.
@@ -347,15 +383,36 @@ Each is pinned by a test that fails the day it stops being true.
   number (a state license `0B`, a tax id `TJ`, an `EI`, a National Provider Identifier `HPI`, the
   provider numbers `1A` to `1D`, `1G`, `1J`, `G2`, `N5`, `N7`, `D3`, `EW`, `X4`, `LU`, and the payer,
   payee, submitter, receiver and claim office numbers `2U`, `PQ`, `EO`, `EV`, `FY`) is kept only when
-  the last `NM1` or `N1` before it in its section is a party whose role keeps it, such as a provider. A
-  section starts at the transaction set, at every `HL`, and at every member `INS` of an 834. After the
-  individual, a relative, an employer, an unknown party, or no party in its section, it is removed and
-  recorded. That over-removes a well-formed value the TR3 places before any party, such as the 835
-  receiver id (`REF*EV`) in the header.
+  the last `NM1` or `N1` before it in its section is a party whose role keeps it, such as a provider,
+  and that names itself (a name or an identifier). A section starts at the transaction set, at every
+  `HL`, at every `ENT` of an 820 (one entity's remittance detail), and at every member `INS` of an 834.
+  After the individual, a relative, an employer, an unknown party, a provider `NM1` that names
+  nothing, or no party in its section, it is removed and recorded. That over-removes a well-formed
+  value the TR3 places before any party, such as the 835 receiver id (`REF*EV`) in the header.
 - **C-CDA:** in the header, a coded element the allow-list recognizes (`administrativeGenderCode`,
   `maritalStatusCode` and the others) keeps its `@code` and its `@displayName` as they arrived, and a
-  person-role `<id>` keeps its `@root`.
-- **FHIR, NCPDP Telecom, DICOM:** none in the shapes the property generates.
+  person-role `<id>` that has an extension keeps its `@root`, the assigning authority. An `<id>` with
+  no extension, or an empty one, is identified by its root alone, so the root is **replaced**: in the
+  header, and in the document's own `id` and `setId`, by a stand-in in the root's shape (an OID under
+  `2.25`, a UUID, or a plain token), the same one for the same root throughout the document, so a
+  `setId` that repeats the `id`, or an author named in two places, still match. A clinical body
+  `<id>` with that same root gets the same stand-in; any other body `<id>` is a clinical record's own
+  id and is kept and counted, as the body always was. The document `id` and `setId` with an extension
+  are kept and counted too. Before this, a header `<id>` with no extension was removed, which cut its
+  links, and the document `id` and `setId` were kept and counted.
+- **FHIR:** a person resource's `language` is kept only as a language tag in canonical form whose
+  primary subtag is one of the 184 two-letter ISO 639-1 codes the library lists: the code in small
+  letters, then optionally a four-letter script (`Hant`) and a region (`US`, `419`). A short name such
+  as `Smith` or `Mary-Ann`, a tag with a three-letter primary subtag (`haw`), a variant, an extension
+  or a private-use part, and a tag in other casing (`EN-us`) are removed and recorded. A two-letter
+  surname that is a language code and is written in small letters is kept.
+- **NCPDP Telecom:** the other payer id (`340-7C`) is kept only as five or six digits, the form of a
+  BIN (six digits) or an NAIC company code (five). Up to ten letters, digits, spaces and hyphens would
+  keep a short name or a member id, so any other value is removed and recorded; that over-removes a
+  conforming other payer id in another form, such as a Health Industry Number. The other payer
+  processor control number (`MH`) has no format that tells a plan's routing code from a short name,
+  so it is removed and recorded whatever it holds.
+- **DICOM:** none in the shapes the property generates.
 
 The property generates the shapes listed above and no others, so a clean run says nothing about a
 shape it does not write.
