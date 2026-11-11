@@ -14,9 +14,16 @@ de-identifies DICOM installs it alongside `@cosyte/deid`; the core stays third-p
 reaches DICOM data **only** through `@cosyte/dicom`'s own `parseDicom` / `deidentify` / `serializeDicom`
 surface: it never touches a third-party substrate and never inspects bytes directly.
 
-**Fail closed.** The default `safe-harbor` policy applies the **full Basic Profile with no Retain/Clean
+**Fail closed.** With no option named, the run applies the **full Basic Profile with no Retain/Clean
 deviations**: every private tag is removed, every UID is consistently remapped, and no identifying metadata
 is retained. The output is **"Safe-Harbor-transformed per the configured policy"**, never "de-identified".
+
+**Three Annex E options a caller can name.** `annexEOptions` takes Clean Descriptors, Retain Patient
+Characteristics and Retain Device Identity ([DICOM\_ANNEX\_E\_OPTIONS](#dicom_annex_e_options)). Each is applied by the
+delegated pass, declared by its CID 7050 term, and every attribute a Retain option keeps is a `retained`
+row of the manifest. A sequence the pass cleans keeps its items, so this adapter removes it. Each option
+keeps something Safe Harbor removes, so a run under the reserved `safe-harbor` label that names one is
+refused; any option not offered is refused too, never ignored.
 
 **The declaration is machine-readable, not only prose.** Beside the De-identification Method text the
 delegated pass writes to `(0012,0063)`, this adapter writes the **CID 7050** coded terms for the profile
@@ -95,7 +102,7 @@ Every Annex E option this adapter can name, each declared **applied** or **withh
 
 > `readonly` **retained**: readonly `string`[]
 
-The Annex E Retain/Clean options that were active (always empty).
+The Annex E Retain/Clean options that were active (empty unless `annexEOptions` named one).
 
 ##### uidReferentialIntegrity
 
@@ -164,9 +171,9 @@ knobs that make **relationships survive** de-identification: a shared UID cache 
 The `context` (HMAC key) carried by the unified ["@cosyte/deid".DeidOptions](../deid.md#deidoptions) is **not used** here:
 PS3.15 Annex E dummying and content-derived UID remapping do not consume a keyed-transform key. It is
 accepted only for API uniformity with the other adapters. The `policy` selects the output **label** and
-guarantees the fail-closed posture; the DICOM de-identification itself is **always** the full Basic
-Application Level Confidentiality Profile (the delegated Annex E action map is authoritative, this
-adapter orchestrates, it does not reimplement).
+guarantees the fail-closed posture; the DICOM de-identification itself is the Basic Application Level
+Confidentiality Profile plus the Annex E options named in `annexEOptions`, none by default (the
+delegated Annex E action map is authoritative, this adapter orchestrates, it does not reimplement).
 
 #### Example
 
@@ -179,6 +186,44 @@ const opts: DicomDeidOptions = { uidMap };
 ```
 
 #### Properties
+
+##### annexEOptions?
+
+> `readonly` `optional` **annexEOptions?**: readonly [`DicomAnnexEOption`](#dicomannexeoption)[]
+
+The PS3.15 Annex E options to apply on top of the Basic Profile, from
+["@cosyte/deid/dicom".DICOM\_ANNEX\_E\_OPTIONS](#dicom_annex_e_options). None by default. Each applied option is written to
+`(0012,0064)` by its CID 7050 term and named in `(0012,0063)`, and every attribute a Retain option
+keeps is a `retained` manifest row.
+
+- `"CleanDescriptors"`: text descriptions and comments are emptied rather than removed, and every
+  sequence the option cleans (the diagnosis code sequences, Reason for Visit, Request Attributes,
+  Reason for Requested Procedure, Prescription Notes) is removed at the top level, because the
+  delegated pass keeps its items. A cleaned sequence nested inside a kept one is refused with
+  `DEID_FORMAT_UNSUPPORTED`. Refused under a policy named `safe-harbor`: the delegated pass keeps
+  coded list items, free-text Code Meaning included.
+- `"RetainPatientCharacteristics"`: age, sex, size, weight and the other characteristics of
+  Table E.1-1 are kept. Refused under a policy named `safe-harbor`: it keeps an age over 89.
+- `"RetainDeviceIdentity"`: device serial numbers, station names and device identifiers are kept,
+  and so are calibration, manufacture and installation dates, scheduled locations, station
+  location code sequences, the original Device UID and the Manufacturer's Device Class UID.
+  Refused under a policy named `safe-harbor`: it keeps device identifiers.
+
+Any other entry, or an option named twice, is refused with `DEID_POLICY_INVALID`, never ignored.
+
+###### Example
+
+```ts
+import { defineDeidPolicy } from "@cosyte/deid";
+import { deidentifyDicom } from "@cosyte/deid/dicom";
+
+const research = defineDeidPolicy({ name: "imaging-research" });
+const { retained } = deidentifyDicom(dataset, {
+  policy: research,
+  annexEOptions: ["RetainPatientCharacteristics"],
+});
+retained; // => ["RetainPatientCharacteristics"]
+```
 
 ##### policy?
 
@@ -271,8 +316,8 @@ Every Annex E option this adapter can name, each declared **applied** or **withh
 
 > `readonly` **retained**: readonly `string`[]
 
-The Annex E Retain/Clean options that were active. Always empty (the full Basic Profile applies
-with no deviations); surfaced so a reviewer can confirm nothing was retained.
+The Annex E Retain/Clean options that were active: exactly the options named in `annexEOptions`,
+in table order. Empty when none was named, so a reviewer can confirm nothing was retained.
 
 ##### uidReferentialIntegrity
 
@@ -394,6 +439,23 @@ The same fact in one PHI-free sentence, safe to log or to copy into a disclosure
 
 ## Type Aliases
 
+### DicomAnnexEOption
+
+> **DicomAnnexEOption** = `"CleanDescriptors"` \| `"RetainPatientCharacteristics"` \| `"RetainDeviceIdentity"`
+
+An Annex E option a caller can name in `DicomDeidOptions.annexEOptions`, by the delegated
+pass's own option name.
+
+#### Example
+
+```ts
+import type { DicomAnnexEOption } from "@cosyte/deid/dicom";
+
+const option: DicomAnnexEOption = "RetainPatientCharacteristics";
+```
+
+***
+
 ### DicomOptionStatus
 
 > **DicomOptionStatus** = `"applied"` \| `"withheld"`
@@ -503,6 +565,24 @@ CID_7050_VERSION; // => "20170914"
 
 ***
 
+### DICOM\_ANNEX\_E\_OPTIONS
+
+> `const` **DICOM\_ANNEX\_E\_OPTIONS**: readonly [`DicomAnnexEOption`](#dicomannexeoption)[]
+
+Every Annex E option this adapter offers, in CID 7050 order (`113105`, `113108`, `113109`). The
+declaration and the option list handed to the delegated pass follow this order whatever order the
+caller named them in.
+
+#### Example
+
+```ts
+import { DICOM_ANNEX_E_OPTIONS } from "@cosyte/deid/dicom";
+
+DICOM_ANNEX_E_OPTIONS; // => ["CleanDescriptors", "RetainPatientCharacteristics", "RetainDeviceIdentity"]
+```
+
+***
+
 ### INPUT\_METHOD\_CODE\_SEQUENCE\_DROPPED\_CODE
 
 > `const` **INPUT\_METHOD\_CODE\_SEQUENCE\_DROPPED\_CODE**: `"DICOM_INPUT_DEIDENTIFICATION_METHOD_CODES_DROPPED"` = `"DICOM_INPUT_DEIDENTIFICATION_METHOD_CODES_DROPPED"`
@@ -563,7 +643,8 @@ The parsed dataset (`parseDicom(bytes)`).
 
 [`DicomDeidOptions`](#dicomdeidoptions) = `{}`
 
-The policy and (for cross-file UID consistency) a shared `uidMap` / `uidRoot`.
+The policy, the Annex E options to apply (none by default), and (for cross-file UID
+  consistency) a shared `uidMap` / `uidRoot`.
 
 #### Returns
 
@@ -571,6 +652,18 @@ The policy and (for cross-file UID consistency) a shared `uidMap` / `uidRoot`.
 
 The de-identified dataset, the value-free manifest, the coded declaration, the warnings, and
   the metadata-only stance.
+
+#### Throws
+
+DeidError `DEID_POLICY_INVALID` when `annexEOptions` names an option this adapter does
+  not offer, names one twice, or names any option under a policy named `safe-harbor`: each keeps
+  something Safe Harbor removes.
+
+#### Throws
+
+DeidError `DEID_FORMAT_UNSUPPORTED` when Clean Descriptors cleaned a sequence nested
+  inside a sequence the pass kept: its items would keep their text, and only a top-level sequence is
+  removed.
 
 #### Throws
 
@@ -627,13 +720,18 @@ Raw DICOM Part 10 bytes.
 
 [`DicomDeidOptions`](#dicomdeidoptions) = `{}`
 
-The policy and (for cross-file UID consistency) a shared `uidMap` / `uidRoot`.
+The policy, the Annex E options to apply (none by default), and (for cross-file UID
+  consistency) a shared `uidMap` / `uidRoot`.
 
 #### Returns
 
 [`DicomBufferDeidResult`](#dicombufferdeidresult)
 
 The de-identified Part 10 bytes and the value-free audit.
+
+#### Throws
+
+DeidError `DEID_POLICY_INVALID` as [deidentifyDicom](#deidentifydicom) does.
 
 #### Example
 

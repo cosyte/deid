@@ -10,6 +10,7 @@ import type { DeidManifestEntry } from "../manifest.js";
 import type { DeidPolicy } from "../policy.js";
 import type { UnexaminedResidual } from "../residual.js";
 
+import type { DicomAnnexEOption } from "./annex-e-options.js";
 import type { DicomCodedTerm, DicomOptionDeclaration } from "./method-codes.js";
 import type { DicomUidReferentialIntegrity } from "./uid-scope.js";
 
@@ -20,9 +21,9 @@ import type { DicomUidReferentialIntegrity } from "./uid-scope.js";
  * The `context` (HMAC key) carried by the unified {@link "@cosyte/deid".DeidOptions} is **not used** here:
  * PS3.15 Annex E dummying and content-derived UID remapping do not consume a keyed-transform key. It is
  * accepted only for API uniformity with the other adapters. The `policy` selects the output **label** and
- * guarantees the fail-closed posture; the DICOM de-identification itself is **always** the full Basic
- * Application Level Confidentiality Profile (the delegated Annex E action map is authoritative, this
- * adapter orchestrates, it does not reimplement).
+ * guarantees the fail-closed posture; the DICOM de-identification itself is the Basic Application Level
+ * Confidentiality Profile plus the Annex E options named in `annexEOptions`, none by default (the
+ * delegated Annex E action map is authoritative, this adapter orchestrates, it does not reimplement).
  *
  * @example
  * ```ts
@@ -45,6 +46,41 @@ export interface DicomDeidOptions {
   readonly uidMap?: Map<string, string>;
   /** Root for generated replacement UIDs (Annex E action `U`); undefined → `@cosyte/dicom` default. */
   readonly uidRoot?: string;
+  /**
+   * The PS3.15 Annex E options to apply on top of the Basic Profile, from
+   * {@link "@cosyte/deid/dicom".DICOM_ANNEX_E_OPTIONS}. None by default. Each applied option is written to
+   * `(0012,0064)` by its CID 7050 term and named in `(0012,0063)`, and every attribute a Retain option
+   * keeps is a `retained` manifest row.
+   *
+   * - `"CleanDescriptors"`: text descriptions and comments are emptied rather than removed, and every
+   *   sequence the option cleans (the diagnosis code sequences, Reason for Visit, Request Attributes,
+   *   Reason for Requested Procedure, Prescription Notes) is removed at the top level, because the
+   *   delegated pass keeps its items. A cleaned sequence nested inside a kept one is refused with
+   *   `DEID_FORMAT_UNSUPPORTED`. Refused under a policy named `safe-harbor`: the delegated pass keeps
+   *   coded list items, free-text Code Meaning included.
+   * - `"RetainPatientCharacteristics"`: age, sex, size, weight and the other characteristics of
+   *   Table E.1-1 are kept. Refused under a policy named `safe-harbor`: it keeps an age over 89.
+   * - `"RetainDeviceIdentity"`: device serial numbers, station names and device identifiers are kept,
+   *   and so are calibration, manufacture and installation dates, scheduled locations, station
+   *   location code sequences, the original Device UID and the Manufacturer's Device Class UID.
+   *   Refused under a policy named `safe-harbor`: it keeps device identifiers.
+   *
+   * Any other entry, or an option named twice, is refused with `DEID_POLICY_INVALID`, never ignored.
+   *
+   * @example
+   * ```ts
+   * import { defineDeidPolicy } from "@cosyte/deid";
+   * import { deidentifyDicom } from "@cosyte/deid/dicom";
+   *
+   * const research = defineDeidPolicy({ name: "imaging-research" });
+   * const { retained } = deidentifyDicom(dataset, {
+   *   policy: research,
+   *   annexEOptions: ["RetainPatientCharacteristics"],
+   * });
+   * retained; // => ["RetainPatientCharacteristics"]
+   * ```
+   */
+  readonly annexEOptions?: readonly DicomAnnexEOption[];
 }
 
 /**
@@ -108,8 +144,8 @@ export interface DicomDeidResult {
    */
   readonly burnedInAnnotationHazard: boolean;
   /**
-   * The Annex E Retain/Clean options that were active. Always empty (the full Basic Profile applies
-   * with no deviations); surfaced so a reviewer can confirm nothing was retained.
+   * The Annex E Retain/Clean options that were active: exactly the options named in `annexEOptions`,
+   * in table order. Empty when none was named, so a reviewer can confirm nothing was retained.
    */
   readonly retained: readonly string[];
   /**
@@ -152,7 +188,7 @@ export interface DicomBufferDeidResult {
   readonly metadataOnly: true;
   /** `true` when the image may carry burned-in PHI this metadata-only pass cannot remove. */
   readonly burnedInAnnotationHazard: boolean;
-  /** The Annex E Retain/Clean options that were active (always empty). */
+  /** The Annex E Retain/Clean options that were active (empty unless `annexEOptions` named one). */
   readonly retained: readonly string[];
   /**
    * The CID 7050 coded terms written to De-identification Method Code Sequence `(0012,0064)` in

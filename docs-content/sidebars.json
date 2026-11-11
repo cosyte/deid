@@ -31,7 +31,7 @@
     {
       "type": "category",
       "label": "Explanation",
-      "items": ["concepts-archetype", "limitations"]
+      "items": ["concepts-archetype", "limitations", "dicom-annex-e-options"]
     },
     {
       "type": "category",

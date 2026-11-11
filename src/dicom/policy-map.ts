@@ -4,18 +4,25 @@
  * DICOM is the one format `deid` **delegates rather than reimplements**: `@cosyte/dicom` already ships the
  * PS3.15 **Basic Application Level Confidentiality Profile** and the metadata-affecting Annex E Options.
  * This module resolves the unified {@link DeidOptions} into a `@cosyte/dicom` `DeidentifyOptions`, and it
- * does so **fail-closed**: the default `safe-harbor` policy always applies the **full Basic Profile with no
- * Retain/Clean deviations** (maximal removal), so every private tag is removed and every UID is consistently
- * remapped. There is no per-category auto-derivation, on purpose: the Annex E option model is coarser than
- * the 18-category Safe Harbor model, so auto-relaxing it from a policy would risk *under*-removal. A
- * deviation that retains identifying metadata is an Expert-Determination choice this adapter does not
- * offer: it cannot be talked into keeping PHI.
+ * does so **fail-closed**: with no option named, the run applies the **full Basic Profile with no
+ * Retain/Clean deviations** (maximal removal), so every private tag is removed and every UID is
+ * consistently remapped. There is no per-category auto-derivation, on purpose: the Annex E option model
+ * is coarser than the 18-category Safe Harbor model, so auto-relaxing it from a policy would risk
+ * *under*-removal. An option is applied only when the caller names it in `annexEOptions`, only from the
+ * closed set `./annex-e-options.ts` offers, and an option that keeps what Safe Harbor removes is refused
+ * under the reserved `safe-harbor` label.
  *
  * @packageDocumentation
  */
 
 import { resolvePolicy } from "../policy.js";
 
+import { resolveAnnexEOptions, type DicomAnnexEOption } from "./annex-e-options.js";
+import {
+  BASIC_PROFILE_CODE_VALUE,
+  resolveMethodDeclaration,
+  type MethodDeclaration,
+} from "./method-codes.js";
 import type { DicomDeidOptions } from "./types.js";
 
 /**
@@ -26,8 +33,16 @@ import type { DicomDeidOptions } from "./types.js";
  * @internal
  */
 export interface ResolvedDicomOptions {
-  /** Annex E Retain/Clean options to activate. Always empty (full Basic Profile). */
-  readonly retain: readonly never[];
+  /**
+   * Annex E Retain/Clean options to activate, in CID 7050 order. Empty unless the caller named one in
+   * `annexEOptions`; empty is the full Basic Profile.
+   */
+  readonly retain: readonly DicomAnnexEOption[];
+  /**
+   * The coded declaration of the run: the CID 7050 terms for `(0012,0064)`, the profile first and then
+   * each applied option in table order, and every option declared applied or withheld.
+   */
+  readonly declaration: MethodDeclaration;
   /** Root for generated replacement UIDs (Annex E action `U`); undefined → `@cosyte/dicom` default. */
   readonly uidRoot?: string;
   /** Caller-owned source→replacement UID cache for cross-file consistency. */
@@ -41,20 +56,28 @@ export interface ResolvedDicomOptions {
 
 /**
  * Resolve the unified de-id options into the concrete `@cosyte/dicom` de-identification options: the
- * full Basic Profile (no Retain/Clean options), consistent UID remapping, and a policy-named
- * De-identification Method string. The `context` (HMAC key) is intentionally unused: Annex E dummying and
+ * Basic Profile plus the Annex E options the caller named (none by default), consistent UID remapping,
+ * and a De-identification Method string naming the profile, each option and the policy. The `context` (HMAC key) is intentionally unused: Annex E dummying and
  * content-derived UID remapping do not consume the keyed-transform key; it is accepted only for API
  * uniformity with the other adapters.
  *
  * @param options - The unified de-id options (policy + optional UID cache/root).
  * @returns The fail-closed `@cosyte/dicom` de-identification options.
+ * @throws {@link DeidError} `DEID_POLICY_INVALID` for an option the adapter does not offer, or for one
+ *   that keeps what Safe Harbor removes under the reserved `safe-harbor` label.
  * @internal
  */
 export function resolveDicomOptions(options: DicomDeidOptions): ResolvedDicomOptions {
   const policy = resolvePolicy(options.policy);
+  const retain = resolveAnnexEOptions(options.annexEOptions, policy.name);
+  // Resolved here, before anything is delegated: a profile or option the vocabulary cannot name
+  // refuses the pass with no dataset and no bytes produced.
+  const declaration = resolveMethodDeclaration(BASIC_PROFILE_CODE_VALUE, retain);
+  const optionMeanings = declaration.appliedTerms.slice(1).map((term) => term.codeMeaning);
   const base: ResolvedDicomOptions = {
-    retain: [],
-    deidentificationMethod: deidentificationMethodText(policy.name),
+    retain,
+    declaration,
+    deidentificationMethod: deidentificationMethodText(policy.name, optionMeanings),
   };
   return {
     ...base,
@@ -106,18 +129,17 @@ function loCharacter(character: string): string {
  * The fixed Values of the method text: the library, the profile it applies, and that only metadata is
  * touched. Each is inside the `LO` maximum on its own.
  */
-const FIXED_METHOD_VALUES: readonly string[] = [
-  "Cosyte @cosyte/deid",
-  "PS3.15 Basic Application Level Confidentiality Profile",
-  "metadata only",
-];
+const METHOD_LIBRARY_VALUE = "Cosyte @cosyte/deid";
+const METHOD_PROFILE_VALUE = "PS3.15 Basic Application Level Confidentiality Profile";
+const METHOD_SCOPE_VALUE = "metadata only";
 
 /**
  * Compose the De-identification Method `(0012,0063)` text for a run under the named policy.
  *
  * PS3.6 gives `(0012,0063)` the VR `LO` with value multiplicity `1-n`, and PS3.5 Table 6.2-1 caps an
  * `LO` at 64 characters per Value, so the method is written as several Values rather than one long
- * one: the library, the profile, "metadata only", and `policy "<name>"`. PS3.15 E.1.1 asks for "a
+ * one: the library, the profile, the CID 7050 Code Meaning of each applied option, "metadata only",
+ * and `policy "<name>"`. PS3.15 E.1.1 asks for "a
  * text string describing the method used", and the Values together still say exactly that.
  *
  * The policy name is the caller's, so its Value is the only one that can be long or hold a character
@@ -127,15 +149,26 @@ const FIXED_METHOD_VALUES: readonly string[] = [
  * cut to fit and ends in `...` inside the quotes.
  *
  * @param policyName - The resolved policy's name.
+ * @param optionMeanings - The Code Meaning of each applied Annex E option, in table order. Each is a
+ *   CID 7050 Code Meaning, so each is at most 64 characters and holds only printable ASCII.
  * @returns The Values joined by `\`, each at most 64 characters.
  * @internal
  */
-export function deidentificationMethodText(policyName: string): string {
+export function deidentificationMethodText(
+  policyName: string,
+  optionMeanings: readonly string[],
+): string {
   const name = Array.from(policyName, loCharacter).join("");
   const whole = `policy "${name}"`;
   const policyValue =
     whole.length <= LO_VALUE_MAX_CHARS
       ? whole
       : `policy "${name.slice(0, LO_VALUE_MAX_CHARS - 'policy ""'.length - ELLIPSIS.length)}${ELLIPSIS}"`;
-  return [...FIXED_METHOD_VALUES, policyValue].join(VALUE_DELIMITER);
+  return [
+    METHOD_LIBRARY_VALUE,
+    METHOD_PROFILE_VALUE,
+    ...optionMeanings,
+    METHOD_SCOPE_VALUE,
+    policyValue,
+  ].join(VALUE_DELIMITER);
 }
