@@ -83,6 +83,11 @@ benchmark suite on `@cosyte/bench`, every input built in code by `bench/shapes.m
 at its top say how to take a reading, a profile and a base against head comparison. Take a full
 reading on a GitHub runner through the Bench workflow, not on a shared machine.
 
+`docs-content/performance.md` carries no measured number: its "Current numbers" section is filled at
+each release from the Bench run on the release commit (`scripts/performance-numbers.ts`, run by
+`pnpm pack:docs:release`), and `pnpm check:docs-content` fails on a number typed anywhere on the page
+but in a budget the script names.
+
 ## Data
 
 Synthetic data only. Every document this library handles carries a patient's identity: never put a
