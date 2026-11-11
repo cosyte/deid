@@ -88,7 +88,7 @@ of the residuals below.
 | **Every resource, by datatype**                                                                                        | any `HumanName`, any `Address`: `Organization.contact.name`, `Location.address`, `Organization.address`, a choice-type `locationAddress`            | name **removed**; address → the same safe **3-digit ZIP** (or `000`), finer geography dropped, that a person resource's address gets                                                                                                               |
 | **Every resource (the universal PHI vectors)**                                                                         | `identifier`, PHI-bearing dates, narrative `text.div`, `extension` / `modifierExtension` values, `Reference.display`                                | identifier **removed** under Safe Harbor, `system` retained (a consistent keyed surrogate by `system` only under a preset that does not claim the label); dates → **year**; narrative div / extension values / reference labels **blocked**        |
 | **Every resource's logical id**                                                                                        | the resource `id`; the id in a `Bundle.entry.fullUrl`, a `Reference.reference`, a `Bundle.entry.request.url` and a `Bundle.entry.response.location` | **replaced**, the same id by the same value throughout the call so every reference still resolves: a per-call stand-in under Safe Harbor, a keyed surrogate under a keyed policy (see [Resource ids and references](#resource-ids-and-references)) |
-| **Contained resources and `Bundle` entries**                                                                           | each nested resource                                                                                                                                | **walked**: the resource role is re-derived at every `resourceType`, so a contained `RelatedPerson` or a Bundled `Patient` is de-identified too                                                                                                    |
+| **Contained resources and `Bundle` entries**                                                                           | each nested resource                                                                                                                                | **walked**: the resource role is re-derived at every `resourceType`, so a contained `RelatedPerson` or a Bundled `Patient` is transformed too                                                                                                      |
 | **Clinical resources**: `Observation`, `Condition`, `Encounter`, …                                                     | codes, values, units, statuses, reference ranges, reference wiring                                                                                  | **retained untouched** (the over-scrub guard); the wiring keeps every link, with the ids in it replaced                                                                                                                                            |
 
 Positive classification is **closed**, and that is the over-scrub guard: an element is a `HumanName`
@@ -271,7 +271,7 @@ the identifier rule), and an empty one as `{}`.
   its `type` is one, its `physicalType` names nothing that removes it, and it has no `partOf` (see
   [the limitations page](./limitations.md#ages-over-89)). A physical type alone never keeps a position.
 
-## The two guarantees
+## What the leak and over-scrub tests check
 
 - **No leak.** Every seeded PHI sentinel across the person resources, the universal vectors, the nested
   `contact` relative, and a contained resource is gone from the serialized output. An unmapped element or
@@ -290,7 +290,7 @@ the identifier rule), and an empty one as `{}`.
   a base that carries anything else carries it out. An id written anywhere else is passed through and
   counted as an unexamined position: `meta.versionId`, `meta.source`, `Bundle.link.url` (a search
   link), an `Attachment.url`, any other uri, and an element's own `id`.
-- Under the Safe Harbor default the stand-ins are **per call**: the same resource de-identified in two
+- Under the Safe Harbor default the stand-ins are **per call**: the same resource transformed in two
   calls gets two unrelated ids, and a reference from one call's output does not resolve in another's.
   Linkage across documents needs a keyed policy, which does not claim Safe Harbor.
 - Free-text **prose** loci (`note`, `contentString`, uncoded `valueString`) fail closed by default; a

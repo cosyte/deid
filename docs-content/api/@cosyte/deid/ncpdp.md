@@ -60,7 +60,7 @@ const tx = parseTelecom(raw);
 const result: TelecomDeidResult = deidentifyTelecom(tx, {
   context: createDeidContext({ key: process.env.DEID_KEY! }),
 });
-result.telecom;  // de-identified NCPDP Telecom text
+result.telecom;  // transformed NCPDP Telecom text
 result.manifest; // value-free audit: category + locus, never a value
 ```
 
@@ -344,7 +344,7 @@ import { deidentify } from "@cosyte/deid";
 const tx = parseTelecom(raw);
 const { loci, coords } = extractTelecomLoci(tx);
 const { document } = deidentify({ loci }, { context });
-const clean = applyTelecom(tx, document.loci, coords); // de-identified Telecom text
+const clean = applyTelecom(tx, document.loci, coords); // transformed Telecom text
 ```
 
 ***

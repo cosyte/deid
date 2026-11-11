@@ -69,7 +69,7 @@ import { assertSingleTransaction } from "./multi-transaction-refusal.js";
  * const result: TelecomDeidResult = deidentifyTelecom(tx, {
  *   context: createDeidContext({ key: process.env.DEID_KEY! }),
  * });
- * result.telecom;  // de-identified NCPDP Telecom text
+ * result.telecom;  // transformed NCPDP Telecom text
  * result.manifest; // value-free audit: category + locus, never a value
  * ```
  */

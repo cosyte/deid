@@ -154,7 +154,7 @@ A date the pass reduces is written back alone: a component after it in the same 
 of precision, or anything else written there) is removed with the original date. A date position whose
 date is empty but which holds a value in a later component or subcomponent is blocked and recorded.
 
-## The two guarantees
+## What the leak and over-scrub tests check
 
 - **No leak.** Every seeded PHI sentinel across PID/NK1/GT1/IN1/IN2, the encounter dates and order
   identifiers, every other date inside a retained segment, the free-text loci, and Z-segments is gone
@@ -163,7 +163,7 @@ date is empty but which holds a value in a later component or subcomponent is bl
 - **No over-scrub.** Structured clinical OBX values, units, LOINC/coded observation identifiers,
   reference ranges, result statuses, times of day (`TM`), and every component of a composite that is not
   itself a date are retained byte-identical: the de-identifier never degenerates into a
-  blanket-blanking "safe but useless" scrubber. The narrowings of that guarantee are stated rather than
+  blanket-blanking "safe but useless" scrubber. The narrowings of that check are stated rather than
   implied, and there are two, both of them dates: an OBX-5 whose OBX-2 types it as a **date** is a date,
   and is acted on and recorded like any other, so a structured OBX value is retained byte-identical
   **except** for that date-typed subset; and the OBX segment's own date/time fields (OBX-12, OBX-14,
