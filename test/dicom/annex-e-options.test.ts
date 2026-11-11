@@ -65,13 +65,25 @@ function text(dataset: ReturnType<typeof parseDicom>, tag: string): string | und
   return raw !== undefined && raw.length > 0 ? raw : undefined;
 }
 
-/** Run once and return the result plus its serialized bytes as latin1, for byte-level leak checks. */
-function run(options: DicomDeidOptions): {
+/** One run's result plus its serialized bytes as latin1, for byte-level leak checks. */
+interface Run {
   readonly result: ReturnType<typeof deidentifyDicom>;
   readonly bytes: string;
-} {
-  const result = deidentifyDicom(optionDataset(), options);
-  return { result, bytes: serializeDicom(result.dataset).toString("latin1") };
+}
+
+/**
+ * A run made the first time a test asks for it, inside that test. Never at collection time: a run
+ * made in a `describe` body is outside every test, so a mutant it would reveal is charged to none.
+ */
+function run(options: DicomDeidOptions): () => Run {
+  let made: Run | undefined;
+  return () => {
+    if (made === undefined) {
+      const result = deidentifyDicom(optionDataset(), options);
+      made = { result, bytes: serializeDicom(result.dataset).toString("latin1") };
+    }
+    return made;
+  };
 }
 
 /** Capture what a call throws, so a test can assert on the typed refusal. */
@@ -99,18 +111,17 @@ describe("the offered set", () => {
 });
 
 describe("Retain Patient Characteristics (113108)", () => {
-  const { result, bytes } = run({
-    policy: RESEARCH,
-    annexEOptions: ["RetainPatientCharacteristics"],
-  });
+  const made = run({ policy: RESEARCH, annexEOptions: ["RetainPatientCharacteristics"] });
 
   it("keeps age, sex and weight, which the Basic Profile removes", () => {
+    const { result } = made();
     expect(text(result.dataset, "00101010")).toBe(SYNTH.patientAge);
     expect(text(result.dataset, "00100040")).toBe(SYNTH.patientSex);
     expect(text(result.dataset, "00101030")).toBe(SYNTH.patientWeight);
   });
 
   it("is declared: applied in (0012,0064), named in (0012,0063), listed on retained", () => {
+    const { result } = made();
     expect(result.deidentificationMethodCodes.map((t) => t.codeValue)).toEqual([
       "113100",
       "113108",
@@ -133,6 +144,7 @@ describe("Retain Patient Characteristics (113108)", () => {
   });
 
   it("records every attribute it kept as a retained manifest row, never silently", () => {
+    const { result } = made();
     const retained = result.manifest.filter((e) => e.disposition === "retained");
     expect(retained.map((e) => e.locus).sort()).toEqual([
       "(0010,0040) Patient's Sex",
@@ -147,6 +159,7 @@ describe("Retain Patient Characteristics (113108)", () => {
   });
 
   it("keeps nothing else: every identifier the option does not name is gone from the bytes", () => {
+    const { bytes } = made();
     for (const value of [...NEVER_KEPT, SYNTH.deviceSerial, SYNTH.stationName]) {
       expect(bytes.includes(value), `survived: ${value}`).toBe(false);
     }
@@ -154,14 +167,16 @@ describe("Retain Patient Characteristics (113108)", () => {
 });
 
 describe("Retain Device Identity (113109)", () => {
-  const { result, bytes } = run({ policy: RESEARCH, annexEOptions: ["RetainDeviceIdentity"] });
+  const made = run({ policy: RESEARCH, annexEOptions: ["RetainDeviceIdentity"] });
 
   it("keeps the device serial number and station name, which the Basic Profile removes", () => {
+    const { result } = made();
     expect(text(result.dataset, "00181000")).toBe(SYNTH.deviceSerial);
     expect(text(result.dataset, "00081010")).toBe(SYNTH.stationName);
   });
 
   it("is declared: applied in (0012,0064), named in (0012,0063), listed on retained", () => {
+    const { result } = made();
     expect(result.deidentificationMethodCodes.map((t) => t.codeValue)).toEqual([
       "113100",
       "113109",
@@ -171,6 +186,7 @@ describe("Retain Device Identity (113109)", () => {
   });
 
   it("records the kept device attributes as retained rows", () => {
+    const { result } = made();
     const retained = result.manifest.filter((e) => e.disposition === "retained");
     expect(retained.map((e) => e.locus).sort()).toEqual([
       "(0008,1010) Station Name",
@@ -180,6 +196,7 @@ describe("Retain Device Identity (113109)", () => {
   });
 
   it("keeps nothing else: patient characteristics and identifiers are gone from the bytes", () => {
+    const { result, bytes } = made();
     for (const value of [...NEVER_KEPT, SYNTH.patientAge, SYNTH.patientWeight]) {
       expect(bytes.includes(value), `survived: ${value}`).toBe(false);
     }
@@ -189,9 +206,10 @@ describe("Retain Device Identity (113109)", () => {
 
 describe("Clean Descriptors (113105)", () => {
   // Removes rather than keeps: a cleaned descriptor is emptied, so the label may stand.
-  const { result, bytes } = run({ annexEOptions: ["CleanDescriptors"] });
+  const made = run({ annexEOptions: ["CleanDescriptors"] });
 
   it("runs under the default safe-harbor policy, because it keeps nothing Safe Harbor removes", () => {
+    const { result } = made();
     expect(result.retained).toEqual(["CleanDescriptors"]);
     expect(result.deidentificationMethodCodes.map((t) => t.codeValue)).toEqual([
       "113100",
@@ -201,6 +219,7 @@ describe("Clean Descriptors (113105)", () => {
   });
 
   it("empties the descriptors: no text a descriptor carried reaches the bytes", () => {
+    const { result, bytes } = made();
     expect(text(result.dataset, "00081030")).toBeUndefined();
     expect(text(result.dataset, "00104000")).toBeUndefined();
     for (const value of NEVER_KEPT) {
@@ -209,6 +228,7 @@ describe("Clean Descriptors (113105)", () => {
   });
 
   it("keeps nothing, so it adds no retained row", () => {
+    const { result } = made();
     expect(result.manifest.filter((e) => e.disposition === "retained")).toEqual([]);
   });
 });

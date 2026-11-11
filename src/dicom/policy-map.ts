@@ -156,7 +156,7 @@ const METHOD_SCOPE_VALUE = "metadata only";
  */
 export function deidentificationMethodText(
   policyName: string,
-  optionMeanings: readonly string[] = [],
+  optionMeanings: readonly string[],
 ): string {
   const name = Array.from(policyName, loCharacter).join("");
   const whole = `policy "${name}"`;
