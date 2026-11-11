@@ -51,6 +51,11 @@ output holds, not only that the pass did not throw.
   floor only rises: a line no input can reach carries a comment naming why, never a lower number.
 - **The test-selection check, the examples and the smoke test** run as their own CI jobs on every
   pull request, against the built package.
+- **Both ends of each parser range.** The suite above runs on the parser releases the lockfile pins.
+  A separate job on every pull request and each night installs all six parsers at the lowest release
+  each peer range admits, then at the highest published one, and runs the whole suite on each. Each
+  range starts at a release that job passes on, and the latest end fails when the release npm
+  installs today falls outside a range.
 - **The PHI scan** runs on every commit (a pre-commit hook) and in CI.
 
 ## Run them yourself
