@@ -176,9 +176,12 @@ describe("a bare string where an Address or a HumanName is expected, outside a p
       endpoint: [{ reference: "Endpoint/ep1", address: "ZZREFADDR" }],
     });
     expect(out.json).toBe(
-      '{"resourceType":"Organization","endpoint":[{"reference":"Endpoint/ep1"}]}',
+      '{"resourceType":"Organization","endpoint":[{"reference":"Endpoint/1"}]}',
     );
-    expect(rows(out)).toEqual(["Organization.endpoint[0].address blocked"]);
+    expect(rows(out)).toEqual([
+      "Organization.endpoint[0].reference transformed",
+      "Organization.endpoint[0].address blocked",
+    ]);
   });
 
   it("keeps a CapabilityStatement messaging endpoint's address, the other url R4 puts at `address`", () => {

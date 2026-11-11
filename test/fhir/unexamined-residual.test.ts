@@ -2,7 +2,8 @@
  * **FHIR: the positions the walk descends past without deciding anything.** This adapter has no `clinical`
  * locus kind at all: it applies the person rules and the universal identifier / date / narrative /
  * extension / reference rules, and everything else it simply walks past. Those positions, a coded system,
- * a code, a status, a `fullUrl`, used to be invisible. They are counted and located now.
+ * a code, a status, used to be invisible. They are counted and located now. A `fullUrl`, a resource
+ * id and a reference used to be among them; each is now replaced and recorded in the manifest.
  *
  * The negative control is the load-bearing half: a suite proving an unreached primitive is listed would
  * pass equally if the adapter listed everything, so nothing the pass acted on or blocked may appear here,
@@ -49,8 +50,18 @@ describe("FHIR unexamined residual positions", () => {
 
   it("lists the Bundle's own structural values and an identifier's system", () => {
     expect(loci.has("Bundle.type")).toBe(true);
-    expect(loci.has("Bundle.entry[0].fullUrl")).toBe(true);
     expect(loci.has("Bundle.entry[0].resource.identifier[0].system")).toBe(true);
+  });
+
+  it("no longer lists a fullUrl, a resource id or a reference: each is replaced and recorded", () => {
+    for (const decided of [
+      "Bundle.entry[0].fullUrl",
+      "Bundle.entry[0].resource.id",
+      "Bundle.entry[2].resource.patient.reference",
+    ]) {
+      expect(loci.has(decided)).toBe(false);
+      expect(manifest.some((m) => m.locus === decided)).toBe(true);
+    }
   });
 
   it("NEGATIVE CONTROL: never a position the pass acted on or blocked", () => {

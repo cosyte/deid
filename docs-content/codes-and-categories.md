@@ -48,6 +48,7 @@ residual, never the value acted on.
 | `DEID_RESIDUAL_RETAINED`          | a residual of the individual's own identity was kept and recorded: a year, a safe three-digit ZIP prefix, or a whole value a retention class kept |
 | `DEID_PARTY_ROLE_RETAINED`        | a party was left in place because its typed role puts it outside the scope clause; the entry names the role code it was classified on           |
 | `DEID_POSITION_UNEXAMINED`        | a value-bearing position inside a structure the pass handed through that no locus rule names; a measurement, not an allegation                  |
+| `DEID_IDENTIFIER_SUBSTITUTED`     | an identifier other positions point at (a FHIR resource id, the id in a `fullUrl` or a reference) was removed and a per-call sequence number written in its place, the same one for the same identifier throughout the call; not derived from the value, not a keyed surrogate |
 
 ## Transforms
 
@@ -56,12 +57,12 @@ that need your key.
 
 | Transform      | What it does                                                                                                         | Keyed |
 | -------------- | -------------------------------------------------------------------------------------------------------------------- | ----- |
-| `redact`       | removes the value                                                                                                    | no    |
+| `redact`       | removes the value (an identifier other positions point at gets a per-call stand-in in its place)                    | no    |
 | `generalize`   | reduces precision by the locus kind: a date to its year (a birth year that shows an age over 89 removed), a ZIP to its first three digits or `000`, an age over 89 held as a number removed, a caller-built `age` locus with no `ageUnit` over 89 to `90+` | no    |
 | `date-shift`   | shifts every date of a patient by one deterministic offset, keeping intervals                                        | yes   |
 | `pseudonymize` | replaces an identifier with a consistent keyed HMAC-SHA-256 surrogate                                                | yes   |
 | `hash`         | replaces a value with a keyed one-way digest                                                                         | yes   |
-| `block`        | the fail-closed action: withholds the value                                                                          | no    |
+| `block`        | the fail-closed action: withholds the value (an identifier other positions point at gets a per-call stand-in)        | no    |
 | `byo-redact`   | the manifest marker for a free-text locus your redactor redacted; assigned in a policy, it blocks                    | no    |
 | `retain`       | the manifest marker for a locus a profile's retention set kept; assigned in a policy, it blocks                      | no    |
 

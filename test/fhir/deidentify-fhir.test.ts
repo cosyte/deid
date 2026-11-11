@@ -109,8 +109,11 @@ const CLINICAL: readonly string[] = [
   "Married", // maritalStatus coding display (a Coding.display, never a Reference.display)
   "English", // communication language display
   "Doctor of Medicine", // qualification display
-  "Patient/pat1", // reference wiring preserved structurally after identifier handling
-  "Practitioner/prac1", // reference wiring preserved
+  // Reference wiring preserved: the ids are replaced by the call's stand-ins, in the order first met
+  // (`pat1` is the second, after the Patient entry's own fullUrl; `prac1` the fourth), and every
+  // reference names the resource it named before.
+  '"reference":"Patient/2"',
+  '"reference":"Practitioner/4"',
   "902", // Patient ZIP generalized to safe 3-digit prefix
   "MA", // state, permitted, retained
 ];
@@ -233,7 +236,8 @@ describe("deidentifyFhir, structured per-category behavior", () => {
 
   it("preserves reference wiring while blocking a Reference.display person label", () => {
     const { wire, manifest } = deid("bundle");
-    expect(wire).toContain('"reference":"Patient/pat1"'); // wiring intact
+    expect(wire).toContain('"reference":"Patient/2"'); // wiring intact, the id replaced
+    expect(wire).toContain('"resourceType":"Patient","id":"2"');
     expect(wire).not.toContain("ZZREFDISPLAYNAME"); // the display label blocked
     expect(
       manifest.some((m) => m.locus.endsWith("subject.display") && m.disposition === "blocked"),

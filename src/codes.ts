@@ -221,6 +221,17 @@ export const DEID_DISPOSITION_CODES = {
    * is additions-only.
    */
   DEID_POSITION_UNEXAMINED: "DEID_POSITION_UNEXAMINED",
+  /**
+   * An identifier that other positions of the same document point at (a FHIR resource's logical `id`,
+   * the id part of a `fullUrl` or of a reference) was **removed and a stand-in written in its place**,
+   * because the configured transform for its category withholds the value (`redact` or `block`). The
+   * stand-in is a sequence number counted from 1 in the order the distinct identifiers are first met in
+   * one call, written in the identifier's shape (a UUID, an OID, or a plain token). It is not computed
+   * from the identifier; the same identifier gets the same stand-in throughout the call, so every link
+   * still resolves, and it means nothing outside that call. It is not a keyed surrogate, so the entry's
+   * `reidentificationCode` is `false`. The disposition-code set is additions-only.
+   */
+  DEID_IDENTIFIER_SUBSTITUTED: "DEID_IDENTIFIER_SUBSTITUTED",
 } as const;
 
 /**

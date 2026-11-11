@@ -42,6 +42,7 @@ import { serializeDicom } from "@cosyte/dicom";
 import {
   buildExpertDeterminationSupportReport,
   createDeidContext,
+  createDeidRegistry,
   formatExpertDeterminationSupportReport,
   LIMITED_DATA_SET_PROFILE,
   profileOptions,
@@ -327,8 +328,9 @@ function fhirCase(): CorpusCase {
     // Distinctive clinical survivors only: bare short numerics (140/135/145) are deliberately excluded
     // here, since a coincidental recurrence elsewhere in the JSON could mask a selective destruction of
     // exactly that value. LOINC / unit / status / reference wiring are unique; the FHIR adapter's own
-    // test owns the byte-exact over-scrub check on the numeric values.
-    survivors: ["2951-2", "mmol/L", "final", "Patient/pat1", "Practitioner/prac1"],
+    // test owns the byte-exact over-scrub check on the numeric values. The wiring survives with the
+    // logical ids replaced by the call's stand-ins (`pat1` is the second id met, `prac1` the fourth).
+    survivors: ["2951-2", "mmol/L", "final", "Patient/2", "Practitioner/4"],
   };
 }
 
@@ -382,7 +384,6 @@ function fhirNonPersonCase(): CorpusCase {
       "2951-2",
       "mmol/L",
       "final",
-      "Organization/org1",
       "https://example.org/fhir/endpoint",
       "mllp:interface.example.org:9234",
     ],
@@ -823,6 +824,67 @@ function fhirMissedCase(): CorpusCase {
   };
 }
 
+/**
+ * The FHIR **logical ids**: a Patient's `id`, the `fullUrl` of its Bundle entry and every reference to
+ * it, each carrying a sentinel, under the Safe Harbor default (a per-call stand-in) and under the
+ * limited data set preset (a keyed surrogate). A server id is very often the medical record number
+ * itself, so none of the three positions may carry it out. The wiring is the survivor: the reference
+ * still names the Patient, by its replacement.
+ */
+const FHIR_ID_SENTINELS: readonly string[] = [
+  "ZZFHIRIDPAT1",
+  "ZZFHIRIDOBS1",
+  "ZZFHIRIDCONT1",
+  "ZZFHIRIDVER1",
+  "ZZFHIRIDOTHER1",
+];
+
+function fhirResourceIdCase(keyed: boolean): CorpusCase {
+  const raw = JSON.stringify({
+    resourceType: "Bundle",
+    type: "collection",
+    entry: [
+      {
+        fullUrl: "https://fhir.example.org/r4/Patient/ZZFHIRIDPAT1",
+        resource: { resourceType: "Patient", id: "ZZFHIRIDPAT1", gender: "female" },
+      },
+      {
+        fullUrl: "urn:uuid:ZZFHIRIDOBS1",
+        resource: {
+          resourceType: "Observation",
+          id: "ZZFHIRIDOBS1",
+          status: "final",
+          code: { coding: [{ system: "http://loinc.org", code: "2951-2" }] },
+          contained: [{ resourceType: "Specimen", id: "ZZFHIRIDCONT1" }],
+          specimen: { reference: "#ZZFHIRIDCONT1" },
+          subject: { reference: "Patient/ZZFHIRIDPAT1/_history/ZZFHIRIDVER1" },
+          performer: [{ reference: "https://other.example.net/fhir/Practitioner/ZZFHIRIDOTHER1" }],
+          valueQuantity: { value: 140, unit: "mmol/L", system: "http://unitsofmeasure.org" },
+        },
+      },
+    ],
+  });
+  const registry = createDeidRegistry({ key: "fhir-id-corpus-synthetic-hmac-key" });
+  const ctx = registry.forPatient("p-fhir-ids");
+  const options = keyed
+    ? profileOptions(LIMITED_DATA_SET_PROFILE, ctx)
+    : profileOptions(SAFE_HARBOR_PROFILE, ctx);
+  const { document, manifest, unexaminedResiduals } = deidentifyFhir(
+    parseResource(raw).resource,
+    options,
+  );
+  const patient = keyed ? registry.pseudonym("ZZFHIRIDPAT1") : "1";
+  return {
+    name: keyed ? "fhir-resource-ids-keyed" : "fhir-resource-ids",
+    deidWire: serializeResource(document),
+    manifest,
+    unexaminedResiduals,
+    originalWire: raw,
+    sentinels: FHIR_ID_SENTINELS,
+    survivors: ["2951-2", "mmol/L", "final", `"reference":"Patient/${patient}"`],
+  };
+}
+
 function ccdaMissedCase(): CorpusCase {
   const ctx = createDeidContext({ key: "ccda-missed-corpus-synthetic-key", patientId: "p-ccda-m" });
   const sct = "2.16.840.1.113883.6.96";
@@ -890,6 +952,8 @@ const CASES: readonly CorpusCase[] = [
   hl7MissedCase(),
   fhirMissedCase(),
   ccdaMissedCase(),
+  fhirResourceIdCase(false),
+  fhirResourceIdCase(true),
 ];
 
 /** The one leak sweep every gate uses: deliberately the SAME function the tamper test attacks. */

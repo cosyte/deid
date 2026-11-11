@@ -27,6 +27,13 @@
  * Contained resources and Bundle entries are walked by re-deriving the resource role at every
  * `resourceType` boundary.
  *
+ * Every resource's logical `id`, and the id part of every literal that names one (a
+ * `Bundle.entry.fullUrl`, a `Reference.reference`, a `Bundle.entry.request.url`, a
+ * `Bundle.entry.response.location`), is a medical record number locus marked `referencedId`, so the
+ * engine writes one replacement per distinct id for the whole call and the references still resolve.
+ * A literal is read by `./reference.js`; one it cannot read, and an absolute reference to a server the
+ * input's own `fullUrl`s do not name, is blocked.
+ *
  * The `@cosyte/fhir` model is **immutable**, so the extractor never edits the tree; the applier rebuilds
  * a fresh tree from these coordinates (see `./apply.js`).
  *
@@ -73,6 +80,7 @@ import {
   isFhirDateValue,
   locationMayBeResidence,
 } from "./locus-map.js";
+import { readFhirLiteral } from "./reference.js";
 
 /**
  * How the applier rewrites one extracted locus onto a fresh copy of the node it came from:
@@ -88,8 +96,12 @@ import {
  * - `age`: the `value` of a `Quantity` that holds an age. The number is kept exactly as it arrived when
  *   the pass kept the age, and dropped otherwise: an age over 89, one the pass could not read, or a
  *   surrogate a custom policy computed, since a decimal is never written back as a string.
+ * - `reference`: a literal that carries a logical id (a `fullUrl`, a `Reference.reference`, a request
+ *   url or a response location). The id part is replaced by the transformed value and the structure
+ *   around it is kept: the `#`, the resource type, the `urn:uuid:` or `urn:oid:` scheme, or the server
+ *   base. A version suffix (`/_history/vid`) is dropped. A `null` transform result drops the literal.
  */
-export type FhirEditKind = "drop" | "set-primitive" | "address" | "age";
+export type FhirEditKind = "drop" | "set-primitive" | "address" | "age" | "reference";
 
 /**
  * A write-back coordinate: a direct handle to the exact model node one extracted locus came from, plus
@@ -127,6 +139,11 @@ interface FhirLocusAccumulator {
    * positively typed as a coded term rather than a person label.
    */
   readonly ruleReached: Set<FhirNode>;
+  /**
+   * The server bases the input's own `Bundle.entry.fullUrl`s name. An absolute reference keeps its
+   * base only when it is one of these, because only then can it resolve inside the document.
+   */
+  readonly bases: ReadonlySet<string>;
 }
 
 /** Append a locus + its coordinate to the accumulator. */
@@ -703,6 +720,8 @@ interface ParentFacts {
   readonly codedAs: CodedAs;
   /** The complex is a `Location` that may be a patient's residence (see `locationMayBeResidence`). */
   readonly residence: boolean;
+  /** The complex is a resource (it carries a `resourceType`), so its `id` is a logical id. */
+  readonly resource: boolean;
 }
 
 /**
@@ -803,6 +822,139 @@ function handleAgesAndBirthDates(
 }
 
 /**
+ * Where a literal sits, which decides the forms it may take:
+ *
+ * - `reference`: a `Reference.reference`. `#` alone is the container itself and is kept.
+ * - `full-url`: a `Bundle.entry.fullUrl`. It names its own server, so its base is kept unchecked.
+ * - `request`: a `Bundle.entry.request.url` or `response.location`. A resource type alone is a create
+ *   and is kept.
+ */
+type LiteralPosition = "reference" | "full-url" | "request";
+
+/** The literal positions of a `Bundle` entry, by R4 element path. */
+const BUNDLE_LITERAL_ELEMENTS: ReadonlyMap<string, LiteralPosition> = new Map<
+  string,
+  LiteralPosition
+>([
+  ["Bundle.entry.fullUrl", "full-url"],
+  ["Bundle.entry.request.url", "request"],
+  ["Bundle.entry.response.location", "request"],
+]);
+
+/** Emit the replacement locus for a logical id: a medical record number that others point at. */
+function pushLogicalId(
+  out: FhirLocusAccumulator,
+  node: FhirPrimitive,
+  path: string,
+  id: string,
+  edit: FhirEditKind,
+): void {
+  push(
+    out,
+    {
+      path,
+      kind: "identifier",
+      category: SAFE_HARBOR_CATEGORIES.MRN,
+      referencedId: true,
+      value: id,
+    },
+    { node, edit },
+  );
+}
+
+/**
+ * Decide one literal that may carry a logical id. A literal carrying one has its id replaced and its
+ * structure kept. `#` alone in a reference and a resource type alone in a request url or a response
+ * location carry no id, and are kept as decided. Everything else is **removed**: a form the pass
+ * cannot read ({@link readFhirLiteral}), a form that does not belong at the position, a value that is
+ * not a primitive, and, outside a `fullUrl`, an absolute URL to a server the input's own `fullUrl`s do
+ * not name, which cannot resolve inside the document.
+ */
+function emitLiteral(
+  out: FhirLocusAccumulator,
+  node: FhirNode,
+  path: string,
+  position: LiteralPosition,
+): void {
+  if (!isPrimitive(node)) {
+    blockNode(out, node, path);
+    return;
+  }
+  const literal = readFhirLiteral(primitiveString(node), position === "request");
+  if (
+    (literal?.kind === "self" && position === "reference") ||
+    (literal?.kind === "type" && position === "request")
+  ) {
+    out.ruleReached.add(node);
+    return;
+  }
+  if (
+    literal?.kind !== "id" ||
+    (position !== "full-url" && literal.base !== undefined && !out.bases.has(literal.base))
+  ) {
+    blockNode(out, node, path);
+    return;
+  }
+  pushLogicalId(out, node, path, literal.id, "reference");
+}
+
+/**
+ * The **logical id** rule: a resource's own `id`, and every literal that names one. Returns `true`
+ * when it took the property.
+ *
+ * - A resource's `id` (the `id` of a complex carrying a `resourceType`, a contained resource and a
+ *   Bundle entry's resource included) is replaced. One that is not a primitive is removed whole.
+ * - A `Reference.reference` (a `reference` property holding a string, at any depth outside a person
+ *   resource's own top level) is read by {@link emitLiteral}. A `reference` holding an object is a
+ *   `Reference` datatype R4 names `reference` (`Consent.provision.data.reference`), so it is walked
+ *   like any other complex, and its own inner `reference` is read in turn.
+ * - A `Bundle.entry.fullUrl`, `request.url` and `response.location` are read the same way. A
+ *   `fullUrl` names its own server, so its base is kept without the check a reference gets.
+ *
+ * Each replacement is a locus of the medical record number category marked `referencedId`, so the
+ * engine writes the same replacement for the same id throughout the call and every link resolves.
+ */
+function handleLogicalIds(
+  out: FhirLocusAccumulator,
+  name: string,
+  value: FhirNode,
+  path: string,
+  personCtx: boolean,
+  isPersonTop: boolean,
+  parent: ParentFacts,
+  elementPath: string,
+): boolean {
+  if (name === "id" && parent.resource) {
+    if (!isPrimitive(value)) {
+      blockNode(out, value, path);
+    } else if (primitiveString(value).length > 0) {
+      pushLogicalId(out, value, path, primitiveString(value), "set-primitive");
+    }
+    return true;
+  }
+  if (name === "reference" && !isPersonTop && !isComplex(value)) {
+    const items = isList(value) ? value.items : [value];
+    items.forEach((item, i) => {
+      const itemPath = isList(value) ? idx(path, i) : path;
+      if (isComplex(item)) walkValue(out, item, itemPath, personCtx, elementPath);
+      else emitLiteral(out, item, itemPath, "reference");
+    });
+    return true;
+  }
+  const position = BUNDLE_LITERAL_ELEMENTS.get(elementPath);
+  if (position === undefined) return false;
+  if (isComplex(value)) {
+    blockNode(out, value, path);
+    return true;
+  }
+  const items = isList(value) ? value.items : [value];
+  items.forEach((item, i) => {
+    emitLiteral(out, item, isList(value) ? idx(path, i) : path, position);
+  });
+  return true;
+}
+
+/**
  * Dispatch one property of a complex through the FHIR PHI rules.
  *
  * @param elementPath - The R4 element path of this property (see {@link walkComplex}).
@@ -824,6 +976,7 @@ function handleProperty(
     out.ruleReached.add(value);
     return;
   }
+  if (handleLogicalIds(out, name, value, path, personCtx, isPersonTop, parent, elementPath)) return;
   if (name === "extension" || name === "modifierExtension") {
     blockExtension(out, value, path);
     return;
@@ -911,6 +1064,7 @@ function walkComplex(
     parentIsCoding: isCodingComplex(complex),
     codedAs: codedAs(complex),
     residence: rt === "Location" && locationMayBeResidence(complex),
+    resource: rt !== undefined,
   };
   complex.properties.forEach((prop, i) => {
     if (decided.has(prop.name)) return;
@@ -927,6 +1081,31 @@ function walkComplex(
       `${ownPath}.${prop.name}`,
     );
   });
+}
+
+/**
+ * Collect the server bases the input's own `Bundle.entry.fullUrl`s name, in every `Bundle` at any
+ * depth. Read before the walk, because a reference can come before the entry it points at.
+ */
+function fullUrlBases(resource: FhirComplex): ReadonlySet<string> {
+  const bases = new Set<string>();
+  const visit = (node: FhirNode): void => {
+    if (isList(node)) {
+      node.items.forEach(visit);
+      return;
+    }
+    if (!isComplex(node)) return;
+    const entries = resourceType(node) === "Bundle" ? getProperty(node, "entry") : undefined;
+    for (const entry of entries === undefined ? [] : isList(entries) ? entries.items : [entries]) {
+      const fullUrl = isComplex(entry) ? getProperty(entry, "fullUrl") : undefined;
+      if (fullUrl === undefined || !isPrimitive(fullUrl)) continue;
+      const literal = readFhirLiteral(primitiveString(fullUrl), false);
+      if (literal?.kind === "id" && literal.base !== undefined) bases.add(literal.base);
+    }
+    for (const prop of node.properties) visit(prop.value);
+  };
+  visit(resource);
+  return bases;
 }
 
 /**
@@ -955,7 +1134,12 @@ function walkComplex(
  * ```
  */
 export function extractFhirLoci(resource: FhirComplex): FhirExtraction {
-  const out: FhirLocusAccumulator = { loci: [], coords: [], ruleReached: new Set<FhirNode>() };
+  const out: FhirLocusAccumulator = {
+    loci: [],
+    coords: [],
+    ruleReached: new Set<FhirNode>(),
+    bases: fullUrlBases(resource),
+  };
   // `resourceType` is a JSON string VALUE, not a checked identifier, and it is the ROOT of every path
   // in the manifest, so an unbounded one prefixes the whole audit with document content.
   const rt = safeLocusToken(resourceType(resource) ?? "", "fhirElementName");
@@ -993,6 +1177,7 @@ const EDIT_REACH: Readonly<Record<FhirEditKind, "replaces-node" | "rebuilds-addr
   "set-primitive": "replaces-node",
   address: "rebuilds-address",
   age: "replaces-node",
+  reference: "replaces-node",
 };
 
 /** What the enumeration carries down the tree: the pass's decisions, and whether a value was decided. */

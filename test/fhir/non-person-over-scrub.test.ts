@@ -24,6 +24,7 @@ import { parseResource, serializeResource } from "@cosyte/fhir";
 
 import {
   createDeidContext,
+  DEID_DISPOSITION_CODES,
   profileOptions,
   SAFE_HARBOR_PROFILE,
   SAFE_HARBOR_CATEGORIES,
@@ -134,19 +135,38 @@ const OVER_SCRUB_GRAPH = {
   ],
 };
 
+/**
+ * The three positions that carry a resource's logical id. The pass replaces every id there with a
+ * stand-in, the same one for the same id, so the wiring survives with new ids in it. That is a rule
+ * of its own (`resource-ids.test.ts`), not the sweep this suite fences, so the comparisons below take
+ * those positions out of both sides and assert the rest is byte-identical.
+ */
+const LINK_KEYS: ReadonlySet<string> = new Set(["id", "fullUrl", "reference"]);
+
+/** Serialized JSON with every logical-id position removed, for comparing everything else. */
+function withoutLinks(wire: string): string {
+  return JSON.stringify(JSON.parse(wire), (key, value: unknown) =>
+    LINK_KEYS.has(key) ? undefined : value,
+  );
+}
+
 function pass(graph: unknown): {
   before: string;
   after: string;
   manifest: readonly { locus: string }[];
+  idRows: readonly { locus: string; code: string }[];
   residuals: string[];
 } {
   const raw = JSON.stringify(graph);
   const { resource } = parseResource(raw);
   const { document, manifest, unexaminedResiduals } = deidentifyFhir(resource, options());
+  const substituted = (m: { code: string }): boolean =>
+    m.code === DEID_DISPOSITION_CODES.DEID_IDENTIFIER_SUBSTITUTED;
   return {
-    before: serializeResource(resource),
-    after: serializeResource(document),
-    manifest,
+    before: withoutLinks(serializeResource(resource)),
+    after: withoutLinks(serializeResource(document)),
+    manifest: manifest.filter((m) => !substituted(m)),
+    idRows: manifest.filter(substituted),
     residuals: unexaminedResiduals.map((r) => r.locus),
   };
 }
@@ -155,7 +175,32 @@ describe("the widened sweep changes nothing about a document that carries none o
   const run = pass(OVER_SCRUB_GRAPH);
 
   it("the transformed document is byte-identical to the document that went in", () => {
+    // Every position but the logical ids (see `withoutLinks`), which have their own rule.
     expect(run.after).toBe(run.before);
+  });
+
+  it("the logical ids are replaced, and the wiring between them still resolves", () => {
+    const { resource } = parseResource(JSON.stringify(OVER_SCRUB_GRAPH));
+    const out = JSON.parse(serializeResource(deidentifyFhir(resource, options()).document)) as {
+      entry: { fullUrl: string; resource: Record<string, unknown> }[];
+    };
+    const [org, loc, obs] = out.entry.map((e) => e.resource);
+    expect(org?.["id"]).toBe("2");
+    expect(loc?.["managingOrganization"]).toEqual({
+      reference: `Organization/${String(org?.["id"])}`,
+    });
+    expect(obs?.["subject"]).toEqual({ reference: "Patient/8" });
+    expect(run.idRows.map((m) => m.locus)).toEqual([
+      "Bundle.entry[0].fullUrl",
+      "Bundle.entry[0].resource.id",
+      "Bundle.entry[0].resource.partOf.reference",
+      "Bundle.entry[1].fullUrl",
+      "Bundle.entry[1].resource.id",
+      "Bundle.entry[1].resource.managingOrganization.reference",
+      "Bundle.entry[2].fullUrl",
+      "Bundle.entry[2].resource.id",
+      "Bundle.entry[2].resource.subject.reference",
+    ]);
   });
 
   it("and its digest is the one the pass produced before the sweep widened", () => {
@@ -165,10 +210,12 @@ describe("the widened sweep changes nothing about a document that carries none o
     // yesterday, so a future change that starts acting here has to move a written-down number.
     // Re-captured once, when the Location gained its hospital `type`: a position is now kept only for
     // a facility type, so the input itself changed. The output is still the input, byte for byte.
-    expect(digest(run.after)).toMatchInlineSnapshot(`"ade43d2d765c9f2b086e67b2b6fd834a"`);
+    // Re-captured a second time when resource ids began to be replaced: the digest is now taken over
+    // the document with the logical-id positions taken out (`withoutLinks`), the part the sweep owns.
+    expect(digest(run.after)).toMatchInlineSnapshot(`"efae78d4cf32743213420bdfaaa0f26e"`);
   });
 
-  it("nothing is recorded as acted on", () => {
+  it("nothing is recorded as acted on but the logical ids", () => {
     expect(run.manifest).toEqual([]);
   });
 
@@ -182,11 +229,6 @@ describe("the widened sweep changes nothing about a document that carries none o
       "140", // its value
       "mmol/L", // its unit
       "final", // its status
-      "Organization/org9", // reference wiring
-      "Patient/pat9",
-      "org9", // a resource logical id
-      "loc9",
-      "obs9",
     ]) {
       expect(run.after).toContain(survivor);
     }
@@ -199,7 +241,6 @@ describe("the widened sweep changes nothing about a document that carries none o
       "Bundle.entry[2].resource.code.coding[0].code",
       "Bundle.entry[2].resource.valueQuantity.unit",
       "Bundle.entry[2].resource.status",
-      "Bundle.entry[2].resource.subject.reference",
     ]) {
       expect(run.residuals).toContain(locus);
     }

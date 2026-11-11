@@ -489,8 +489,8 @@ describe("fail closed: a newly reached element the pass cannot handle faithfully
   });
 
   it("leaves an EMPTY object at a typed position alone: there is nothing there to leak", () => {
-    const { json, manifest } = run({ resourceType: "Location", id: "loc1", address: {} });
-    expect(JSON.parse(json)).toEqual({ resourceType: "Location", id: "loc1", address: {} });
+    const { json, manifest } = run({ resourceType: "Location", address: {} });
+    expect(JSON.parse(json)).toEqual({ resourceType: "Location", address: {} });
     expect(manifest).toEqual([]);
   });
 
@@ -613,7 +613,8 @@ describe("the residual inventory after the sweep widened", () => {
   });
 
   it("and every position it still does not examine is still reported", () => {
-    expect(residuals(withSwept).loci).toEqual(["Location.id", "Location.status", "Location.name"]);
+    // The logical id is examined too: it is replaced by a stand-in and recorded in the manifest.
+    expect(residuals(withSwept).loci).toEqual(["Location.status", "Location.name"]);
   });
 
   it("so the two counts for one document sum to the same total as before", () => {
@@ -624,7 +625,10 @@ describe("the residual inventory after the sweep widened", () => {
     // its positions, so the equality above is a measurement rather than an enumeration that stopped.
     expect(residuals(withUnsweptShape).total).toBe(residuals(withoutAddress).total + 1);
     expect(residuals(withUnsweptShape).loci).toContain("Location.vendorAddress.description");
-    expect(withUnsweptShape.manifest).toEqual([]);
+    // The one row is the logical id's stand-in, a rule of its own; the sweep recorded nothing.
+    expect(withUnsweptShape.manifest.map((m) => `${m.locus} ${m.code}`)).toEqual([
+      `Location.id ${DEID_DISPOSITION_CODES.DEID_IDENTIFIER_SUBSTITUTED}`,
+    ]);
   });
 
   it("nothing beneath a swept element is enumerated, and no record carries a value", () => {
@@ -647,7 +651,17 @@ describe("the committed non-person fixture, end to end", () => {
   const { document, manifest, unexaminedResiduals } = deidentifyFhir(resource, options());
 
   it("acts on every name- and address-typed element it carries, and nothing else", () => {
-    expect(manifest.map((m) => `${m.locus} ${m.category}`)).toEqual([
+    // The logical ids, their fullUrls and the references to them are replaced by their own rule
+    // (`resource-ids.test.ts`); every other row is the sweep's.
+    const swept = manifest.filter(
+      (m) => m.code !== DEID_DISPOSITION_CODES.DEID_IDENTIFIER_SUBSTITUTED,
+    );
+    for (const m of manifest) {
+      if (m.code === DEID_DISPOSITION_CODES.DEID_IDENTIFIER_SUBSTITUTED) {
+        expect(m.locus).toMatch(/(\.id|\.fullUrl|\.reference)$/);
+      }
+    }
+    expect(swept.map((m) => `${m.locus} ${m.category}`)).toEqual([
       "Bundle.entry[0].resource.address GEOGRAPHIC",
       "Bundle.entry[0].resource.contact[0].name NAMES",
       "Bundle.entry[0].resource.contact[0].address GEOGRAPHIC",
@@ -674,8 +688,9 @@ describe("the committed non-person fixture, end to end", () => {
       "2951-2",
       "mmol/L",
       "final",
-      "Organization/org1",
-      "Patient/pat9",
+      // The wiring survives with its ids replaced: the resource type stays in front of the stand-in.
+      "Organization/",
+      "Patient/",
       "https://example.org/fhir/endpoint",
       "mllp:interface.example.org:9234",
       "ZZPLANOWNNAME",
