@@ -56,7 +56,7 @@ const { document, manifest } = deidentify(
         path: "PID-19",
         kind: "identifier",
         category: SAFE_HARBOR_CATEGORIES.SSN,
-        value: "900-00-0001",
+        value: "900000001",
       },
     ],
   },
@@ -66,7 +66,7 @@ const { document, manifest } = deidentify(
 document.loci[0]?.value; // => null
 manifest[0]?.category; // => "SSN"
 manifest[0]?.locus; // => "PID-19"
-JSON.stringify(manifest).includes("900-00-0001"); // => false
+JSON.stringify(manifest).includes("900000001"); // => false
 ```
 
 The value is removed, and the manifest records the category and the locus, never the value.
