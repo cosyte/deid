@@ -424,19 +424,15 @@ function actId(out: CcdaLocusAccumulator, el: Element, path: string): void {
   // The id rule reads the assigning authority and the id value, and the applier rewrites one of them.
   nameAttributes(out, el, ["root", "extension"]);
   const root = attr(el, "root");
-  if (isExtensionless(el)) {
+  const extension = attr(el, "extension");
+  if (extension === undefined || extension.length === 0) {
     if (root === undefined || root.length === 0) return; // nullFlavor-only id, nothing to transform
     replaceRoot(out, el, path, root, categoryForIdRoot(root));
     return;
   }
   push(
     out,
-    {
-      path,
-      kind: "identifier",
-      category: categoryForIdRoot(root),
-      value: attr(el, "extension") ?? "",
-    },
+    { path, kind: "identifier", category: categoryForIdRoot(root), value: extension },
     { node: el, edit: "id" },
   );
 }

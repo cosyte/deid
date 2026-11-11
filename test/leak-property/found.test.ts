@@ -17,7 +17,12 @@ import { parseResource, serializeResource } from "@cosyte/fhir";
 import { parseCcda } from "@cosyte/ccda";
 import { buildTelecomRequest, serializeTelecom } from "@cosyte/ncpdp/telecom";
 
-import { createDeidContext, DEID_DISPOSITION_CODES as D } from "../../src/index.js";
+import {
+  createDeidContext,
+  defineDeidPolicy,
+  DEID_DISPOSITION_CODES as D,
+  SAFE_HARBOR_CATEGORIES as C,
+} from "../../src/index.js";
 import { deidentifyHl7 } from "../../src/hl7/index.js";
 import { deidentifyFhir } from "../../src/fhir/index.js";
 import { deidentifyCcda } from "../../src/ccda/index.js";
@@ -500,6 +505,24 @@ ${header}
       "component/structuredBody/component/section/entry/observation/id[0]@root",
     );
     expect(out).toContain(`<id nullFlavor="NA"/>`);
+  });
+
+  it("under a policy whose transform cannot replace an id, the root is removed, not kept", () => {
+    // `generalize` is no way to replace an identifier, so the engine blocks the root (fail closed).
+    const policy = defineDeidPolicy({ name: "odd", transforms: { [C.MRN]: "generalize" } });
+    const r = deidentifyCcda(
+      parseCcda(
+        doc(
+          `<recordTarget><patientRole><id root="ZQLKROOT05X"/><patient/></patientRole></recordTarget>`,
+        ),
+      ),
+      { context: ctx, policy },
+    );
+    expect(r.document.toString()).not.toContain("ZQLKROOT05X");
+    expect(r.document.toString()).toContain("<id/>");
+    expect(r.manifest.map((m) => `${m.locus} ${m.code}`)).toContain(
+      `recordTarget/patientRole/id ${D.DEID_LOCUS_BLOCKED}`,
+    );
   });
 
   it("a body id the header does not name is handed through and counted, as before", () => {
