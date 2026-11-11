@@ -1,0 +1,35 @@
+name: Nightly properties
+
+# The property tests at depth. Every property runs through `test/helpers/property.ts`, which reads
+# the shared settings of `@cosyte/test-utils`: 100 cases on a pull request and 10,000 here
+# (COSYTE_PROPERTY_RUNS). Each prints its seed before it runs, and a failure prints the seed and path
+# that replay it; the shared job keeps each one in its summary and in the `property-run` artifact.
+# Set COSYTE_PROPERTY_SEED and COSYTE_PROPERTY_PATH to them and run `pnpm test:property` to get the
+# same case, already shrunk.
+#
+# `pnpm test:property` is the whole suite without `test/leak-property/`: the six generated leak
+# properties take longer at this depth and keep a workflow of their own, `leak-property.yml`, with a
+# longer budget. The shared job is cosyte/.github's nightly-properties.yml.
+#
+# Not a required check: it runs on a schedule and on demand, never on a pull request.
+
+on:
+  schedule:
+    # 04:53 UTC. An odd minute: GitHub delays scheduled runs at the start of every hour.
+    - cron: "53 4 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  nightly:
+    # The release of commit 398cd4ded647, the same reference as ci.yml (see the note there).
+    uses: cosyte/.github/.github/workflows/nightly-properties.yml@398cd4ded647dddd9f2e220ceb042840f59e1426 # the release of 398cd4ded647
+    with:
+      test-cmd: "pnpm test:property"
+      property-runs: "10000"

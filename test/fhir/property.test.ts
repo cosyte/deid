@@ -14,6 +14,7 @@ import { parseResource, serializeResource } from "@cosyte/fhir";
 
 import { createDeidContext } from "../../src/index.js";
 import { deidentifyFhir } from "../../src/fhir/index.js";
+import { checkProperty } from "../helpers/property.js";
 
 /** A recognizable synthetic token: `ZZ` + upper-alnum, distinct from any structural URI/code. */
 const token = fc.stringMatching(/^[A-Z0-9]{4,10}$/).map((s) => `ZZ${s}`);
@@ -53,7 +54,8 @@ function buildBundle(t: {
 
 describe("deidentifyFhir, property: fail-safe leak + value-free invariants", () => {
   it("never leaves an injected token in the output or the manifest, for arbitrary inputs", () => {
-    fc.assert(
+    checkProperty(
+      "never leaves an injected token in the output or the manifest, for arbitrary inputs",
       fc.property(
         fc.record({
           family: token,
@@ -81,7 +83,6 @@ describe("deidentifyFhir, property: fail-safe leak + value-free invariants", () 
           expect(manifestBlob.includes(r.key)).toBe(false); // the key never leaks
         },
       ),
-      { numRuns: 60 },
     );
   });
 });

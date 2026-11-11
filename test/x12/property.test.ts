@@ -16,6 +16,7 @@ import {
   createDeidContext,
 } from "../../src/index.js";
 import { deidentifyX12 } from "../../src/x12/index.js";
+import { checkProperty } from "../helpers/property.js";
 
 const FATAL = new Set<string>(Object.values(FATAL_CODES));
 const KNOWN = new Set<string>(Object.values(DEID_DISPOSITION_CODES));
@@ -55,7 +56,8 @@ function interchangeArb(): fc.Arbitrary<string> {
 
 describe("deidentifyX12, fail-safe invariants", () => {
   it("never throws a non-fatal, never leaks a scrub-locus sentinel, manifest is value-free", () => {
-    fc.assert(
+    checkProperty(
+      "never throws a non-fatal, never leaks a scrub-locus sentinel, manifest is value-free",
       fc.property(interchangeArb(), (raw) => {
         let result;
         try {
@@ -73,12 +75,12 @@ describe("deidentifyX12, fail-safe invariants", () => {
           expect(entry.locus.includes(SENTINEL)).toBe(false);
         }
       }),
-      { numRuns: 300 },
     );
   });
 
   it("never mutates the input interchange", () => {
-    fc.assert(
+    checkProperty(
+      "never mutates the input interchange",
       fc.property(interchangeArb(), (raw) => {
         const ix = parseX12(raw);
         const before = serializeX12(ix);

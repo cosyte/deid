@@ -575,7 +575,9 @@ The de-identified dataset, the value-free manifest, the coded declaration, the w
 #### Throws
 
 DeidError `DEID_POSITIONS_UNENUMERABLE` when a dataset, a sequence item or the Part 10
-  File Meta group will not yield its positions, so no honest count exists for this study.
+  File Meta group will not yield its positions, so no honest count exists for this study, or when an
+  element carries no value bytes (a copy of an `Element` made by object spread keeps no `rawBytes`;
+  copy one through the `Element` constructor instead).
 
 #### Throws
 

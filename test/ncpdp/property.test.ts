@@ -19,6 +19,7 @@ import {
   createDeidContext,
 } from "../../src/index.js";
 import { deidentifyTelecom } from "../../src/ncpdp/index.js";
+import { checkProperty } from "../helpers/property.js";
 
 const FATAL = new Set<string>(Object.values(FATAL_CODES));
 const KNOWN = new Set<string>(Object.values(DEID_DISPOSITION_CODES));
@@ -83,7 +84,8 @@ function transactionArb(): fc.Arbitrary<ReturnType<typeof buildTelecomRequest>> 
 
 describe("deidentifyTelecom, fail-safe invariants", () => {
   it("never throws a non-fatal, never leaks a scrub-locus sentinel, manifest is value-free", () => {
-    fc.assert(
+    checkProperty(
+      "never throws a non-fatal, never leaks a scrub-locus sentinel, manifest is value-free",
       fc.property(transactionArb(), (tx) => {
         let result;
         try {
@@ -101,12 +103,12 @@ describe("deidentifyTelecom, fail-safe invariants", () => {
         // The retained clinical NDC always survives (the over-scrub guard).
         expect(result.telecom.includes("00071015527")).toBe(true);
       }),
-      { numRuns: 300 },
     );
   });
 
   it("never mutates the input transaction", () => {
-    fc.assert(
+    checkProperty(
+      "never mutates the input transaction",
       fc.property(transactionArb(), (tx) => {
         const before = serializeTelecom(tx);
         try {

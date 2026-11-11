@@ -25,6 +25,7 @@ import {
   type LocusKind,
   type SafeHarborCategory,
 } from "../../src/index.js";
+import { checkProperty, propertyRun } from "../helpers/property.js";
 
 const FATAL = new Set<string>(Object.values(FATAL_CODES));
 const KNOWN_CODES = new Set<string>(Object.values(DEID_DISPOSITION_CODES));
@@ -56,7 +57,8 @@ function locusArb(): fc.Arbitrary<GenericLocus> {
 describe("deid core conformance (fail-safe invariants)", () => {
   it("fail-safe: arbitrary loci never throw a non-fatal, and every manifest entry is value-free", () => {
     const ctx = createDeidContext({ key: "property-key-synthetic-hmac-key", patientId: "p1" });
-    fc.assert(
+    checkProperty(
+      "fail-safe: arbitrary loci never throw a non-fatal, and every manifest entry is value-free",
       fc.property(fc.array(locusArb(), { maxLength: 40 }), (loci) => {
         let result;
         try {
@@ -93,6 +95,7 @@ describe("deid core conformance (fail-safe invariants)", () => {
 
   it("immutability: the frozen output document rejects mutation, leaving prior reads intact", () => {
     immutabilityProperty({
+      seed: propertyRun("immutability: the frozen output document rejects mutation").seed,
       arbitrary: fc.constant("ignored"),
       parse: () =>
         deidentify(
