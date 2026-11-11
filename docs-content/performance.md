@@ -63,13 +63,13 @@ It runs on demand and on a pull request that changes `bench/` or the workflow.
 
 ## Latest reading on a GitHub runner
 
-Two readings of the same library code (0.2.10), from the Bench workflow's runs 43023900708 (commit
-`99833a8`) and 43028309781 (commit `aa0b7db`), Node 22.23.4 on GitHub-hosted `ubuntu` x64 runners
-with 4 vCPUs. Each format ran in its own job on its own machine (AMD EPYC 7763, 9V45 or 9V74, or
-Intel Xeon Platinum 8573C), and the machine changed between the runs, so each cell gives the range
-of the two readings, lower first. Compare rows within a format, not across formats, and read them
-as a scale, not a specification: the policy engine ran about twice as fast on one machine as on
-the other.
+Three readings of the same library code (0.2.10), from the Bench workflow's runs 43023900708
+(commit `99833a8`), 43028309781 (commit `aa0b7db`) and 43030470989 (commit `8273ab7`), Node 22.23.4
+on GitHub-hosted `ubuntu` x64 runners with 4 vCPUs. Each format ran in its own job on its own
+machine (AMD EPYC 7763, 9V45 or 9V74, or Intel Xeon Platinum 8573C), and the machine changed
+between runs, so each cell gives the range of the three readings, lower first. Compare rows within
+a format, not across formats, and read them as a scale, not a specification: the same pass ran up
+to 2.2 times as fast on one machine as on another.
 
 **Method.** Throughput and time per call are the median of 3 fresh processes; latency is per call,
 nearest rank (a slow size takes too few calls in its sample to give a p99, shown as none); peak
@@ -78,45 +78,47 @@ heap is one call's V8 heap above the settled heap. A size whose warmup did not s
 
 Text in, text out (what a consumer runs), at each format's smallest and largest size:
 
-| Format and size                          | Per call              | p50                   | p99                 | Throughput               | Peak heap            |
-| ---------------------------------------- | --------------------- | --------------------- | ------------------- | ------------------------ | -------------------- |
-| HL7 v2, 1 ORU^R01, 1.6 KiB               | 219.24 to 296.13 us   | 200.13 to 276.73 us   | 456.24 to 708.78 us | 5.3 to 7.16 MiB/s        | 671.2 to 681.6 KiB   |
-| HL7 v2, batch of 1,000, 1.6 MiB          | skipped in both       | 286.969 to 383.488 ms | none                | none                     | 107.68 to 107.71 MiB |
-| FHIR R4, 1 Patient, 1 KiB                | 26.26 to 38.82 us     | 23.75 to 37.15 us     | 60.41 to 77.76 us   | 22.08 to 32.65 MiB/s     | 93.2 KiB in both     |
-| FHIR R4, Bundle of 10,000, 5.8 MiB       | skipped in both       | 616.776 ms (one run)  | none                | none                     | 168.31 to 169.92 MiB |
-| C-CDA, 10 results, 11 KiB                | 2.383 to 2.407 ms     | 2.213 to 2.253 ms     | none                | 4.34 to 4.38 MiB/s       | 1.81 to 1.82 MiB     |
-| C-CDA, 1,000 results, 640 KiB            | 145.242 to 145.9 ms   | 140.599 to 142.458 ms | none                | 4.3 to 4.32 MiB/s        | 40.72 to 40.79 MiB   |
-| X12 837P, 1 claim, 1 KiB                 | 90.06 to 120.46 us    | 88.78 to 117.67 us    | 204.24 to 289.51 us | 8.52 to 11.39 MiB/s      | 258.8 to 259.7 KiB   |
-| X12 837P, 5,000 claims, 2.7 MiB          | 506.227 ms (one run)  | 494.886 to 588.381 ms | none                | 5.36 MiB/s (one run)     | 173.86 to 175.85 MiB |
-| DICOM, CT slice, 514 KiB                 | 452.36 to 547.55 us   | 372.24 to 375.01 us   | 1.035 to 1.599 ms   | 916.28 to 1109.09 MiB/s  | 537.6 to 549.8 KiB   |
-| DICOM, Enhanced CT, 200 frames, 100 MiB  | 61.25 to 64.011 ms    | 60.468 to 61.755 ms   | none                | 1562.84 to 1633.29 MiB/s | 15.75 to 15.76 MiB   |
-| Policy engine, Safe Harbor, 16 loci      | 1.9 to 3.78 us        | 2.02 to 3.84 us       | 3.45 to 8.22 us     | 316.2 to 630.22 MiB/s    | 17.7 KiB in both     |
-| Policy engine, Safe Harbor, 100,000 loci | 40.121 to 65.251 ms   | 37.685 to 65.93 ms    | none                | 118.77 to 193.16 MiB/s   | 29.58 to 30.23 MiB   |
-| Policy engine, keyed, 16 loci            | 15.64 to 29.52 us     | 14.5 to 27.24 us      | 22.11 to 53.19 us   | 40.52 to 76.49 MiB/s     | 32.2 KiB in both     |
-| Policy engine, keyed, 100,000 loci       | 137.612 to 240.137 ms | 138.538 to 246.701 ms | none                | 32.27 to 56.32 MiB/s     | 38.87 to 38.89 MiB   |
+| Format and size                          | Per call              | p50                              | p99                 | Throughput               | Peak heap            |
+| ---------------------------------------- | --------------------- | -------------------------------- | ------------------- | ------------------------ | -------------------- |
+| HL7 v2, 1 ORU^R01, 1.6 KiB               | 206.09 to 296.13 us   | 194.67 to 276.73 us              | 441.45 to 708.78 us | 5.3 to 7.61 MiB/s        | 667.4 to 681.6 KiB   |
+| HL7 v2, batch of 1,000, 1.6 MiB          | 272.998 ms (one run)  | 256.786 to 383.488 ms            | none                | 5.75 MiB/s (one run)     | 107.68 to 107.94 MiB |
+| FHIR R4, 1 Patient, 1 KiB                | 26.26 to 47.3 us      | 23.75 to 45.69 us                | 60.41 to 103.5 us   | 18.13 to 32.65 MiB/s     | 93.2 KiB in all      |
+| FHIR R4, Bundle of 10,000, 5.8 MiB       | skipped in all        | 616.776 ms (one run)             | none                | none                     | 168.31 to 169.92 MiB |
+| C-CDA, 10 results, 11 KiB                | 2.374 to 2.407 ms     | 2.213 to 2.253 ms                | none                | 4.34 to 4.4 MiB/s        | 1.81 to 1.82 MiB     |
+| C-CDA, 1,000 results, 640 KiB            | 145.242 to 146.383 ms | 140.599 to 148.712 ms            | none                | 4.29 to 4.32 MiB/s       | 40.72 to 40.79 MiB   |
+| X12 837P, 1 claim, 1 KiB                 | 90.06 to 202.41 us    | 88.78 to 181.4 us                | 204.24 to 375.68 us | 5.07 to 11.39 MiB/s      | 253 to 259.7 KiB     |
+| X12 837P, 5,000 claims, 2.7 MiB          | 506.227 ms (one run)  | 494.886 to 588.381 ms (two runs) | none                | 5.36 MiB/s (one run)     | 173.86 to 175.85 MiB |
+| DICOM, CT slice, 514 KiB                 | 452.36 to 736.04 us   | 372.24 to 527.28 us              | 1.035 to 1.599 ms   | 681.64 to 1109.09 MiB/s  | 537.6 to 578.6 KiB   |
+| DICOM, Enhanced CT, 200 frames, 100 MiB  | 61.25 to 77.583 ms    | 60.468 to 78.929 ms              | none                | 1289.44 to 1633.29 MiB/s | 15.75 to 15.98 MiB   |
+| Policy engine, Safe Harbor, 16 loci      | 1.9 to 3.78 us        | 2.02 to 3.84 us                  | 3.45 to 8.22 us     | 316.2 to 630.22 MiB/s    | 17.7 KiB in all      |
+| Policy engine, Safe Harbor, 100,000 loci | 40.015 to 65.251 ms   | 37.685 to 65.93 ms               | none                | 118.77 to 193.68 MiB/s   | 29.58 to 30.23 MiB   |
+| Policy engine, keyed, 16 loci            | 15.64 to 29.52 us     | 14.5 to 27.24 us                 | 22.11 to 53.19 us   | 40.52 to 76.49 MiB/s     | 32.2 KiB in all      |
+| Policy engine, keyed, 100,000 loci       | 134.756 to 240.137 ms | 138.232 to 246.701 ms            | none                | 32.27 to 57.51 MiB/s     | 38.85 to 38.89 MiB   |
 
-"One run" marks a size the other run skipped. The DICOM peak heap leaves out Pixel Data, which is
-a Buffer: counted with every byte, the 100 MiB Enhanced CT peaked at 123.23 to 123.66 MiB
-resident, 1.23 to 1.24 times its input. The engine's throughput is over the JSON size of its locus
-model.
+"One run" or "two runs" marks a value only that many runs measured: the others skipped the size or
+gave no value. The DICOM peak heap leaves out Pixel Data, which is a Buffer: counted with every
+byte, the 100 MiB Enhanced CT peaked at 123.23 to 123.66 MiB resident, 1.23 to 1.24 times its
+input. The engine's throughput is over the JSON size of its locus model.
 
-**Against the budgets**, in the same two runs:
+**Against the budgets**, in the same three runs:
 
-- **Peak heap, 20 times the input for a dense shape:** missed by every format row but one in both
-  runs. The multiples run from 18.67 to 18.90 (the FHIR adapter on a Bundle of 10,000, the one
-  within it) up to 417.84 to 424.30 (one HL7 v2 message, text in, text out); a small input pays a
-  fixed cost that a large one spreads. The policy engine is within it at every size but the keyed
-  policy at 16 loci (26.31 times in both).
-- **Peak memory, 3 times the input for DICOM:** within it in both, from 0.08 to 2.09 times
+- **Peak heap, 20 times the input for a dense shape:** missed by every format row but one in all
+  three runs. The multiples run from 18.67 to 19.16 (the FHIR adapter on a Bundle of 10,000, the
+  one within it) up to 415.47 to 424.30 (one HL7 v2 message, text in, text out); a small input
+  pays a fixed cost that a large one spreads. The policy engine is within it at every size but the
+  keyed policy at 16 loci (26.31 times in all three).
+- **Peak memory, 3 times the input for DICOM:** within it in all three, from 0.07 to 2.09 times
   resident.
 - **Throughput kept from smallest to largest size, at least half**, read by the profile: within it
-  for HL7 v2 (79 to 80% text in, text out; 92 to 99% the adapter), C-CDA (88 to 90%), X12 (52% in
-  both) and DICOM. Missed by FHIR R4 (27% text in, text out; 22 to 23% the adapter) and the Safe
-  Harbor engine (40% in both).
-- **Cold import, 15 ms an entry:** within it for the root (5.95 to 6.19 ms) and `/ncpdp` (8.18 to
-  8.42 ms); missed by `/ccda` (16.84 to 17.52 ms), `/fhir` (17.52 to 18.06 ms), `/hl7` (20.36 to
-  20.98 ms), `/dicom` (21.15 to 21.73 ms) and `/x12` (26.19 to 27.25 ms). Each of those loads its
-  parser, which is most of the bytes.
+  in all three for HL7 v2 (72 to 80% text in, text out; 92 to 99% the adapter), C-CDA (88 to 90%
+  text in, text out; 76 to 90% the adapter), X12 (52 to 53% text in, text out; 50 to 52% the
+  adapter, at the edge) and DICOM. Missed by FHIR R4 (27% text in, text out; 22 to 23% the adapter)
+  and the Safe Harbor engine (39 to 40%).
+- **Cold import, 15 ms an entry:** within it in all three for the root (4.72 to 6.19 ms) and
+  `/ncpdp` (6.63 to 8.42 ms). `/ccda` (13.57 to 17.52 ms) and `/fhir` (13.80 to 18.06 ms) were
+  within it in one run and missed it in two; `/hl7` (16.22 to 20.98 ms), `/dicom` (16.64 to 21.73
+  ms) and `/x12` (20.65 to 27.25 ms) missed it in all three. Each of those five loads its parser,
+  which is most of the bytes.
 
 The budgets are proposals, so a miss here is a number to act on, not a failed check.
 
