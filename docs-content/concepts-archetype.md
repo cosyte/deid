@@ -25,7 +25,10 @@ scrubber.
 
 - **redact**: remove the value (the fail-safe floor; the default for SSN, phone, email, URL, IP, …).
 - **generalize**: reduce precision to **date → year**, **ZIP → initial 3 digits or `000`** (the cited
-  ≤20,000-population rule), **age → `90+`** for ages over 89.
+  ≤20,000-population rule). A date of birth whose year shows an age over 89 is removed rather than
+  kept. An age held as a value is not located by any adapter, so it passes through unchanged; only a
+  locus a caller builds with `kind: "age"` is turned into `90+` (see
+  [Known limitations](./limitations.md#ages-over-89)).
 - **date-shift**: shift every date for a patient by a single deterministic per-patient offset,
   preserving intervals. An **Expert-Determination** technique (a shifted real date is still a date), so
   it is **not** used under the Safe Harbor policy: the offset never leaks.

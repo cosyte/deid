@@ -298,7 +298,7 @@ only when a real de-identified document grounds it.
 
 <a id="ages-over-89"></a>
 
-## Ages over 89: a birth year is removed, not kept
+## Ages over 89: what is removed, and what is not
 
 §164.514(b)(2)(i)(C) lets a date keep its year, except that every element of a date, the year
 included, that is indicative of an age over 89 is aggregated into a single category of age 90 or
@@ -329,6 +329,33 @@ residual. A birth year under that line keeps its year and its residual row exact
 - **The generic core needs the marker.** On the root entry, set `dateOfBirth: true` on a `date` locus
   for the engine to apply the rule; a locus without it keeps its year however old. A policy that
   date-shifts or retains dates does not aggregate either: the rule is part of the year generalization.
+- **A removed C-CDA `birthTime` is written empty.** The `value` attribute is dropped and no
+  `nullFlavor` is added, so the element reads `<birthTime/>`, the same as a date the pass blocks. A
+  receiver that requires a value or a `nullFlavor` on `birthTime` will reject it as it stands.
+
+**An age held as a value is not found or aggregated.** No adapter locates an age written as a number,
+so an age over 89 passes through unchanged under every policy, `safe-harbor` included. The
+`generalize` transform turns an age over 89 into `90+` only for a locus a caller builds by hand with
+`kind: "age"`; no adapter emits one. Examples of ages that are kept as they arrive:
+
+- an HL7 v2 numeric result such as `OBX|1|NM|30525-0^Age^LN||93|a`: OBX-5 typed `NM` (or another
+  numeric or coded type) is a structured clinical value and is retained;
+- a FHIR age: `Observation.valueQuantity` in years, `Condition.onsetAge`,
+  `FamilyMemberHistory.ageAge`;
+- a C-CDA age observation in the clinical body, which is retained untouched.
+
+Finding and aggregating these is the caller's job: read the ages your documents carry and band or
+remove every one over 89 before the output leaves your control.
+
+**Birth dates the pass does not treat as birth dates.** Three positions carry a birth date the rule
+above never reaches, so an over-89 year can survive in each:
+
+- **HL7 v2 `NK1-16`**, the next of kin's date of birth, is not in the `NK1` field map. It leaves the
+  pass untouched, counted as an unexamined residual rather than reduced or removed.
+- **An HL7 v2 OBX result typed as a date that holds a birth date.** OBX-5 typed `DT` or `TS` is cut to
+  its year like any date, but nothing marks it as a birth date, so a year over 89 is kept.
+- **A relative's birth date in a C-CDA family history** sits in the clinical body, which the pass does
+  not read, so it is never located at all.
 
 <a id="policy-profiles"></a>
 

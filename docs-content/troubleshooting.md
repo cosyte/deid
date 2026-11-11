@@ -98,8 +98,10 @@ The library's promise is **narrow and honest**. Do **not** over-trust it:
   whose year is 90 or more years before the year the pass runs is removed instead, and recorded as
   [`DEID_CATEGORY_GENERALIZED`](./codes-and-categories.md#disposition-codes). Every format adapter marks the birth dates it locates; on the
   generic core, set `dateOfBirth: true` on a `date` locus yourself, or the year is kept however old it
-  is. See [Known limitations](./limitations.md#ages-over-89) for the reference date and the year-only
-  comparison.
+  is. An age held as a value (an HL7 v2 numeric OBX result, a FHIR `Age`, a C-CDA age observation)
+  is **not** located by any adapter and passes through unchanged: handle it yourself. See
+  [Known limitations](./limitations.md#ages-over-89) for the reference date, the year-only
+  comparison, and the birth-date positions the rule does not reach.
 - **`GEOGRAPHIC` is generalized as a ZIP.** A locus of category `GEOGRAPHIC` is treated as a ZIP code
   (initial-3-digit or `000`). Street/city/county elements should be **removed**: mark them for
   redaction (or a non-ZIP kind) rather than relying on ZIP generalization, which would keep a leading
