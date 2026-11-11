@@ -139,7 +139,7 @@ const fhir = (): ScalingGateOptions<string, string> => ({
   name: "@cosyte/deid FHIR R4, text in, text out",
   parse: fhirText,
   weigh: (text) => text.length,
-  count: { n: 64, generate: (i) => fhirPatient(i) },
+  count: { n: 256, generate: (i) => fhirPatient(i) },
   size: { inputs: 2, size: 50, generate: (i, size) => fhirBundle(i, size) },
 });
 gate("FHIR R4", fhir, (text) => fhirText(readTextQuadratically(text, TEXT_STEP)));
@@ -159,7 +159,7 @@ const x12 = (): ScalingGateOptions<string, string> => ({
   name: "@cosyte/deid X12 837P, text in, text out",
   parse: x12Text,
   weigh: (text) => text.length,
-  count: { n: 32, generate: (i) => x12Claims(i, 1) },
+  count: { n: 128, generate: (i) => x12Claims(i, 1) },
   size: { inputs: 2, size: 50, generate: (i, size) => x12Claims(i, size) },
 });
 gate("X12 837P", x12, (text) => x12Text(readTextQuadratically(text, TEXT_STEP)));
@@ -176,7 +176,7 @@ const dicom = (): ScalingGateOptions<Buffer, Buffer> => ({
   parse: dicomFile,
   weigh: (bytes) => bytes.length,
   count: { n: 32, generate: (i) => ctImage(i, GATE_SIDE) },
-  size: { inputs: 2, size: 50, generate: (i, size) => enhancedCt(i, size, GATE_SIDE) },
+  size: { inputs: 4, size: 50, generate: (i, size) => enhancedCt(i, size, GATE_SIDE) },
 });
 gate(
   "DICOM",
@@ -194,7 +194,7 @@ const engine = (): ScalingGateOptions<Model, number> => ({
   name: "@cosyte/deid policy engine, Safe Harbor",
   parse: (model) => deidentify(model, {}).manifest.length,
   weigh: (n) => n,
-  count: { n: 1_024, generate: (i) => locusModel(i, 16) },
+  count: { n: 2_048, generate: (i) => locusModel(i, 16) },
   size: { inputs: 2, size: 8_000, generate: (i, size) => locusModel(i, size) },
 });
 gate("policy engine", engine, (model) => {
