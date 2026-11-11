@@ -16,6 +16,7 @@ import {
   createDeidContext,
 } from "../../src/index.js";
 import { deidentifyHl7 } from "../../src/hl7/index.js";
+import { checkProperty } from "../helpers/property.js";
 
 const FATAL = new Set<string>(Object.values(FATAL_CODES));
 const KNOWN = new Set<string>(Object.values(DEID_DISPOSITION_CODES));
@@ -52,7 +53,8 @@ function messageArb(): fc.Arbitrary<string> {
 
 describe("deidentifyHl7, fail-safe invariants", () => {
   it("never throws a non-fatal, never leaks the sentinel except in a retained clinical value, manifest is value-free", () => {
-    fc.assert(
+    checkProperty(
+      "never throws a non-fatal, never leaks the sentinel except in a retained clinical value, manifest is value-free",
       fc.property(messageArb(), (raw) => {
         let result;
         try {
@@ -77,12 +79,12 @@ describe("deidentifyHl7, fail-safe invariants", () => {
           expect(entry.locus.includes(SENTINEL)).toBe(false);
         }
       }),
-      { numRuns: 300 },
     );
   });
 
   it("never mutates the input message", () => {
-    fc.assert(
+    checkProperty(
+      "never mutates the input message",
       fc.property(messageArb(), (raw) => {
         const msg = parseHL7(raw);
         const before = msg.toString();

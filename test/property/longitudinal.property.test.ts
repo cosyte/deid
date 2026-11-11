@@ -23,6 +23,7 @@ import {
   defineDeidPolicy,
   type GenericLocus,
 } from "../../src/index.js";
+import { checkProperty } from "../helpers/property.js";
 
 const C = SAFE_HARBOR_CATEGORIES;
 const RESEARCH = defineDeidPolicy({ name: "research", transforms: { [C.DATES]: "date-shift" } });
@@ -61,7 +62,8 @@ function daysBetween(a: string, b: string): number {
 
 describe("longitudinal consistency (property)", () => {
   it("same (key, patient, date) → same shifted output across independent passes", () => {
-    fc.assert(
+    checkProperty(
+      "same (key, patient, date) → same shifted output across independent passes",
       fc.property(keyArb(), fc.string({ minLength: 1 }), isoDateArb(), (key, patient, date) => {
         const a = shiftOne(key, patient, date);
         const b = shiftOne(key, patient, date);
@@ -72,7 +74,8 @@ describe("longitudinal consistency (property)", () => {
   });
 
   it("preserves the interval between two dates of the same patient exactly", () => {
-    fc.assert(
+    checkProperty(
+      "preserves the interval between two dates of the same patient exactly",
       fc.property(
         keyArb(),
         fc.string({ minLength: 1 }),
@@ -97,7 +100,8 @@ describe("longitudinal consistency (property)", () => {
   });
 
   it("distinct identifiers never share a pseudonym; the same identifier always does", () => {
-    fc.assert(
+    checkProperty(
+      "distinct identifiers never share a pseudonym; the same identifier always does",
       fc.property(
         keyArb(),
         fc.string({ minLength: 1 }),
@@ -114,7 +118,8 @@ describe("longitudinal consistency (property)", () => {
   });
 
   it("secret absence: the key never appears in the output or the value-free manifest", () => {
-    fc.assert(
+    checkProperty(
+      "secret absence: the key never appears in the output or the value-free manifest",
       fc.property(
         // A key long enough that an accidental substring match would be meaningful.
         keyArb(),

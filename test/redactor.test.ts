@@ -22,6 +22,7 @@ import {
   type GenericLocus,
   type SafeHarborCategory,
 } from "../src/index.js";
+import { checkProperty } from "./helpers/property.js";
 
 const C = SAFE_HARBOR_CATEGORIES;
 const D = DEID_DISPOSITION_CODES;
@@ -173,7 +174,8 @@ describe("BYO free-text redactor, scope and safety invariants", () => {
 
 describe("BYO free-text redactor, properties", () => {
   it("a declining/throwing redactor always blocks (never a value survives)", () => {
-    fc.assert(
+    checkProperty(
+      "a declining/throwing redactor always blocks (never a value survives)",
       fc.property(fc.string(), fc.boolean(), (value, doThrow) => {
         const redactor: FreeTextRedactor = doThrow
           ? () => {
@@ -188,7 +190,8 @@ describe("BYO free-text redactor, properties", () => {
   });
 
   it("block-only default leaves no free-text value in the document for arbitrary prose", () => {
-    fc.assert(
+    checkProperty(
+      "block-only default leaves no free-text value in the document for arbitrary prose",
       fc.property(fc.string(), (value) => {
         const out = deidentify({ loci: [freetext(`SENTINEL_${value}`)] }, {});
         expect(out.document.loci[0]?.value).toBeNull();

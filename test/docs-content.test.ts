@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, normalize } from "node:path";
+import { pathToFileURL } from "node:url";
 
 import ts from "typescript";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -55,10 +56,22 @@ const ENTRY_POINTS: Readonly<Record<string, string>> = {
   "@cosyte/deid/ncpdp": join(root, "dist", "ncpdp", "index.mjs"),
   "@cosyte/deid/dicom": join(root, "dist", "dicom", "index.mjs"),
 };
-const resolve = (specifier: string): string | undefined => ENTRY_POINTS[specifier];
+/**
+ * The built module a sample's import loads, as a file URL: on Windows a bare absolute path starts
+ * with a drive letter, which the ES module loader reads as a URL scheme and refuses.
+ */
+const resolve = (specifier: string): string | undefined => {
+  const path = ENTRY_POINTS[specifier];
+  return path === undefined ? undefined : pathToFileURL(path).href;
+};
 
 beforeAll(() => {
-  execFileSync("pnpm", ["build"], { cwd: root, stdio: "inherit" });
+  // On Windows `pnpm` is a `.cmd` file, which only a shell starts.
+  execFileSync("pnpm", ["build"], {
+    cwd: root,
+    stdio: "inherit",
+    shell: process.platform === "win32",
+  });
 }, 120_000);
 
 /** The hand-written pages: every `.md` file at the top of `docs-content/`, not the generated `api/`. */

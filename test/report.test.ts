@@ -25,6 +25,7 @@ import {
   type DeidManifestEntry,
   type UnexaminedResidual,
 } from "../src/index.js";
+import { checkProperty } from "./helpers/property.js";
 
 const C = SAFE_HARBOR_CATEGORIES;
 const CODES = DEID_DISPOSITION_CODES;
@@ -316,7 +317,8 @@ describe("buildExpertDeterminationSupportReport, determinism, immutability, valu
   });
 
   it("value-free property: a report built over a real de-id manifest contains none of the input PHI values", () => {
-    fc.assert(
+    checkProperty(
+      "value-free property: a report built over a real de-id manifest contains none of the input PHI values",
       fc.property(
         fc.array(
           fc.record({
@@ -351,7 +353,8 @@ describe("buildExpertDeterminationSupportReport, determinism, immutability, valu
   it("value-free property: no manifest value survives into any report field for arbitrary loci", () => {
     // Guard against the report echoing a locus *value*: build directly from arbitrary manifest entries
     // whose loci are tagged sentinels; assert none appears anywhere in the serialized report.
-    fc.assert(
+    checkProperty(
+      "value-free property: no manifest value survives into any report field for arbitrary loci",
       fc.property(
         fc.array(
           fc.record({

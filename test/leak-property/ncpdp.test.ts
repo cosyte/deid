@@ -226,6 +226,7 @@ describe("the generated leak property: NCPDP Telecom", () => {
   });
 
   it("the sweep has teeth: a sentinel put back into a real output, or the manifest, is caught", () => {
+    // One fixed case for the tamper proof, not a property, so the shared depth does not apply.
     const [sample] = fc.sample(caseArb, { seed: 7, numRuns: 1 });
     if (sample === undefined) throw new Error("no sample");
     const { raw, placed } = build(sample.fill, sample.stem, sample.placements);

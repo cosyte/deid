@@ -46,10 +46,12 @@ describe("date-shift is timezone-independent (nit #1)", () => {
     // different zones and require an identical result. Would have differed under the old local parse.
     const runner = fileURLToPath(new URL("./helpers/run-date-shift.ts", import.meta.url));
     const tsxBin = fileURLToPath(new URL("../node_modules/.bin/tsx", import.meta.url));
+    // On Windows the `.bin` entry is a `.cmd` file, which only a shell starts.
     const run = (tz: string): string =>
       execFileSync(tsxBin, [runner], {
         env: { ...process.env, TZ: tz },
         encoding: "utf8",
+        shell: process.platform === "win32",
       }).trim();
     const kolkata = run("Asia/Kolkata"); // UTC+05:30
     const honolulu = run("Pacific/Honolulu"); // UTC-10:00
