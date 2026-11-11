@@ -68,7 +68,7 @@ const XML_DECLARATION = '<?xml version="1.0" encoding="UTF-8"?>';
  * import { deidentifyCcda } from "@cosyte/deid/ccda";
  *
  * const result: CcdaDeidResult = deidentifyCcda(parseCcda(xml), {});
- * result.document.toString(); // de-identified C-CDA XML
+ * result.document.toString(); // transformed C-CDA XML
  * ```
  */
 export interface CcdaDeidResult {

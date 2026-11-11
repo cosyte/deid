@@ -4,7 +4,7 @@
 // leaks, and the cold import with every file it loads and its gzip size):
 //   pnpm build && pnpm bench:reading --out bench-results/reading.json
 // One format only (its benchmarks are named `<format> ...`):
-//   pnpm bench:reading --only "HL7 v2: text in, text out" --only "HL7 v2: adapter on a parsed message"
+//   pnpm bench:reading --only "HL7 v2: text in, text out" --only "HL7 v2: adapter on a parsed model"
 // A base against head comparison, the base built in another checkout:
 //   pnpm bench:compare --base <base checkout>/bench/target.mjs --head bench/target.mjs
 // The budgets, read from a reading, and the profile (peak memory with Buffers counted, single-call
@@ -66,7 +66,7 @@ function keyedOptions(pkg) {
 export function deidentifyHl7Batch(pkg, text) {
   const out = [];
   for (const entry of pkg.hl7.splitBatch(text).messages) {
-    // A message the parser refuses is not de-identified; the shapes never carry one. The wire the
+    // A message the parser refuses is not transformed; the shapes never carry one. The wire the
     // adapter wrote is `hl7`; a build from before it existed is written here instead.
     if (entry.ok) {
       const result = pkg.deidHl7.deidentifyHl7(entry.message);

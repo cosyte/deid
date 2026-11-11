@@ -2,7 +2,7 @@
 id: what-the-caller-still-owns
 title: What the caller still owns
 sidebar_label: What the caller still owns
-description: "The duties a pass leaves with you before you release its output: residuals, the actual-knowledge review, key custody, logs, and what each adapter does not cover."
+description: "The duties a pass leaves with you before you release the output: residuals, the actual-knowledge review, key custody, logs, and what an adapter does not cover."
 ---
 
 # What the caller still owns
@@ -66,7 +66,7 @@ offsets matter, split the document per patient and give each part `registry.forP
 We ship no detector of identifiers in prose. With no redactor, every free-text position is blocked.
 With your own redactor, its output is written back and recorded as `DEID_FREETEXT_CONSUMER_REDACTED`,
 and the engine does not scan it again: whether it found everything is yours to establish. See
-[Redact free text with your own detector](./guides-freetext.md#the-honesty-boundary-what-the-library-does-not-guarantee).
+[Redact free text with your own detector](./guides-freetext.md#the-honesty-boundary-what-the-library-does-not-check).
 
 ## Read the unexamined residuals
 

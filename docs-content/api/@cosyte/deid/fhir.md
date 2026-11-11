@@ -68,11 +68,13 @@ Resource ids are replaced and the reference wiring is kept, with what that does 
 the server base of a `fullUrl`, and of an absolute reference to it, is kept verbatim; and an id
 written anywhere else (`meta.versionId`, `meta.source`, `Bundle.link.url`, an `Attachment.url`, any
 other uri, and an element's own `id`) is passed through and counted as unexamined. Under the Safe
-Harbor default the stand-ins are per call, so the same resource de-identified in two calls gets two
+Harbor default the stand-ins are per call, so the same resource transformed in two calls gets two
 unrelated ids; linkage across calls needs a keyed policy, which does not claim Safe Harbor.
-Structured free-text elements inside clinical resources (`Observation.valueString`, `Annotation.text`)
-are retained (the over-scrub guard): narrative free-text de-id is separately scoped (the BYO
-redaction interface); only the rendered narrative `text.div` is blocked here.
+Free text is blocked, not retained. A `note` (`Annotation` text, author and time, as one unit), a
+`contentString` and an uncoded `valueString` are free-text loci: removed and recorded as
+`DEID_FREETEXT_BLOCKED` unless a consumer-supplied redactor returns its own text for them. The
+rendered narrative `text.div` is blocked at any depth, with no redactor. A coded or typed result
+(`valueQuantity`, `valueCodeableConcept`, `valueDateTime`) is kept (the over-scrub guard).
 Five surfaces the datatype sweep deliberately does **not** reach. Three because no datatype types a
 person at the position: a **`ContactPoint` outside a person resource** (widening to telecom would put
 a payer's own switchboard number in scope, which the sibling adapters keep); an **organisation's own
@@ -495,7 +497,7 @@ import { createDeidContext } from "@cosyte/deid";
 const context = createDeidContext({ key: process.env.DEID_KEY! });
 const { resource } = parseResource(json);
 const { document, manifest } = deidentifyFhir(resource, { context });
-serializeResource(document); // de-identified FHIR JSON
+serializeResource(document); // transformed FHIR JSON
 ```
 
 ***

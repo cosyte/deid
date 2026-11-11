@@ -18,8 +18,8 @@ From the repo root, in this order, with the pinned pnpm 10 first on PATH (AGENTS
 pnpm install --frozen-lockfile
 pnpm typecheck && pnpm lint && pnpm format:check && pnpm phi-scan
 pnpm test && pnpm test:coverage && pnpm quality:check --base origin/main && pnpm build && pnpm attw
-pnpm smoke && pnpm examples && pnpm check:test-selection
-pnpm check:no-emdash && pnpm check:no-internal-refs
+pnpm smoke && pnpm examples && pnpm check:test-selection && pnpm check:docs-reference
+pnpm check:no-emdash && pnpm check:no-internal-refs && pnpm check:docs-content
 pnpm check:readme && pnpm check:claude-card && pnpm check:catalog && pnpm check:process
 ```
 

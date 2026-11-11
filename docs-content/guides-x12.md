@@ -10,7 +10,7 @@ description: "Run an X12 EDI interchange through the Safe Harbor policy, read wh
 The `@cosyte/deid/x12` adapter is the HIPAA 005010 X12 binding of the de-identification core. It locates
 PHI **structurally** in a parsed X12 interchange (a name is at `NM1-03..07` because the X12 TR3 says so,
 never because a string "looked like" a name), applies the configured policy, and returns the
-de-identified X12 byte stream plus the core's **value-free manifest**.
+transformed X12 byte stream plus the core's **value-free manifest**.
 
 > **`@cosyte/x12` is an optional peer dependency.** Install it alongside `@cosyte/deid` to use this
 > subpath; the core stays third-party-dependency-free. The adapter reaches EDI data only through
@@ -156,7 +156,7 @@ rule names. The adapter decides every element it hands through, so none of those
   is a sequence number counted from 1 in the order the distinct trace numbers are met in one call, the
   same one for the same trace number, so a response's echo of a request's trace in the same
   interchange still matches it (`TRN*2*ZZTRACE01*1999999999` becomes `TRN*2*1*1999999999`); it is
-  recorded as `DEID_IDENTIFIER_SUBSTITUTED`. A request and its response de-identified in two calls no
+  recorded as `DEID_IDENTIFIER_SUBSTITUTED`. A request and its response transformed in two calls no
   longer match. The originating company id and its supplemental code (`TRN-03`, `TRN-04`) are kept
   as bounded printable text.
 - **A party's own number is kept only under a party that vouches for it.** A `REF` naming a party's
