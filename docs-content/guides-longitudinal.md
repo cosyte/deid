@@ -83,7 +83,8 @@ identifiers (study/series/instance UIDs, GUIDs) you thread across files.
 - **Rotation is intentional linkage breakage.** A new key deterministically produces _different_
   offsets and _different_ pseudonyms, so a corpus de-identified under a rotated key **no longer links**
   to records made under the old key. Rotate to sever linkage; keep the key to preserve it. The library
-  holds **no persistent key store**: key custody and lifetime are yours.
+  holds **no persistent key store**: key custody and lifetime are yours. The rest of what stays with
+  you is in [What the caller still owns](./what-the-caller-still-owns.md).
 
 ```ts runnable throws
 import { createDeidRegistry } from "@cosyte/deid";

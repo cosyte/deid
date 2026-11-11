@@ -318,6 +318,9 @@ the identifier rule), and an empty one as `{}`.
 The honesty line is unchanged: the output is **"Safe-Harbor-transformed per the configured policy,"**
 never "de-identified" and never "HIPAA-compliant."
 
+[What the caller still owns](./what-the-caller-still-owns.md) lists the duties that stay with you
+before you release the output, with a table of what this adapter does not cover.
+
 ## Reference
 
 - [`deidentifyFhir`](./api/@cosyte/deid/fhir.md#deidentifyfhir),

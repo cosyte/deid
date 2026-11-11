@@ -17,6 +17,8 @@ or extension, or a free-text blob, the library blocks or removes, never passing 
 "probably safe."
 
 Read this page before you rely on the library for anything that leaves your control.
+[What the caller still owns](./what-the-caller-still-owns.md) lists, in one place, the duties this
+page leaves with you, and a table per adapter of what it does not cover.
 
 ## What it does
 
@@ -727,6 +729,8 @@ per-patient offsets matter, split the document per patient and give each part it
 
 ## Put it to use
 
+- [What the caller still owns](./what-the-caller-still-owns.md): the checklist before you release
+  output
 - [Choose a policy and read the manifest](./choose-a-policy.md): the profiles above, and what the
   manifest records
 - [Keep a patient linkable across documents](./guides-longitudinal.md): the limited-data-set preset
