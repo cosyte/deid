@@ -49,7 +49,10 @@ function removeDirectText(el: Element): void {
   for (const n of doomed) el.removeChild(n);
 }
 
-/** Apply a pseudonymized / redacted id: replace the id value it carries, retaining the assigning root. */
+/**
+ * Apply a pseudonymized / redacted id: replace the id value it carries, retaining the assigning root.
+ * An id with no extension, or an empty one, carries its value in the root, so the root is what changes.
+ */
 function applyId(el: Element, value: string | null): void {
   const hasExtension = (el.getAttribute("extension") ?? "").length > 0;
   if (value === null) {

@@ -135,8 +135,8 @@ interface X12LocusAccumulator {
   readonly delimiters: { readonly component: string; readonly repetition: string };
   /**
    * For each transaction set (`group:transaction`), whether the last `NM1` / `N1` party in its current
-   * section (since the last `HL`, or `INS` in an 834) is one its role keeps. A party-number `REF` is
-   * kept only under such a party.
+   * section (since the last `HL`, `ENT`, or `INS` in an 834) is one its role keeps that names itself. A
+   * party-number `REF` is kept only under such a party.
    */
   readonly partyKept: Map<string, boolean>;
 }
@@ -147,7 +147,8 @@ interface X12LocusAccumulator {
  * the last party in its section is one its role keeps; after the individual, a relative, an employer,
  * an unknown party, or no party at all, the number may be the individual's own (a payee or a submitter
  * can be a person), so it is removed and recorded. A section starts at the transaction set, at every
- * `HL`, and at every `INS` of an 834 (a member), so a party in an earlier section never vouches for it.
+ * `HL`, at every `ENT` (an 820 entity), and at every `INS` of an 834 (a member), so a party in an
+ * earlier section never vouches for it.
  */
 const PARTY_IDENTITY_REF_QUALIFIERS: ReadonlySet<string> = new Set<string>([
   "0B", // State License Number
@@ -494,18 +495,37 @@ function emitRetainedParty(
   );
 }
 
+/** The name and identifier elements of an `NM1` a party kept by its role leaves in place. */
+const NM1_IDENTITY_ELEMENTS: readonly number[] = [3, 4, 5, 6, 7, 9];
+/** The name and identifier elements of an `N1` a party kept by its role leaves in place. */
+const N1_IDENTITY_ELEMENTS: readonly number[] = [2, 4];
+
+/**
+ * Whether a party vouches for the party-number `REF`s after it in its section: only a party its role
+ * keeps that names itself (a name or an identifier), which is exactly a party the manifest records as
+ * kept by role ({@link emitRetainedParty}). A provider `NM1` with neither is no party a reader can see,
+ * so a number after it is not known to be the provider's and fails closed.
+ */
+function vouches(
+  seg: X12Segment,
+  scope: ReturnType<typeof classifyNm1Party>["scope"],
+  identityElements: readonly number[],
+): boolean {
+  return scope === "outside-scope" && identityElements.some((n) => has(seg, n));
+}
+
 /** Handle an `NM1`: entity-classified name (03 to 07) + identifier (09 routed by the 08 qualifier). */
 function handleNm1(out: X12LocusAccumulator, seg: X12Segment, pos: SegPos): void {
   keepCodeOrBlock(out, seg, pos, 1);
   // The classifier reads the entity code only when it passed the exact check; anything else is unknown.
   // The transaction set decides a code whose meaning changes by set (the 820 premium payer).
   const party = classifyNm1Party(trustedCode(seg, "NM1", 1), pos.stId);
-  out.partyKept.set(transactionKey(pos), party.scope === "outside-scope");
+  out.partyKept.set(transactionKey(pos), vouches(seg, party.scope, NM1_IDENTITY_ELEMENTS));
   if (party.scope === "outside-scope") {
     // Recognized provider / organization: retained, and the role code that placed it outside the scope
     // clause is recorded at its locus rather than left to be inferred from an absence. Its qualifier is
     // still only kept when it is a qualifier.
-    emitRetainedParty(out, seg, pos, party.roleCode, [3, 4, 5, 6, 7, 9]);
+    emitRetainedParty(out, seg, pos, party.roleCode, NM1_IDENTITY_ELEMENTS);
     keepCodeOrBlock(out, seg, pos, 8);
     return;
   }
@@ -551,10 +571,10 @@ function handleNm1(out: X12LocusAccumulator, seg: X12Segment, pos: SegPos): void
 function handleN1(out: X12LocusAccumulator, seg: X12Segment, pos: SegPos): void {
   keepCodeOrBlock(out, seg, pos, 1);
   const party = classifyNm1Party(trustedCode(seg, "N1", 1), pos.stId);
-  out.partyKept.set(transactionKey(pos), party.scope === "outside-scope");
+  out.partyKept.set(transactionKey(pos), vouches(seg, party.scope, N1_IDENTITY_ELEMENTS));
   if (party.scope === "outside-scope") {
     // Recognized org / payer / provider party: retained, with the role code recorded at its locus.
-    emitRetainedParty(out, seg, pos, party.roleCode, [2, 4]);
+    emitRetainedParty(out, seg, pos, party.roleCode, N1_IDENTITY_ELEMENTS);
     keepCodeOrBlock(out, seg, pos, 3);
     return;
   }
@@ -587,6 +607,36 @@ function handleRef(out: X12LocusAccumulator, seg: X12Segment, pos: SegPos): void
   }
   // An unknown qualifier fails closed (category R); a patient identifier is routed to its category.
   emitId(out, seg, pos, 2, disposition.kind === "phi" ? disposition.category : undefined);
+}
+
+/**
+ * Handle a `TRN`: the trace number (`TRN-02`) is replaced; the sweep decides the rest by shape.
+ *
+ * A trace number is assigned per transaction, so in an eligibility, claim status or services review
+ * inquiry it is assigned per patient, and the response echoes it back. It is replaced rather than
+ * removed, and marked as a referenced identifier, so the same trace number gets the same replacement
+ * everywhere in the interchange: a request's trace and the trace a response in the same interchange
+ * echoes still match. Under the Safe Harbor default the replacement is a sequence number counted in
+ * the order the distinct trace numbers are met, never computed from them.
+ */
+function handleTrace(out: X12LocusAccumulator, seg: X12Segment, pos: SegPos): void {
+  // With no trace type code (`TRN-01`), a value after it may have shifted left from somewhere else:
+  // the closing sweep removes every one of them, as it does for any segment missing its first element.
+  if (!has(seg, 1)) return;
+  name(pos, [2]);
+  if (!has(seg, 2)) return;
+  push(
+    out,
+    pos,
+    {
+      path: path(pos, 2),
+      kind: "identifier",
+      category: SAFE_HARBOR_CATEGORIES.OTHER_UNIQUE_ID,
+      referencedId: true,
+      value: el(seg, 2),
+    },
+    coord(pos, [2]),
+  );
 }
 
 /** Handle a `CLM` / `CLP`: pseudonymize the `-01` patient account number; the sweep decides the rest. */
@@ -675,9 +725,14 @@ function removeSegment(out: X12LocusAccumulator, seg: SegmentElements, pos: SegP
 function handleSegment(out: X12LocusAccumulator, seg: X12Segment, pos: SegPos): void {
   const id = pos.segId;
   // A new hierarchical level, or a new member in an 834, starts a section of its own: no party before
-  // it vouches for a party number inside it.
+  // it vouches for a party number inside it. (So does an 820 `ENT`, reset in the walk itself, because
+  // the pass removes that segment whole and it never reaches here.)
   if (id === "HL" || (id === "INS" && pos.stId === "834"))
     out.partyKept.delete(transactionKey(pos));
+  if (id === "TRN") {
+    handleTrace(out, seg, pos);
+    return;
+  }
   if (id === "NM1") {
     handleNm1(out, seg, pos);
     return;
@@ -1054,6 +1109,10 @@ export function extractX12Loci(interchange: X12Interchange): X12Extraction {
         // The control pair carries no rule of its own; the closing sweep decides it like any other.
         // A segment whose identifier is not recognized gets no rule: the sweep removes it whole.
         const start = out.loci.length;
+        // An 820 `ENT` starts the remittance detail of one entity, an organization or one individual,
+        // so it starts a section: no party before it vouches for a party number after it. The pass
+        // removes the segment whole (it can carry the entity's own identifier), so the reset is here.
+        if (seg.id === "ENT") out.partyKept.delete(transactionKey(pos));
         if (recognized && seg.id !== "ST" && seg.id !== "SE") handleSegment(out, seg, pos);
         closeSegment(out, seg, pos, recognized);
         orderSegmentLoci(out, start);

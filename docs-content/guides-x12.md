@@ -145,8 +145,22 @@ rule names. The adapter decides every element it hands through, so none of those
   individual inside a retained segment (`PAT-06`, `INS-12`, an `HI` occurrence or procedure date) is
   generalized the same way, at its own component. A value that is no valid date in its format, a `TM`
   time of day included, is removed rather than cut down to whatever its front looks like.
-- **Amounts, quantities and counts keep only a number**, and a trace, control or trading partner number
-  keeps a bounded run of printable characters.
+- **Amounts, quantities and counts keep only a number**, and a control or trading partner number
+  keeps a bounded run of printable characters: one value, so a value holding the component or the
+  repetition separator is removed whole.
+- **A trace number (`TRN-02`) is replaced.** It is assigned per transaction, so per patient in an
+  eligibility, claim status or services review inquiry. Under the Safe Harbor default the replacement
+  is a sequence number counted from 1 in the order the distinct trace numbers are met in one call, the
+  same one for the same trace number, so a response's echo of a request's trace in the same
+  interchange still matches it (`TRN*2*ZZTRACE01*1999999999` becomes `TRN*2*1*1999999999`); it is
+  recorded as `DEID_IDENTIFIER_SUBSTITUTED`. A request and its response de-identified in two calls no
+  longer match. The originating company id and its supplemental code (`TRN-03`, `TRN-04`) are kept
+  as bounded printable text.
+- **A party's own number is kept only under a party that vouches for it.** A `REF` naming a party's
+  own number (a license, a tax id, a provider, payer, payee, submitter or receiver number) is kept
+  only when the last `NM1` / `N1` in its section is a party its role keeps that names itself (a name or
+  an identifier). A section starts at the transaction set, at every `HL`, at every `ENT` of an 820,
+  and at every member `INS` of an 834.
 - **A shift into a number is caught by the position it left empty.** A number shape cannot tell a
   shifted date or account number from an amount, so the adapter looks for the shift instead. A position
   the 005010 TR3s require (`CLM-01`, `CLP-01`, `CAS-03`, an `HI` entry's qualifier and code),

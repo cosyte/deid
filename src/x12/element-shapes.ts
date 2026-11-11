@@ -276,10 +276,18 @@ function matching(pattern: RegExp): X12ShapeTest {
  * An **administrative reference** of at most `max` printable characters, not blank: a trace number, a
  * control number, a trading partner or payer id. The rule that names it decided the value is not the
  * individual's; the shape only bounds what may sit there.
+ *
+ * It is one simple value, so a value holding the interchange's component separator, or its repetition
+ * separator, is not one: it is a composite or a repetition where a single value belongs, and it is
+ * removed whole rather than kept with whatever rides in its second part.
  */
 function reference(max: number): X12ShapeTest {
   const pattern = new RegExp(`^[\\x20-\\x7E]{1,${String(max)}}$`);
-  return (value) => pattern.test(value) && value.trim().length > 0;
+  return (value, ctx) =>
+    pattern.test(value) &&
+    value.trim().length > 0 &&
+    !value.includes(ctx.component) &&
+    !value.includes(ctx.repetition);
 }
 
 /** Keep every repetition of a repeating element when each passes `test`. */
@@ -705,6 +713,8 @@ export const X12_ELEMENT_SHAPES: Readonly<
   },
   TRN: {
     1: code("481"),
+    // TRN-02, the trace number, is replaced by its own rule before this table is read
+    // (`handleTrace` in `./extract.js`); this row decides it only if that rule ever stops naming it.
     2: keep(reference(50)),
     3: keep(reference(10)),
     4: keep(reference(50)),

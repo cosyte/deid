@@ -351,12 +351,14 @@ describe("deidentifyCcda, fail closed on narrative and unknown structure", () =>
     expect(wire).toContain('value="2020"'); // center date generalized to year
   });
 
-  it("redacts a root-only SSN-rooted id (no extension) by dropping the root value", () => {
+  it("replaces a root-only SSN-rooted id (no extension): the root is the identifier", () => {
     const xml = `<?xml version="1.0"?><ClinicalDocument xmlns="urn:hl7-org:v3">
       <recordTarget><patientRole><id root="2.16.840.1.113883.4.1"/></patientRole></recordTarget>
     </ClinicalDocument>`;
     const { document, manifest } = deidentifyCcda(parseCcda(xml), { context: ctx });
-    expect(document.getPatient()?.identifiers[0]?.root).toBeUndefined(); // SSN root value dropped
+    // The root alone is the identifier, so it is replaced by a stand-in computed from nothing about it,
+    // the same one wherever the same root appears in the document.
+    expect(document.getPatient()?.identifiers[0]?.root).toBe("2.25.1");
     expect(manifest.find((m) => m.locus.includes("id"))?.category).toBe(C.SSN);
   });
 

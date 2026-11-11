@@ -132,8 +132,8 @@ const NCPDP_AMOUNT = /^[0-9]{0,9}[0-9{}A-R]$/;
 /**
  * The format of each field a person, prescriber, insurance or coordination of benefits segment keeps
  * (`TELECOM_SEGMENT_RETAIN_FIELDS`), from its NCPDP Telecom vD.0 definition: a one- or two-character
- * code, a count, an amount, a state code, or a payer identifier of at most ten characters. A field the
- * list keeps and this table does not name keeps nothing.
+ * code, a count, an amount, a state code, or an other payer id of five or six digits. A field the list
+ * keeps and this table does not name keeps nothing.
  */
 const RETAINED_FIELD_FORMATS: Readonly<Record<string, RegExp>> = {
   C5: /^[0-9A-Z]$/, // Patient Gender Code
@@ -149,13 +149,15 @@ const RETAINED_FIELD_FORMATS: Readonly<Record<string, RegExp>> = {
   "4C": /^[0-9]$/, // Coordination Of Benefits / Other Payments Count
   "5C": /^[0-9A-Z]{1,2}$/, // Other Payer Coverage Type
   "6C": /^[0-9A-Z]{1,2}$/, // Other Payer ID Qualifier
-  "7C": /^[0-9A-Z][0-9A-Z -]{0,9}$/, // Other Payer ID
+  // Other Payer ID: digits only, five or six of them, the form of a BIN (six digits) or an NAIC company
+  // code (five). Up to ten letters or digits would keep a short name or a member id; any other form is
+  // removed.
+  "7C": /^[0-9]{5,6}$/,
   HC: /^[0-9A-Z]{1,2}$/, // Other Payer Amount Paid Qualifier
   DV: NCPDP_AMOUNT, // Other Payer Amount Paid
   "6E": /^[0-9A-Z]{1,2}$/, // Other Payer-Patient Responsibility Amount Qualifier
   "7E": NCPDP_AMOUNT, // Other Payer-Patient Responsibility Amount
   NT: /^[0-9]$/, // Other Payer ID Count
-  MH: /^[0-9A-Z][0-9A-Z -]{0,9}$/, // Other Payer Processor Control Number
 };
 
 /** Whether a kept field's value, trailing padding aside, has the format its definition gives it. */

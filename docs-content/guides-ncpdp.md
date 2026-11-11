@@ -78,11 +78,13 @@ deliberate asymmetry.
 
 A field a Patient, Prescriber, Insurance or Coordination of Benefits segment retains (gender, state,
 relationship, place of service, the id qualifiers, person code, pregnancy indicator, residence, the
-coordination of benefits counts, coverage type, qualifiers and amounts, the other payer id and its
-processor control number) is kept **only in its own format**: a one- or two-character code, a count,
-a two-letter state, an amount, or for the other payer id and processor control number at most ten
-letters, digits, spaces or hyphens. A value in any other shape is blocked and recorded like an
-unlisted field.
+coordination of benefits counts, coverage type, qualifiers and amounts, and the other payer id) is
+kept **only in its own format**: a one- or two-character code, a count,
+a two-letter state, an amount, or for the other payer id (`340-7C`) five or six digits, the form of a
+BIN or an NAIC company code. A value in any other shape is blocked and recorded like an unlisted
+field, which removes an other payer id in another form (a Health Industry Number, say). The other
+payer processor control number (`MH`) is not kept at all: it has no format that tells a plan's
+routing code from a short name, so it is blocked and recorded whatever it holds.
 
 ## NCPDP SCRIPT is refused
 

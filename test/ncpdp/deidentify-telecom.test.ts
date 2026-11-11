@@ -78,7 +78,6 @@ const SENTINELS = [
 const SURVIVORS = [
   "00071015527", // NDC drug code
   "RX0000001", // Rx reference number (retained residual)
-  "PAYERID99", // other-payer id (a payer identifier, not the patient's)
   "PHARM123", // pharmacy service-provider id
   "441", // ZIP generalized to 3-digit prefix
   "1985", // DOB generalized to year
@@ -139,7 +138,9 @@ describe("NCPDP Telecom structured + fail-closed behavior", () => {
     expect(fieldValue(findSegment(tx.segments, "01"), "2C")).toBe("2"); // pregnancy indicator retained (335-2C)
     expect(fieldValue(findSegment(tx.segments, "04"), "C3")).toBe("01"); // person code retained
     expect(fieldValue(findSegment(tx.segments, "05"), "DV")).toBe("1000"); // COB monetary amount retained
-    expect(fieldValue(findSegment(tx.segments, "05"), "7C")).toBe("PAYERID99"); // payer id retained
+    // The other payer id is kept only as five or six digits (a BIN or an NAIC code); this one is
+    // letters and digits, so it is removed (fail closed), an over-removal the guide names.
+    expect(fieldValue(findSegment(tx.segments, "05"), "7C")).toBe("");
   });
 
   it("blocks the FQ additional-message free-text field (fails closed)", () => {

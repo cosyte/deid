@@ -81,6 +81,7 @@ const CODE_PATHS: readonly (readonly (string | number)[])[] = [
   ["telecom", 0, "system"],
   ["telecom", 0, "use"],
   ["gender"],
+  ["language"],
   ["code", "coding", 0, "code"],
   ["code", "coding", 0, "system"],
   ["code", "text"],
@@ -332,5 +333,17 @@ describe("the generated leak property: FHIR R4", () => {
     const caught = tamper(placed, pass(raw));
     expect(caught.inOutput).toContain("survives in the output");
     expect(caught.inManifest).toContain("is in the manifest");
+  });
+});
+
+/**
+ * The keep the adapter closes, put through the same sweep as a generated case: with its fix taken out
+ * of the adapter, the sweep reports each one.
+ */
+describe("the FHIR sweep reports a short name kept as a language", () => {
+  it.each(["ZQVABA", "Zqvaba", "Zqv-Aba"])("Patient.language: %s", (sentinel) => {
+    const raw = JSON.stringify({ resourceType: "Patient", language: sentinel });
+    const placed: Placement[] = [{ sentinel, shape: "qualifier-or-code", where: "language" }];
+    expect(sweep(placed, pass(raw))).toEqual([]);
   });
 });

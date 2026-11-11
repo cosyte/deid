@@ -17,7 +17,12 @@ import { parseResource, serializeResource } from "@cosyte/fhir";
 import { parseCcda } from "@cosyte/ccda";
 import { buildTelecomRequest, serializeTelecom } from "@cosyte/ncpdp/telecom";
 
-import { createDeidContext, DEID_DISPOSITION_CODES as D } from "../../src/index.js";
+import {
+  createDeidContext,
+  defineDeidPolicy,
+  DEID_DISPOSITION_CODES as D,
+  SAFE_HARBOR_CATEGORIES as C,
+} from "../../src/index.js";
 import { deidentifyHl7 } from "../../src/hl7/index.js";
 import { deidentifyFhir } from "../../src/fhir/index.js";
 import { deidentifyCcda } from "../../src/ccda/index.js";
@@ -126,7 +131,11 @@ describe("X12: a party's own reference number is kept only under a party its rol
     `GS*${gs}*A*A*20000101*0000*1*X*${guide}~ST*${st}*0001*${guide}~`;
   function x12(body: string, st = "270"): { out: string; rows: string[] } {
     const head =
-      st === "834" ? envelope("BE", "834", "005010X220A1") : envelope("HS", "270", "005010X279A1");
+      st === "834"
+        ? envelope("BE", "834", "005010X220A1")
+        : st === "820"
+          ? envelope("RA", "820", "005010X218")
+          : envelope("HS", "270", "005010X279A1");
     const count = body.split("~").length + 1;
     const r = deidentifyX12String(
       `${head}${body}SE*${String(count)}*0001~GE*1*1~IEA*1*000000001~`,
@@ -197,6 +206,72 @@ describe("X12: a party's own reference number is kept only under a party its rol
   it("an administrative reference is kept by its qualifier alone, as before", () => {
     expect(x12("NM1*IL*1*ZZFAMILY~REF*G1*ZQLKREFD03X~").out).toContain("ZQLKREFD03X");
   });
+
+  it("in an 820, an ENT starts a new section: a payee before it does not vouch for the REF", () => {
+    // Non-conforming input (a party number with no NM1 after the ENT), the shape the property's
+    // pin already read as a new section while the adapter did not.
+    const { out, rows } = x12("N1*PE*ZZPAYEE~ENT*1~REF*0B*ZQLKREFH07X~", "820");
+    expect(out).not.toContain("ZQLKREFH07X");
+    expect(rows).toContain(`820/REF[0]-2 ${D.DEID_LOCUS_BLOCKED}`);
+    // A payee inside the entity's own section still vouches for its REF.
+    expect(x12("ENT*1~N1*PE*ZZPAYEE~REF*0B*ZQLKREFI08X~", "820").out).toContain("ZQLKREFI08X");
+  });
+
+  it("a provider NM1 with no name and no id vouches for nothing: no row, so no keep", () => {
+    // The manifest records a party kept by role only when it names itself; the REF rule now agrees.
+    const { out, rows } = x12("NM1*1P*2~REF*0B*ZQLKREFJ09X~");
+    expect(out).not.toContain("ZQLKREFJ09X");
+    expect(rows).toContain(`270/REF[0]-2 ${D.DEID_LOCUS_BLOCKED}`);
+    expect(rows.some((r) => r.includes(D.DEID_PARTY_ROLE_RETAINED))).toBe(false);
+  });
+});
+
+describe("X12: a trace number is replaced, the same one by the same value", () => {
+  const isa =
+    "ISA*00*          *00*          *ZZ*A              *ZZ*A              *000101*0000*^*00501*000000001*0*P*:~";
+  function run(body: string): { out: string; rows: string[] } {
+    const count = body.split("~").length + 1;
+    const r = deidentifyX12String(
+      `${isa}GS*HB*A*A*20000101*0000*1*X*005010X279A1~ST*271*0001*005010X279A1~${body}` +
+        `SE*${String(count)}*0001~GE*1*1~IEA*1*000000001~`,
+      { context: ctx },
+    );
+    return { out: r.x12, rows: r.manifest.map((m) => `${m.locus} ${m.code}`) };
+  }
+
+  it("TRN-02 is replaced and recorded, in every shape a trace number takes", () => {
+    for (const trace of ["ZQLKTRAC00X", "ZQVAB", "Zqvabc", "93175012547"]) {
+      const { out, rows } = run(`TRN*1*${trace}*9ZZORIGIN~`);
+      expect(out).not.toContain(trace);
+      expect(out).toContain("TRN*1*1*9ZZORIGIN~");
+      expect(rows).toContain(`271/TRN[0]-2 ${D.DEID_IDENTIFIER_SUBSTITUTED}`);
+    }
+  });
+
+  it("a reference element holding a second component or a repetition is removed whole", () => {
+    // Found by the X12 property on seed -1577527710 once the TRN pin read the shape from the input:
+    // `TRN-04` written as `A1:<value>` was kept whole, the value riding in its second component.
+    const { out, rows } = run("TRN*1*ZZTRACE*9ZZORIGIN*A1:ZQLKAAAA00X~TRN*1*ZZTRACE*A1^ZQVABA~");
+    expect(out).not.toContain("ZQLKAAAA00X");
+    expect(out).not.toContain("ZQVABA");
+    expect(rows).toContain(`271/TRN[0]-4 ${D.DEID_LOCUS_BLOCKED}`);
+    expect(rows).toContain(`271/TRN[1]-3 ${D.DEID_LOCUS_BLOCKED}`);
+    // One simple value is still kept.
+    expect(run("TRN*1*ZZTRACE*9ZZORIGIN*ZZDIVISION~").out).toContain("*9ZZORIGIN*ZZDIVISION~");
+  });
+
+  it("a TRN with no trace number records nothing at TRN-02", () => {
+    const { out, rows } = run("TRN*1~");
+    expect(out).toContain("TRN*1~");
+    expect(rows.filter((r) => r.startsWith("271/TRN"))).toEqual([]);
+  });
+
+  it("a trace number echoed in the same interchange gets the same replacement", () => {
+    const { out } = run(
+      "TRN*2*ZQLKTRAC01X*9ZZORIGIN~TRN*1*ZQLKTRAC02X*9ZZORIGIN~TRN*2*ZQLKTRAC01X*9ZZORIGIN~",
+    );
+    expect(out).toContain("TRN*2*1*9ZZORIGIN~TRN*1*2*9ZZORIGIN~TRN*2*1*9ZZORIGIN~");
+  });
 });
 
 describe("NCPDP Telecom: a field a person segment keeps is kept only in its own format", () => {
@@ -235,9 +310,24 @@ describe("NCPDP Telecom: a field a person segment keeps is kept only in its own 
     ["04", "C3", "001"],
     ["05", "6C", "03"],
     ["05", "7C", "610014"],
+    ["05", "7C", "12345"],
   ])("a value at %s/%s in the field's format is still kept", (seg, id, value) => {
     expect(telecom(seg, id, value)).toContain(value);
   });
+
+  it.each(["ZQVABA", "Zqvaba", "ZQV 12345", "PAYERID99", "1234567", "1234", "44-1700"])(
+    "an other payer id (05/7C) that is not five or six digits is removed: %s",
+    (value) => {
+      expect(telecom("05", "7C", value)).not.toContain(value);
+    },
+  );
+
+  it.each(["ZQVABA", "ZQLKPCN00X", "MEDDPRIME", "4417"])(
+    "an other payer processor control number (05/MH) is removed whatever it holds: %s",
+    (value) => {
+      expect(telecom("05", "MH", value)).not.toContain(value);
+    },
+  );
 });
 
 describe("FHIR: a conditional request header is removed", () => {
@@ -310,6 +400,140 @@ describe("FHIR: a person resource keeps a string only where R4 puts a code it ca
     expect(run.out["gender"]).toBe("female");
     expect(run.out["language"]).toBe("en-US");
   });
+
+  it.each(["en", "es-419", "zh-Hant-TW", "pt-BR", "fr"])(
+    "a language tag from the fixed list of primary subtags is kept: %s",
+    (language) => {
+      expect(fhir({ resourceType: "Patient", language }).out["language"]).toBe(language);
+    },
+  );
+
+  it.each([
+    "Smith",
+    "Mary-Ann",
+    "Zqvaba",
+    "ZQVABA",
+    "Li",
+    "EN-us",
+    "en-Latn-US-x-zqv",
+    "haw",
+    "xx-US",
+  ])(
+    "a language that is no tag from the fixed list, a short name included, is removed: %s",
+    (language) => {
+      const run = fhir({ resourceType: "Patient", language });
+      expect(run.wire).not.toContain(language);
+      expect(run.rows).toContain(`Patient.language ${D.DEID_LOCUS_BLOCKED}`);
+    },
+  );
+});
+
+describe("C-CDA: an id with no extension has its root replaced, the same root by the same value", () => {
+  const doc = (header: string, body = ""): string => `<?xml version="1.0"?>
+<ClinicalDocument xmlns="urn:hl7-org:v3">
+${header}
+<component><structuredBody><component><section><entry>
+<observation classCode="OBS" moodCode="EVN">${body}</observation>
+</entry></section></component></structuredBody></component>
+</ClinicalDocument>`;
+  function ccda(xml: string): { out: string; rows: string[] } {
+    const r = deidentifyCcda(parseCcda(xml), { context: ctx });
+    return { out: r.document.toString(), rows: r.manifest.map((m) => `${m.locus} ${m.code}`) };
+  }
+
+  it("a patient-role id with no extension, or an empty one, loses its root", () => {
+    const { out, rows } = ccda(
+      doc(
+        `<recordTarget><patientRole><id root="ZQLKROOT00X"/><id root="ZQLKROOT01X" extension=""/>` +
+          `<patient/></patientRole></recordTarget>`,
+      ),
+    );
+    expect(out).not.toContain("ZQLKROOT00X");
+    expect(out).not.toContain("ZQLKROOT01X");
+    expect(rows).toContain(`recordTarget/patientRole/id[0] ${D.DEID_IDENTIFIER_SUBSTITUTED}`);
+    expect(rows).toContain(`recordTarget/patientRole/id[1] ${D.DEID_IDENTIFIER_SUBSTITUTED}`);
+  });
+
+  it("the same root gets the same replacement in the header and in the body, in its own shape", () => {
+    const author = "2.16.840.1.113883.19.5.99.1";
+    const { out } = ccda(
+      doc(
+        `<author><assignedAuthor><id root="${author}"/></assignedAuthor></author>` +
+          `<legalAuthenticator><assignedEntity><id root="${author}"/></assignedEntity></legalAuthenticator>`,
+        `<author><assignedAuthor><id root="${author}"/></assignedAuthor></author>`,
+      ),
+    );
+    expect(out).not.toContain(author);
+    expect(out.match(/<id root="2\.25\.1"\/>/g)?.length).toBe(3);
+  });
+
+  it("the document id and a set id that repeats it are replaced by one value", () => {
+    const { out, rows } = ccda(
+      doc(
+        `<id root="11111111-2222-4333-8444-555555555555"/>` +
+          `<setId root="11111111-2222-4333-8444-555555555555"/>`,
+      ),
+    );
+    expect(out).not.toContain("11111111-2222-4333-8444-555555555555");
+    expect(out).toContain(`<id root="00000000-0000-4000-8000-000000000001"/>`);
+    expect(out).toContain(`<setId root="00000000-0000-4000-8000-000000000001"/>`);
+    expect(rows).toContain(`id ${D.DEID_IDENTIFIER_SUBSTITUTED}`);
+    expect(rows).toContain(`setId ${D.DEID_IDENTIFIER_SUBSTITUTED}`);
+  });
+
+  it("an id with nothing to replace, or with an extension, is left as it was", () => {
+    const header = "2.16.840.1.113883.19.5.99.3";
+    const r = deidentifyCcda(
+      parseCcda(
+        doc(
+          `<id nullFlavor="NI"/><setId root="2.16.840.1.113883.19.5.99.4" extension="ZZSET1"/>` +
+            `<author><assignedAuthor><id root="${header}"/><id nullFlavor="UNK"/></assignedAuthor></author>`,
+          `<id root="${header}" extension="ZZENTRY1"/><id nullFlavor="NA"/>`,
+        ),
+      ),
+      { context: ctx },
+    );
+    const out = r.document.toString();
+    const residuals = r.unexaminedResiduals.map((x) => x.locus);
+    // The envelope: an id with no root is untouched; a set id with an extension is kept and counted.
+    expect(out).toContain(`<id nullFlavor="NI"/>`);
+    expect(out).toContain(`<setId root="2.16.840.1.113883.19.5.99.4" extension="ZZSET1"/>`);
+    expect(residuals).toContain("setId@extension");
+    // The body: the header's root behind an extension is the assigning authority, kept and counted.
+    expect(out).toContain(`<id root="${header}" extension="ZZENTRY1"/>`);
+    expect(residuals).toContain(
+      "component/structuredBody/component/section/entry/observation/id[0]@root",
+    );
+    expect(out).toContain(`<id nullFlavor="NA"/>`);
+  });
+
+  it("under a policy whose transform cannot replace an id, the root is removed, not kept", () => {
+    // `generalize` is no way to replace an identifier, so the engine blocks the root (fail closed).
+    const policy = defineDeidPolicy({ name: "odd", transforms: { [C.MRN]: "generalize" } });
+    const r = deidentifyCcda(
+      parseCcda(
+        doc(
+          `<recordTarget><patientRole><id root="ZQLKROOT05X"/><patient/></patientRole></recordTarget>`,
+        ),
+      ),
+      { context: ctx, policy },
+    );
+    expect(r.document.toString()).not.toContain("ZQLKROOT05X");
+    expect(r.document.toString()).toContain("<id/>");
+    expect(r.manifest.map((m) => `${m.locus} ${m.code}`)).toContain(
+      `recordTarget/patientRole/id ${D.DEID_LOCUS_BLOCKED}`,
+    );
+  });
+
+  it("a body id the header does not name is handed through and counted, as before", () => {
+    const r = deidentifyCcda(parseCcda(doc("", `<id root="2.16.840.1.113883.19.5.99.2"/>`)), {
+      context: ctx,
+    });
+    expect(r.document.toString()).toContain("2.16.840.1.113883.19.5.99.2");
+    expect(r.unexaminedResiduals.map((x) => x.locus)).toContain(
+      "component/structuredBody/component/section/entry/observation/id@root",
+    );
+  });
 });
 
 describe("pinned: keeps the property reaches that this change does not close", () => {
@@ -319,23 +543,25 @@ describe("pinned: keeps the property reaches that this change does not close", (
     expect(residuals).toContain("PID-3.4");
   });
 
-  it("X12: a trace number, a code-shaped procedure code, and a kept party's identifier are kept", () => {
+  it("X12: an originating company id, a code-shaped procedure code, and a kept party's id are kept", () => {
     const isa =
       "ISA*00*          *00*          *ZZ*SENDER         *ZZ*RECEIVER       *260101*1200*^*00501*000000001*0*P*:~" +
       "GS*HC*SENDER*RECEIVER*20260101*1200*1*X*005010X222A2~ST*837*0001*005010X222A2~";
     const tail = "SE*6*0001~GE*1*1~IEA*1*000000001~";
     // Found again on seed -1723084702: REF*1S (an ambulatory patient group) kept with any value.
     const body =
-      "TRN*1*ZQLKTRAC00X*1999999999~SV1*A1:ZQLKPROC01X*100*UN*1***1~" +
+      "TRN*1*ZQLKTRAC04X*ZQVABA~SV1*A1:ZQLKPROC01X*100*UN*1***1~" +
       "N1*1P*0928*A1*A1^ZQLKPRTY02X~REF*1S*ZQLKAPGN03X~";
     const out = deidentifyX12String(`${isa}${body}${tail}`, { context: ctx }).x12;
-    expect(out).toContain("ZQLKTRAC00X");
+    // TRN-03, the originating company id: kept when it fits ten characters. TRN-02 is replaced.
+    expect(out).toContain("TRN*1*1*ZQVABA~");
     expect(out).toContain("ZQLKPROC01X");
     expect(out).toContain("ZQLKPRTY02X");
     expect(out).toContain("ZQLKAPGN03X");
   });
 
   it("C-CDA: a header coded element's code and display name, and an id's root, are kept", () => {
+    // The root of an id WITH an extension: the assigning authority, not the identifier.
     const xml = `<?xml version="1.0"?>
 <ClinicalDocument xmlns="urn:hl7-org:v3">
 <recordTarget><patientRole>

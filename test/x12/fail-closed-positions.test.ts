@@ -370,7 +370,8 @@ describe("recognized codes, dates and amounts on well-formed input keep their ou
     const { x12, manifest } = run(wrap(segments.join(""), segments.length + 2));
     const out = body(x12);
     expect(out[0]).toBe(segments[0]);
-    expect(out[1]).toBe(segments[1]);
+    // The trace number is replaced by a sequence number; the rest of the TRN is kept.
+    expect(out[1]).toBe("TRN*1*1*1999999999~");
     expect(out[2]).toMatch(/^CLP\*\*1\*100\.00\*80\.00\*20\.00\*12\*ZZPAYERCLAIM\*11\*1~$/);
     expect(out[3]).toBe(segments[3]);
     expect(out[4]).toBe("DTM*472*2026~");

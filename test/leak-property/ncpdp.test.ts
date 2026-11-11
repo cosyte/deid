@@ -17,6 +17,7 @@ import { describe, expect, it } from "vitest";
 import fc from "fast-check";
 import {
   buildTelecomRequest,
+  parseTelecom,
   serializeTelecom,
   type TelecomSegmentInput,
 } from "@cosyte/ncpdp/telecom";
@@ -44,7 +45,7 @@ const SEGMENT_FIELDS: Readonly<Record<string, readonly string[]>> = {
   "02": ["EY", "E9"],
   "03": ["EZ", "DB", "DR", "PM", "2J", "2K", "2M", "2N", "2P"],
   "04": ["C2", "CC", "CD", "C1", "C3", "C6", "C9", "FO", "2A", "2B"],
-  "05": ["4C", "5C", "6C", "7C", "E8"],
+  "05": ["4C", "5C", "6C", "7C", "MH", "E8"],
   "07": ["EM", "D2", "E1", "D7", "E7", "D3", "D5", "D6", "D8", "DE", "DF", "DJ"],
   "08": ["7E", "E4", "E5", "E6", "8E", "J9"],
   "11": ["D9", "DC", "DQ", "DU", "DN"],
@@ -104,7 +105,7 @@ export function build(
   fill: { segments: readonly string[]; value: string },
   stem: string,
   specs: readonly NcpdpPlacement[],
-): { raw: string; placed: Placement[]; at: Map<string, string> } {
+): { raw: string; placed: Placement[] } {
   const segments = new Map<string, { id: string; value: string }[]>();
   for (const seg of fill.segments) {
     const ids = SEGMENT_FIELDS[seg] ?? [];
@@ -114,7 +115,6 @@ export function build(
     );
   }
   const placed: Placement[] = [];
-  const at = new Map<string, string>();
   specs.forEach((p, i) => {
     const sentinel = sentinelAt(stem, i);
     let seg = p.segment;
@@ -140,7 +140,6 @@ export function build(
     if (p.shape === "extra-repeat") fields.push({ id, value: fill.value });
     fields.push({ id, value: sentinel });
     placed.push({ sentinel, shape: p.shape, where: `${seg}/${id}` });
-    at.set(sentinel, `${seg}/${id}`);
   });
   // The claim segment is always present, so the request is a claim.
   if (!segments.has("07")) segments.set("07", [{ id: "D7", value: "00000000000" }]);
@@ -151,26 +150,43 @@ export function build(
     header: { transactionCode: "B1", binNumber: "999999", dateOfService: "20260115" },
     segments: ordered,
   });
-  return { raw: serializeTelecom(tx), placed, at };
+  return { raw: serializeTelecom(tx), placed };
 }
 
-/** Whether the inventory names `segment/field`, at any occurrence of either. */
-function namesField(loci: readonly string[], where: string): boolean {
-  const [seg, id] = where.split("/");
-  const pattern = new RegExp(`^${seg ?? ""}(\\[\\d+\\])?/${id ?? ""}(\\[\\d+\\])?$`);
-  return loci.some((l) => pattern.test(l));
+/** A segment or field id the adapter writes into a locus as it is: two digits or capitals. */
+const CODE = /^[0-9A-Z]{2}$/;
+
+/**
+ * Every locus at which the sentinel sits in the PARSED input, as the adapter writes one
+ * (`05/7C`): the segment and the field the parser put it in, not where the generator meant it to go.
+ * `undefined` when an id is not one a locus carries as it is, so no residual can stand for it.
+ */
+function lociOf(raw: string, sentinel: string): string[] | undefined {
+  const loci: string[] = [];
+  for (const seg of parseTelecom(raw).segments) {
+    for (const field of seg.fields) {
+      if (!field.value.includes(sentinel)) continue;
+      if (!CODE.test(seg.segmentId) || !CODE.test(field.id)) return undefined;
+      loci.push(`${seg.segmentId}/${field.id}`);
+    }
+  }
+  return loci;
 }
 
 /** Run the adapter on the text and read back the outcome. */
-export function pass(raw: string, at: ReadonlyMap<string, string>): PassOutcome {
+export function pass(raw: string): PassOutcome {
   try {
     const result = deidentifyTelecomString(raw, { context: ctx });
-    const loci = result.unexaminedResiduals.map((r) => r.locus);
+    const residual = new Set(result.unexaminedResiduals.map((r) => r.locus));
     return {
       output: result.telecom,
       manifest: result.manifest,
       unexaminedResiduals: result.unexaminedResiduals,
-      residualAt: (s) => namesField(loci, at.get(s) ?? ""),
+      // Every place the sentinel occupies in the parsed input must be named, at its own locus.
+      residualAt: (s) => {
+        const loci = lociOf(raw, s);
+        return loci !== undefined && loci.length > 0 && loci.every((l) => residual.has(l));
+      },
       refused: false,
     };
   } catch (err) {
@@ -196,12 +212,12 @@ export function checkCase(
   },
   tally: LeakTally,
 ): string[] {
-  const { raw, placed, at } = build(value.fill, value.stem, value.placements);
+  const { raw, placed } = build(value.fill, value.stem, value.placements);
   // Non-vacuity: only a sentinel the input holds is swept, and a case must hold one. A later
   // placement can overwrite an earlier one at the same position.
   const present = placed.filter((p) => raw.includes(p.sentinel));
   if (present.length === 0) return ["no sentinel reached the input"];
-  return sweep(present, pass(raw, at), tally);
+  return sweep(present, pass(raw), tally);
 }
 
 describe("the generated leak property: NCPDP Telecom", () => {
@@ -212,9 +228,31 @@ describe("the generated leak property: NCPDP Telecom", () => {
   it("the sweep has teeth: a sentinel put back into a real output, or the manifest, is caught", () => {
     const [sample] = fc.sample(caseArb, { seed: 7, numRuns: 1 });
     if (sample === undefined) throw new Error("no sample");
-    const { raw, placed, at } = build(sample.fill, sample.stem, sample.placements);
-    const caught = tamper(placed, pass(raw, at));
+    const { raw, placed } = build(sample.fill, sample.stem, sample.placements);
+    const caught = tamper(placed, pass(raw));
     expect(caught.inOutput).toContain("survives in the output");
     expect(caught.inManifest).toContain("is in the manifest");
+  });
+});
+
+/**
+ * The keeps the adapter closes, put through the same sweep as a generated case: with its fix taken out
+ * of the adapter, the sweep reports each one.
+ */
+describe("the NCPDP sweep reports a short value kept by shape", () => {
+  it.each([
+    ["7C", "ZQVABA"],
+    ["7C", "Zqv-Aba"],
+    ["MH", "ZQVABA"],
+  ])("at 05/%s: %s", (id, sentinel) => {
+    const tx = buildTelecomRequest({
+      header: { transactionCode: "B1", binNumber: "999999", dateOfService: "20260115" },
+      segments: [
+        { segmentId: "05", fields: [{ id, value: sentinel }] },
+        { segmentId: "07", fields: [{ id: "D7", value: "00000000000" }] },
+      ],
+    });
+    const placed: Placement[] = [{ sentinel, shape: "plain", where: `05/${id}` }];
+    expect(sweep(placed, pass(serializeTelecom(tx)))).toEqual([]);
   });
 });

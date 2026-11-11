@@ -74,6 +74,10 @@ const TEMPLATES: Readonly<Record<string, readonly Template[]>> = {
     ["patientRole", (s) => `<telecom use="${s}" value="tel:+1-555-0100"/>`],
     ["patient", (s) => `<name use="${s}"><given>ZZGIVEN</given></name>`],
     ["patientRole", (s) => `<id root="${s}" extension="123"/>`],
+    // An id with no extension, or an empty one: the root is the identifier.
+    ["patientRole", (s) => `<id root="${s}"/>`],
+    ["patientRole", (s) => `<id root="${s}" extension=""/>`],
+    ["doc", (s) => `<setId root="${s}"/>`],
     ["entry", (s) => `<code code="${s}" codeSystem="2.16.840.1.113883.6.1"/>`],
     ["entry", (s) => `<value xsi:type="CD" code="${s}" codeSystem="2.16.840.1.113883.6.96"/>`],
     ["entry", (s) => `<statusCode code="${s}"/>`],
@@ -105,6 +109,8 @@ const TEMPLATES: Readonly<Record<string, readonly Template[]>> = {
         `<author><assignedAuthor><assignedPerson><name>${s}</name></assignedPerson></assignedAuthor></author>`,
     ],
     ["entry", (s) => `<text>see ${s}</text>`],
+    // A record id in the body: handed through and counted, unless the header replaced the same root.
+    ["entry", (s) => `<author><assignedAuthor><id root="${s}"/></assignedAuthor></author>`],
   ],
 };
 
@@ -112,7 +118,7 @@ const SHAPES = Object.keys(TEMPLATES) as LeakShape[];
 
 const placementArb = fc.record({
   shape: fc.constantFrom(...SHAPES),
-  pick: fc.nat({ max: 7 }),
+  pick: fc.nat({ max: 11 }),
 });
 
 /** One generated case: the placements, and whether the entry and the address are there at all. */
@@ -213,6 +219,8 @@ export function pass(raw: string): PassOutcome {
       output: result.document.toString(),
       manifest: result.manifest,
       unexaminedResiduals: result.unexaminedResiduals,
+      // The pinned shapes, read from the input and the output (see `keptInPinnedShape`).
+      decidedKeep: (s) => keptInPinnedShape(raw, result.document.toString(), s),
       residualAt: (s) => {
         if (root === null) return false;
         const loci: string[] = [];
@@ -236,13 +244,70 @@ export function pass(raw: string): PassOutcome {
 }
 
 /**
+ * The pinned shapes, as loci in the output: the patient's `administrativeGenderCode/@code` and
+ * `maritalStatusCode/@displayName`, and the `@root` of a patient-role `<id>`.
+ */
+const PINNED_LOCUS =
+  /^recordTarget\/patientRole\/(patient\/administrativeGenderCode(\[\d+\])?@code|patient\/maritalStatusCode(\[\d+\])?@displayName|id(\[\d+\])?@root)$/;
+
+/**
+ * Whether the sentinel is kept in a pinned shape: in the INPUT, every place it sits is a pinned locus,
+ * and an `<id>` root sits on an `<id>` that carries a non-empty extension, so the root is its assigning
+ * authority and not the identifier; and in the OUTPUT, every place it survives is a pinned locus. A
+ * sentinel kept anywhere else, a name kept later included, is not pinned.
+ */
+function keptInPinnedShape(input: string, output: string, sentinel: string): boolean {
+  const inRoot = new DOMParser().parseFromString(input, "text/xml").documentElement;
+  const outRoot = new DOMParser().parseFromString(output, "text/xml").documentElement;
+  if (inRoot === null || outRoot === null) return false;
+  const inSites: { locus: string; el: Element }[] = [];
+  sitesOf(inRoot, "ClinicalDocument", sentinel, inSites);
+  const outSites: { locus: string; el: Element }[] = [];
+  sitesOf(outRoot, "ClinicalDocument", sentinel, outSites);
+  return (
+    inSites.length > 0 &&
+    inSites.every(
+      ({ locus, el }) =>
+        PINNED_LOCUS.test(locus) &&
+        (!locus.endsWith("@root") || (el.getAttribute("extension") ?? "").length > 0),
+    ) &&
+    outSites.every(({ locus }) => PINNED_LOCUS.test(locus))
+  );
+}
+
+/** Every attribute holding the sentinel, as a locus and the element that carries it. */
+function sitesOf(
+  el: Element,
+  path: string,
+  sentinel: string,
+  out: { locus: string; el: Element }[],
+): void {
+  const loci: string[] = [];
+  lociOf(el, path, sentinel, loci);
+  for (const locus of loci) out.push({ locus, el: elementAt(el, locus) ?? el });
+}
+
+/** The element a locus written by {@link lociOf} names, read back from the same document. */
+function elementAt(root: Element, locus: string): Element | undefined {
+  const steps = locus.replace(/@[^/]*$/, "").split("/");
+  let el: Element | undefined = root;
+  for (const step of steps) {
+    if (el === undefined) return undefined;
+    const kids = children(el);
+    el = kids.find((k) => k.seg === step)?.el;
+  }
+  return el;
+}
+
+/**
  * The C-CDA keeps this suite pins rather than closes (named on the limitations page, pinned in
  * `./found.test.ts`): in the header, a coded element the allow-list recognizes keeps its `@code` and
- * its `@displayName` as they arrived, and an identifier keeps its `@root`.
+ * its `@displayName` as they arrived, and an identifier WITH an extension keeps its `@root`, the
+ * assigning authority. The pin reads the input and the output, so it holds only for a sentinel kept in
+ * that shape.
  */
 export const CCDA_PINS: readonly Pin[] = [
-  // administrativeGenderCode/@code, maritalStatusCode/@displayName, id/@root.
-  { applies: (p) => ["patient#0", "patient#1", "patientRole#4"].includes(p.where) },
+  { applies: (p, outcome) => outcome.decidedKeep?.(p.sentinel) === true },
 ];
 
 /** One case through the property: build, check the sentinels are in the input, run, sweep. */
@@ -275,5 +340,29 @@ describe("the generated leak property: C-CDA", () => {
     const caught = tamper(placed, pass(raw));
     expect(caught.inOutput).toContain("survives in the output");
     expect(caught.inManifest).toContain("is in the manifest");
+  });
+});
+
+/**
+ * An extension-less `<id>` root, put through the same sweep and the same pins as a generated case: the
+ * pins never accept it, and it is gone from the output, replaced rather than kept and counted. Before
+ * the change the document's own `setId` root was kept (counted as an unexamined residual, which the
+ * sweep allows), so the last assertion is the one that failed.
+ */
+describe("the C-CDA pins never accept an extension-less id root, and it does not survive", () => {
+  it.each([
+    ["the document's set id", `<setId root="ZQLKROOT00X"/>`, "", "ZQLKROOT00X"],
+    ["a patient-role id", "", `<id root="ZQVABA"/>`, "ZQVABA"],
+    ["a patient-role id with an empty extension", "", `<id root="Zqvaba" extension=""/>`, "Zqvaba"],
+  ])("%s", (_label, envelope, id, sentinel) => {
+    const raw = `<?xml version="1.0"?>
+<ClinicalDocument xmlns="urn:hl7-org:v3">
+${envelope}
+<recordTarget><patientRole>${id}<patient/></patientRole></recordTarget>
+</ClinicalDocument>`;
+    const placed: Placement[] = [{ sentinel, shape: "qualifier-or-code", where: "fixed case" }];
+    const outcome = pass(raw);
+    expect(sweep(placed, outcome, undefined, CCDA_PINS)).toEqual([]);
+    expect(outcome.output).not.toContain(sentinel);
   });
 });

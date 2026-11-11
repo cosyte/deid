@@ -29,6 +29,7 @@ import {
   runLeakProperty,
   sentinelAt,
   sentinelStem,
+  stemAvoiding,
   sweep,
   tamper,
   type LeakShape,
@@ -175,8 +176,10 @@ export function build(
   const d = delimsOf(wire);
   const lines = wire.split("\r").filter((l) => l.length > 0);
   const placed: Placement[] = [];
+  // MSH-1 and MSH-2: the five characters a value must not hold unescaped.
+  const safeStem = stemAvoiding(stem, wire.slice(3, 8));
   specs.forEach((spec, i) => {
-    const sentinel = sentinelAt(stem, i);
+    const sentinel = sentinelAt(safeStem, i);
     const [segment, field, component] =
       spec.shape === "qualifier-or-code"
         ? spec.code

@@ -12,7 +12,8 @@
  *
  * For each one, every segment is listed with the output it must have. A segment with no individual's
  * value in it must come back byte-identical; one that carries a name, an identifier or a date of the
- * individual moves only at those positions. `STC` keeps only its status composites and its payment
+ * individual moves only at those positions, and a trace number (`TRN-02`) is replaced by a sequence
+ * number counted in the order the distinct trace numbers are met. `STC` keeps only its status composites and its payment
  * method, so its dates, amounts, action code and check number are the control's `blocked` rows. No
  * other position is removed, SE-01 still counts every segment, and the unexamined residual count is
  * zero.
@@ -108,7 +109,7 @@ const CONTROLS: Readonly<Record<string, Control>> = {
       "HL*2*1*21*1",
       PROVIDER,
       "HL*3*2*22*0",
-      "TRN*1*ZZTRACE1*1999999999",
+      ["TRN*1*ZZTRACE1*1999999999", "TRN*1*1*1999999999"],
       SUBSCRIBER("ZZMEMBER270"),
       ["REF*6P*ZZGROUP270", "REF*6P*"],
       DOB("M"),
@@ -128,7 +129,7 @@ const CONTROLS: Readonly<Record<string, Control>> = {
       "HL*2*1*21*1",
       PROVIDER,
       "HL*3*2*22*0",
-      "TRN*2*ZZTRACE1*1999999999",
+      ["TRN*2*ZZTRACE1*1999999999", "TRN*2*1*1999999999"],
       SUBSCRIBER("ZZMEMBER271"),
       ["REF*EJ*ZZACCT271", "REF*EJ*"],
       ["REF*F6*ZZHICN271", "REF*F6*"],
@@ -169,7 +170,7 @@ const CONTROLS: Readonly<Record<string, Control>> = {
       "HL*4*3*22*0",
       DOB("M"),
       SUBSCRIBER("ZZMEMBER276"),
-      "TRN*1*ZZTRACE1",
+      ["TRN*1*ZZTRACE1", "TRN*1*1"],
       "REF*1K*ZZPAYERCLAIM",
       "REF*BLT*111",
       ["REF*EJ*ZZACCT276", "REF*EJ*"],
@@ -194,7 +195,7 @@ const CONTROLS: Readonly<Record<string, Control>> = {
       PROVIDER,
       "HL*4*3*22*0",
       SUBSCRIBER("ZZMEMBER277"),
-      "TRN*2*ZZTRACE1",
+      ["TRN*2*ZZTRACE1", "TRN*2*1"],
       ["STC*F1:65*20260610**200.00*150.00*20260608*CHK*20260612*ZZCHECK1", "STC*F1:65******CHK**"],
       "REF*1K*ZZPAYERCLAIM",
       ["REF*EJ*ZZACCT277", "REF*EJ*"],
@@ -220,7 +221,7 @@ const CONTROLS: Readonly<Record<string, Control>> = {
       SUBSCRIBER("ZZMEMBER278"),
       DOB("F"),
       "HL*4*3*EV*1",
-      "TRN*2*ZZTRACE1*1999999999",
+      ["TRN*2*ZZTRACE1*1999999999", "TRN*2*1*1999999999"],
       "UM*HS*I*3*11:B",
       "HCR*A1*ZZCERT278",
       "REF*BB*ZZAUTH278",
@@ -294,7 +295,7 @@ const CONTROLS: Readonly<Record<string, Control>> = {
     st01: "835",
     lines: [
       "BPR*I*100.00*C*ACH*CCP*01*999999999*DA*123456*1999999999**01*999999999*DA*654321*20260615",
-      "TRN*1*ZZTRACE1*1999999999",
+      ["TRN*1*ZZTRACE1*1999999999", "TRN*1*1*1999999999"],
       // The receiver id names a party, and the TR3 puts it before any N1 says whose it is: a party
       // number with no kept party before it is removed (an over-removal of this header value).
       ["REF*EV*ZZRECEIVER", "REF*EV*"],
@@ -454,7 +455,7 @@ const CONTROLS: Readonly<Record<string, Control>> = {
       PAYER,
       "HL*2*1*21*1",
       SUBMITTER,
-      "TRN*1*ZZBATCHTRACE",
+      ["TRN*1*ZZBATCHTRACE", "TRN*1*1"],
       ["STC*A1:19:PR*20260615*WQ*5000", "STC*A1:19:PR***"],
       "QTY*90*1",
       "QTY*AA*1",
@@ -462,13 +463,13 @@ const CONTROLS: Readonly<Record<string, Control>> = {
       "AMT*YY*150",
       "HL*3*2*19*1",
       PROVIDER,
-      "TRN*2*ZZPROVIDERTRACE",
+      ["TRN*2*ZZPROVIDERTRACE", "TRN*2*2"],
       ["STC*A2:20:PR*20260615*WQ*150", "STC*A2:20:PR***"],
       "QTY*QA*1",
       "AMT*YU*150",
       "HL*4*3*PT",
       ["NM1*QC*1*ZZPATLAST*ZZPATFIRST****MI*ZZMEMBER277CA", "NM1*QC*1******MI*"],
-      "TRN*2*ZZCLAIMTRACE",
+      ["TRN*2*ZZCLAIMTRACE", "TRN*2*3"],
       ["STC*A7:21:PR*20260615*U*150", "STC*A7:21:PR***"],
       "REF*1K*ZZPAYERCLAIM",
       ["DTP*472*RD8*20260601-20260602", "DTP*472*RD8*2026"],

@@ -9,15 +9,16 @@
  * scheme, a code meaning), a value under a VR the attribute does not have (`UN`), and nested sequence
  * items, two levels deep and with a private attribute inside.
  *
- * Where a sentinel sits is known from the generator, as the adapter writes a locus
- * (`(0008,1032)[0]/(0008,0104)`), and the residual it must be named by is matched on that.
+ * Where a sentinel sits is read back from the PARSED input, as the adapter writes a locus
+ * (`(0008,1032)[0]/(0008,0104)`), so the residual it must be named by is the parser's position and not
+ * the generator's intent.
  */
 
 import { Buffer } from "node:buffer";
 
 import { describe, expect, it } from "vitest";
 import fc from "fast-check";
-import { parseDicom, serializeDicom } from "@cosyte/dicom";
+import { parseDicom, serializeDicom, type Dataset } from "@cosyte/dicom";
 
 import { DeidError, FATAL_CODES } from "../../src/index.js";
 import { deidentifyDicom } from "../../src/dicom/index.js";
@@ -262,16 +263,41 @@ export function build(value: {
   return { buf, placed, loci };
 }
 
+/**
+ * Every locus at which the sentinel sits in the PARSED dataset, as the adapter writes one: the tag,
+ * behind the sequence and item index of each level above it. Read from each attribute's value bytes,
+ * so it is where the parser put the value.
+ */
+function lociOf(dataset: Dataset, context: string, sentinel: string, out: string[]): void {
+  for (const element of dataset.elements()) {
+    const tag = fmt(element.tag);
+    const items = element.items;
+    if (items === undefined) {
+      if (element.rawBytes.toString("latin1").includes(sentinel)) out.push(`${context}${tag}`);
+      continue;
+    }
+    items.forEach((item, i) => {
+      lociOf(item, `${context}${tag}[${String(i)}]/`, sentinel, out);
+    });
+  }
+}
+
 /** Run the adapter on the bytes and read back the outcome. */
-export function pass(buf: Buffer, loci: ReadonlyMap<string, string>): PassOutcome {
+export function pass(buf: Buffer): PassOutcome {
   try {
-    const result = deidentifyDicom(parseDicom(buf));
+    const input = parseDicom(buf);
+    const result = deidentifyDicom(input);
     const residual = new Set(result.unexaminedResiduals.map((r) => r.locus.toLowerCase()));
     return {
       output: serializeDicom(result.dataset).toString("latin1"),
       manifest: result.manifest,
       unexaminedResiduals: result.unexaminedResiduals,
-      residualAt: (s) => residual.has(loci.get(s) ?? ""),
+      // Every place the sentinel occupies in the parsed input must be named, at its own locus.
+      residualAt: (s) => {
+        const loci: string[] = [];
+        lociOf(input, "", s, loci);
+        return loci.length > 0 && loci.every((l) => residual.has(l));
+      },
       refused: false,
     };
   } catch (err) {
@@ -290,13 +316,13 @@ export function pass(buf: Buffer, loci: ReadonlyMap<string, string>): PassOutcom
 
 /** One case through the property: build, check the sentinels are in the input, run, sweep. */
 export function checkCase(value: Parameters<typeof build>[0], tally: LeakTally): string[] {
-  const { buf, placed, loci } = build(value);
+  const { buf, placed } = build(value);
   const before = buf.toString("latin1");
   // Non-vacuity: only a sentinel the input holds is swept, and a case must hold one. A later
   // placement can overwrite an earlier one at the same position.
   const present = placed.filter((p) => before.includes(p.sentinel));
   if (present.length === 0) return ["no sentinel reached the input"];
-  return sweep(present, pass(buf, loci), tally);
+  return sweep(present, pass(buf), tally);
 }
 
 describe("the generated leak property: DICOM", () => {
@@ -307,8 +333,8 @@ describe("the generated leak property: DICOM", () => {
   it("the sweep has teeth: a sentinel put back into a real output, or the manifest, is caught", () => {
     const [sample] = fc.sample(caseArb, { seed: 7, numRuns: 1 });
     if (sample === undefined) throw new Error("no sample");
-    const { buf, placed, loci } = build(sample);
-    const caught = tamper(placed, pass(buf, loci));
+    const { buf, placed } = build(sample);
+    const caught = tamper(placed, pass(buf));
     expect(caught.inOutput).toContain("survives in the output");
     expect(caught.inManifest).toContain("is in the manifest");
   });
