@@ -19,7 +19,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { parseResource, serializeResource } from "@cosyte/fhir";
+import { complex, list, parseResource, primitive, serializeResource } from "@cosyte/fhir";
 
 import {
   createDeidRegistry,
@@ -617,18 +617,45 @@ describe("FHIR resource ids: the other transforms and shapes", () => {
   });
 
   it("a Bundle literal held as a list is read item by item, and an object item is removed", () => {
-    const run = pass({
-      resourceType: "Bundle",
-      type: "batch",
-      entry: [
-        {
-          resource: { resourceType: "Basic", code: { text: "x" } },
-          request: { method: "POST", url: ["Basic", { value: "ZZOBJECTITEM" }] },
-        },
-      ],
-    });
-    expect(at(run.out, "entry.0.request.url")).toEqual(["Basic"]);
-    expect(run.wire).not.toContain("ZZOBJECTITEM");
+    // Built from the model directly: the reader does not hand an object through at a uri, but a model
+    // a caller builds by hand can hold one, and the pass must not keep it.
+    const str = (value: string) => primitive(value);
+    const bundle = complex([
+      { name: "resourceType", value: str("Bundle") },
+      { name: "type", value: str("batch") },
+      {
+        name: "entry",
+        value: list([
+          complex([
+            {
+              name: "resource",
+              value: complex([
+                { name: "resourceType", value: str("Basic") },
+                { name: "code", value: complex([{ name: "text", value: str("x") }]) },
+              ]),
+            },
+            {
+              name: "request",
+              value: complex([
+                { name: "method", value: str("POST") },
+                {
+                  name: "url",
+                  value: list([
+                    str("Basic"),
+                    complex([{ name: "value", value: str("ZZOBJECTITEM") }]),
+                  ]),
+                },
+              ]),
+            },
+          ]),
+        ]),
+      },
+    ]);
+    const { document, manifest } = deidentifyFhir(bundle);
+    const wire = serializeResource(document);
+    expect(wire).not.toContain("ZZOBJECTITEM");
+    expect(wire).toContain('"url":["Basic"]');
+    expect(row(manifest, "Bundle.entry[0].request.url[1]")?.code).toBe(D.DEID_LOCUS_BLOCKED);
   });
 
   it("a Bundle whose entry is a single object, or holds a non-object, still has its bases read", () => {
