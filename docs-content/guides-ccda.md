@@ -81,7 +81,7 @@ pass reads only narrative, every `<birthTime>` and the value of an age observati
 
 | Participation | Loci | Transform |
 |---|---|---|
-| **recordTarget / patientRole** (+ nested `guardian`) | `id` (MRN / SSN), `addr`, `telecom`, `patient/name`, `birthTime` | name/telecom **removed**; `id` extension **removed** under Safe Harbor, assigning root retained (a consistent keyed surrogate only under a preset that does not claim the label); an `id` with no extension has its root **replaced** (see below); `birthTime` → **year** (removed, with `nullFlavor="MSK"`, when the year shows an age over 89); `addr` → safe **3-digit ZIP** (or `000`), finer geography dropped |
+| **recordTarget / patientRole** (+ nested `guardian`) | `id` (MRN / SSN), `addr`, `telecom`, `patient/name`, `birthTime` | name/telecom **removed**; `id` extension **removed** under Safe Harbor (a consistent keyed surrogate only under a preset that does not claim the label), assigning root retained unless the header replaced the same root; an `id` with no extension has its root **replaced** (see below); `birthTime` → **year** (removed, with `nullFlavor="MSK"`, when the year shows an age over 89); `addr` → safe **3-digit ZIP** (or `000`), finer geography dropped |
 | **author / dataEnterer / informant / authenticator / legalAuthenticator / participant / custodian** | person `name`, `id`, `addr`, `telecom`, participation `time` | same category transforms: Safe Harbor removes identifiers of **relatives, employers, and household members**, not only the patient |
 | **componentOf / documentationOf** | encounter / service-event `id`, `effectiveTime` | ids acted on under the configured transform; dates → **year** |
 | **section `<text>` narrative, `nonXMLBody`** | every narrative block | **fail closed**: blocked, never regex-scrubbed |
@@ -103,9 +103,16 @@ shape (an OID under `2.25`, a UUID, or a plain token) counted from 1 in the orde
 are met in one call, recorded as `DEID_IDENTIFIER_SUBSTITUTED`; under a keyed preset it is the keyed
 surrogate. The same root gets the same replacement throughout the document, so a `setId` that repeats
 the `id`, an author named in two participations, and a clinical body `<id>` carrying a root the header
-replaced all still match. Any other body `<id>` is a clinical record's own id and is kept and counted
-as an unexamined residual; so are the document `<id>` and `<setId>` when they have an extension. A
-document de-identified in two calls gets two unrelated stand-ins for the same root.
+replaced all still match.
+
+A root the header replaced is replaced on **every** element that carries it as its `@root`, with an
+extension or without: a header `<id>` with an extension, the document's own `<id>` and `<setId>` with
+an extension, and a clinical body `<id>` with an extension all take the same replacement, recorded at
+the root's own position (`component/structuredBody/.../observation/id@root`). The extension beside it
+is decided as before: transformed in the header, kept and counted in the body and on the document's
+own ids. A root the header did not replace is left where it was: on a body `<id>` it is kept and
+counted, and on the document `<id>` and `<setId>` with an extension it is kept and counted with the
+extension. A document de-identified in two calls gets two unrelated stand-ins for the same root.
 
 ## How to read a C-CDA locus path
 

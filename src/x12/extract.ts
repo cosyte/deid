@@ -54,6 +54,7 @@ import {
   type X12ElementShape,
   type X12ShapeContext,
 } from "./element-shapes.js";
+import { isX12Version5010OrLater, x12MaxLength } from "./element-lengths.js";
 
 /**
  * Where a segment outside every transaction set sits: the interchange header (`ISA`), an envelope-level
@@ -131,8 +132,17 @@ export interface X12Extraction {
 interface X12LocusAccumulator {
   readonly loci: GenericLocus[];
   readonly coords: X12Coord[];
-  /** The interchange's component and repetition separators, which a composite or repeating shape reads. */
-  readonly delimiters: { readonly component: string; readonly repetition: string };
+  /**
+   * The interchange's component and repetition separators, which a composite or repeating shape reads.
+   * The repetition separator is `undefined` when the interchange's version has none
+   * ({@link x12RepetitionSeparator}).
+   */
+  readonly delimiters: { readonly component: string; readonly repetition: string | undefined };
+  /**
+   * The indices of the functional groups whose `GS-08` names 005010 or later, which take the 005010
+   * element maxima; every other group takes the shorter 004010 ones (see `./element-lengths.js`).
+   */
+  readonly version5010: ReadonlySet<number>;
   /**
    * For each transaction set (`group:transaction`), whether the last `NM1` / `N1` party in its current
    * section (since the last `HL`, `ENT`, or `INS` in an 834) is one its role keeps that names itself. A
@@ -285,9 +295,34 @@ function name(pos: SegPos, elements: readonly number[]): void {
   for (const element of elements) pos.named.add(element);
 }
 
-/** Append a locus + its coordinate to the accumulator; the coordinate's elements are named by it. */
+/**
+ * The most characters a locus's value may take where the applier writes it, which bounds what the
+ * engine writes there ({@link GenericLocus.maxLength}). A date is bounded by its own length, which the
+ * format its segment declares fixes. Any other value is bounded by the maxima of the elements it is
+ * written into, read for the functional group's version (`./element-lengths.js`); an element with no
+ * maximum on record bounds it to `0`, so nothing is written there.
+ */
+function maxLengthOf(
+  out: X12LocusAccumulator,
+  pos: SegPos,
+  locus: GenericLocus,
+  coord: X12Coord,
+): number {
+  if (locus.kind === "date") return locus.value.length;
+  return x12MaxLength(pos.segId, coord.elements, out.version5010.has(pos.at.groupIndex));
+}
+
+/**
+ * Append a locus + its coordinate to the accumulator; the coordinate's elements are named by it. A
+ * locus with a category, one the engine may write a value into, carries the length its position
+ * holds ({@link maxLengthOf}); one with none is blocked whatever it holds.
+ */
 function push(out: X12LocusAccumulator, pos: SegPos, locus: GenericLocus, coord: X12Coord): void {
-  out.loci.push(locus);
+  out.loci.push(
+    locus.category === undefined
+      ? locus
+      : { ...locus, maxLength: maxLengthOf(out, pos, locus, coord) },
+  );
   out.coords.push(coord);
   name(pos, coord.elements);
 }
@@ -1031,6 +1066,22 @@ function envelopePos(segId: X12EnvelopeAddress["segment"], occurrence: number): 
 }
 
 /**
+ * The interchange's **repetition separator**, read by its version. From version 00402 on, `ISA-11` is
+ * the repetition separator. Before it, `ISA-11` is the interchange control standards identifier, the
+ * letter `U`, and the interchange has no repetition separator at all, so a `U` in a value is a letter
+ * like any other. So `ISA-11` is not read as a separator only when `ISA-12` names a version before
+ * 00402 and `ISA-11` is a letter or a digit; in every other case, a version that cannot be read
+ * included, it is read as the separator, and a single value holding it is removed as before.
+ */
+function x12RepetitionSeparator(interchange: X12Interchange): string | undefined {
+  // The parser reads the ISA at fixed byte positions and refuses one that is short, so ISA-12 is there.
+  const version = interchange.isa.elements[12] as string;
+  const declared = interchange.delimiters.repetition;
+  const before402 = /^\d{5}$/.test(version) && Number(version) < 402;
+  return before402 && /^[A-Za-z0-9]$/.test(declared) ? undefined : declared;
+}
+
+/**
  * Walk a parsed X12 interchange and extract every PHI-bearing (or fail-closed) locus, structurally,
  * from the `@cosyte/x12` model. Never mutates the interchange.
  *
@@ -1060,8 +1111,13 @@ export function extractX12Loci(interchange: X12Interchange): X12Extraction {
     coords: [],
     delimiters: {
       component: interchange.delimiters.component,
-      repetition: interchange.delimiters.repetition,
+      repetition: x12RepetitionSeparator(interchange),
     },
+    version5010: new Set(
+      interchange.groups.flatMap((group, groupIndex) =>
+        isX12Version5010OrLater(group.gs.elements[8]) ? [groupIndex] : [],
+      ),
+    ),
     partyKept: new Map(),
   };
   const enumerated: { readonly seg: SegmentElements; readonly pos: SegPos }[] = [];

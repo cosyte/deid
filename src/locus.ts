@@ -136,6 +136,24 @@ export interface GenericLocus {
    * loci by hand sets it on its own.
    */
   readonly referencedId?: boolean;
+  /**
+   * The **most characters the position may hold**, when the format bounds it: an X12 element's
+   * maximum length, for example. Present, it bounds every value the engine writes there:
+   *
+   * - a **keyed surrogate** (`pseudonymize`, `hash`) longer than this is cut to its first `maxLength`
+   *   characters of lowercase hex, 4 bits each, when that keeps at least 80 bits (20 characters). A
+   *   position shorter than 20 characters cannot carry a surrogate that links safely, so the value is
+   *   **blocked** instead (removed, recorded as `DEID_LOCUS_BLOCKED`). A referenced identifier whose
+   *   surrogate in its own shape (a UUID, an OID) does not fit is written as the cut hex digest;
+   * - a **stand-in** that does not fit in its shape is written as its bare sequence number;
+   * - any **other** value the engine writes that is longer than this is blocked.
+   *
+   * A value kept exactly as it arrived is not checked. A value that is not a whole number of zero or
+   * more is read as `0`, so every value written there is blocked. Absent (the default) nothing is
+   * bounded, exactly as before. The X12 adapter sets it; a caller building loci by hand sets it on
+   * its own.
+   */
+  readonly maxLength?: number;
   /** The value at the locus. Consumed by the engine, never copied into the manifest. */
   readonly value: string;
 }

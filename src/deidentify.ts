@@ -27,6 +27,7 @@ import type { DeidDocument, GenericLocus, TransformedLocus } from "./locus.js";
 import { ManifestBuilder, type DeidManifestEntry, type DeidResult } from "./manifest.js";
 import { resolvePolicy, type DeidPolicy, type TransformName } from "./policy.js";
 import type { FreeTextRedactor } from "./redactor.js";
+import { declaredMaxLength, fitKeyedSurrogate } from "./field-length.js";
 import { keyedInShape, ReferencedIdStandIns } from "./referenced-id.js";
 import {
   assertRetentionContract,
@@ -275,7 +276,7 @@ function referencedIdOutcome(
 ): LocusOutcome {
   if (transform === "redact" || transform === "block") {
     return {
-      value: standIns.standIn(locus.value),
+      value: standIns.standIn(locus.value, declaredMaxLength(locus)),
       disposition: "transformed",
       manifest: {
         category,
@@ -290,8 +291,16 @@ function referencedIdOutcome(
     const ctx = requireContext(context, transform);
     const digest =
       transform === "pseudonymize" ? pseudonymize(locus.value, ctx) : keyedHash(locus.value, ctx);
+    const value = fitKeyedSurrogate(
+      keyedInShape(digest, locus.value),
+      digest,
+      declaredMaxLength(locus),
+    );
+    if (value === null) {
+      return blocked(locus.path, category, DEID_DISPOSITION_CODES.DEID_LOCUS_BLOCKED);
+    }
     return {
-      value: keyedInShape(digest, locus.value),
+      value,
       disposition: "transformed",
       manifest: {
         category,
@@ -375,9 +384,14 @@ function applyTransform(
         },
       };
     }
-    case "pseudonymize":
+    case "pseudonymize": {
+      const digest = pseudonymize(locus.value, requireContext(context, transform));
+      const value = fitKeyedSurrogate(digest, digest, declaredMaxLength(locus));
+      if (value === null) {
+        return blocked(locus.path, category, DEID_DISPOSITION_CODES.DEID_LOCUS_BLOCKED);
+      }
       return {
-        value: pseudonymize(locus.value, requireContext(context, transform)),
+        value,
         disposition: "transformed",
         manifest: {
           category,
@@ -387,9 +401,15 @@ function applyTransform(
           code: DEID_DISPOSITION_CODES.DEID_CATEGORY_PSEUDONYMIZED,
         },
       };
-    case "hash":
+    }
+    case "hash": {
+      const digest = keyedHash(locus.value, requireContext(context, transform));
+      const value = fitKeyedSurrogate(digest, digest, declaredMaxLength(locus));
+      if (value === null) {
+        return blocked(locus.path, category, DEID_DISPOSITION_CODES.DEID_LOCUS_BLOCKED);
+      }
       return {
-        value: keyedHash(locus.value, requireContext(context, transform)),
+        value,
         disposition: "transformed",
         manifest: {
           category,
@@ -399,6 +419,7 @@ function applyTransform(
           code: DEID_DISPOSITION_CODES.DEID_CATEGORY_HASHED,
         },
       };
+    }
     case "byo-redact":
     case "retain":
     case "block":
@@ -466,6 +487,24 @@ function handleFreeText(locus: GenericLocus, redactor: FreeTextRedactor | undefi
       code: DEID_DISPOSITION_CODES.DEID_FREETEXT_CONSUMER_REDACTED,
     },
   };
+}
+
+/**
+ * Hold an outcome to the length its locus declares ({@link GenericLocus.maxLength}): a value the
+ * engine wrote that is longer than the position holds is blocked, whatever wrote it. A keyed
+ * surrogate and a stand-in were already fitted where they were written; this is the guard that holds
+ * for every other transform, and for them too should a fitting ever be missed. A value kept exactly
+ * as it arrived is the document's own and is not checked.
+ */
+function withinDeclaredLength(outcome: LocusOutcome, locus: GenericLocus): LocusOutcome {
+  const max = declaredMaxLength(locus);
+  if (max === undefined || outcome.value === null || outcome.value === locus.value) return outcome;
+  if (outcome.value.length <= max) return outcome;
+  return blocked(
+    locus.path,
+    locus.category ?? SAFE_HARBOR_CATEGORIES.OTHER_UNIQUE_ID,
+    DEID_DISPOSITION_CODES.DEID_LOCUS_BLOCKED,
+  );
 }
 
 /** Resolve a single locus to its outcome, applying the fail-closed rule. */
@@ -599,14 +638,17 @@ export function deidentify(
   const standIns = new ReferencedIdStandIns();
 
   for (const locus of inputLoci) {
-    const outcome = handleLocus(
+    const outcome = withinDeclaredLength(
+      handleLocus(
+        locus,
+        policy,
+        options.context,
+        options.redactor,
+        options.retainedLoci,
+        referenceYear,
+        standIns,
+      ),
       locus,
-      policy,
-      options.context,
-      options.redactor,
-      options.retainedLoci,
-      referenceYear,
-      standIns,
     );
     loci.push(
       Object.freeze({

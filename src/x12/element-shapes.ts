@@ -41,8 +41,11 @@ import { x12CodeList, type X12CodeListElement } from "./code-lists.js";
 export interface X12ShapeContext {
   /** The interchange's component separator (`ISA-16`). */
   readonly component: string;
-  /** The interchange's repetition separator (`ISA-11`). */
-  readonly repetition: string;
+  /**
+   * The interchange's repetition separator (`ISA-11`), or `undefined` when its version has none (before
+   * 00402, `ISA-11` is the standards identifier `U`, not a separator).
+   */
+  readonly repetition: string | undefined;
   /** The 1-indexed decoded elements of the segment the value sits in. */
   readonly elements: readonly string[];
   /** The components of the composite the value sits in, when it is a component. */
@@ -287,12 +290,18 @@ function reference(max: number): X12ShapeTest {
     pattern.test(value) &&
     value.trim().length > 0 &&
     !value.includes(ctx.component) &&
-    !value.includes(ctx.repetition);
+    (ctx.repetition === undefined || !value.includes(ctx.repetition));
 }
 
-/** Keep every repetition of a repeating element when each passes `test`. */
+/**
+ * Keep every repetition of a repeating element when each passes `test`. With no repetition separator
+ * the element is one value, tested whole.
+ */
 function repeating(test: X12ShapeTest): X12ShapeTest {
-  return (value, ctx) => value.split(ctx.repetition).every((part) => test(part, ctx));
+  return (value, ctx) =>
+    ctx.repetition === undefined
+      ? test(value, ctx)
+      : value.split(ctx.repetition).every((part) => test(part, ctx));
 }
 
 /** Keep a value the complete 005010 code list of data element `element` holds, exactly as written. */

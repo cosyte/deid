@@ -524,3 +524,16 @@ DOB 19700610
 # rule must remove. Both dates are invented.
 DOB 19200301
 DOB 19200215
+
+# --- Synthetic X12 tokens for the keyed field-length suite ---
+# test/x12/keyed-field-lengths.test.ts writes small interchanges inline whose names and ids are
+# ZZ-tagged and invented, to check the keyed surrogate written into each element fits it.
+NAME ZZLAST
+NAME ZZFIRST
+NAME ZZNAMEONE
+ID ZZMEMBERREF01
+ID ZZGROUP777
+ID ZZMEMBER01
+ID ZZMEMBER02
+ID ZZSAMEID01
+ID ZZOTHERID01

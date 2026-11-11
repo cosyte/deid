@@ -177,7 +177,8 @@ describe("X12 structured behavior", () => {
     const { x12 } = deidentifyX12String(load("837p"), { context: ctx, policy: keyed });
     expect(x12).not.toContain("ZZACCTX12");
     const clm = x12.split("~").find((s) => s.startsWith("CLM"));
-    expect(clm).toMatch(/^CLM\*[0-9a-f]{64}\*100\.00/);
+    // CLM-01 (element 1028) holds 38 characters, so the surrogate is the keyed digest cut to 38.
+    expect(clm).toMatch(/^CLM\*[0-9a-f]{38}\*100\.00/);
   });
 
   it("generalizes DTP/DMG dates to year and N4 ZIP to its 3-digit prefix", () => {

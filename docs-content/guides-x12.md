@@ -147,7 +147,10 @@ rule names. The adapter decides every element it hands through, so none of those
   time of day included, is removed rather than cut down to whatever its front looks like.
 - **Amounts, quantities and counts keep only a number**, and a control or trading partner number
   keeps a bounded run of printable characters: one value, so a value holding the component or the
-  repetition separator is removed whole.
+  repetition separator is removed whole. The repetition separator is read by version: it is `ISA-11`
+  from 00402 on, and before it (`ISA-12` of `00401` or earlier) `ISA-11` is the standards identifier
+  `U` and there is no repetition separator, so a `U` in a value is a letter. Where `ISA-12` cannot be
+  read as a version, or `ISA-11` is a punctuation character, `ISA-11` is read as the separator.
 - **A trace number (`TRN-02`) is replaced.** It is assigned per transaction, so per patient in an
   eligibility, claim status or services review inquiry. Under the Safe Harbor default the replacement
   is a sequence number counted from 1 in the order the distinct trace numbers are met in one call, the
@@ -218,6 +221,55 @@ nothing is left unexamined, `unexaminedResiduals` is always empty for X12: the c
 it is a measured zero. The transaction's creation date (`BHT-04`), a payment's effective date
 (`BPR-16`) and the envelope dates are kept when they are valid dates: they date the exchange, not the
 individual.
+
+## A keyed surrogate fits its field
+
+Under a preset that pseudonymizes or hashes a category (one that does not claim the Safe Harbor
+label), the keyed surrogate is a lowercase-hex HMAC-SHA-256 digest of 64 characters, and several X12
+elements hold fewer. So the adapter bounds each position it writes into by its data element's maximum
+length, and the surrogate written there is the digest cut to that length. A functional group whose
+`GS-08` names 005010 or later takes the 005010 maxima; any other group, one whose version cannot be
+read included, takes the 004010 maxima, which are never longer.
+
+Each character kept carries 4 bits. For `n` distinct values under one key, the chance that any two
+share a surrogate is at most `n(n-1) / 2^(bits+1)`; the last column gives it for a billion distinct
+values.
+
+| Position | Data element | 005010 max | 004010 max | Bits kept (005010 / 004010) | Bound for 10^9 values |
+| --- | --- | --- | --- | --- | --- |
+| `REF-02`, `TRN-02`, `SBR-03` | 127 | 50 | 30 | 200 / 120 | 3.1e-43 / 3.8e-19 |
+| `CLM-01`, `CLP-01` | 1028 | 38 | 38 | 152 | 8.8e-29 |
+| `N1-02`, `SBR-04`, `PER-02` | 93 | 60 | 60 | 240 | 2.8e-55 |
+| `NM1-03` | 1035 | 60 | 35 | 240 / 140 | 2.8e-55 / 3.6e-25 |
+| `NM1-04` | 1036 | 35 | 25 | 140 / 100 | 3.6e-25 / 3.9e-13 |
+| `NM1-05` | 1037 | 25 | 25 | 100 | 3.9e-13 |
+| `NM1-09`, `N1-04` | 67 | 80 | 80 | 256, the whole digest | 4.3e-60 |
+| `PER-04`, `-06`, `-08` | 364 | 256 | 80 | 256, the whole digest | 4.3e-60 |
+| `NM1-06`, `NM1-07` | 1038, 1039 | 10 | 10 | none: removed | n/a |
+| `N4-03` | 116 | 15 | 15 | none: removed | n/a |
+| A date (`DMG-02`, `DTP-03`, `DTM-02`, a date in a retained segment) | its declared format | 8 to 17 | 8 to 17 | none: removed | n/a |
+
+- **A person's name is one value written into each name element it has** (`NM1-03` to `-07`), so it
+  is cut to the shortest maximum among them: 35 characters for a last and a first name (25 in
+  004010), 25 with a middle name.
+- **A position shorter than 20 characters (80 bits, the lower bound RFC 2104 sets for a cut HMAC)
+  takes no surrogate.** The value is removed and recorded as blocked (`DEID_LOCUS_BLOCKED`, with
+  `reidentificationCode: false`, since no surrogate was written): a name with a prefix or a suffix,
+  a postal code, and every date, whose length its format fixes.
+- **Linking holds inside one key.** The same value under the same key gets the same surrogate in
+  every field of one length, and the first characters of it in a shorter field: a member id in
+  `NM1-09` and in `REF-02` matches on its first 50 characters.
+- **A holder of the output still cannot invert it.** The digest is keyed, so without the key nobody
+  can compute the surrogate of a candidate value to test a guess; cutting removes bits and adds
+  nothing about the value.
+- **A trace number** (`TRN-02`) under a keyed preset keeps the UUID or OID form of a trace number in
+  that form when it fits the field, and is the cut digest when it does not. Under the Safe Harbor
+  default its stand-in is a short sequence number, which always fits.
+- **Free text a caller's redactor writes back** (`MSG-01` and `III-04`, 264 characters; `K3-01` and
+  `NTE-02`, 80) is bounded the same way: prose longer than the element is blocked rather than written.
+
+A caller that stored X12 surrogates of 64 characters from an earlier release matches them to this
+output on the cut length.
 
 ## Known limitations
 
