@@ -133,6 +133,42 @@ interface X12LocusAccumulator {
   readonly coords: X12Coord[];
   /** The interchange's component and repetition separators, which a composite or repeating shape reads. */
   readonly delimiters: { readonly component: string; readonly repetition: string };
+  /**
+   * For each transaction set (`group:transaction`), whether the last `NM1` / `N1` party in it is one its
+   * role keeps (outside the scope clause). A provider identity `REF` is kept only under such a party.
+   */
+  readonly partyKept: Map<string, boolean>;
+}
+
+/**
+ * The `REF-01` qualifiers that name a person's or an organisation's OWN number: a license, a tax id, a
+ * provider number. Kept as a provider reference only when the last party in the transaction set is one
+ * its role keeps; after the individual, a relative, an employer, an unknown party, or no party at all,
+ * the number may be the individual's own, so it is removed and recorded.
+ */
+const PARTY_IDENTITY_REF_QUALIFIERS: ReadonlySet<string> = new Set<string>([
+  "0B", // State License Number
+  "1A", // Blue Cross Provider Number
+  "1B", // Blue Shield Provider Number
+  "1C", // Medicare Provider Number
+  "1D", // Medicaid Provider Number
+  "1G", // Provider UPIN Number
+  "1J", // Facility ID Number
+  "D3", // NCPDP Pharmacy Number
+  "EI", // Employer's Identification Number
+  "EW", // Mammography Certification Number
+  "G2", // Provider Commercial Number
+  "HPI", // National Provider Identifier
+  "LU", // Location Number
+  "N5", // Provider Plan Network Identification Number
+  "N7", // Facility Network Identification Number
+  "TJ", // Federal Taxpayer's Identification Number
+  "X4", // Clinical Laboratory Improvement Amendment Number
+]);
+
+/** The key of the transaction set a segment sits in, for {@link X12LocusAccumulator.partyKept}. */
+function transactionKey(pos: SegPos): string {
+  return `${String(pos.at.groupIndex)}:${String(pos.at.txIndex)}`;
 }
 
 /**
@@ -456,6 +492,7 @@ function handleNm1(out: X12LocusAccumulator, seg: X12Segment, pos: SegPos): void
   // The classifier reads the entity code only when it passed the exact check; anything else is unknown.
   // The transaction set decides a code whose meaning changes by set (the 820 premium payer).
   const party = classifyNm1Party(trustedCode(seg, "NM1", 1), pos.stId);
+  out.partyKept.set(transactionKey(pos), party.scope === "outside-scope");
   if (party.scope === "outside-scope") {
     // Recognized provider / organization: retained, and the role code that placed it outside the scope
     // clause is recorded at its locus rather than left to be inferred from an absence. Its qualifier is
@@ -506,6 +543,7 @@ function handleNm1(out: X12LocusAccumulator, seg: X12Segment, pos: SegPos): void
 function handleN1(out: X12LocusAccumulator, seg: X12Segment, pos: SegPos): void {
   keepCodeOrBlock(out, seg, pos, 1);
   const party = classifyNm1Party(trustedCode(seg, "N1", 1), pos.stId);
+  out.partyKept.set(transactionKey(pos), party.scope === "outside-scope");
   if (party.scope === "outside-scope") {
     // Recognized org / payer / provider party: retained, with the role code recorded at its locus.
     emitRetainedParty(out, seg, pos, party.roleCode, [2, 4]);
@@ -528,8 +566,14 @@ function handleN1(out: X12LocusAccumulator, seg: X12Segment, pos: SegPos): void 
 function handleRef(out: X12LocusAccumulator, seg: X12Segment, pos: SegPos): void {
   keepCodeOrBlock(out, seg, pos, 1);
   // The qualifier routes REF-02 only when it passed the exact check; anything else routes as unknown.
-  const disposition = classifyRefQualifier(trustedCode(seg, "REF", 1));
-  if (disposition.kind === "retain") {
+  const qualifier = trustedCode(seg, "REF", 1);
+  const disposition = classifyRefQualifier(qualifier);
+  // A party's own number is kept only under a party its role keeps; anywhere else it fails closed.
+  const partyNumber = PARTY_IDENTITY_REF_QUALIFIERS.has(qualifier.toUpperCase());
+  if (
+    disposition.kind === "retain" &&
+    (!partyNumber || out.partyKept.get(transactionKey(pos)) === true)
+  ) {
     name(pos, [2]); // recognized administrative / provider reference
     return;
   }
@@ -951,6 +995,7 @@ export function extractX12Loci(interchange: X12Interchange): X12Extraction {
       component: interchange.delimiters.component,
       repetition: interchange.delimiters.repetition,
     },
+    partyKept: new Map(),
   };
   const enumerated: { readonly seg: SegmentElements; readonly pos: SegPos }[] = [];
   const envelope = (

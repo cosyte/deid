@@ -79,6 +79,14 @@ describe("HL7 v2: an identifier keeps only its replaced number, its authority an
     expect(rows).toContain(`PID-3[1] ${D.DEID_LOCUS_BLOCKED}`);
   });
 
+  it("and in the visit number a retained PV1 carries (PV1-19)", () => {
+    const pv1 = ["PV1", "1", "I", ...Array<string>(16).fill(""), "^ZQLKVNUM00X^^HOSP^VN"];
+    const { wire, rows } = hl7(pv1.join("|"));
+    expect(wire).not.toContain("ZQLKVNUM00X");
+    expect(wire).toContain("^^^HOSP^VN");
+    expect(rows).toContain(`PV1-19[0] ${D.DEID_LOCUS_BLOCKED}`);
+  });
+
   it("the same holds at every identifier the map names: a policy number held as a composite", () => {
     // IN1-36, the policy number, written as a composite.
     const in1 = ["IN1", "1", "PLAN1", ...Array<string>(33).fill(""), "ZQLKPOL00X^ZQLKPOLB01X"];
@@ -94,9 +102,55 @@ describe("HL7 v2: a date field keeps only the date it was reduced to", () => {
     expect(wire).toContain("EVN|A01|2020\r");
   });
 
+  it("a date component whose date is empty but which holds a value in a subcomponent is blocked", () => {
+    // SPM-17, the collection date range: its start (component 1) is a date position of its own.
+    const spm = ["SPM", "1", ...Array<string>(15).fill(""), "&ZQLKSPMD00X^20200102"];
+    const { wire } = hl7(spm.join("|"));
+    expect(wire).not.toContain("ZQLKSPMD00X");
+  });
+
   it("a date field whose date is empty but which holds a value elsewhere is blocked", () => {
     expect(hl7("EVN|A01|^ZQLKEDAT00X").wire).not.toContain("ZQLKEDAT00X");
     expect(hl7("EVN|A01|&ZQLKEDAT01X").wire).not.toContain("ZQLKEDAT01X");
+  });
+});
+
+describe("X12: a provider identity reference is kept only under a party its role keeps", () => {
+  // Found by the X12 property on seed -614318039: `REF*0B*<value>` in a 270, kept with no party before
+  // it. 0B (a state license number) and the other provider identity qualifiers name a person's own
+  // number when the party they follow is the individual, or when no party says whose they are.
+  const isa =
+    "ISA*00*          *00*          *ZZ*A              *ZZ*A              *000101*0000*^*00501*000000001*0*P*:~" +
+    "GS*HS*A*A*20000101*0000*1*X*005010X279A1~ST*270*0001*005010X279A1~";
+  function x12(body: string): { out: string; rows: string[] } {
+    const count = body.split("~").length + 1;
+    const r = deidentifyX12String(`${isa}${body}SE*${String(count)}*0001~GE*1*1~IEA*1*000000001~`, {
+      context: ctx,
+    });
+    return { out: r.x12, rows: r.manifest.map((m) => `${m.locus} ${m.code}`) };
+  }
+
+  it("with no party before it, the reference is removed", () => {
+    const { out, rows } = x12("REF*0B*ZQLKREFA00X~");
+    expect(out).not.toContain("ZQLKREFA00X");
+    expect(rows).toContain(`270/REF[0]-2 ${D.DEID_LOCUS_BLOCKED}`);
+  });
+
+  it.each(["0B", "TJ", "EI", "1G", "HPI"])(
+    "after the individual's own party, a %s reference is removed",
+    (qualifier) => {
+      expect(x12(`NM1*IL*1*ZZFAMILY~REF*${qualifier}*ZQLKREFB01X~`).out).not.toContain(
+        "ZQLKREFB01X",
+      );
+    },
+  );
+
+  it("after a party its role keeps (a provider), the reference is still kept", () => {
+    expect(x12("NM1*1P*2*ZZORG~REF*0B*ZQLKREFC02X~").out).toContain("ZQLKREFC02X");
+  });
+
+  it("an administrative reference is kept by its qualifier alone, as before", () => {
+    expect(x12("NM1*IL*1*ZZFAMILY~REF*G1*ZQLKREFD03X~").out).toContain("ZQLKREFD03X");
   });
 });
 
@@ -224,14 +278,16 @@ describe("pinned: keeps the property reaches that this change does not close", (
     const isa =
       "ISA*00*          *00*          *ZZ*SENDER         *ZZ*RECEIVER       *260101*1200*^*00501*000000001*0*P*:~" +
       "GS*HC*SENDER*RECEIVER*20260101*1200*1*X*005010X222A2~ST*837*0001*005010X222A2~";
-    const tail = "SE*5*0001~GE*1*1~IEA*1*000000001~";
+    const tail = "SE*6*0001~GE*1*1~IEA*1*000000001~";
+    // Found again on seed -1723084702: REF*1S (an ambulatory patient group) kept with any value.
     const body =
       "TRN*1*ZQLKTRAC00X*1999999999~SV1*A1:ZQLKPROC01X*100*UN*1***1~" +
-      "N1*1P*0928*A1*A1^ZQLKPRTY02X~";
+      "N1*1P*0928*A1*A1^ZQLKPRTY02X~REF*1S*ZQLKAPGN03X~";
     const out = deidentifyX12String(`${isa}${body}${tail}`, { context: ctx }).x12;
     expect(out).toContain("ZQLKTRAC00X");
     expect(out).toContain("ZQLKPROC01X");
     expect(out).toContain("ZQLKPRTY02X");
+    expect(out).toContain("ZQLKAPGN03X");
   });
 
   it("C-CDA: a header coded element's code and display name, and an id's root, are kept", () => {

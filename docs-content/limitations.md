@@ -334,7 +334,12 @@ Each is pinned by a test that fails the day it stops being true.
   length. A procedure code (`SV1-01`, `SV2-02`, `SV3-01`) is kept when it has the shape its qualifier
   gives it, which for a qualifier with no published code shape is 1 to 48 letters and digits. And a
   party whose role keeps it (a provider, a service location) keeps its name and identifier elements as
-  they arrived, a repetition inside its identifier included.
+  they arrived, a repetition inside its identifier included. A `REF-02` under an administrative
+  qualifier the adapter keeps (a payer claim number, an authorization or referral number, an
+  ambulatory patient group) is kept whatever it holds. A `REF` that names a party's own number (a
+  state license, a tax id, a provider number, a National Provider Identifier) is kept only when the
+  last party before it in the transaction set is one its role keeps; after the individual, a
+  relative, an employer, an unknown party, or no party, it is removed and recorded.
 - **C-CDA:** in the header, a coded element the allow-list recognizes (`administrativeGenderCode`,
   `maritalStatusCode` and the others) keeps its `@code` and its `@displayName` as they arrived, and a
   person-role `<id>` keeps its `@root`.

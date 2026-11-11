@@ -22,7 +22,7 @@ import { buildInterchange, serializeX12, type InterchangeSpec } from "@cosyte/x1
 import { interchangeSpec } from "@cosyte/x12/arbitraries";
 
 import { createDeidContext, DeidError, FATAL_CODES } from "../../src/index.js";
-import { deidentifyX12String } from "../../src/x12/index.js";
+import { classifyRefQualifier, deidentifyX12String } from "../../src/x12/index.js";
 import {
   runLeakProperty,
   sentinelAt,
@@ -194,8 +194,17 @@ export function pass(raw: string): PassOutcome {
         .filter((m) => m.code === "DEID_PARTY_ROLE_RETAINED")
         .map((m) => m.locus.replace(/^[^/]*\//, "").replace(/-\d+$/, "")),
     );
+    const rowLoci = new Set(result.manifest.map((m) => m.locus.replace(/^[^/]*\//, "")));
     return {
-      decidedKeep: (s) => keptParties.has(segmentOf(raw, terminator, element, s)),
+      // A party its role kept, or a `REF` the adapter kept by its administrative qualifier: the
+      // qualifier is on the retained list and REF-02 has no manifest row, so no rule removed it.
+      decidedKeep: (s) => {
+        const at = segmentOf(raw, terminator, element, s);
+        if (keptParties.has(at)) return true;
+        if (!at.startsWith("REF[")) return false;
+        const qualifier = segmentText(raw, terminator, s).split(element)[1] ?? "";
+        return classifyRefQualifier(qualifier).kind === "retain" && !rowLoci.has(`${at}-2`);
+      },
       output: result.x12,
       manifest: result.manifest,
       unexaminedResiduals: result.unexaminedResiduals,
@@ -221,8 +230,9 @@ export function pass(raw: string): PassOutcome {
  * The X12 keeps this suite pins rather than closes (named on the limitations page, pinned in
  * `./found.test.ts`): a trace number in `TRN` is kept when it is printable text of its length, a
  * procedure code is kept when it has the shape its qualifier gives it (any letters and digits for a
- * mutually defined one), and a party its role keeps (a provider) keeps its name and identifier
- * elements as they arrived.
+ * mutually defined one), a party its role keeps (a provider) keeps its name and identifier
+ * elements as they arrived, and a `REF-02` under an administrative qualifier the adapter keeps (a
+ * claim, authorization or classification number) is kept whatever it holds.
  */
 export const X12_PINS: readonly Pin[] = [
   { applies: (p) => /^TRN-[234]$/.test(p.where) },
@@ -232,7 +242,17 @@ export const X12_PINS: readonly Pin[] = [
     applies: (p, outcome) =>
       /^(NM1|N1)-\d$/.test(p.where) && outcome.decidedKeep?.(p.sentinel) === true,
   },
+  {
+    // Only where the REF-01 the input carries is a retained administrative qualifier and no rule
+    // recorded REF-02: never a REF position alone.
+    applies: (p, outcome) => p.where === "REF-2" && outcome.decidedKeep?.(p.sentinel) === true,
+  },
 ];
+
+/** The text of the body segment holding the sentinel. */
+function segmentText(raw: string, terminator: string, sentinel: string): string {
+  return raw.split(terminator).find((seg) => seg.includes(sentinel)) ?? "";
+}
 
 /**
  * The segment id and occurrence (`NM1[1]`) of the body segment holding the sentinel, counted the way
