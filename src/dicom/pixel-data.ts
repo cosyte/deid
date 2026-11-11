@@ -7,19 +7,28 @@
  * Pixel Data as it is, so it has no reason to pay for those copies.
  *
  * When the shape allows it, the dataset is written with an **empty** Pixel Data element in place of
- * the real one. The writer gives that element the same place it gives the real one (elements are
- * ordered by tag), and an element's bytes are its header and its value, so when the empty element's
- * header is the last thing written, the full file is exactly that header-only file with the element's
- * length filled in and the value appended. That file is built with one copy of the value, into a
- * buffer of the final size. Anything the shape does not allow is written by `serializeDicom` as
- * before, so every byte stays the writer's own:
+ * the real one. The writer gives that element the same place it gives the real one, and an element's
+ * bytes are its header and its value, so when the empty element is the last thing written, the full
+ * file is exactly that header-only file with the element's length filled in and the value appended.
+ * That file is built with one copy of the value, into a buffer of the final size.
+ *
+ * "The last thing written" is established twice, never from the trailing bytes alone. Pixel Data must
+ * carry the highest tag in the dataset, so no element is ordered after it by tag. And the dataset is
+ * written a second time with a two-byte Pixel Data value: the two files must agree on every byte in
+ * front of the element's length and differ only in that length and the two bytes after it. An element
+ * the writer emits out of tag order (one it leaves open) would follow the length in both files, so the
+ * byte where the lengths differ would not be among the last four of the first file, and the check
+ * fails. Bytes that happen to look like the empty element pass neither check.
+ *
+ * Anything the shape does not allow is written by `serializeDicom` as before, so every byte stays the
+ * writer's own:
  *
  * - a transfer syntax other than Implicit VR Little Endian or Explicit VR Little Endian (Big Endian
  *   swaps the value, Deflated compresses the body, an encapsulated syntax writes fragments);
  * - a Media Storage Directory (the writer rewrites record offsets there);
  * - Pixel Data that is not `OB` or `OW`, has an undefined length, an odd length (the writer pads it)
  *   or a length past what four bytes can state;
- * - any element written after Pixel Data.
+ * - an element with a higher tag than Pixel Data, or any element written after it.
  *
  * @packageDocumentation
  */
@@ -47,6 +56,8 @@ const MAX_DEFINED_LENGTH = 0xfffffffe;
 interface PixelDataSplit {
   /** The dataset with an empty Pixel Data element in place of the real one. */
   readonly headerOnly: Dataset;
+  /** The dataset with a two-byte Pixel Data value: where its file differs places the element. */
+  readonly probe: Dataset;
   /** The Pixel Data value, as the dataset holds it (never copied here). */
   readonly value: Buffer;
   /** The bytes the empty Pixel Data element is written as, which must end the header-only file. */
@@ -70,25 +81,41 @@ function splitPixelData(dataset: Dataset): PixelDataSplit | undefined {
   if (value.length > MAX_DEFINED_LENGTH) return undefined;
 
   const elements = new Map<string, Element>();
+  const probe = new Map<string, Element>();
   for (const element of dataset.elements()) {
-    elements.set(element.tag, element.tag === TAG_PIXEL_DATA ? emptied(element) : element);
+    if (element.tag === TAG_PIXEL_DATA) {
+      elements.set(element.tag, withValue(element, Buffer.alloc(0)));
+      probe.set(element.tag, withValue(element, PROBE_VALUE));
+      continue;
+    }
+    // Ordered after Pixel Data by its tag: the value would not be the last thing in the file.
+    if (element.tag.toUpperCase() > TAG_PIXEL_DATA) return undefined;
+    elements.set(element.tag, element);
+    probe.set(element.tag, element);
   }
-  const headerOnly = new Dataset({ warnings: [], elements, fileMeta });
-  return { headerOnly, value, emptyElement: emptyElementBytes(encoding, pixel.vr) };
+  return {
+    headerOnly: new Dataset({ warnings: [], elements, fileMeta }),
+    probe: new Dataset({ warnings: [], elements: probe, fileMeta }),
+    value,
+    emptyElement: emptyElementBytes(encoding, pixel.vr),
+  };
 }
 
+/** The two-byte value the probe file carries in place of Pixel Data. */
+const PROBE_VALUE = Buffer.from([0x00, 0x00]);
+
 /**
- * The same element with no value. It is only ever written, never read, and the writer reads a binary
- * element's tag, VR, length and bytes; a standard tag carries no private creator, and an `OB` or `OW`
- * value has no character set.
+ * The same element with another value. It is only ever written, never read, and the writer reads a
+ * binary element's tag, VR, length and bytes; a standard tag carries no private creator, and an `OB`
+ * or `OW` value has no character set.
  */
-function emptied(element: Element): Element {
+function withValue(element: Element, value: Buffer): Element {
   return new Element({
     tag: element.tag,
     vr: element.vr,
     vm: element.vm,
-    length: 0,
-    rawBytes: Buffer.alloc(0),
+    length: value.length,
+    rawBytes: value,
     byteOffset: element.byteOffset,
     littleEndian: element.littleEndian,
   });
@@ -105,10 +132,19 @@ function emptyElementBytes(encoding: "implicit" | "explicit", vr: string): Buffe
   return Buffer.concat([tag, Buffer.from(vr, "latin1"), Buffer.alloc(2), length]);
 }
 
-/** `true` when `bytes` ends with `suffix`. */
-function endsWith(bytes: Buffer, suffix: Buffer): boolean {
+/**
+ * `true` when the empty Pixel Data element is the last thing in `head`. Two checks. `head` must end
+ * with the element's bytes. And `probe`, the same dataset written with a two-byte value, must agree
+ * with `head` on every byte in front of the element's length: the two files first differ at that
+ * length, so were any element written after Pixel Data, `head` would carry it after the length and
+ * the bytes compared would run past the first difference. A value that merely ends in the element's
+ * bytes passes the first check and fails the second.
+ */
+function endsWithPixelData(head: Buffer, probe: Buffer, emptyElement: Buffer): boolean {
+  const lengthAt = head.length - 4;
   return (
-    bytes.length >= suffix.length && bytes.subarray(bytes.length - suffix.length).equals(suffix)
+    head.subarray(head.length - emptyElement.length).equals(emptyElement) &&
+    probe.subarray(0, lengthAt).equals(head.subarray(0, lengthAt))
   );
 }
 
@@ -127,7 +163,8 @@ export function writeDicom(dataset: Dataset, whole: boolean): Buffer {
   const split = splitPixelData(dataset);
   if (split === undefined) return serializeDicom(dataset);
   const head = serializeDicom(split.headerOnly);
-  if (!endsWith(head, split.emptyElement)) return serializeDicom(dataset);
+  const probe = serializeDicom(split.probe);
+  if (!endsWithPixelData(head, probe, split.emptyElement)) return serializeDicom(dataset);
   if (!whole) return head;
   const out = Buffer.allocUnsafe(head.length + split.value.length);
   head.copy(out, 0);

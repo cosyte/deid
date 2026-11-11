@@ -9,8 +9,9 @@
 import { Buffer } from "node:buffer";
 
 import { describe, expect, it } from "vitest";
-import { Dataset, parseDicom, serializeDicom } from "@cosyte/dicom";
+import { Dataset, Element, parseDicom, serializeDicom } from "@cosyte/dicom";
 
+import { deidentifyDicom, deidentifyDicomBuffer } from "../../src/dicom/index.js";
 import { writeDicom } from "../../src/dicom/pixel-data.js";
 import { buildDicom, type BuildDicomOptions } from "./helpers/build-dicom.js";
 import { pad, UID } from "./helpers/fixtures.js";
@@ -30,6 +31,36 @@ const HEADER: BuildDicomOptions["elements"] = [
 
 function pixels(n: number): Buffer {
   return Buffer.from(Array.from({ length: n }, (_v, i) => (i * 7) % 256));
+}
+
+/** The bytes an empty Explicit VR `OW` Pixel Data element is written as. */
+const EMPTY_PIXEL_DATA_OW = Buffer.from([0xe0, 0x7f, 0x10, 0x00, 0x4f, 0x57, 0, 0, 0, 0, 0, 0]);
+
+/**
+ * `base` with one more element the writer leaves open, so it is written after every closed element,
+ * Pixel Data included, though its tag is lower: a sequence of undefined length whose bytes do not
+ * read back as a sequence, written as they are.
+ */
+function withOpenElement(base: Dataset, bytes: Buffer): Dataset {
+  const elements = new Map(base.elements().map((element) => [element.tag, element]));
+  elements.set(
+    "00081140",
+    new Element({
+      tag: "00081140",
+      vr: "SQ",
+      vm: 1,
+      length: 0xffffffff,
+      rawBytes: bytes,
+      byteOffset: 0,
+      littleEndian: true,
+      items: [],
+    }),
+  );
+  return new Dataset({
+    warnings: [],
+    elements,
+    ...(base.fileMeta !== undefined ? { fileMeta: base.fileMeta } : {}),
+  });
 }
 
 function dataset(
@@ -109,6 +140,30 @@ describe("writeDicom writes exactly what serializeDicom writes", () => {
           { tag: "FFFCFFFC", vr: "OB", value: Buffer.alloc(8) },
         ]),
     ],
+    [
+      "an element after Pixel Data whose value ends in an empty Pixel Data element",
+      () =>
+        dataset([
+          { tag: "7FE00010", vr: "OW", value: pixels(256) },
+          { tag: "7FE00020", vr: "OW", value: EMPTY_PIXEL_DATA_OW },
+        ]),
+    ],
+    [
+      "an open element written after Pixel Data",
+      () =>
+        withOpenElement(
+          dataset([{ tag: "7FE00010", vr: "OW", value: pixels(256) }]),
+          Buffer.from([0x08, 0x00, 0x40, 0x11, 0x4f, 0x42, 0, 0, 2, 0, 0, 0, 0, 0]),
+        ),
+    ],
+    [
+      "an open element written after Pixel Data whose bytes are an empty Pixel Data element",
+      () =>
+        withOpenElement(
+          dataset([{ tag: "7FE00010", vr: "OW", value: pixels(256) }]),
+          EMPTY_PIXEL_DATA_OW,
+        ),
+    ],
   ];
 
   for (const [name, build] of shapes) {
@@ -131,6 +186,20 @@ describe("writeDicom writes exactly what serializeDicom writes", () => {
       expect(head === full || head.endsWith("00000000")).toBe(true);
     });
   }
+
+  it("a file with an element after Pixel Data that ends in its bytes is de-identified, not refused", () => {
+    const file = buildDicom({
+      transferSyntax: TS_EXPLICIT_LE,
+      mediaStorageSOPInstanceUID: UID.sop,
+      elements: [
+        ...HEADER,
+        { tag: "7FE00010", vr: "OW", value: pixels(256) },
+        { tag: "7FE00020", vr: "OW", value: EMPTY_PIXEL_DATA_OW },
+      ],
+    });
+    const { bytes } = deidentifyDicomBuffer(file);
+    expect(bytes.equals(serializeDicom(deidentifyDicom(parseDicom(file)).dataset))).toBe(true);
+  });
 
   it("the fast shapes really are written without the value", () => {
     const ds = dataset([{ tag: "7FE00010", vr: "OW", value: pixels(256) }]);
