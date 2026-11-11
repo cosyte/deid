@@ -140,7 +140,8 @@ export interface Hl7DeidResult {
  *   options bag removes the encounter dates and identifiers rather than keeping them.
  * @returns The de-identified message and the value-free manifest.
  * @throws {@link DeidError} `DEID_NO_KEY` when a keyed transform is required for a category present in
- *   the message but no key context was supplied.
+ *   the message but no key context was supplied; `DEID_FORMAT_UNSUPPORTED` when the message carries
+ *   more than one `MSH` segment (several messages read as one), refused before anything is extracted.
  * @example
  * ```ts
  * import { parseHL7 } from "@cosyte/hl7";
@@ -154,6 +155,8 @@ export interface Hl7DeidResult {
  * ```
  */
 export function deidentifyHl7(msg: Hl7Message, options: DeidOptions = {}): Hl7DeidResult {
+  // Refuse before anything is extracted, so a refused shape can never leave a partial artifact.
+  assertOneMessage(msg);
   const { loci, coords, unexaminedResiduals } = extractHl7Loci(
     msg,
     options.retainedLoci !== undefined ? { retainedLoci: options.retainedLoci } : {},
@@ -174,7 +177,7 @@ export function deidentifyHl7(msg: Hl7Message, options: DeidOptions = {}): Hl7De
  * @returns The de-identified wire on `hl7`, the transformed message and the value-free manifest.
  * @throws {@link DeidError} `DEID_OUTPUT_INVALID` when the transformed message does not round-trip
  *   through its parser; `DEID_NO_KEY` when a keyed transform is required but no key context was
- *   supplied. Whatever `parseHL7` throws for text it cannot read is thrown as it is.
+ *   supplied; `DEID_FORMAT_UNSUPPORTED` when the text holds more than one `MSH` segment. Whatever `parseHL7` throws for text it cannot read is thrown as it is.
  * @example
  * ```ts
  * import { deidentifyHl7String } from "@cosyte/deid/hl7";
@@ -187,6 +190,32 @@ export function deidentifyHl7(msg: Hl7Message, options: DeidOptions = {}): Hl7De
  */
 export function deidentifyHl7String(raw: string, options: DeidOptions = {}): Hl7DeidResult {
   return deidentifyHl7(parseHL7(raw), options);
+}
+
+/**
+ * The diagnostic for a parsed message that carries more than one `MSH` segment. Fixed text this
+ * library owns: it carries no value read from the message. Not exported: callers branch on the
+ * `DEID_FORMAT_UNSUPPORTED` code.
+ */
+const HL7_REPEATED_MSH_REFUSAL_MESSAGE: string =
+  "An HL7 v2 message carrying more than one MSH segment is refused, not handled: it is several " +
+  "messages read as one, which may be several patients', and de-identifying them under one patient " +
+  "context would give them one date-shift offset. De-identify each message on its own, each with " +
+  "its own context.";
+
+/**
+ * Refuse a parsed message that carries a second `MSH` segment. A message has one header; the parser
+ * reads messages written one after another, with no batch envelope, as one message whose later
+ * headers are ordinary segments, so this is the only place the shape can be told apart.
+ */
+function assertOneMessage(msg: Hl7Message): void {
+  let headers = 0;
+  for (const seg of msg.allSegments()) {
+    if (seg.type === "MSH") headers += 1;
+    if (headers > 1) {
+      throw new DeidError(FATAL_CODES.DEID_FORMAT_UNSUPPORTED, HL7_REPEATED_MSH_REFUSAL_MESSAGE);
+    }
+  }
 }
 
 /**

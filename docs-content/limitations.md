@@ -422,6 +422,28 @@ more than one is **refused** with a typed `DeidError` carrying `DEID_FORMAT_UNSU
 transformed message, no manifest and no partial output, so no transaction is dropped or returned
 untransformed. Split such a message and de-identify each transaction on its own.
 
+A transaction that carries more than one Patient (`01`) or Claim (`07`) segment is refused the same
+way. A second patient's segments with no Group Separator in front of them decode as part of the one
+transaction, and the caller's one patient context would give both patients one date-shift offset.
+
+## One context per call, however many people the document names
+
+A call takes one context, and a `date-shift` policy derives one offset from that context's patient
+scope. Where a document is several documents read as one, the adapter refuses it: an NCPDP Telecom
+transaction with a repeated Patient or Claim segment (above), and an HL7 v2 message with more than one
+`MSH` segment, which is what messages written one after another with no batch envelope parse as. An
+HL7 v2 batch with its `FHS` / `BHS` envelope is refused by `parseHL7` itself; split it with
+`splitBatch` from `@cosyte/hl7` and de-identify each message on its own.
+
+The X12 and HL7 v2 adapters do not refuse one document that names more than one person, because that
+is their ordinary shape: an X12 `837` names a subscriber and a dependent patient, and an interchange
+can carry many claims for many patients; an HL7 v2 `ADT^A17` swaps two patients' PID segments. Every
+date in such a document is shifted by the same offset, so two people's shifted dates keep their real
+distance from each other. Pseudonyms do not depend on the patient scope, only on the key. Under the
+default Safe Harbor policy dates are generalized to the year and no offset is involved. When
+per-patient offsets matter, split the document per patient and give each part its own context
+(`registry.forPatient(...)`).
+
 ## Put it to use
 
 - [Choose a policy and read the manifest](./choose-a-policy.md): the profiles above, and what the
