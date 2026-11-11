@@ -57,7 +57,7 @@ describe("the HL7 v2 round-trip check reads and writes the message once", () => 
     // so the first write back differs from the wire and the canonical form is read a second time.
     const raw = [
       "MSH|^~\\&|A|B|C|D|20240315103000||ORU^R01|M1|P|2.5.1",
-      "PID|1||ZZMRN0001^^^HOSP^MR||ZZFAMILY^ZZGIVEN",
+      "PID|1||ZZMRN001^^^HOSP^MR||ZZFAMILY^ZZGIVEN",
       "OBX|1|NM|2951-2^Sodium^LN||  140  |mmol/L",
     ].join("\r");
     const msg = hl7.parseHL7(raw, { trimFields: false });
@@ -66,7 +66,7 @@ describe("the HL7 v2 round-trip check reads and writes the message once", () => 
     expect(vi.mocked(hl7.parseHL7)).toHaveBeenCalledTimes(2);
     expect(result.hl7).toContain("|  140  |");
     expect(result.hl7).toBe(result.document.toString());
-    expect(result.hl7).not.toContain("ZZMRN0001");
+    expect(result.hl7).not.toContain("ZZMRN001");
     expect(result.hl7).not.toContain("ZZFAMILY");
   });
 });
