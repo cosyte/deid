@@ -74,6 +74,25 @@ function expectKept(manifest: readonly DeidManifestEntry[], locus: string): void
   });
 }
 
+/**
+ * Assert the one row at `locus` records a kept age: `retained`, because the value is unchanged, under
+ * the same code and disposition whichever transform kept it.
+ */
+function expectAgeKept(
+  manifest: readonly DeidManifestEntry[],
+  locus: string,
+  transform = "generalize",
+): void {
+  const rows = at(manifest, locus);
+  expect(rows).toHaveLength(1);
+  expect(rows[0]).toMatchObject({
+    category: C.DATES,
+    transform,
+    disposition: "retained",
+    code: D.DEID_RESIDUAL_RETAINED,
+  });
+}
+
 describe("the core: an age held as a number", () => {
   const age = (value: string, ageUnit: string): GenericLocus => ({
     // Each age at its own path: two loci at one path share a manifest row.
@@ -88,13 +107,13 @@ describe("the core: an age held as a number", () => {
     const out = deidentify({ loci: [age("93", "a"), age("89", "a"), age("45.5", "a")] }, {});
     expect(out.document.loci.map((l) => [l.value, l.disposition])).toEqual([
       [null, "removed"],
-      ["89", "transformed"],
-      ["45.5", "transformed"],
+      ["89", "retained"],
+      ["45.5", "retained"],
     ]);
     expect(out.manifest.map((m) => [m.disposition, m.code])).toEqual([
       ["removed", D.DEID_CATEGORY_GENERALIZED],
-      ["transformed", D.DEID_RESIDUAL_RETAINED],
-      ["transformed", D.DEID_RESIDUAL_RETAINED],
+      ["retained", D.DEID_RESIDUAL_RETAINED],
+      ["retained", D.DEID_RESIDUAL_RETAINED],
     ]);
   });
 
@@ -177,7 +196,7 @@ describe("HL7 v2: an OBX age and an OBX birth date", () => {
     expect(fields(hl7, "OBX|6|")[6]).toBe("a^year^UCUM");
     expectAggregated(manifest, "OBX[5]-5");
     expect(fields(hl7, "OBX|7|")[5]).toBe("45");
-    expectKept(manifest, "OBX[6]-5");
+    expectAgeKept(manifest, "OBX[6]-5");
   });
 
   it("reads an age in months by its unit", () => {
@@ -280,7 +299,7 @@ describe("FHIR R4: an age held as a value", () => {
     expectAggregated(over.manifest, "Observation.valueQuantity.value");
     const under = fhir(ageObservation(45));
     expect(under.json).toBe(JSON.stringify(ageObservation(45)));
-    expectKept(under.manifest, "Observation.valueQuantity.value");
+    expectAgeKept(under.manifest, "Observation.valueQuantity.value");
   });
 
   it("reaches an age-coded component as well", () => {
@@ -597,35 +616,94 @@ describe("what the rules read, and the shapes they fail closed on", () => {
     expect(at(manifest, "FamilyMemberHistory.deceasedAge.value")).toHaveLength(0);
   });
 
-  it("FHIR: a Location type it cannot read fails closed, and a system it does not know keeps", () => {
+  it("FHIR: a Location type it cannot read fails closed", () => {
     const position = { longitude: -71.0589, latitude: 42.3601 };
-    // A type sent as a bare string, a coding sent as a bare string, and a coding with no code: none
-    // of them says what the Location is, so each fails closed.
+    // A type sent as a bare string, a coding sent as a bare string, a coding with no code, and a
+    // coding with no system: none of them says what the Location is, so each fails closed.
     for (const type of [
       "PTRES",
       [{ coding: "PTRES" }],
       [{ coding: [{ system: "http://x.example" }] }],
+      [{ coding: [{ code: "PTRES" }] }],
+      [{ coding: [{ code: "HOSP" }] }],
+      [{ text: "ZZ hospital" }],
     ]) {
       expect(fhir({ resourceType: "Location", type, position }).json).not.toContain("42.3601");
     }
-    const unstated = fhir({
-      resourceType: "Location",
-      type: [{ coding: [{ code: "PTRES" }] }],
-      position,
+  });
+
+  describe("FHIR: Location.position is kept only for a known facility code in a known system", () => {
+    const position = { longitude: -71.0589, latitude: 42.3601 };
+    const ROLE = "http://terminology.hl7.org/CodeSystem/v3-RoleCode";
+    const ROLE_OID = "urn:oid:2.16.840.1.113883.5.111";
+    const PHYSICAL = "http://terminology.hl7.org/CodeSystem/location-physical-type";
+    const run = (location: object): string =>
+      fhir({ resourceType: "Location", ...location, position }).json;
+
+    it("removes it for a code in a local system, PTRES or a local home code", () => {
+      for (const code of ["PTRES", "HOME"]) {
+        const json = run({
+          type: [{ coding: [{ system: "http://example.org/zz-local", code }] }],
+        });
+        expect(json).not.toContain("42.3601");
+      }
     });
-    expect(unstated.json).not.toContain("42.3601");
-    const foreign = fhir({
-      resourceType: "Location",
-      type: [{ coding: [{ system: "http://example.org/zz-local", code: "PTRES" }] }],
-      position,
+
+    it("reads the OID form of v3 RoleCode: PTRES removes it, HOSP keeps it", () => {
+      expect(run({ type: [{ coding: [{ system: ROLE_OID, code: "PTRES" }] }] })).not.toContain(
+        "42.3601",
+      );
+      expect(run({ type: [{ coding: [{ system: ROLE_OID, code: "HOSP" }] }] })).toContain(
+        '"latitude":42.3601',
+      );
     });
-    expect(foreign.json).toContain('"latitude":42.3601');
-    const building = fhir({
-      resourceType: "Location",
-      physicalType: { coding: { code: "bu" } },
-      position,
+
+    it("removes it for a mixed list: one facility code and one it does not know", () => {
+      const mixed = run({
+        type: [
+          { coding: [{ system: ROLE, code: "HOSP" }] },
+          { coding: [{ system: "http://example.org/zz-local", code: "ZZWARD" }] },
+        ],
+      });
+      expect(mixed).not.toContain("42.3601");
+      const mixedCodings = run({
+        type: [
+          {
+            coding: [
+              { system: ROLE, code: "HOSP" },
+              { system: ROLE, code: "PTRES" },
+            ],
+          },
+        ],
+      });
+      expect(mixedCodings).not.toContain("42.3601");
     });
-    expect(building.json).toContain('"latitude":42.3601');
+
+    it("reads physicalType alone: a building is kept, a house or an unsystemed code removed", () => {
+      expect(run({ physicalType: { coding: [{ system: PHYSICAL, code: "bu" }] } })).toContain(
+        '"latitude":42.3601',
+      );
+      expect(run({ physicalType: { coding: [{ system: PHYSICAL, code: "ho" }] } })).not.toContain(
+        "42.3601",
+      );
+      expect(run({ physicalType: { coding: { code: "bu" } } })).not.toContain("42.3601");
+    });
+
+    it("keeps it when type and physicalType are both known facility codes", () => {
+      const json = run({
+        type: [{ coding: [{ system: ROLE, code: "HOSP" }] }],
+        physicalType: { coding: [{ system: PHYSICAL, code: "wa" }] },
+      });
+      expect(json).toContain('"latitude":42.3601');
+    });
+
+    it("removes it when the type is a facility but the physical type is a house", () => {
+      const json = run({
+        type: [{ coding: [{ system: ROLE, code: "HOSP" }] }],
+        physicalType: { coding: [{ system: PHYSICAL, code: "ho" }] },
+      });
+      expect(json).not.toContain("42.3601");
+    });
   });
 
   it("C-CDA: reads each bound of an age range, and leaves a code in another system alone", () => {
@@ -678,5 +756,81 @@ describe("what the rules read, and the shapes they fail closed on", () => {
     );
     const { document } = deidentifyCcda(parseCcda(raw), { policy: hashed, context: ctx });
     expect(document.toString()).toContain('<value xsi:type="PQ" unit="a" nullFlavor="MSK"/>');
+  });
+});
+
+describe("review round: the dispositions agree, and the readings the review asked for", () => {
+  it("records a kept age alike under generalize and date-shift: retained, residual", () => {
+    const locus: GenericLocus = {
+      path: "AGE",
+      kind: "age",
+      category: C.DATES,
+      ageUnit: "a",
+      value: "45",
+    };
+    const generalized = deidentify({ loci: [locus] }, {});
+    expect(generalized.document.loci[0]?.disposition).toBe("retained");
+    expectAgeKept(generalized.manifest, "AGE");
+    const shift = defineDeidPolicy({ name: "research", transforms: { [C.DATES]: "date-shift" } });
+    const shifted = deidentify({ loci: [locus] }, { policy: shift, context: ctx });
+    expect(shifted.document.loci[0]?.disposition).toBe("retained");
+    expectAgeKept(shifted.manifest, "AGE", "date-shift");
+  });
+
+  it("HL7 v2: records NK1-33 as the party's identifiers and NK1-37 as an SSN", () => {
+    const f = ["NK1", "1", "ZZNKFAMILY^ZZNKGIVEN", "SPO"];
+    f[33] = "ZZNKID33^^^ZZAUTH^MR";
+    f[37] = "900000037";
+    const { hl7, manifest } = deidentifyHl7(
+      parseHL7(adt(Array.from(f, (v) => v ?? "").join("|"))),
+      { context: ctx },
+    );
+    expect(hl7).not.toContain("ZZNKID33");
+    expect(hl7).not.toContain("900000037");
+    expect(at(manifest, "NK1-33[0]")[0]).toMatchObject({ category: C.MRN });
+    expect(at(manifest, "NK1-37")[0]).toMatchObject({ category: C.SSN, disposition: "removed" });
+    // The assigning authority of the identifier stays, as it does at PID-3.
+    expect(fields(hl7, "NK1|")[33]).toBe("^^^ZZAUTH^MR");
+  });
+
+  const ageCoded = (value: object) => ({
+    resourceType: "Observation",
+    status: "final",
+    code: { coding: [{ system: LOINC, code: "30525-0" }] },
+    ...value,
+  });
+
+  it("FHIR: reads an age-coded valueInteger as years", () => {
+    const over = fhir(ageCoded({ valueInteger: 93 }));
+    expect(over.json).not.toContain("93");
+    expectAggregated(over.manifest, "Observation.valueInteger");
+    const under = fhir(ageCoded({ valueInteger: 45 }));
+    expect(under.json).toBe(JSON.stringify(ageCoded({ valueInteger: 45 })));
+    expectAgeKept(under.manifest, "Observation.valueInteger");
+  });
+
+  it("FHIR: reads each bound of an age-coded valueRange", () => {
+    const { json, manifest } = fhir(
+      ageCoded({
+        valueRange: {
+          low: { value: 91, unit: "a", system: UCUM, code: "a" },
+          high: { value: 45, unit: "a", system: UCUM, code: "a" },
+        },
+      }),
+    );
+    expect(json).not.toContain("91");
+    expect(json).toContain('"value":45');
+    expectAggregated(manifest, "Observation.valueRange.low.value");
+    expectAgeKept(manifest, "Observation.valueRange.high.value");
+  });
+
+  it("FHIR: leaves a valueInteger and a valueRange that are not coded as an age alone", () => {
+    const count = {
+      resourceType: "Observation",
+      status: "final",
+      code: { coding: [{ system: LOINC, code: "2951-2" }] },
+      valueInteger: 140,
+    };
+    expect(fhir(count).json).toBe(JSON.stringify(count));
   });
 });

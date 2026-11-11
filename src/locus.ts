@@ -110,8 +110,8 @@ export interface GenericLocus {
    *
    * Present, it changes what the `generalize` transform writes. The `"90+"` category cannot be written
    * into a number, so an age over 89 (measured in years after reading the unit) is **removed** and
-   * recorded as `DEID_CATEGORY_GENERALIZED`; an age of 89 or under is kept **exactly as written** and
-   * recorded as a residual; an age whose value or unit cannot be read is blocked. Under `date-shift`
+   * recorded as `DEID_CATEGORY_GENERALIZED`; an age of 89 or under is kept **exactly as written**, with
+   * the disposition `retained` and the code `DEID_RESIDUAL_RETAINED`; an age whose value or unit cannot be read is blocked. Under `date-shift`
    * the age is kept and recorded as a residual: a shift keeps every interval, and an age is one.
    *
    * Absent (the default) an `age` locus takes the `"90+"` generalization as before. The format

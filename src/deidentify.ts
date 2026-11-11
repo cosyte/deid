@@ -208,8 +208,8 @@ function birthYearAggregated(locus: GenericLocus, category: SafeHarborCategory):
  *
  * - `generalize`: the `"90+"` category cannot be written into a number, so an age over 89 is removed
  *   and recorded as generalized ({@link birthYearAggregated} is the same outcome for a birth year); an
- *   age of 89 or under is kept exactly as written, a residual; an age it cannot read is blocked.
- * - `date-shift`: the age is kept and recorded as a residual. A shift moves every date of a patient by
+ *   age of 89 or under is kept exactly as written ({@link keptAge}); an age it cannot read is blocked.
+ * - `date-shift`: the age is kept ({@link keptAge}). A shift moves every date of a patient by
  *   one offset so intervals survive, and an age is an interval, so the shifted age is the age itself.
  */
 function numericAgeOutcome(
@@ -223,28 +223,30 @@ function numericAgeOutcome(
   if (years === null) {
     return blocked(locus.path, category, DEID_DISPOSITION_CODES.DEID_LOCUS_BLOCKED);
   }
-  if (transform === "date-shift") {
-    return {
-      value: locus.value,
-      disposition: "retained",
-      manifest: {
-        category,
-        transform,
-        locus: locus.path,
-        disposition: "retained",
-        code: DEID_DISPOSITION_CODES.DEID_RESIDUAL_RETAINED,
-      },
-    };
-  }
+  if (transform === "date-shift") return keptAge(locus, category, transform);
   if (years > 89) return birthYearAggregated(locus, category);
+  return keptAge(locus, category, transform);
+}
+
+/**
+ * The outcome for an age held as a number that the pass **keeps exactly as written**, under either
+ * transform that keeps one: the disposition is `retained`, because nothing about the value changed,
+ * and the code is `DEID_RESIDUAL_RETAINED`, because a kept age is a residual a determiner reads. The
+ * transform names which rule decided to keep it.
+ */
+function keptAge(
+  locus: GenericLocus,
+  category: SafeHarborCategory,
+  transform: TransformName,
+): LocusOutcome {
   return {
     value: locus.value,
-    disposition: "transformed",
+    disposition: "retained",
     manifest: {
       category,
       transform,
       locus: locus.path,
-      disposition: "transformed",
+      disposition: "retained",
       code: DEID_DISPOSITION_CODES.DEID_RESIDUAL_RETAINED,
     },
   };

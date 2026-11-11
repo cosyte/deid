@@ -495,11 +495,55 @@ export const FHIR_BIRTH_DATE_ELEMENTS: ReadonlySet<string> = new Set<string>([
   "bornDate",
 ]);
 
-/** The v3 RoleCode system `Location.type` names a patient's residence in (`PTRES`). */
-const V3_ROLE_CODE_SYSTEM = "http://terminology.hl7.org/CodeSystem/v3-RoleCode";
+/**
+ * The systems a `Location.type` code is read in: v3 RoleCode, by its canonical URI and its OID.
+ */
+const ROLE_CODE_SYSTEMS: ReadonlySet<string> = new Set([
+  "http://terminology.hl7.org/CodeSystem/v3-RoleCode",
+  "urn:oid:2.16.840.1.113883.5.111",
+]);
 
-/** The location-physical-type system `Location.physicalType` names a house in (`ho`). */
-const PHYSICAL_TYPE_SYSTEM = "http://terminology.hl7.org/CodeSystem/location-physical-type";
+/**
+ * The v3 RoleCode service delivery location codes that name a **facility**, never a home: hospital,
+ * emergency room, intensive care unit, operating room, pharmacy, laboratory, ambulance, mobile unit,
+ * hospital unit, skilled nursing facility, psychiatric facility, rehabilitation hospital, chronic care
+ * facility.
+ */
+const FACILITY_ROLE_CODES: ReadonlySet<string> = new Set([
+  "HOSP",
+  "ER",
+  "ICU",
+  "OR",
+  "PHARM",
+  "LAB",
+  "AMB",
+  "MBL",
+  "HU",
+  "SNF",
+  "PSYCHF",
+  "RH",
+  "CHR",
+]);
+
+/** The system a `Location.physicalType` code is read in, by its canonical URI. */
+const PHYSICAL_TYPE_SYSTEMS: ReadonlySet<string> = new Set([
+  "http://terminology.hl7.org/CodeSystem/location-physical-type",
+]);
+
+/**
+ * The location-physical-type codes that name part of a facility: building, wing, ward, level,
+ * corridor, room, bed. `ho` (house) is not one, nor are the open ones (site, vehicle, road, area,
+ * jurisdiction, cabinet), which can be anywhere.
+ */
+const FACILITY_PHYSICAL_TYPES: ReadonlySet<string> = new Set([
+  "bu",
+  "wi",
+  "wa",
+  "lvl",
+  "co",
+  "ro",
+  "bd",
+]);
 
 /** A node's items: a list's own, a single node as one, nothing for an absent one. */
 function items(node: FhirNode | undefined): readonly FhirNode[] {
@@ -535,26 +579,45 @@ export function codings(concept: FhirNode | undefined): { system: string; code: 
 }
 
 /**
+ * `true` when every concept in a `CodeableConcept` (or a list of them) is coded, and every coding it
+ * carries is a known facility code in its known system. An uncoded concept, a coding with no code or
+ * no system, a system the pass does not know, or a code it does not list is not known, and answers
+ * `false`.
+ */
+function allKnownFacility(
+  concept: FhirNode | undefined,
+  systems: ReadonlySet<string>,
+  facilityCodes: ReadonlySet<string>,
+): boolean {
+  for (const cc of items(concept)) {
+    if (!isComplex(cc)) return false;
+    const pairs = codings(cc);
+    if (pairs.length === 0) return false;
+    for (const { system, code } of pairs) {
+      if (!systems.has(system) || !facilityCodes.has(code)) return false;
+    }
+  }
+  return true;
+}
+
+/**
  * `true` when a `Location` **may be a patient's residence**, so its `position` (latitude and longitude)
- * is geography finer than a State and is removed:
- *
- * - its `type` carries `PTRES` (v3 RoleCode, patient's residence), or
- * - its `physicalType` carries `ho` (location-physical-type, house), or
- * - it carries **no coded `type` and no coded `physicalType` at all**: the pass cannot tell a home from
- *   a clinic, and it fails closed.
- *
- * A Location coded only as something else (a hospital, a ward, a building) keeps its position, which
- * locates a facility rather than a person. A coding with no system is read in the system its element
- * is bound to.
+ * is geography finer than a State and is removed. It fails closed: the position is kept **only** when
+ * the Location carries at least one coded `type` or `physicalType`, and every coding on both is a known
+ * facility code (a hospital, a ward, a building, ...) in its known system, v3 RoleCode by URI or OID
+ * for `type`, location-physical-type by URI for `physicalType`. A `PTRES` (patient's residence), a
+ * house, a local or unknown system, a coding without a system, an uncoded concept, a list that mixes a
+ * facility code with anything else, and a Location with no type at all all remove it.
  *
  * @param location - The `Location` resource complex.
  * @internal
  */
 export function locationMayBeResidence(location: FhirComplex): boolean {
-  const types = codings(getProperty(location, "type"));
-  const physical = codings(getProperty(location, "physicalType"));
-  const isIn = (system: string, bound: string): boolean => system === "" || system === bound;
-  if (types.some((c) => c.code === "PTRES" && isIn(c.system, V3_ROLE_CODE_SYSTEM))) return true;
-  if (physical.some((c) => c.code === "ho" && isIn(c.system, PHYSICAL_TYPE_SYSTEM))) return true;
-  return types.length === 0 && physical.length === 0;
+  const type = getProperty(location, "type");
+  const physical = getProperty(location, "physicalType");
+  if (items(type).length + items(physical).length === 0) return true;
+  return !(
+    allKnownFacility(type, ROLE_CODE_SYSTEMS, FACILITY_ROLE_CODES) &&
+    allKnownFacility(physical, PHYSICAL_TYPE_SYSTEMS, FACILITY_PHYSICAL_TYPES)
+  );
 }

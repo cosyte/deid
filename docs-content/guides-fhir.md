@@ -171,15 +171,17 @@ not mistaken for a date, so it survives.
 - The narrative **`text.div`** is blocked at any depth (resource-, section-, entry-level).
 - An **age held as a number** is located: an `Age` (`Condition.onsetAge`, `FamilyMemberHistory.ageAge`
   and `deceasedAge`, `Procedure.performedAge`, and the other `Age` arms), each bound of an age `Range`,
-  and an `Observation.valueQuantity` whose `code` names an age (LOINC `30525-0`, among others). Over 89
+  and an `Observation.valueQuantity`, `valueInteger` or `valueRange` whose `code` names an age (LOINC
+  `30525-0`, among others). Over 89
   the quantity's `value` is **removed** and its unit kept; 89 or under it is kept exactly as written,
   and the manifest records it either way (see [the limitations page](./limitations.md#ages-over-89)).
 - `FamilyMemberHistory.bornDate`, each bound of `bornPeriod`, `bornString` and an
   `Observation.valueDateTime` coded as a birth date (LOINC `21112-8`) are **dates of birth**, like
   `birthDate`: a year that shows an age over 89 is removed.
-- **`Location.position`** is removed, as geography finer than a State, from a Location that may be a
-  residence: typed `PTRES`, of physical type `ho` (house), or carrying neither code. A Location coded
-  only as a facility keeps it.
+- **`Location.position`** is removed, as geography finer than a State, unless every coding on the
+  Location's `type` and `physicalType` is a known facility code in its known system (see
+  [the limitations page](./limitations.md#ages-over-89)). A home, an unknown system, a coding with no
+  system, a mixed list or no type at all removes it.
 
 ## The two guarantees
 

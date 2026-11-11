@@ -712,7 +712,8 @@ interface ParentFacts {
  * - An element R4 types as an `Age` (`Condition.onsetAge`, `FamilyMemberHistory.ageAge`, ...) and an
  *   age-coded `valueQuantity`: the quantity's `value` becomes an age locus, and the rest of the
  *   quantity is walked as before.
- * - An `Age` range (`FamilyMemberHistory.ageRange`, `Condition.onsetRange`, ...): each bound alike.
+ * - An `Age` range (`FamilyMemberHistory.ageRange`, `Condition.onsetRange`, ...) and an age-coded
+ *   `valueRange`: each bound alike. An age-coded `valueInteger` is an age in years.
  * - `FamilyMemberHistory.bornPeriod`: each bound is a date of birth. `bornString`: a date of birth
  *   written as text, generalized to its leading year when it has one and blocked when it has none.
  * - `Location.position` on a Location that may be a residence: removed whole, as geography finer than
@@ -739,7 +740,25 @@ function handleAgesAndBirthDates(
     walkAge(value, path);
     return true;
   }
-  if (isComplex(value) && FHIR_AGE_RANGE_ELEMENTS.has(name)) {
+  if (name === "valueInteger" && parent.codedAs === "age" && isPrimitive(value)) {
+    // An age-coded integer result: a whole number of years, with no unit to read.
+    push(
+      out,
+      {
+        path,
+        kind: "age",
+        category: FHIR_DATE_CATEGORY,
+        ageUnit: "",
+        value: primitiveString(value),
+      },
+      { node: value, edit: "age" },
+    );
+    return true;
+  }
+  if (
+    isComplex(value) &&
+    (FHIR_AGE_RANGE_ELEMENTS.has(name) || (name === "valueRange" && parent.codedAs === "age"))
+  ) {
     for (const bound of RANGE_BOUNDS) {
       const quantity = getProperty(value, bound);
       if (quantity !== undefined && isComplex(quantity)) walkAge(quantity, join(path, bound));

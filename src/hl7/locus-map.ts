@@ -117,8 +117,8 @@ const NK1_RULES: readonly Hl7FieldRule[] = [
   { field: 30, category: C.NAMES, mode: "redact" }, // NK1-30 Contact Person's Name (XPN~)
   { field: 31, category: C.PHONE, mode: "redact" }, // NK1-31 Contact Person's Phone (XTN~)
   { field: 32, category: C.GEOGRAPHIC, mode: "address" }, // NK1-32 Contact Person's Address (XAD~)
-  { field: 33, category: C.SSN, mode: "redact" }, // NK1-33 Next of Kin/Associated Party's SSN
-  { field: 37, category: C.MRN, mode: "id" }, // NK1-37 Contact Person Social Security Number / identifiers (CX)
+  { field: 33, category: C.MRN, mode: "id" }, // NK1-33 Next of Kin/Associated Party's Identifiers (CX~)
+  { field: 37, category: C.SSN, mode: "redact" }, // NK1-37 Contact Person Social Security Number (ST)
   { field: 40, category: C.PHONE, mode: "redact" }, // NK1-40 Next of Kin Telecommunication Information (XTN, v2.7)
   { field: 41, category: C.PHONE, mode: "redact" }, // NK1-41 Contact Person's Telecommunication Information (XTN, v2.7)
 ];

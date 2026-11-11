@@ -343,17 +343,17 @@ residual. A birth year under that line keeps its year and its residual row exact
 
 An age written as a number is located and aggregated too. Under a policy that generalizes dates, an
 age over 89 is **removed** and recorded as `DEID_CATEGORY_GENERALIZED` with the disposition `removed`;
-an age of 89 or under is kept **exactly as written** and recorded as a `DEID_RESIDUAL_RETAINED`
-residual. The ages located are:
+an age of 89 or under is kept **exactly as written**, with the disposition `retained` and the code
+`DEID_RESIDUAL_RETAINED`, the same row a date-shift policy writes for a kept age. The ages located are:
 
 - an HL7 v2 OBX result typed `NM` whose `OBX-3` (identifier or alternate identifier) codes it as an
   age, for example `OBX|1|NM|30525-0^Age^LN||93|a`. `OBX-5` is emptied and `OBX-6` keeps the unit;
 - a FHIR `Age`: `Condition.onsetAge` and `abatementAge`, `FamilyMemberHistory.ageAge`, `deceasedAge`
   and `condition.onsetAge`, `AllergyIntolerance.onsetAge`, `Procedure.performedAge`, an action's
   `timingAge`, and an open `valueAge`; each bound of an age `Range` (`ageRange`, `deceasedRange`,
-  `onsetRange`, `abatementRange`, `performedRange`); and an `Observation.valueQuantity` (or a
-  component's) whose `code` names an age. The quantity's `value` is dropped and its unit, system and
-  code stay;
+  `onsetRange`, `abatementRange`, `performedRange`); and an `Observation.valueQuantity`,
+  `valueInteger` (read as years) or each bound of a `valueRange` (or a component's) whose `code` names
+  an age. The quantity's `value` (or the integer) is dropped and its unit, system and code stay;
 - a C-CDA observation in the clinical body whose `code` names an age (the Age Observation's SNOMED CT
   `445518008`, among others), its `PQ` `value`, or each bound of an `IVL_PQ`. The `value` attribute is
   dropped and `nullFlavor="MSK"` is written in its place.
@@ -373,7 +373,8 @@ SNOMED CT `445518008` and `397659008`. A code with no stated system is matched a
   an HL7 v2 `OBX-5`, and removes the FHIR or C-CDA number, which cannot hold one.
 - **Residual: ages these rules do not read.** An age written as text (FHIR `ageString`,
   `deceasedString`, `onsetString`, an HL7 v2 OBX typed `ST`, which is blocked as free text anyway), an
-  HL7 v2 OBX age typed `SN` (structured numeric) or any other structured type than `NM`, and an age under a code outside the lists above all pass as before. A caller who builds
+  HL7 v2 OBX age typed `SN` (structured numeric) or any other structured type than `NM`, an age-coded
+  FHIR `valueRatio`, and an age under a code outside the lists above all pass as before. A caller who builds
   loci by hand gets the rule by setting `ageUnit` on an `age` locus; without it the `generalize`
   transform turns an age over 89 into `90+`.
 
@@ -381,11 +382,20 @@ SNOMED CT `445518008` and `397659008`. A code with no stated system is matched a
 
 The HL7 v2 map names `NK1-12` (the associated party's employee number, blocked as the (R) catch-all),
 `NK1-13` (the party's organisation name and identifier, removed as a name) and the v2.7
-telecommunication fields `PID-40`, `NK1-40` and `NK1-41` (removed as phone numbers). FHIR removes
-`Location.position` from a Location that may be a residence: one typed `PTRES` (patient's residence),
-one whose `physicalType` is `ho` (house), and one with neither a coded type nor a coded physical type,
-recorded as geographic and blocked. A Location coded only as something else (a hospital, a ward, a
-building) keeps its position. A `geolocation` extension is removed by the extension rule wherever it
+telecommunication fields `PID-40`, `NK1-40` and `NK1-41` (removed as phone numbers). `NK1-33` is now
+read as the associated party's identifiers (one locus per repetition, as `PID-2` is) and `NK1-37`
+as the contact person's Social Security number; the map had the two the other way round.
+
+FHIR removes `Location.position`, recorded as geographic and blocked, unless the Location is
+positively a facility: it keeps the position **only** when it carries at least one coded `type` or
+`physicalType`, and every coding on both is a known facility code in its known system. For `type` that
+is v3 RoleCode (by its URI or its OID `2.16.840.1.113883.5.111`) and one of `HOSP`, `ER`, `ICU`, `OR`,
+`PHARM`, `LAB`, `AMB`, `MBL`, `HU`, `SNF`, `PSYCHF`, `RH`, `CHR`; for `physicalType` it is
+location-physical-type (by its URI) and one of `bu`, `wi`, `wa`, `lvl`, `co`, `ro`, `bd`. Anything
+else removes it: `PTRES`, a house, a local or unknown system, a coding with no system, an uncoded
+concept, a list that mixes a facility code with anything else, and a Location with no type at all. A
+facility coded in a system or with a code outside those lists loses its position too, which is the
+over-removal this rule accepts. A `geolocation` extension is removed by the extension rule wherever it
 sits, and inside an `Address` by the address reduction.
 
 Still not named, and so handed through and counted as unexamined residuals: `NK1-26` (the associated
