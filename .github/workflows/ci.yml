@@ -81,14 +81,37 @@ jobs:
   #   adapters are subpaths and the shared job hands a suite one module. Advisory: it never fails,
   #   so never require it. The large sizes are measured by bench.yml's reading instead.
   #
-  # This caller alone is one release ahead of the others: the release of commit 0be6757a7738 is the
-  # first with those two jobs. Its name carries its date, which a PHI scan of a changed file can
-  # read as a date of service, so the comment names its commit instead. The other callers move to it
-  # with the next change to them.
+  # The testing standard's jobs run beside them too:
+  # - `verify` on Linux, Windows and macOS (`os` below), each on Node 22, 24 and 26. The contexts
+  #   the ruleset names, `ci / verify (<22, 24>, ubuntu-latest)`, are still emitted verbatim; the
+  #   Windows and macOS ones are new and not required yet.
+  # - `bun`: `pnpm test` under Bun. The `deno` job is not on yet: under Deno 2.9.8 every DICOM
+  #   write fails inside `@cosyte/dicom`'s `serializeDicom` (a RangeError from `Buffer.compare`),
+  #   so every DICOM case would be red there; the rest of the suite passes under Deno. Turn on
+  #   `run-deno` once that writer runs under Deno.
+  # - `coverage-ratchet`: the coverage run held to `quality-floor.json` by `cosyte-ratchet`, and on
+  #   a pull request every changed line it counts held to having run.
+  # - `mutation` (pull requests only): StrykerJS over the source files the pull request changed
+  #   (`pnpm exec cosyte-mutate changed`), and every mutant in its changed lines must be killed.
+  #   The full run is weekly, sharded, in `weekly-mutation.yml`, and holds the whole score to the
+  #   floor.
+  # A job skipped by a condition satisfies a required context, so require any of these only while
+  # its input below stays on.
+  #
+  # This caller, `weekly-mutation.yml` and `nightly-properties.yml` are one release ahead of the
+  # others: the release of commit 398cd4ded647 is the first with every one of those jobs. Its name
+  # carries its date, which a PHI scan of a changed file can read as a date of service, so the
+  # comment names its commit instead. `release.yml` stays where it is: from this release on the
+  # shared release gates a publish on a recent weekly mutation result, and there is none until the
+  # first weekly run on `main`. The other callers move with the next change to them.
   ci:
-    uses: cosyte/.github/.github/workflows/ci.yml@0be6757a773885cbd5165dbfa0f93772d907b3e8 # the release of 0be6757a7738
+    uses: cosyte/.github/.github/workflows/ci.yml@398cd4ded647dddd9f2e220ceb042840f59e1426 # the release of 398cd4ded647
     with:
+      os: '["ubuntu-latest", "windows-latest", "macos-latest"]'
       run-phi-scan: true
+      run-bun: true
+      run-coverage-ratchet: true
+      run-mutation: true
       run-scaling-gate: true
       run-bench-compare: true
       bench-suites: bench/deid.bench.mjs

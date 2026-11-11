@@ -10,10 +10,12 @@
 
 import { Buffer } from "node:buffer";
 
-import { Dataset, Element, parseDicom } from "@cosyte/dicom";
+import { Dataset, Element, Item, parseDicom } from "@cosyte/dicom";
 import { describe, expect, it } from "vitest";
 
-import { SAFE_HARBOR_CATEGORIES } from "../../src/index.js";
+import { DeidError, FATAL_CODES, SAFE_HARBOR_CATEGORIES } from "../../src/index.js";
+import { WITHHELD_LOCUS_TOKEN } from "../../src/derived-token.js";
+import { assertValueBytes } from "../../src/dicom/fold.js";
 import { deidentifyDicom, deidentifyDicomBuffer } from "../../src/dicom/index.js";
 import { buildDicom, type BuildDicomOptions } from "./helpers/build-dicom.js";
 import { buildPhiDataset, pad, TS_EXPLICIT_LE, UID } from "./helpers/fixtures.js";
@@ -155,5 +157,157 @@ describe("deidentifyDicom, a tag a hand-built dataset spells out of shape", () =
     expect(manifest).toEqual([
       expect.objectContaining({ locus: "0009100 PrivateTag", disposition: "removed" }),
     ]);
+  });
+});
+
+describe("deidentifyDicom, an element copied by spreading", () => {
+  /**
+   * A copy of an element made with object spread, as it comes out from `@cosyte/dicom` 0.1.12 on:
+   * `rawBytes` is an accessor over private state there, so the copy carries every structural field
+   * but no value bytes, and the delegated Annex E pass fails on it with a bare `TypeError` from
+   * inside the peer. Before 0.1.12 `rawBytes` was an own property a spread kept, so the lowest
+   * release the peer range admits would copy it; it is dropped here so each release sees the copy
+   * the current ones make.
+   */
+  function spread(el: Element): Element {
+    const all: Record<string, unknown> = { ...el };
+    delete all["rawBytes"];
+    return all as unknown as Element;
+  }
+
+  function refusal(run: () => unknown): DeidError {
+    try {
+      run();
+    } catch (err) {
+      if (err instanceof DeidError) return err;
+      throw err;
+    }
+    throw new Error("the pass returned instead of refusing");
+  }
+
+  const fileMeta = { transferSyntaxUID: TS_EXPLICIT_LE };
+
+  it("refuses a body element with no value bytes, naming its tag and no value", () => {
+    const modality = element("00080060", "LO", "ZZMODALITY");
+    const err = refusal(() =>
+      deidentifyDicom(
+        new Dataset({
+          warnings: [],
+          elements: new Map([["00080060", spread(modality)]]),
+          fileMeta,
+        }),
+      ),
+    );
+    expect(err.code).toBe(FATAL_CODES.DEID_POSITIONS_UNENUMERABLE);
+    expect(err.message).toContain("the structure at (0008,0060) could not");
+    expect(err.message).not.toContain("ZZMODALITY");
+  });
+
+  it("refuses one the profile would remove, too: the pass never decides on bytes it cannot read", () => {
+    const name = element("00100010", "LO", "ZZDOE^ZZJANE");
+    const err = refusal(() =>
+      deidentifyDicom(
+        new Dataset({ warnings: [], elements: new Map([["00100010", spread(name)]]), fileMeta }),
+      ),
+    );
+    expect(err.code).toBe(FATAL_CODES.DEID_POSITIONS_UNENUMERABLE);
+    expect(err.message).toContain("(0010,0010)");
+    expect(err.message).not.toContain("ZZDOE");
+  });
+
+  it("refuses one inside a sequence item, naming the item it sits in", () => {
+    const inner = element("00080060", "LO", "ZZMODALITY");
+    const item = new Item({
+      index: 0,
+      warnings: [],
+      elements: new Map([["00080060", spread(inner)]]),
+    });
+    const sequence = new Element({
+      tag: "00081110",
+      vr: "SQ",
+      vm: 1,
+      length: 0,
+      rawBytes: Buffer.alloc(0),
+      byteOffset: 0,
+      littleEndian: true,
+      items: [item],
+    });
+    const err = refusal(() =>
+      deidentifyDicom(
+        new Dataset({ warnings: [], elements: new Map([["00081110", sequence]]), fileMeta }),
+      ),
+    );
+    expect(err.code).toBe(FATAL_CODES.DEID_POSITIONS_UNENUMERABLE);
+    expect(err.message).toContain("the structure at (0008,1110)[0]/(0008,0060) could not");
+  });
+
+  it("withholds a tag that is not eight hex digits rather than print it", () => {
+    const priv = { ...spread(element("00091001", "LO", "ZZPRIVATEVALUE")), tag: "ZZTAG" };
+    const err = refusal(() =>
+      deidentifyDicom(
+        new Dataset({
+          warnings: [],
+          elements: new Map([["ZZTAG", priv as unknown as Element]]),
+          fileMeta,
+        }),
+      ),
+    );
+    expect(err.code).toBe(FATAL_CODES.DEID_POSITIONS_UNENUMERABLE);
+    expect(err.message).toContain(WITHHELD_LOCUS_TOKEN);
+    expect(err.message).not.toContain("ZZTAG");
+  });
+
+  it.each(["Z00080060", "00080060Z", "0008006"])(
+    "withholds %s, which only part of reads as eight hex digits",
+    (tag) => {
+      const copy = { ...spread(element("00080060", "LO", "ZZMODALITY")), tag };
+      const err = refusal(() =>
+        deidentifyDicom(
+          new Dataset({
+            warnings: [],
+            elements: new Map([[tag, copy as unknown as Element]]),
+            fileMeta,
+          }),
+        ),
+      );
+      expect(err.message).toContain(`the structure at ${WITHHELD_LOCUS_TOKEN} could not`);
+    },
+  );
+
+  /** A dataset or item whose elements cannot be listed, as a hand-built one can fail to. */
+  const unlistable = {
+    elements(): never {
+      throw new Error("ZZUNLISTABLE");
+    },
+  };
+
+  it("names the root dataset when it will not list its elements", () => {
+    const err = refusal(() => assertValueBytes(unlistable));
+    expect(err.code).toBe(FATAL_CODES.DEID_POSITIONS_UNENUMERABLE);
+    expect(err.message).toContain("the structure at dataset could not");
+    expect(err.message).not.toContain("ZZUNLISTABLE");
+  });
+
+  it("names the nested item, by its whole path, when it will not list its elements", () => {
+    const view = new Uint8Array(0);
+    const inner = { tag: "00400275", vr: "SQ", length: 0, rawBytes: view, items: [unlistable] };
+    const outer = {
+      tag: "00081110",
+      vr: "SQ",
+      length: 0,
+      rawBytes: view,
+      items: [{ elements: () => [inner] }],
+    };
+    const err = refusal(() => assertValueBytes({ elements: () => [outer] }));
+    expect(err.message).toContain("the structure at (0008,1110)[0]/(0040,0275)[0] could not");
+  });
+
+  it("passes the same element when it is the parsed one", () => {
+    const parsed = element("00080060", "LO", "CT");
+    expect(() =>
+      deidentifyDicom(
+        new Dataset({ warnings: [], elements: new Map([["00080060", parsed]]), fileMeta }),
+      ),
+    ).not.toThrow();
   });
 });

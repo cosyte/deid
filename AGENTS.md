@@ -19,7 +19,9 @@ pnpm test
 
 ## The gate
 
-A pull request is ready when these pass, in this order. CI runs the first nine on Node 22, 24, and 26.
+A pull request is ready when these pass, in this order. CI runs the first ten on Linux, Windows and
+macOS on Node 22, 24, and 26 (`quality:check` in its own `coverage-ratchet` job), and the suite
+under Bun.
 
 ```sh
 pnpm install --frozen-lockfile
@@ -29,6 +31,7 @@ pnpm format:check
 pnpm phi-scan
 pnpm test
 pnpm test:coverage
+pnpm quality:check --base origin/main
 pnpm build
 pnpm attw
 pnpm smoke
@@ -44,6 +47,23 @@ pnpm test:perf
 ```
 
 A change that reaches the published package adds a changeset (`pnpm changeset`).
+
+## The testing standard
+
+`quality-floor.json` holds the coverage and the mutation score CI measures, and they only rise;
+`vitest.config.ts` reads its coverage floor from there, for `src/` and for each directory on its own.
+`pnpm quality:check` holds coverage to it (after `pnpm test:coverage`); with `--base origin/main`
+every changed line coverage counts must also have run. On a pull request CI's `mutation` job mutates
+the changed source files with `stryker.config.mjs` and every mutant in the changed lines must be
+killed. `.github/workflows/weekly-mutation.yml` runs the full run (`pnpm mutate:full`) twice a week,
+in eight shards, and holds its score to the floor; raise a floor with `pnpm quality:raise` after a
+full run. Mutation runs the suite of `vitest.mutation.config.ts`, without the tests that build the
+package, compile the examples or test the tooling, and with every property on one fixed seed.
+
+Every property runs through `test/helpers/property.ts`: 100 cases on a pull request, 10,000 nightly
+(`nightly-properties.yml` runs `pnpm test:property`; `leak-property.yml` runs the leak properties),
+its seed printed first, a failure replayed with `COSYTE_PROPERTY_SEED` and `COSYTE_PROPERTY_PATH`.
+A property passes no case count of its own.
 
 ## Performance
 
