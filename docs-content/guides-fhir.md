@@ -82,14 +82,14 @@ sender, and coverage that depended on that choice would not be coverage at all. 
 resource the map decides instead, which reaches the elements it lists and no others; that is the last
 of the residuals below.
 
-| Scope | Loci | Transform |
-|---|---|---|
-| **Person resources**: `Patient` / `RelatedPerson` / `Practitioner` / `Person` (+ nested `Patient.contact`, a relative) | `name`, `telecom`, `photo`, `address`, `birthDate`, `deceasedDateTime` | name/telecom/photo **removed**; `address` → safe **3-digit ZIP** (or `000` for a restricted prefix), finer geography dropped; dates → **year**, and a `birthDate` whose year shows an age over 89 is **removed** |
-| **Every resource, by datatype** | any `HumanName`, any `Address`: `Organization.contact.name`, `Location.address`, `Organization.address`, a choice-type `locationAddress` | name **removed**; address → the same safe **3-digit ZIP** (or `000`), finer geography dropped, that a person resource's address gets |
-| **Every resource (the universal PHI vectors)** | `identifier`, PHI-bearing dates, narrative `text.div`, `extension` / `modifierExtension` values, `Reference.display` | identifier **removed** under Safe Harbor, `system` retained (a consistent keyed surrogate by `system` only under a preset that does not claim the label); dates → **year**; narrative div / extension values / reference labels **blocked** |
-| **Every resource's logical id** | the resource `id`; the id in a `Bundle.entry.fullUrl`, a `Reference.reference`, a `Bundle.entry.request.url` and a `Bundle.entry.response.location` | **replaced**, the same id by the same value throughout the call so every reference still resolves: a per-call stand-in under Safe Harbor, a keyed surrogate under a keyed policy (see [Resource ids and references](#resource-ids-and-references)) |
-| **Contained resources and `Bundle` entries** | each nested resource | **walked**: the resource role is re-derived at every `resourceType`, so a contained `RelatedPerson` or a Bundled `Patient` is de-identified too |
-| **Clinical resources**: `Observation`, `Condition`, `Encounter`, … | codes, values, units, statuses, reference ranges, reference wiring | **retained untouched** (the over-scrub guard); the wiring keeps every link, with the ids in it replaced |
+| Scope                                                                                                                  | Loci                                                                                                                                                | Transform                                                                                                                                                                                                                                          |
+| ---------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Person resources**: `Patient` / `RelatedPerson` / `Practitioner` / `Person` (+ nested `Patient.contact`, a relative) | `name`, `telecom`, `photo`, `address`, `birthDate`, `deceasedDateTime`                                                                              | name/telecom/photo **removed**; `address` → safe **3-digit ZIP** (or `000` for a restricted prefix), finer geography dropped; dates → **year**, and a `birthDate` whose year shows an age over 89 is **removed**                                   |
+| **Every resource, by datatype**                                                                                        | any `HumanName`, any `Address`: `Organization.contact.name`, `Location.address`, `Organization.address`, a choice-type `locationAddress`            | name **removed**; address → the same safe **3-digit ZIP** (or `000`), finer geography dropped, that a person resource's address gets                                                                                                               |
+| **Every resource (the universal PHI vectors)**                                                                         | `identifier`, PHI-bearing dates, narrative `text.div`, `extension` / `modifierExtension` values, `Reference.display`                                | identifier **removed** under Safe Harbor, `system` retained (a consistent keyed surrogate by `system` only under a preset that does not claim the label); dates → **year**; narrative div / extension values / reference labels **blocked**        |
+| **Every resource's logical id**                                                                                        | the resource `id`; the id in a `Bundle.entry.fullUrl`, a `Reference.reference`, a `Bundle.entry.request.url` and a `Bundle.entry.response.location` | **replaced**, the same id by the same value throughout the call so every reference still resolves: a per-call stand-in under Safe Harbor, a keyed surrogate under a keyed policy (see [Resource ids and references](#resource-ids-and-references)) |
+| **Contained resources and `Bundle` entries**                                                                           | each nested resource                                                                                                                                | **walked**: the resource role is re-derived at every `resourceType`, so a contained `RelatedPerson` or a Bundled `Patient` is de-identified too                                                                                                    |
+| **Clinical resources**: `Observation`, `Condition`, `Encounter`, …                                                     | codes, values, units, statuses, reference ranges, reference wiring                                                                                  | **retained untouched** (the over-scrub guard); the wiring keeps every link, with the ids in it replaced                                                                                                                                            |
 
 Positive classification is **closed**, and that is the over-scrub guard: an element is a `HumanName`
 only when every property it carries is one FHIR R4 defines on `HumanName`, **and** at least one of them
@@ -199,10 +199,16 @@ the identifier rule), and an empty one as `{}`.
 
 ## Fail closed
 
-- A bare **unrecognized string** at a person resource's top level is **blocked**: a positive allow-list
-  of recognized coded/administrative elements governs the person sweep, so a vendor `<Patient>`-level
-  field cannot ride through in the clear (an open-ended allow-list can never satisfy Safe Harbor's
-  open-ended category (R)).
+- A bare **string** at a person resource's top level is **blocked** unless it is a code the pass can
+  check: a `gender` in the R4 `AdministrativeGender` value set (`male`, `female`, `other`, `unknown`)
+  or a `language` shaped as a language tag. A vendor `<Patient>`-level field, a string where R4 puts a
+  structure (`link`, `contact`, `managingOrganization`), a gender outside the value set, and an
+  `implicitRules` URI are all removed and recorded (an open-ended allow-list can never satisfy Safe
+  Harbor's open-ended category (R)). A date there is decided by the date rule first.
+- The conditional headers of a **`Bundle.entry.request`** (`ifNoneExist`, `ifMatch`, `ifNoneMatch`)
+  are **blocked** whatever they hold: a search string such as `identifier=system|value` or `_id=value`
+  carries an identifier, and an entity tag carries a server's version id. The entry keeps its method
+  and its url (read as above), so a conditional create becomes an unconditional one.
 - A **`display` that is not on a `Coding`** is a Reference person-label and is **blocked**, including a
   display-only (`{ display }`) or type+display reference that names no `reference`/`identifier` target. A
   Coding is identified positively (a `code`/`system` sibling), so `Coding.display` (a coded term) is

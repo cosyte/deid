@@ -18,6 +18,7 @@ import { Hl7Message, type RawSegment } from "@cosyte/hl7";
 
 import type { TransformedLocus } from "../locus.js";
 import type { Hl7Coord } from "./extract.js";
+import { isIdentifierTypeCode } from "./locus-map.js";
 
 /** Mutable mirror of `@cosyte/hl7`'s readonly `RawComponent`. */
 interface MutComponent {
@@ -79,21 +80,41 @@ function applyWholeField(field: MutField, t: TransformedLocus): void {
   }
 }
 
-/** Apply an id-number edit: replace only CX.1 of the target repetition, retaining authority/type. */
+/**
+ * Apply an id-number edit: rebuild the target repetition from the replaced number (CX.1), the assigning
+ * authority (CX.4) and a type code (CX.5) that HL7 Table 0203 defines. Every other component goes: the
+ * check digit and its scheme, the assigning facility, the effective and expiration dates, the
+ * jurisdiction and the agency, and anything past them. A type code the table does not hold goes too, so
+ * a value written where a code belongs is never kept. A blocked number leaves CX.1 empty.
+ */
 function applyIdNumber(field: MutField, rep: number, t: TransformedLocus): void {
   const repetition = field.repetitions[rep];
   if (repetition === undefined) return;
-  // Assign component 1 (CX.1); index-0 assignment also covers the (parser-unreachable) empty-components
-  // case without a dead branch. Components 2+ (assigning authority / type code) are retained.
-  repetition.components[0] = { subcomponents: [t.value ?? ""] };
+  const [, , , authority, typeCode] = repetition.components;
+  const rebuilt: MutComponent[] = [
+    { subcomponents: [t.value ?? ""] },
+    emptyComponent(),
+    emptyComponent(),
+    authority ?? emptyComponent(),
+    typeCode !== undefined && isIdentifierTypeCode(typeCode) ? typeCode : emptyComponent(),
+  ];
+  // No empty component is left at the end, so the repetition writes no trailing delimiters.
+  while (rebuilt.length > 1 && isEmpty(rebuilt[rebuilt.length - 1])) rebuilt.pop();
+  repetition.components = rebuilt;
+}
+
+/** `true` when a component holds no value in any subcomponent. */
+function isEmpty(component: MutComponent | undefined): boolean {
+  return component === undefined || component.subcomponents.every((s) => s.length === 0);
 }
 
 /**
- * Apply a **date-field** edit: rewrite the date component of ONE repetition, never the whole field.
+ * Apply a **date-field** edit: rewrite ONE repetition, never the whole field.
  *
- * A transformed value replaces component 1 of that repetition and leaves every sibling component (a
- * degree-of-precision marker, say) at its own ordinal. A blocked value empties the locus at its own
- * unit: when the field carries a single repetition the field itself is emptied, position preserved
+ * A transformed value becomes the whole repetition: every sibling component after the date (a
+ * degree-of-precision marker, or anything else written there) is removed with it. A blocked value
+ * empties the locus at its own unit: when the field carries a single repetition the field itself is
+ * emptied, position preserved
  * and no component residue left behind; when it repeats, only the offending repetition is emptied, so
  * a sibling repetition keeps both its bytes and its ordinal.
  */
@@ -108,7 +129,9 @@ function applyDateField(field: MutField, rep: number, t: TransformedLocus): void
     repetition.components = [emptyComponent()];
     return;
   }
-  repetition.components[0] = { subcomponents: [t.value] };
+  // The reduced date is the whole repetition: a component after it (a degree of precision, or a value
+  // in a shape the date type does not have) is not kept beside it.
+  repetition.components = [{ subcomponents: [t.value] }];
 }
 
 /**

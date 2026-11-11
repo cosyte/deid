@@ -116,6 +116,8 @@ const OVER_SCRUB_GRAPH = {
         code: {
           coding: [
             {
+              // An element id: not a logical id, so the comparison below still reads it.
+              id: "coding-sodium",
               system: "http://loinc.org",
               code: "2951-2",
               display: "Sodium [Moles/volume] in Serum or Plasma",
@@ -136,18 +138,22 @@ const OVER_SCRUB_GRAPH = {
 };
 
 /**
- * The three positions that carry a resource's logical id. The pass replaces every id there with a
- * stand-in, the same one for the same id, so the wiring survives with new ids in it. That is a rule
- * of its own (`resource-ids.test.ts`), not the sweep this suite fences, so the comparisons below take
- * those positions out of both sides and assert the rest is byte-identical.
+ * The three positions that carry a resource's logical id: a resource's own `id`, a `fullUrl` and a
+ * `reference`. The pass replaces every id there with a stand-in, the same one for the same id, so the
+ * wiring survives with new ids in it. That is a rule of its own (`resource-ids.test.ts`), not the
+ * sweep this suite fences, so the comparisons below take those positions out of both sides and assert
+ * the rest is byte-identical. Only a RESOURCE's `id` is taken out: an element's own `id` (the one on
+ * the Observation's coding below) is not a logical id, passes through, and stays in the comparison.
  */
-const LINK_KEYS: ReadonlySet<string> = new Set(["id", "fullUrl", "reference"]);
+const LINK_KEYS: ReadonlySet<string> = new Set(["fullUrl", "reference"]);
 
 /** Serialized JSON with every logical-id position removed, for comparing everything else. */
 function withoutLinks(wire: string): string {
-  return JSON.stringify(JSON.parse(wire), (key, value: unknown) =>
-    LINK_KEYS.has(key) ? undefined : value,
-  );
+  return JSON.stringify(JSON.parse(wire), function (this: unknown, key: string, value: unknown) {
+    const holder = this as Record<string, unknown>;
+    const resourceId = key === "id" && typeof holder["resourceType"] === "string";
+    return resourceId || LINK_KEYS.has(key) ? undefined : value;
+  });
 }
 
 function pass(graph: unknown): {
@@ -212,7 +218,9 @@ describe("the widened sweep changes nothing about a document that carries none o
     // a facility type, so the input itself changed. The output is still the input, byte for byte.
     // Re-captured a second time when resource ids began to be replaced: the digest is now taken over
     // the document with the logical-id positions taken out (`withoutLinks`), the part the sweep owns.
-    expect(digest(run.after)).toMatchInlineSnapshot(`"efae78d4cf32743213420bdfaaa0f26e"`);
+    // Re-captured a third time when that skip was narrowed to resource ids and the Observation's coding
+    // gained an element id, so an element id is in the bytes compared.
+    expect(digest(run.after)).toMatchInlineSnapshot(`"e3207170d23524cce6b23dd9623a1a7d"`);
   });
 
   it("nothing is recorded as acted on but the logical ids", () => {
@@ -229,6 +237,7 @@ describe("the widened sweep changes nothing about a document that carries none o
       "140", // its value
       "mmol/L", // its unit
       "final", // its status
+      '"id":"coding-sodium"', // an element id, which the comparison above keeps
     ]) {
       expect(run.after).toContain(survivor);
     }

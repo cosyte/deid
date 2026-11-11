@@ -295,7 +295,9 @@ const CONTROLS: Readonly<Record<string, Control>> = {
     lines: [
       "BPR*I*100.00*C*ACH*CCP*01*999999999*DA*123456*1999999999**01*999999999*DA*654321*20260615",
       "TRN*1*ZZTRACE1*1999999999",
-      "REF*EV*ZZRECEIVER",
+      // The receiver id names a party, and the TR3 puts it before any N1 says whose it is: a party
+      // number with no kept party before it is removed (an over-removal of this header value).
+      ["REF*EV*ZZRECEIVER", "REF*EV*"],
       ["DTM*405*20260615", "DTM*405*2026"],
       "N1*PR*ZZPAYERNAME",
       "N1*PE*ZZPAYEE*XX*1999999999",
@@ -325,7 +327,7 @@ const CONTROLS: Readonly<Record<string, Control>> = {
     ],
     // An employee identification number is an identifier of category (R): the policy blocks it. A
     // class of contract code and an attachment code route nowhere: their codes stay.
-    blocked: ["835/REF[2]-2", "835/REF[3]-2", "835/REF[5]-2"],
+    blocked: ["835/REF[0]-2", "835/REF[2]-2", "835/REF[3]-2", "835/REF[5]-2"],
   },
   "837I institutional claim": {
     gs01: "HC",

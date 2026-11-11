@@ -183,7 +183,8 @@ describe("applyHl7, coordinates naming a repetition or component the field does 
     coords[2] = { segIndex: 1, field: 11, rep: 0, edit: "address-zip" }; // no transformed[2]
     const out = applyHl7(parseHL7(RAW), [shifted, shifted], coords);
     expect(out.get("PID.7.1")).toBe("ZZWRITTEN");
-    expect(out.get("PID.7.2")).toBe("Y");
+    // The written date is the whole repetition: the precision marker after it goes with the old date.
+    expect(out.get("PID.7.2")).toBeUndefined();
     expect(out.toString()).toContain("ZZSTREET^^ZZCITY^IL^62704");
   });
 });

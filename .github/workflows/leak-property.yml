@@ -1,0 +1,52 @@
+name: Leak property
+
+# The generated leak property (test/leak-property/) runs about 100 cases per adapter inside `pnpm test`
+# on every pull request. This workflow runs the same six properties at 10,000 cases each, nightly and on
+# demand. Each property prints its seed before it runs and fast-check prints the seed and path of any
+# failing case, so a red run is replayed with DEID_LEAK_SEED set to that seed.
+#
+# Not a required check: it runs on a schedule, never on a pull request.
+
+on:
+  schedule:
+    # 06:17 UTC, after the nightly CI run. An odd minute: GitHub delays scheduled runs on the hour.
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+    inputs:
+      runs:
+        description: "Cases per adapter"
+        required: false
+        default: "10000"
+      seed:
+        description: "A seed to replay (empty draws a new one)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  leak-property:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Run the six leak properties
+        env:
+          DEID_LEAK_RUNS: ${{ inputs.runs || '10000' }}
+          DEID_LEAK_SEED: ${{ inputs.seed || '' }}
+        run: >-
+          pnpm exec vitest run
+          test/leak-property/hl7.test.ts
+          test/leak-property/x12.test.ts
+          test/leak-property/ncpdp.test.ts
+          test/leak-property/fhir.test.ts
+          test/leak-property/ccda.test.ts
+          test/leak-property/dicom.test.ts
+          --testTimeout=1800000

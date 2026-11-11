@@ -552,13 +552,16 @@ describe("closure: the measured inventory over every committed fixture", () => {
   // The FHIR total fell from 51 to 38 on purpose: the fixture's resource ids, fullUrls and references
   // are now replaced and recorded in the manifest, so thirteen positions left this inventory. The
   // ids of its four person resources were kept by name before and were never counted here.
+  // The HL7 totals rose on purpose (39 to 44, 61 to 62): an identifier's assigning authority (CX.4)
+  // is kept as it arrived without being read, so it is now counted as unexamined at every mapped
+  // identifier that carries one, where before the whole identifier field was named as examined.
   it("the per-fixture totals are pinned, so a class that stops being counted is a number", () => {
     expect(measured).toMatchInlineSnapshot(`
       {
         "ccda": 62,
         "fhir": 38,
-        "hl7 adt-a01": 39,
-        "hl7 oru-r01": 61,
+        "hl7 adt-a01": 44,
+        "hl7 oru-r01": 62,
         "ncpdp request": 15,
         "ncpdp response": 13,
         "x12": 0,

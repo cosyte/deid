@@ -841,6 +841,18 @@ const BUNDLE_LITERAL_ELEMENTS: ReadonlyMap<string, LiteralPosition> = new Map<
   ["Bundle.entry.response.location", "request"],
 ]);
 
+/**
+ * The conditional headers of a `Bundle.entry.request`. Each can carry an identifier: `ifNoneExist` is a
+ * search string (`identifier=system|value`, `_id=value`) and `ifMatch` / `ifNoneMatch` hold an entity
+ * tag, a server's version id. None is a form the pass reads, so each is removed whole, whatever it
+ * holds, and recorded as blocked. The entry loses its condition, not its method or its url.
+ */
+const BUNDLE_CONDITIONAL_HEADERS: ReadonlySet<string> = new Set<string>([
+  "Bundle.entry.request.ifNoneExist",
+  "Bundle.entry.request.ifMatch",
+  "Bundle.entry.request.ifNoneMatch",
+]);
+
 /** Emit the replacement locus for a logical id: a medical record number that others point at. */
 function pushLogicalId(
   out: FhirLocusAccumulator,
@@ -941,6 +953,10 @@ function handleLogicalIds(
     });
     return true;
   }
+  if (BUNDLE_CONDITIONAL_HEADERS.has(elementPath)) {
+    blockNode(out, value, path);
+    return true;
+  }
   const position = BUNDLE_LITERAL_ELEMENTS.get(elementPath);
   if (position === undefined) return false;
   if (isComplex(value)) {
@@ -1024,18 +1040,40 @@ function handleProperty(
     FHIR_BIRTH_DATE_ELEMENTS.has(name) ||
     (name === "valueDateTime" && parent.codedAs === "birth-date");
   if (isPrimitive(value) && dateEmit(out, value, path, dateOfBirth)) return;
-  // Fail-closed person sweep: a bare unrecognized string at a person resource's top level is blocked.
-  if (isPersonTop && isStringPrimitive(value) && !RECOGNIZED_PERSON_ELEMENTS.has(name)) {
-    blockNode(out, value, path);
-    return;
-  }
-  // The other half of that sweep: a string the person allow-list DOES recognize is kept by name, which
-  // is a decision at the position and not a silence, so it is examined.
-  if (isPersonTop && isStringPrimitive(value) && RECOGNIZED_PERSON_ELEMENTS.has(name)) {
+  // Fail-closed person sweep: a bare string at a person resource's top level is blocked unless it is a
+  // code the pass can check at an element R4 types as that code (`keepsPersonString`). A recognized
+  // element name is not enough: a string where R4 puts a structure (`link`, `contact`), or a gender
+  // outside its value set, is a shape no rule here reads, and it is removed rather than kept.
+  if (isPersonTop && isStringPrimitive(value)) {
+    if (!keepsPersonString(name, primitiveString(value))) {
+      blockNode(out, value, path);
+      return;
+    }
+    // The other half of that sweep: a checked code is kept by name, which is a decision at the
+    // position and not a silence, so it is examined.
     out.ruleReached.add(value);
   }
   // Otherwise descend (universal rules apply within); a retained scalar code/boolean is left untouched.
   walkValue(out, value, path, personCtx, elementPath);
+}
+
+/** The R4 `AdministrativeGender` codes, a required binding on every person resource's `gender`. */
+const ADMINISTRATIVE_GENDER: ReadonlySet<string> = new Set(["male", "female", "other", "unknown"]);
+
+/** A BCP-47 language tag as R4 `Resource.language` holds one: letters, then hyphenated subtags. */
+const LANGUAGE_TAG = /^[A-Za-z]{2,8}(-[A-Za-z0-9]{1,8})*$/;
+
+/**
+ * Whether a string at a person resource's top level is kept: only a `gender` in its required value set
+ * and a `language` shaped as a language tag. Every other string there is removed, at an element R4
+ * types as a structure, a reference, a boolean or a number, and at `implicitRules` too, a URI the pass
+ * cannot check. A date there is decided before this, by the date rule.
+ */
+function keepsPersonString(name: string, value: string): boolean {
+  if (!RECOGNIZED_PERSON_ELEMENTS.has(name)) return false;
+  if (name === "gender") return ADMINISTRATIVE_GENDER.has(value);
+  if (name === "language") return LANGUAGE_TAG.test(value);
+  return false;
 }
 
 /**

@@ -228,11 +228,17 @@ describe("FHIR R4: Patient.birthDate", () => {
   });
 
   it("still keeps a four-digit string at an element that is not a birth date by name", () => {
+    // A code, not `language`: a person resource now keeps a top-level string only when it is a code
+    // the pass can check, and `1920` is no language tag, so it is removed there for that reason.
     const { json } = deidentifyFhirJson(
-      JSON.stringify({ resourceType: "Patient", gender: "female", language: "1920" }),
+      JSON.stringify({
+        resourceType: "Patient",
+        gender: "female",
+        maritalStatus: { coding: [{ system: "http://example.org/cs", code: "1920" }] },
+      }),
       { context: ctx },
     );
-    expect(json).toContain('"language":"1920"');
+    expect(json).toContain('"code":"1920"');
   });
 
   it("keeps the year of a birth date under 90", () => {

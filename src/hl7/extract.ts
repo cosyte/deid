@@ -57,6 +57,7 @@ import {
   HL7_ORGANISATION_PARTY_RULES,
   HL7_PARTY_ROLE_TABLE,
   categoryForIdentifierType,
+  isIdentifierTypeCode,
   type Hl7FieldRule,
 } from "./locus-map.js";
 import { RETAIN_SEGMENTS, RETAINED_LOCUS_RULES, type Hl7RetainedFieldRule } from "./retain.js";
@@ -66,8 +67,8 @@ import { RETAIN_SEGMENTS, RETAINED_LOCUS_RULES, type Hl7RetainedFieldRule } from
  * it is the coordinate of a locus the profile's retention set kept, which must stay byte-identical
  * (a whole-field write would flatten its components and repetitions into a single value).
  *
- * `date-field` and `date-component` are the two units a date locus can have: the first rewrites the
- * date component of **one repetition** of a field, the second rewrites **one component** of one
+ * `date-field` and `date-component` are the two units a date locus can have: the first rewrites **one
+ * repetition** of a field to the reduced date alone, the second rewrites **one component** of one
  * repetition and leaves every sibling component at its own ordinal.
  *
  * `address-part` is the §164.514(e)(2)(ii) unit: it **reduces the address repetition to the five XAD
@@ -263,6 +264,75 @@ function pushRetainedAddressParts(
   }
 }
 
+/** The one CX component an identifier edit keeps as it arrived: the assigning authority. */
+const CX_ASSIGNING_AUTHORITY = 4;
+
+/**
+ * Name the positions of an identifier (CX) field the rule decides: every component but the assigning
+ * authority. The identifier edit replaces the number (CX.1), keeps a type code (CX.5) only when HL7
+ * Table 0203 defines it, and removes every other component, so each of those is decided. The authority
+ * is kept as it arrived without being read, so it is left to the enumeration, which counts it as an
+ * unexamined residual wherever it holds a value.
+ */
+function examineIdentifier(examined: Hl7ExaminedPositions, seg: Segment, field: number): void {
+  let widest = 1;
+  for (const rep of seg.field(field).repetitions) {
+    widest = Math.max(widest, rep.components.length);
+  }
+  for (let component = 1; component <= widest; component += 1) {
+    if (component !== CX_ASSIGNING_AUTHORITY) examined.component(field, component);
+  }
+}
+
+/**
+ * The blocked locus for an identifier repetition with no number (CX.1 empty) that still carries a value
+ * the identifier edit would not keep: a check digit, a facility, a date, or a type code Table 0203 does
+ * not define. Nothing in it can be replaced, so it is blocked (category omitted, the (R) catch-all) and
+ * written back by the same identifier edit, which keeps only the authority and a defined type code. A
+ * repetition holding only those two carries nothing to act on and emits no locus.
+ */
+function numberlessIdentifier(
+  seg: Segment,
+  type: string,
+  occ: number,
+  field: number,
+  rep: number,
+): PositionedLocus | undefined {
+  /* v8 ignore next -- the caller walks the repetitions the field has, so one always exists here */
+  const components = seg.field(field).repetitions[rep]?.components ?? [];
+  const residue = components.some(
+    (component, i) =>
+      i + 1 !== CX_ASSIGNING_AUTHORITY &&
+      !(i + 1 === 5 && isIdentifierTypeCode(component)) &&
+      component.subcomponents.some((s) => s.length > 0),
+  );
+  if (!residue) return undefined;
+  return {
+    field,
+    rep,
+    component: 0,
+    locus: {
+      path: fieldPath(type, occ, field, rep),
+      kind: "identifier",
+      value: components.map((c) => c.subcomponents.join("")).join(""),
+    },
+    coord: { segIndex: seg.absoluteIndex, field, rep, edit: "id-number" },
+  };
+}
+
+/** Push {@link numberlessIdentifier}'s locus for a mapped identifier field, when there is one. */
+function pushNumberlessIdentifier(
+  out: Hl7LocusAccumulator,
+  seg: Segment,
+  type: string,
+  occ: number,
+  field: number,
+  rep: number,
+): void {
+  const blocked = numberlessIdentifier(seg, type, occ, field, rep);
+  if (blocked !== undefined) push(out, blocked.locus, blocked.coord);
+}
+
 /**
  * Extract the loci for one mapped-segment field rule.
  *
@@ -279,7 +349,8 @@ function extractRule(
   retainedLoci: readonly RetainedLocusClass[] | undefined,
   examined: Hl7ExaminedPositions,
 ): void {
-  examined.field(rule.field);
+  // An identifier field names its positions component by component (`examineIdentifier`).
+  if (rule.mode !== "id") examined.field(rule.field);
   if (!hasContent(seg, rule.field)) return;
   const field = seg.field(rule.field);
 
@@ -323,10 +394,14 @@ function extractRule(
 
     case "id": {
       // One locus per repetition so each identifier gets its own consistent surrogate.
+      examineIdentifier(examined, seg, rule.field);
       const reps = field.repetitions.length;
       for (let rep = 0; rep < reps; rep += 1) {
         const idNumber = componentValue(seg, rule.field, rep, 1); // CX.1
-        if (idNumber.length === 0) continue;
+        if (idNumber.length === 0) {
+          pushNumberlessIdentifier(out, seg, type, occ, rule.field, rep);
+          continue;
+        }
         const category = rule.routeByTypeCode
           ? categoryForIdentifierType(componentValue(seg, rule.field, rep, 5), rule.category) // CX.5
           : rule.category;
@@ -476,8 +551,10 @@ function collectCarveOutLoci(
     retains(retainedLoci, rule.retention);
 
   for (const rule of rules) {
-    // The carve-out table names the whole field, at whichever outcome the retention keys reach.
-    examined.field(rule.field);
+    // The carve-out table names the whole field, at whichever outcome the retention keys reach; an
+    // identifier field names its positions component by component (`examineIdentifier`).
+    if (rule.routeByTypeCode === true) examineIdentifier(examined, seg, rule.field);
+    else examined.field(rule.field);
     if (!hasContent(seg, rule.field)) continue;
 
     if (rule.routeByTypeCode === true) {
@@ -487,7 +564,11 @@ function collectCarveOutLoci(
       const reps = seg.field(rule.field).repetitions.length;
       for (let rep = 0; rep < reps; rep += 1) {
         const idNumber = componentValue(seg, rule.field, rep, 1); // CX.1
-        if (idNumber.length === 0) continue;
+        if (idNumber.length === 0) {
+          const blocked = numberlessIdentifier(seg, type, occ, rule.field, rep);
+          if (blocked !== undefined) found.push(blocked);
+          continue;
+        }
         const category = categoryForIdentifierType(
           componentValue(seg, rule.field, rep, 5), // CX.5
           rule.category,
@@ -543,6 +624,39 @@ function carvedFields(type: string): ReadonlySet<number> {
   return new Set(rules === undefined ? [] : rules.map((r) => r.field));
 }
 
+/**
+ * The blocked locus for a date position whose date is empty but which still holds a value: a value in a
+ * later component of a date field, or in a later subcomponent of the date. No rule reads that shape,
+ * so it is blocked (category omitted, the (R) catch-all) and the date edit empties the position.
+ */
+function emptyDateWithResidue(
+  seg: Segment,
+  type: string,
+  occ: number,
+  field: number,
+  rep: number,
+  component: number | undefined,
+): PositionedLocus | undefined {
+  /* v8 ignore next -- the callers walk the repetitions the field has, so one always exists here */
+  const components = seg.field(field).repetitions[rep]?.components ?? [];
+  const scope = component === undefined ? components : components.slice(component - 1, component);
+  const residue = scope.map((c) => c.subcomponents.join("")).join("");
+  if (residue.length === 0) return undefined;
+  return {
+    field,
+    rep,
+    component: component ?? 0,
+    locus: { path: datePath(type, occ, field, rep, component), kind: "identifier", value: residue },
+    coord: {
+      segIndex: seg.absoluteIndex,
+      field,
+      rep,
+      edit: component === undefined ? "date-field" : "date-component",
+      ...(component === undefined ? {} : { component }),
+    },
+  };
+}
+
 /** Build one date locus at the unit the enumeration gives it, or `undefined` when it is empty. */
 function dateLocus(
   seg: Segment,
@@ -554,10 +668,10 @@ function dateLocus(
   dateOfBirth = false,
 ): PositionedLocus | undefined {
   // A field-granular date is the first component of its repetition (a `TS` field's date part); a
-  // component-granular one is the component the enumeration names. Empty or absent: no locus, no
-  // manifest entry, and the position is emitted exactly as it arrived.
+  // component-granular one is the component the enumeration names. Empty: no locus, no manifest entry,
+  // and the position is emitted exactly as it arrived, unless something else is written there.
   const value = componentValue(seg, field, rep, component ?? 1);
-  if (value.length === 0) return undefined;
+  if (value.length === 0) return emptyDateWithResidue(seg, type, occ, field, rep, component);
   return {
     field,
     rep,
