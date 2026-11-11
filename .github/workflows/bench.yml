@@ -21,9 +21,6 @@ name: Bench
 
 on:
   workflow_dispatch: {}
-  # Temporary: the first reading, before this file is on main and can be dispatched. Removed before review.
-  push:
-    branches: [perf/benchmark-audit]
   pull_request:
     branches: [main]
     paths:

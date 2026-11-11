@@ -65,7 +65,10 @@ function operation(pkg, format, op, raw) {
 
 /** The policy engine as a format: its input is the locus model, sized by its JSON. */
 function engineOperation(pkg, keyed, model) {
-  if (!keyed) return () => pkg.deid.deidentify(model, {});
+  // Named, so a profile charges the call to this frame by name rather than to a neighbour's.
+  if (!keyed) return function safeHarborPass() {
+    return pkg.deid.deidentify(model, {});
+  };
   const C = pkg.deid.SAFE_HARBOR_CATEGORIES;
   const options = {
     policy: pkg.deid.defineDeidPolicy({
@@ -293,9 +296,9 @@ function locate(frame) {
       const source = entry.originalSource.replace(/^.*?(src\/)/, "$1");
       return `${inPeer === null ? "" : `${inPeer[1]} `}${source}:${String(entry.originalLine + 1)}`;
     }
-    where = path
-      .replace(/^.*node_modules\/(?:\.pnpm\/[^/]+\/node_modules\/)?/, "")
-      .replace(/^.*?(dist\/|bench\/)/, "$1");
+    // A file with no source map: a parser's own dist is named by its package, ours by its path.
+    const peer = /node_modules\/(?:\.pnpm\/[^/]+\/node_modules\/)?((?:@[^/]+\/)?[^/]+)\/(.*)$/.exec(path);
+    where = peer === null ? path.replace(/^.*?(dist\/|bench\/)/, "$1") : `${peer[1]} ${peer[2]}`;
   } catch {
     // An unparseable URL keeps its own text.
   }
