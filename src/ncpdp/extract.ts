@@ -126,6 +126,48 @@ function emitRule(
   );
 }
 
+/** A signed NCPDP amount: digits, the last one optionally an overpunch character. */
+const NCPDP_AMOUNT = /^[0-9]{0,9}[0-9{}A-R]$/;
+
+/**
+ * The format of each field a person, prescriber, insurance or coordination of benefits segment keeps
+ * (`TELECOM_SEGMENT_RETAIN_FIELDS`), from its NCPDP Telecom vD.0 definition: a one- or two-character
+ * code, a count, an amount, a state code, or a payer identifier of at most ten characters. A field the
+ * list keeps and this table does not name keeps nothing.
+ */
+const RETAINED_FIELD_FORMATS: Readonly<Record<string, RegExp>> = {
+  C5: /^[0-9A-Z]$/, // Patient Gender Code
+  CO: /^[A-Z]{2}$/, // Patient State/Province
+  C6: /^[0-9]$/, // Patient Relationship Code
+  C7: /^[0-9]{1,2}$/, // Place of Service
+  CX: /^[0-9A-Z]{1,2}$/, // Patient ID Qualifier
+  "2C": /^[0-9A-Z]$/, // Pregnancy Indicator
+  "4X": /^[0-9]{1,2}$/, // Patient Residence
+  EZ: /^[0-9A-Z]{1,2}$/, // Prescriber ID Qualifier
+  C3: /^[0-9A-Z]{1,3}$/, // Person Code
+  CE: /^[0-9]$/, // Eligibility Clarification Code
+  "4C": /^[0-9]$/, // Coordination Of Benefits / Other Payments Count
+  "5C": /^[0-9A-Z]{1,2}$/, // Other Payer Coverage Type
+  "6C": /^[0-9A-Z]{1,2}$/, // Other Payer ID Qualifier
+  "7C": /^[0-9A-Z][0-9A-Z -]{0,9}$/, // Other Payer ID
+  HC: /^[0-9A-Z]{1,2}$/, // Other Payer Amount Paid Qualifier
+  DV: NCPDP_AMOUNT, // Other Payer Amount Paid
+  "6E": /^[0-9A-Z]{1,2}$/, // Other Payer-Patient Responsibility Amount Qualifier
+  "7E": NCPDP_AMOUNT, // Other Payer-Patient Responsibility Amount
+  NT: /^[0-9]$/, // Other Payer ID Count
+  MH: /^[0-9A-Z][0-9A-Z -]{0,9}$/, // Other Payer Processor Control Number
+};
+
+/** Whether a kept field's value, trailing padding aside, has the format its definition gives it. */
+function fitsRetainedFormat(id: string, value: string): boolean {
+  const format = RETAINED_FIELD_FORMATS[id];
+  // Every field the retain list names has a format above, so no input reaches this; a field added to
+  // that list without one would keep nothing, which is the safe direction.
+  /* v8 ignore next */
+  if (format === undefined) return false;
+  return format.test(value.trimEnd());
+}
+
 /**
  * Walk a parsed NCPDP Telecom transaction and extract every PHI-bearing (or fail-closed) locus,
  * structurally, from the `@cosyte/ncpdp` model. Never mutates the transaction.
@@ -213,7 +255,11 @@ export function extractTelecomLoci(tx: TelecomTransaction): TelecomExtraction {
           // blocked, never passed through. This closes the "unmapped identifier field" leak: a Patient
           // e-mail (350-HN), a Medigap id (359-2A), or any un-enumerated id cannot ride through in the clear.
           // A field the retain list DOES name is examined: the list is a rule that reached it and kept it.
-          if (retainFields !== undefined && retainFields.has(field.id)) return;
+          // It keeps the value only in the field's own format: a code, a count or an amount. A value in
+          // any other shape is not what the list kept, so it fails closed like an unlisted field.
+          if (retainFields?.has(field.id) === true && fitsRetainedFormat(field.id, field.value)) {
+            return;
+          }
           blockField(out, segPath, fieldPath, field.value, coord);
           return;
         }

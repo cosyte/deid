@@ -38,8 +38,10 @@ import type { PartyRoleTable } from "../party-role.js";
  *   licence). One locus per field; the field is cleared (or, under a deviating policy, replaced).
  * - `date`: a whole-field date/timestamp (DOB, death date). One locus per field; generalized to year.
  * - `id`, a repeating identifier field (CX list: MRN / account / member id). **One locus per
- *   repetition** so each identifier gets its own consistent surrogate; only the id-number component
- *   (CX.1) is replaced, the assigning authority / type code are retained.
+ *   repetition** so each identifier gets its own consistent surrogate. The id-number component (CX.1)
+ *   is replaced; the assigning authority (CX.4) is kept as it arrived and counted as an unexamined
+ *   residual; the type code (CX.5) is kept only when HL7 Table 0203 defines it; every other component
+ *   is removed. A repetition with no number that holds anything else is blocked.
  * - `address`: a structured address (XAD). **One locus per repetition**; the Safe Harbor 3-digit-ZIP
  *   generalization is applied and every finer geographic component (street / city / county) is dropped.
  * - `block`: a geographic or other identifier with no clean structured generalization (county code,
@@ -330,4 +332,35 @@ export function categoryForIdentifierType(
     default:
       return fallback;
   }
+}
+
+/**
+ * The identifier type codes of HL7 Table 0203 as of v2.5.1, the only values an identifier's type code
+ * (`CX.5`) keeps. Another value there is not a code the standard defines, so the identifier edit
+ * removes it with the identifier's number rather than keep it.
+ *
+ * @internal
+ */
+export const HL7_IDENTIFIER_TYPE_CODES: ReadonlySet<string> = new Set<string>(
+  (
+    "AM AN ANC AND ANON ANT APRN BA BC BR BRN CC CY DDS DEA DFN DI DL DN DO DP DPM DR DS EI EN FI GI " +
+    "GL GN HC IND JHN LI LN LR MA MB MC MCD MCN MCR MCT MD MI MR MRT MS NE NH NI NII NIIP NP NPI OD " +
+    "PA PCN PE PEN PI PN PNT PPIN PPN PRC PRN PT QA RI RN RPH RR RRI SL SN SR SS TAX TN U UPIN VN VS " +
+    "WC WCN XX"
+  ).split(" "),
+);
+
+/**
+ * Whether one component, as the parser holds it, is an identifier type code of
+ * {@link HL7_IDENTIFIER_TYPE_CODES}: a single subcomponent whose upper-case form the table holds.
+ *
+ * @internal
+ */
+export function isIdentifierTypeCode(component: {
+  readonly subcomponents: readonly string[];
+}): boolean {
+  const [only, ...rest] = component.subcomponents;
+  return (
+    only !== undefined && rest.length === 0 && HL7_IDENTIFIER_TYPE_CODES.has(only.toUpperCase())
+  );
 }

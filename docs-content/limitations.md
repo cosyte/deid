@@ -300,7 +300,9 @@ Two things follow, and the second is the one that surprises people:
   `Bundle.entry.response.location` is replaced by the same value throughout one call, recorded as a
   medical record number, so every reference still resolves (see
   [the FHIR guide](./guides-fhir.md#resource-ids-and-references)). A literal the pass cannot read,
-  and an absolute reference to a server no `fullUrl` in the input names, is removed. Four things are
+  and an absolute reference to a server no `fullUrl` in the input names, is removed, and so is every
+  conditional header of a `Bundle.entry.request` (`ifNoneExist`, `ifMatch`, `ifNoneMatch`), which can
+  carry an identifier in a search string or a version id in an entity tag. Four things are
   not covered. The **server base** of an absolute `fullUrl`, and of an absolute reference to that same
   server, is kept verbatim: it names the server, and a base that carries anything else carries it out.
   An **id written anywhere else** is passed through and counted as an unexamined position:
@@ -313,6 +315,33 @@ Two things follow, and the second is the one that surprises people:
 
 Vendor-proprietary loci absent from public specs are deferred, **not invented**: a quirk is encoded
 only when a real de-identified document grounds it.
+
+<a id="generated-leak-property"></a>
+
+### What the generated leak property still finds kept
+
+Our test suite carries a generated leak property for each of the six adapters: it writes tagged
+synthetic values at generated positions and in generated shapes (a plain string where a structure is
+expected, an extra repetition or component, a value in a code or qualifier position, a nested
+structure) and checks that each one is removed, or is counted on `unexaminedResiduals` at its own
+position. The cases below are values it finds kept that are neither. Each is a value kept on purpose
+because it has the shape its position expects, so a value that has that shape is kept whatever it is.
+Each is pinned by a test that fails the day it stops being true.
+
+- **HL7 v2:** none. An identifier's assigning authority (CX.4) is kept as it arrived, and it is
+  counted as an unexamined residual at its own component.
+- **X12:** a trace number (`TRN-02` to `TRN-04`) is kept when it is printable text of the element's
+  length. A procedure code (`SV1-01`, `SV2-02`, `SV3-01`) is kept when it has the shape its qualifier
+  gives it, which for a qualifier with no published code shape is 1 to 48 letters and digits. And a
+  party whose role keeps it (a provider, a service location) keeps its name and identifier elements as
+  they arrived, a repetition inside its identifier included.
+- **C-CDA:** in the header, a coded element the allow-list recognizes (`administrativeGenderCode`,
+  `maritalStatusCode` and the others) keeps its `@code` and its `@displayName` as they arrived, and a
+  person-role `<id>` keeps its `@root`.
+- **FHIR, NCPDP Telecom, DICOM:** none in the shapes the property generates.
+
+The property generates the shapes listed above and no others, so a clean run says nothing about a
+shape it does not write.
 
 <a id="ages-over-89"></a>
 

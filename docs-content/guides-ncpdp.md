@@ -62,19 +62,27 @@ is required and calling without one when the transaction needs it is a fatal `DE
 Telecom is a flat sequence of segments of `{ id, value }` fields. Field ids are globally unique in the
 standard, so the map keys off the field id directly.
 
-| Segment / locus                          | Handling                                                                                                       |
-| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| **Patient (`01`)**                       | name (`CA`/`CB`) + phone (`CQ`) removed; street (`CM`) + city (`CN`) removed; ZIP (`CP`) → 3-digit; DOB (`C4`) → year (removed when it shows an age over 89); patient id (`CY`) **removed** under Safe Harbor; gender + state retained |
-| **Insurance (`04`)**                     | cardholder id (`C2`) + group id (`C1`) **removed** under Safe Harbor; cardholder name (`CC`/`CD`) removed; person code retained |
-| **Prescriber (`03`)**                    | prescriber id (`DB`) **removed**                                                                              |
-| **Coordination of Benefits (`05`)**      | other-payer cardholder (`NU`) + group (`MJ`) ids **removed** under Safe Harbor; other-payer date (`E8`) → year |
-| **Header**                               | Date of Service → year                                                                                        |
-| **Free text** (`544-FY`, `504-F4`, `526-FQ`) | **fails closed**: blocked, never scrubbed by a naive pass                                                 |
-| **Clinical / financial** (`07`/`08`/`10`/`11`/`12`/`13`) | **retained untouched**: NDC drug codes, quantities, days-supply, pricing, DUR reason codes           |
-| Any **unmapped / unknown** segment       | **fails closed**: every field blocked                                                                        |
+| Segment / locus                                          | Handling                                                                                                                                                                                                                               |
+| -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Patient (`01`)**                                       | name (`CA`/`CB`) + phone (`CQ`) removed; street (`CM`) + city (`CN`) removed; ZIP (`CP`) → 3-digit; DOB (`C4`) → year (removed when it shows an age over 89); patient id (`CY`) **removed** under Safe Harbor; gender + state retained |
+| **Insurance (`04`)**                                     | cardholder id (`C2`) + group id (`C1`) **removed** under Safe Harbor; cardholder name (`CC`/`CD`) removed; person code retained                                                                                                        |
+| **Prescriber (`03`)**                                    | prescriber id (`DB`) **removed**                                                                                                                                                                                                       |
+| **Coordination of Benefits (`05`)**                      | other-payer cardholder (`NU`) + group (`MJ`) ids **removed** under Safe Harbor; other-payer date (`E8`) → year                                                                                                                         |
+| **Header**                                               | Date of Service → year                                                                                                                                                                                                                 |
+| **Free text** (`544-FY`, `504-F4`, `526-FQ`)             | **fails closed**: blocked, never scrubbed by a naive pass                                                                                                                                                                              |
+| **Clinical / financial** (`07`/`08`/`10`/`11`/`12`/`13`) | **retained untouched**: NDC drug codes, quantities, days-supply, pricing, DUR reason codes                                                                                                                                             |
+| Any **unmapped / unknown** segment                       | **fails closed**: every field blocked                                                                                                                                                                                                  |
 
 The X12 adapter **retains** provider identity, while this adapter **removes** the prescriber id: a
 deliberate asymmetry.
+
+A field a Patient, Prescriber, Insurance or Coordination of Benefits segment retains (gender, state,
+relationship, place of service, the id qualifiers, person code, pregnancy indicator, residence, the
+coordination of benefits counts, coverage type, qualifiers and amounts, the other payer id and its
+processor control number) is kept **only in its own format**: a one- or two-character code, a count,
+a two-letter state, an amount, or for the other payer id and processor control number at most ten
+letters, digits, spaces or hyphens. A value in any other shape is blocked and recorded like an
+unlisted field.
 
 ## NCPDP SCRIPT is refused
 
