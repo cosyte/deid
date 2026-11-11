@@ -385,8 +385,12 @@ function actId(out: CcdaLocusAccumulator, el: Element, path: string): void {
   );
 }
 
-/** Extract calendar-date loci from a `<birthTime>` / `<time>` / `<effectiveTime>`: generalized to year. */
-function actDate(out: CcdaLocusAccumulator, el: Element, path: string): void {
+/**
+ * Extract calendar-date loci from a `<birthTime>` / `<time>` / `<effectiveTime>`: generalized to year.
+ * A `<birthTime>` is a person's date of birth wherever CDA places it, so its loci carry the marker
+ * that removes a year showing an age over 89.
+ */
+function actDate(out: CcdaLocusAccumulator, el: Element, path: string, dateOfBirth = false): void {
   // The date rule's subject is the timestamp and the `xsi:type` that says whether it is a calendar one at
   // all. Both are named on every branch, including the dosing-period branch, which is a decision about
   // them ("this is an interval, not a date, so it is retained") rather than a position nothing reached.
@@ -398,7 +402,13 @@ function actDate(out: CcdaLocusAccumulator, el: Element, path: string): void {
   if (own !== undefined) {
     push(
       out,
-      { path, kind: "date", category: SAFE_HARBOR_CATEGORIES.DATES, value: own },
+      {
+        path,
+        kind: "date",
+        category: SAFE_HARBOR_CATEGORIES.DATES,
+        ...(dateOfBirth ? { dateOfBirth: true } : {}),
+        value: own,
+      },
       { node: el, edit: "date-value" },
     );
   }
@@ -409,7 +419,13 @@ function actDate(out: CcdaLocusAccumulator, el: Element, path: string): void {
       if (v === undefined) continue;
       push(
         out,
-        { path: join(path, bound), kind: "date", category: SAFE_HARBOR_CATEGORIES.DATES, value: v },
+        {
+          path: join(path, bound),
+          kind: "date",
+          category: SAFE_HARBOR_CATEGORIES.DATES,
+          ...(dateOfBirth ? { dateOfBirth: true } : {}),
+          value: v,
+        },
         { node: c, edit: "date-value" },
       );
     }
@@ -477,7 +493,7 @@ function sweep(out: CcdaLocusAccumulator, el: Element, path: string): void {
           actAddr(out, childEl, childPath);
           break;
         case "date":
-          actDate(out, childEl, childPath);
+          actDate(out, childEl, childPath, ln === "birthTime");
           break;
         case "id":
           actId(out, childEl, childPath);

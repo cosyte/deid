@@ -86,7 +86,8 @@ export const CCDA_ENVELOPE_ELEMENTS: ReadonlySet<string> = new Set<string>([
  *   kept (state / country retained as permitted); every finer geographic child is dropped.
  * - `date`: a `<birthTime>` / `<time>` / `<effectiveTime>` calendar timestamp (its `@value`, and any
  *   `low`/`high`/`center` child `@value`). Generalized to year. Dosing-period `PIVL_TS`/`EIVL_TS`
- *   intervals are **not** dates and are excluded (they live in the clinical body, never swept).
+ *   intervals are **not** dates and are excluded (they live in the clinical body, never swept). A
+ *   `<birthTime>` is a date of birth: a year that shows an age over 89 is removed, not kept.
  * - `id`: an `<id root= extension=>` at a person role (MRN / SSN / member / account). Pseudonymized:
  *   only the id value component is replaced (assigning-authority root retained), with an SSN-rooted id
  *   routed to the SSN category (redacted): the structural, parser-typed knife-edge.

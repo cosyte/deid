@@ -82,13 +82,13 @@ sender, and coverage that depended on that choice would not be coverage at all. 
 resource the map decides instead, which reaches the elements it lists and no others; that is the last
 of the residuals below.
 
-| Scope | Loci | Transform |
-|---|---|---|
-| **Person resources**: `Patient` / `RelatedPerson` / `Practitioner` / `Person` (+ nested `Patient.contact`, a relative) | `name`, `telecom`, `photo`, `address`, `birthDate`, `deceasedDateTime` | name/telecom/photo **removed**; `address` → safe **3-digit ZIP** (or `000` for a restricted prefix), finer geography dropped; dates → **year** |
-| **Every resource, by datatype** | any `HumanName`, any `Address`: `Organization.contact.name`, `Location.address`, `Organization.address`, a choice-type `locationAddress` | name **removed**; address → the same safe **3-digit ZIP** (or `000`), finer geography dropped, that a person resource's address gets |
-| **Every resource (the universal PHI vectors)** | `identifier`, PHI-bearing dates, narrative `text.div`, `extension` / `modifierExtension` values, `Reference.display` | identifier **removed** under Safe Harbor, `system` retained (a consistent keyed surrogate by `system` only under a preset that does not claim the label); dates → **year**; narrative div / extension values / reference labels **blocked** |
-| **Contained resources and `Bundle` entries** | each nested resource | **walked**: the resource role is re-derived at every `resourceType`, so a contained `RelatedPerson` or a Bundled `Patient` is de-identified too |
-| **Clinical resources**: `Observation`, `Condition`, `Encounter`, … | codes, values, units, statuses, reference ranges, reference wiring | **retained untouched** (the over-scrub guard) |
+| Scope                                                                                                                  | Loci                                                                                                                                     | Transform                                                                                                                                                                                                                                   |
+| ---------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Person resources**: `Patient` / `RelatedPerson` / `Practitioner` / `Person` (+ nested `Patient.contact`, a relative) | `name`, `telecom`, `photo`, `address`, `birthDate`, `deceasedDateTime`                                                                   | name/telecom/photo **removed**; `address` → safe **3-digit ZIP** (or `000` for a restricted prefix), finer geography dropped; dates → **year**, and a `birthDate` whose year shows an age over 89 is **removed**                            |
+| **Every resource, by datatype**                                                                                        | any `HumanName`, any `Address`: `Organization.contact.name`, `Location.address`, `Organization.address`, a choice-type `locationAddress` | name **removed**; address → the same safe **3-digit ZIP** (or `000`), finer geography dropped, that a person resource's address gets                                                                                                        |
+| **Every resource (the universal PHI vectors)**                                                                         | `identifier`, PHI-bearing dates, narrative `text.div`, `extension` / `modifierExtension` values, `Reference.display`                     | identifier **removed** under Safe Harbor, `system` retained (a consistent keyed surrogate by `system` only under a preset that does not claim the label); dates → **year**; narrative div / extension values / reference labels **blocked** |
+| **Contained resources and `Bundle` entries**                                                                           | each nested resource                                                                                                                     | **walked**: the resource role is re-derived at every `resourceType`, so a contained `RelatedPerson` or a Bundled `Patient` is de-identified too                                                                                             |
+| **Clinical resources**: `Observation`, `Condition`, `Encounter`, …                                                     | codes, values, units, statuses, reference ranges, reference wiring                                                                       | **retained untouched** (the over-scrub guard)                                                                                                                                                                                               |
 
 Positive classification is **closed**, and that is the over-scrub guard: an element is a `HumanName`
 only when every property it carries is one FHIR R4 defines on `HumanName`, **and** at least one of them
@@ -116,8 +116,9 @@ structurally, not by the property name.
 
 Dates are detected by **value shape**: any primitive whose whole value is a real calendar date
 (`YYYY-MM`, `YYYY-MM-DD`, or a full instant) with a valid month/day is generalized to its year, wherever
-it sits, so a date in an unexpected element is caught too. A bare four-digit year is already
-Safe-Harbor-safe and is left as-is; a clinical code that merely looks date-ish (`2951-2`, `1234-56`) is
+it sits, so a date in an unexpected element is caught too. A bare four-digit year is left as-is,
+except at `birthDate`, where it is the very year the age rule reads: a year-only `birthDate` is
+located and recorded like a full one, and removed when it shows an age over 89; a clinical code that merely looks date-ish (`2951-2`, `1234-56`) is
 not mistaken for a date, so it survives.
 
 ## Fail closed

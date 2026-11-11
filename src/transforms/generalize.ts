@@ -68,6 +68,21 @@ export function generalizeDate(value: string): GeneralizeOutcome | null {
 }
 
 /**
+ * Whether a year kept from a **date of birth** is indicative of an age over 89
+ * (§164.514(b)(2)(i)(C)): the year is 90 or more years before `referenceYear`. By year alone, so a
+ * person who turns 90 in the reference year is counted whether or not the birthday has passed: the
+ * year cannot say, and the rule aggregates every year that may show such an age.
+ *
+ * @param year - The four-digit year {@link generalizeDate} kept.
+ * @param referenceYear - The year the age is measured at.
+ * @returns `true` when the year must be aggregated rather than kept.
+ * @internal
+ */
+export function birthYearShowsAgeOver89(year: string, referenceYear: number): boolean {
+  return referenceYear - Number(year) > 89;
+}
+
+/**
  * Generalize a ZIP code to its safe form (§164.514(b)(2)(i)(B)): the initial three digits, or `000`
  * when those three digits name an area with ≤ 20,000 people (the cited restricted list). Fails closed
  * (`null`) when three leading digits cannot be read.

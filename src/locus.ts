@@ -91,6 +91,17 @@ export interface GenericLocus {
    * retained, so this marker can never become a route for passing an identifier through.
    */
   readonly partyRole?: string;
+  /**
+   * `true` when this `date` locus is a **date of birth**. §164.514(b)(2)(i)(C) lets a date keep its
+   * year, except a year indicative of an age over 89. So when the configured transform generalizes
+   * the date to its year and that year is **90 or more years before the year of the call**, the year
+   * is removed instead of kept, and the manifest records `DEID_CATEGORY_GENERALIZED` rather than a
+   * residual. The comparison is by year alone, so a person who may already be 90 is aggregated.
+   *
+   * Absent (the default) a date keeps its year however old it is. The format adapters set it on the
+   * birth dates they locate; a caller building loci by hand sets it on its own.
+   */
+  readonly dateOfBirth?: boolean;
   /** The value at the locus. Consumed by the engine, never copied into the manifest. */
   readonly value: string;
 }

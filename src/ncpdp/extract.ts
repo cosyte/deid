@@ -113,7 +113,17 @@ function emitRule(
     return;
   }
   const category: SafeHarborCategory = rule.category;
-  push(out, { path: `${segId}/${fieldId}`, kind: kindForMode(rule.mode), category, value }, coord);
+  push(
+    out,
+    {
+      path: `${segId}/${fieldId}`,
+      kind: kindForMode(rule.mode),
+      category,
+      ...(rule.dateOfBirth === true ? { dateOfBirth: true } : {}),
+      value,
+    },
+    coord,
+  );
 }
 
 /**

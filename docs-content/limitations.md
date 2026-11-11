@@ -296,6 +296,40 @@ Two things follow, and the second is the one that surprises people:
 Vendor-proprietary loci absent from public specs are deferred, **not invented**: a quirk is encoded
 only when a real de-identified document grounds it.
 
+<a id="ages-over-89"></a>
+
+## Ages over 89: a birth year is removed, not kept
+
+§164.514(b)(2)(i)(C) lets a date keep its year, except that every element of a date, the year
+included, that is indicative of an age over 89 is aggregated into a single category of age 90 or
+older. Under a policy that generalizes dates (the `safe-harbor` default), a **date of birth** whose
+year shows such an age is therefore **removed**, and the manifest records it as
+`DEID_CATEGORY_GENERALIZED` with the disposition `removed`, never as a `DEID_RESIDUAL_RETAINED`
+residual. A birth year under that line keeps its year and its residual row exactly as before.
+
+- **The aggregate is the absence of the year.** None of the six formats has a field beside the birth
+  date that could carry a "90 or older" category: a `90+` written into the date itself would not be a
+  valid date in any of them, and DICOM's own Patient's Age `(0010,1010)` is removed by the Basic
+  Profile. So the field is emptied. A recipient who sees a date of birth with no year, where every
+  other date kept its year, can read it as 90 or older, and nothing narrower than that.
+- **Where it applies.** HL7 v2 `PID-7`, the guarantor's `GT1-8` and the insured's `IN1-18`; every
+  C-CDA `<birthTime>` (a bound of one given as an interval included); FHIR `birthDate`, a year-only
+  `birthDate` included; X12 `DMG-02`; NCPDP Telecom `304-C4`. DICOM `(0010,0030)` Patient's Birth Date is
+  emptied for everyone by the delegated Annex E Basic Profile, so no year survives there to aggregate.
+  A date that is not a date of birth (a death date, a service date) keeps its year however old.
+- **The reference date is the year the pass runs.** The age is measured against the UTC year of the
+  call, not against a date in the document (`MSH-7`, `ISA-09`, the C-CDA `effectiveTime`, the NCPDP
+  date of service). A document's date is earlier than the call in every ordinary case, so measuring
+  from it would understate the age the person has when the output is released. It follows that the
+  same input can give different output in a later year: a birth year that is 89 years back today is
+  removed once the calendar turns. Release output soon after the pass, or run the pass again.
+- **The comparison is by year alone.** A year 90 or more years before the year of the call is removed,
+  so a person who turns 90 in that year is aggregated whether or not the birthday has passed. The year
+  is all the output keeps, and it cannot say which side of the birthday the person is on.
+- **The generic core needs the marker.** On the root entry, set `dateOfBirth: true` on a `date` locus
+  for the engine to apply the rule; a locus without it keeps its year however old. A policy that
+  date-shifts or retains dates does not aggregate either: the rule is part of the year generalization.
+
 <a id="policy-profiles"></a>
 
 ## Policy profiles, and the Limited Data Set caveat

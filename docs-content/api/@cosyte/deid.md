@@ -12,7 +12,7 @@ un-locatable identifier is blocked, never passed through as safe.
 **Honesty line (governs the whole library).** Results are **"Safe-Harbor-transformed per the
 configured policy"**, never "de-identified" and never "HIPAA-compliant". Safe Harbor is implemented
 mechanically; the §164.514(b)(2)(ii) actual-knowledge condition is the consumer's; Expert
-Determination (§164.514(b)(1)) is *supported*, never *rendered* or certified here.
+Determination (§164.514(b)(1)) is _supported_, never _rendered_ or certified here.
 
 The root entry ships the **format-agnostic core**: the policy engine, the five transforms, the
 18-category Safe Harbor model, the fail-closed rule, and the value-free manifest: tested against a
@@ -102,7 +102,7 @@ Redacts through `String(...)` and template interpolation.
 
 `string`
 
-***
+---
 
 ### DeidError
 
@@ -163,7 +163,7 @@ A PHI-free explanation safe to log.
 
 The stable fatal code.
 
-***
+---
 
 ### DeidRegistry
 
@@ -215,7 +215,7 @@ patient's dates shift consistently across every document in the corpus. Pass thi
 `string`
 
 A stable per-patient key (an MRN, an enterprise patient id, the consumer's
-  choice, provided it is the same across that patient's documents).
+choice, provided it is the same across that patient's documents).
 
 ###### Returns
 
@@ -270,7 +270,7 @@ registry.pseudonym("MRN-1") === registry.pseudonym("MRN-1"); // => true (consist
 Map an opaque unique identifier (a DICOM study/series/instance UID, a GUID) to its corpus-wide
 **consistent surrogate**, so cross-document UID linkage survives de-identification. Domain-separated
 from [pseudonym](#pseudonym), so a UID and an identifier with the same text never share a surrogate. This
-is the format-agnostic linkage primitive; a format that owns UID *validity* (DICOM UIDs must be a
+is the format-agnostic linkage primitive; a format that owns UID _validity_ (DICOM UIDs must be a
 valid `0.…` OID) handles that in its own adapter.
 
 ###### Parameters
@@ -330,8 +330,15 @@ order A→R), so a reader sees the categories **not** acted on as plainly as tho
 import { buildExpertDeterminationSupportReport, SAFE_HARBOR_CATEGORIES } from "@cosyte/deid";
 
 const report = buildExpertDeterminationSupportReport([
-  { category: SAFE_HARBOR_CATEGORIES.SSN, transform: "redact", locus: "PID-19", count: 1,
-    disposition: "removed", code: "DEID_CATEGORY_REMOVED", reidentificationCode: false },
+  {
+    category: SAFE_HARBOR_CATEGORIES.SSN,
+    transform: "redact",
+    locus: "PID-19",
+    count: 1,
+    disposition: "removed",
+    code: "DEID_CATEGORY_REMOVED",
+    reidentificationCode: false,
+  },
 ]);
 const ssn = report.categoryCoverage.find((c) => c.category === SAFE_HARBOR_CATEGORIES.SSN);
 ssn?.actedOn; // => true
@@ -399,7 +406,7 @@ Total count of values acted on across every locus of this category.
 
 The distinct transforms applied to this category, sorted.
 
-***
+---
 
 ### DeidContextSpec
 
@@ -442,7 +449,7 @@ Absolute bound (days) on the per-patient date-shift offset. Defaults to 365.
 
 The patient scope this context de-identifies. Required for the deterministic date-shift offset.
 
-***
+---
 
 ### DeidDocument
 
@@ -465,7 +472,7 @@ const doc: DeidDocument = { loci: [] };
 
 The transformed loci.
 
-***
+---
 
 ### DeidManifestEntry
 
@@ -474,7 +481,11 @@ A single value-free manifest entry.
 #### Example
 
 ```ts
-import { type DeidManifestEntry, SAFE_HARBOR_CATEGORIES, DEID_DISPOSITION_CODES } from "@cosyte/deid";
+import {
+  type DeidManifestEntry,
+  SAFE_HARBOR_CATEGORIES,
+  DEID_DISPOSITION_CODES,
+} from "@cosyte/deid";
 
 const entry: DeidManifestEntry = {
   category: SAFE_HARBOR_CATEGORIES.SSN,
@@ -536,8 +547,8 @@ The format-neutral locus (segment/field index · path · tag), **never** a value
 
 The **role code** that placed a party outside §164.514(b)(2)(i)'s scope clause, present **only** on
 a `DEID_PARTY_ROLE_RETAINED` entry. It answers, at the party's own locus, the question a silent
-retention could not: *on what did the pass decide this party is not the individual, a relative, an
-employer or a household member?*
+retention could not: _on what did the pass decide this party is not the individual, a relative, an
+employer or a household member?_
 
 Value-free and **additive**, like [reidentificationCode](#reidentificationcode): it is a code from a role table this
 library ships (an X12 element 98 entity-identifier code; the role an HL7 v2.5.1 field definition
@@ -565,7 +576,7 @@ about the residual a surrogate leaves rather than discover it from the transform
 
 The transform applied.
 
-***
+---
 
 ### DeidOptions
 
@@ -617,7 +628,7 @@ profile is what keeps a site preset from adding one.
 
 **Absent or empty retains nothing**, so a bare options bag gets the strict treatment.
 
-***
+---
 
 ### DeidPolicy
 
@@ -646,7 +657,7 @@ The policy name: surfaced in output labelling ("Safe-Harbor-transformed per the 
 
 The transform applied to each Safe Harbor category.
 
-***
+---
 
 ### DeidPolicySpec
 
@@ -678,7 +689,7 @@ The policy name.
 
 Per-category transform overrides; unlisted categories keep their Safe Harbor default.
 
-***
+---
 
 ### DeidProfile
 
@@ -731,7 +742,7 @@ any category uses a keyed transform such as `date-shift` on a category that is a
 
 > `readonly` **retainedLoci**: readonly [`RetainedLocusClass`](#retainedlocusclass)[]
 
-The **retention classes** this profile permits: named groups of *identifying* loci a format
+The **retention classes** this profile permits: named groups of _identifying_ loci a format
 adapter passes through unchanged, each one still recorded as a `DEID_RESIDUAL_RETAINED` residual.
 Empty on [SAFE\_HARBOR\_PROFILE](#safe_harbor_profile); [LIMITED\_DATA\_SET\_PROFILE](#limited_data_set_profile) carries the three classes
 §164.514(e)(2) permits a limited data set to keep. A profile that DECLARES the
@@ -744,7 +755,7 @@ is a fatal [FATAL\_CODES.DEID\_PROFILE\_INVALID](#deid_profile_invalid) rather t
 
 The standard this profile targets: governs how its output may honestly be described.
 
-***
+---
 
 ### DeidProfileSpec
 
@@ -803,7 +814,7 @@ inherit the base's set unchanged.
 Per-category transform overrides. Each may only move a category to an **equal-or-stronger**
 transform than the base (widen-never-narrow); a weakening override is rejected.
 
-***
+---
 
 ### DeidRegistrySpec
 
@@ -840,7 +851,7 @@ counted as UTF-8 bytes when given as a string; use 32 random bytes.
 
 Absolute bound (days) on each derived per-patient date-shift offset. Defaults to 365.
 
-***
+---
 
 ### DeidResult
 
@@ -869,7 +880,7 @@ The transformed document (the generic locus document from the core).
 
 The value-free audit of every action, in locus order.
 
-***
+---
 
 ### DispositionSummary
 
@@ -882,8 +893,15 @@ posture of the pass. Every field is a count; none is a value.
 import { buildExpertDeterminationSupportReport, SAFE_HARBOR_CATEGORIES } from "@cosyte/deid";
 
 const report = buildExpertDeterminationSupportReport([
-  { category: SAFE_HARBOR_CATEGORIES.SSN, transform: "redact", locus: "PID-19", count: 2,
-    disposition: "removed", code: "DEID_CATEGORY_REMOVED", reidentificationCode: false },
+  {
+    category: SAFE_HARBOR_CATEGORIES.SSN,
+    transform: "redact",
+    locus: "PID-19",
+    count: 2,
+    disposition: "removed",
+    code: "DEID_CATEGORY_REMOVED",
+    reidentificationCode: false,
+  },
 ]);
 report.dispositionSummary.removed; // => 2
 ```
@@ -949,7 +967,7 @@ These positions are **not** counted in [transformed](#transformed), [removed](#r
 [retained](#retained): no value was acted on, blocked or kept by a decision, so folding them into any of
 those four would overstate what the pass did.
 
-***
+---
 
 ### ExpertDeterminationReportOptions
 
@@ -983,7 +1001,7 @@ format adapter. A single pass's list, or an array of them for a corpus, matching
 would take for a clearance. An empty array is the opposite claim, and a real one: the pass
 enumerated the positions it handed through and none went unexamined.
 
-***
+---
 
 ### ExpertDeterminationSupportReport
 
@@ -997,8 +1015,15 @@ and is **never** one: `determination` is always `null` and [disclaimer](#disclai
 import { buildExpertDeterminationSupportReport, SAFE_HARBOR_CATEGORIES } from "@cosyte/deid";
 
 const report = buildExpertDeterminationSupportReport([
-  { category: SAFE_HARBOR_CATEGORIES.NAMES, transform: "redact", locus: "PID-5", count: 1,
-    disposition: "removed", code: "DEID_CATEGORY_REMOVED", reidentificationCode: false },
+  {
+    category: SAFE_HARBOR_CATEGORIES.NAMES,
+    transform: "redact",
+    locus: "PID-5",
+    count: 1,
+    disposition: "removed",
+    code: "DEID_CATEGORY_REMOVED",
+    reidentificationCode: false,
+  },
 ]);
 report.determination; // => null (the library never renders one)
 report.totals.categoriesActedOn; // => 1
@@ -1125,7 +1150,7 @@ Empty when the pass measured none **and** when nothing was measured at all: read
 count. `false` says no measurement was supplied, so an empty [unexaminedResiduals](#unexaminedresiduals-1) is silence
 rather than a measured zero, and the determiner is told which it is instead of inferring it.
 
-***
+---
 
 ### FreeTextRedactionRequest
 
@@ -1160,7 +1185,7 @@ The format-neutral locus path (e.g. `"OBX-5"`, `"section/text"`): value-free, fo
 
 The free-text prose at the locus, for the consumer's redactor to de-identify.
 
-***
+---
 
 ### FreeTextRedactionResult
 
@@ -1184,7 +1209,7 @@ const result: FreeTextRedactionResult = { text: "patient [REDACTED]…" };
 
 The redacted prose. May be an empty string (all prose removed); that is a valid redaction.
 
-***
+---
 
 ### GeneralizeOutcome
 
@@ -1206,7 +1231,7 @@ actual-knowledge test, versus a fully non-identifying result (`000`, `90+`).
 
 The generalized value.
 
-***
+---
 
 ### GenericLocus
 
@@ -1234,6 +1259,19 @@ const locus: GenericLocus = {
 
 The Safe Harbor category, when known. Omit to force fail-closed handling as category (R).
 
+##### dateOfBirth?
+
+> `readonly` `optional` **dateOfBirth?**: `boolean`
+
+`true` when this `date` locus is a **date of birth**. §164.514(b)(2)(i)(C) lets a date keep its
+year, except a year indicative of an age over 89. So when the configured transform generalizes
+the date to its year and that year is **90 or more years before the year of the call**, the year
+is removed instead of kept, and the manifest records `DEID_CATEGORY_GENERALIZED` rather than a
+residual. The comparison is by year alone, so a person who may already be 90 is aggregated.
+
+Absent (the default) a date keeps its year however old it is. The format adapters set it on the
+birth dates they locate; a caller building loci by hand sets it on its own.
+
 ##### kind
 
 > `readonly` **kind**: [`LocusKind`](#locuskind)
@@ -1244,7 +1282,7 @@ The kind of value at this locus.
 
 > `readonly` `optional` **partyRole?**: `string`
 
-The **role code** an adapter classified a *party* on, present **only** at a locus that records a
+The **role code** an adapter classified a _party_ on, present **only** at a locus that records a
 party whose role places it **outside** §164.514(b)(2)(i)'s scope clause and whose name and
 identifiers the pass therefore left in place. The engine records the code in the manifest at this
 locus (`DEID_PARTY_ROLE_RETAINED`) and writes nothing back, so a retention that used to be silent
@@ -1270,7 +1308,7 @@ regulation's exclusion is **partial**. §164.514(e)(2)(ii) is the one such claus
 postal address information "other than town or city, State, and zip code", so a locus addressing
 one of those three parts is marked here and the rest of the address is not marked at all.
 
-Like [retention](#retention) it is a *proposal*: the engine keeps the value only if the options list
+Like [retention](#retention) it is a _proposal_: the engine keeps the value only if the options list
 the class **and** [isRetainablePart](#isretainablepart) accepts the class, the resolved category and this
 part together. It is the **only** route past the never-retainable category guard, and it does
 not widen that guard: `GEOGRAPHIC` remains a category no profile may retain whole.
@@ -1284,7 +1322,7 @@ make impossible to reach by accident rather than one it can detect.
 
 > `readonly` `optional` **retention?**: [`RetainedLocusClass`](#retainedlocusclass)
 
-The **retention class** this locus belongs to, when an adapter can name one. It is a *proposal*,
+The **retention class** this locus belongs to, when an adapter can name one. It is a _proposal_,
 never a decision: the engine keeps the value only if the configured options **also** list this
 class, **and** the resolved category is one a limited data set may carry at all. Both keys are
 required, so an adapter cannot retain anything on its own and a stale marker cannot leak a value.
@@ -1299,7 +1337,7 @@ locus marked here **is** identifying and is always recorded when it is kept.
 
 The value at the locus. Consumed by the engine, never copied into the manifest.
 
-***
+---
 
 ### KeyedSurrogateResidual
 
@@ -1323,8 +1361,15 @@ a value, a key or a shift offset.
 import { buildExpertDeterminationSupportReport, SAFE_HARBOR_CATEGORIES } from "@cosyte/deid";
 
 const report = buildExpertDeterminationSupportReport([
-  { category: SAFE_HARBOR_CATEGORIES.MRN, transform: "pseudonymize", locus: "PID-3", count: 1,
-    disposition: "transformed", code: "DEID_CATEGORY_PSEUDONYMIZED", reidentificationCode: true },
+  {
+    category: SAFE_HARBOR_CATEGORIES.MRN,
+    transform: "pseudonymize",
+    locus: "PID-3",
+    count: 1,
+    disposition: "transformed",
+    code: "DEID_CATEGORY_PSEUDONYMIZED",
+    reidentificationCode: true,
+  },
 ]);
 report.keyedSurrogateResiduals[0]?.transform; // => "pseudonymize"
 ```
@@ -1355,7 +1400,7 @@ The format-neutral locus (segment/field index · path · tag), **never** a value
 
 Which keyed transform produced it: `pseudonymize`, `hash` or `date-shift`.
 
-***
+---
 
 ### LocusModel
 
@@ -1378,7 +1423,7 @@ const model: LocusModel = { loci: [{ path: "PID-3", kind: "identifier", value: "
 
 The located candidate values to de-identify.
 
-***
+---
 
 ### PartyRoleTable
 
@@ -1408,7 +1453,7 @@ Role codes that place the party outside the clause: provider / facility / payer 
 
 Role codes the scope clause reaches: the individual, a relative, an **employer**, a household member.
 
-***
+---
 
 ### QuasiIdentifierClassInput
 
@@ -1443,7 +1488,7 @@ One size per distinct quasi-identifier combination: the record count in that equ
 
 A human label for the quasi-identifier set the sizes were computed over. No PHI.
 
-***
+---
 
 ### QuasiIdentifierStatistics
 
@@ -1452,7 +1497,7 @@ class size, the widely-used **k-anonymity indicator**.
 
 **This is not a risk score and not a determination.** It is arithmetic over sizes the consumer
 supplied: the library counts what it is given, applies no threshold, draws no `k ≥ n ⇒ safe`
-conclusion, and emits no verdict. A statistician documents an indicator like this *as one input* to a
+conclusion, and emits no verdict. A statistician documents an indicator like this _as one input_ to a
 §164.514(b)(1) determination: the determination remains theirs. See [note](#note).
 
 #### Example
@@ -1464,7 +1509,7 @@ const report = buildExpertDeterminationSupportReport([], {
   quasiIdentifiers: { equivalenceClassSizes: [40, 20, 5, 1, 1] },
 });
 report.quasiIdentifierStatistics?.minimumEquivalenceClassSize; // => 1
-report.quasiIdentifierStatistics?.uniqueRecords;               // => 2
+report.quasiIdentifierStatistics?.uniqueRecords; // => 2
 ```
 
 #### Properties
@@ -1505,7 +1550,7 @@ Total records across all classes = the sum of the supplied sizes.
 
 How many records fall in a class of size 1 (sample-uniques on the chosen set). Descriptive only.
 
-***
+---
 
 ### RetainedQuasiIdentifier
 
@@ -1522,7 +1567,7 @@ land here:
 These are exactly the residuals an expert reasons about under the §164.514(b)(2)(ii)
 actual-knowledge test, and the second kind is the stronger one: it is a full, unreduced value.
 
-**A keyed surrogate is NOT one of these and never joins this list.** It is a *replacement* computed
+**A keyed surrogate is NOT one of these and never joins this list.** It is a _replacement_ computed
 from the value rather than a piece of the value that survived, so it is inventoried separately as a
 [KeyedSurrogateResidual](#keyedsurrogateresidual): the two kinds are different residuals and a determiner reasons about
 them differently.
@@ -1533,8 +1578,15 @@ them differently.
 import { buildExpertDeterminationSupportReport, SAFE_HARBOR_CATEGORIES } from "@cosyte/deid";
 
 const report = buildExpertDeterminationSupportReport([
-  { category: SAFE_HARBOR_CATEGORIES.DATES, transform: "generalize", locus: "PID-7", count: 1,
-    disposition: "transformed", code: "DEID_RESIDUAL_RETAINED", reidentificationCode: false },
+  {
+    category: SAFE_HARBOR_CATEGORIES.DATES,
+    transform: "generalize",
+    locus: "PID-7",
+    count: 1,
+    disposition: "transformed",
+    code: "DEID_RESIDUAL_RETAINED",
+    reidentificationCode: false,
+  },
 ]);
 report.retainedQuasiIdentifiers[0]?.locus; // => "PID-7"
 ```
@@ -1567,7 +1619,7 @@ How the residual arose, so the two kinds are not indistinguishable in the invent
 left a coarse residual (a year, a safe 3-digit ZIP prefix, an age ≤ 89), while `retain` kept the
 **whole unreduced value**. A determiner reasons about those very differently.
 
-***
+---
 
 ### TransformedLocus
 
@@ -1579,7 +1631,12 @@ the value was removed or blocked (fail-closed). Carries no secret and no origina
 ```ts
 import { type TransformedLocus } from "@cosyte/deid";
 
-const t: TransformedLocus = { path: "PID-3", kind: "identifier", value: null, disposition: "removed" };
+const t: TransformedLocus = {
+  path: "PID-3",
+  kind: "identifier",
+  value: null,
+  disposition: "removed",
+};
 ```
 
 #### Properties
@@ -1608,7 +1665,7 @@ The format-neutral path (unchanged from input).
 
 The transformed value, or `null` when removed / blocked.
 
-***
+---
 
 ### UnexaminedResidual
 
@@ -1670,7 +1727,7 @@ never a reason to drop a "how many". Value-free (a boolean).
 
 ### DeidDispositionCode
 
-> **DeidDispositionCode** = *typeof* [`DEID_DISPOSITION_CODES`](#deid_disposition_codes)\[keyof *typeof* [`DEID_DISPOSITION_CODES`](#deid_disposition_codes)\]
+> **DeidDispositionCode** = _typeof_ [`DEID_DISPOSITION_CODES`](#deid_disposition_codes)\[keyof _typeof_ [`DEID_DISPOSITION_CODES`](#deid_disposition_codes)\]
 
 A value from [DEID\_DISPOSITION\_CODES](#deid_disposition_codes): the code every manifest entry carries.
 
@@ -1682,7 +1739,7 @@ import { DEID_DISPOSITION_CODES, type DeidDispositionCode } from "@cosyte/deid";
 const code: DeidDispositionCode = DEID_DISPOSITION_CODES.DEID_CATEGORY_REMOVED;
 ```
 
-***
+---
 
 ### DeidStandard
 
@@ -1690,11 +1747,11 @@ const code: DeidDispositionCode = DEID_DISPOSITION_CODES.DEID_CATEGORY_REMOVED;
 
 The named standard a profile targets, surfaced so output labelling can never overclaim.
 
-***
+---
 
 ### FatalCode
 
-> **FatalCode** = *typeof* [`FATAL_CODES`](#fatal_codes)\[keyof *typeof* [`FATAL_CODES`](#fatal_codes)\]
+> **FatalCode** = _typeof_ [`FATAL_CODES`](#fatal_codes)\[keyof _typeof_ [`FATAL_CODES`](#fatal_codes)\]
 
 A value from [FATAL\_CODES](#fatal_codes): the code carried by a thrown [DeidError](#deiderror).
 
@@ -1706,7 +1763,7 @@ import { FATAL_CODES, type FatalCode } from "@cosyte/deid";
 const code: FatalCode = FATAL_CODES.EMPTY_INPUT;
 ```
 
-***
+---
 
 ### FreeTextRedactor
 
@@ -1742,7 +1799,7 @@ const redactor: FreeTextRedactor = ({ text }) => ({ text: myNerModel.scrub(text)
 const result = deidentify(model, { redactor });
 ```
 
-***
+---
 
 ### LocusKind
 
@@ -1760,7 +1817,7 @@ import { type LocusKind } from "@cosyte/deid";
 const kind: LocusKind = "identifier";
 ```
 
-***
+---
 
 ### PartyRoleClassification
 
@@ -1788,7 +1845,7 @@ The matching member of the caller's table: a code, never a value.
 
 The role was recognized on one of the two lists.
 
-***
+---
 
 ##### Type Literal
 
@@ -1818,7 +1875,7 @@ const c: PartyRoleClassification = classifyPartyRole("85", {
 c.scope; // => "outside-scope"
 ```
 
-***
+---
 
 ### PartyRoleScope
 
@@ -1840,7 +1897,7 @@ import { type PartyRoleScope } from "@cosyte/deid";
 const scope: PartyRoleScope = "outside-scope";
 ```
 
-***
+---
 
 ### ReportDisposition
 
@@ -1852,11 +1909,11 @@ set deliberately kept unchanged (`DEID_RESIDUAL_RETAINED`, which also appears in
 inventory below), and a **party** whose role places it outside §164.514(b)(2)(i)'s scope clause
 (`DEID_PARTY_ROLE_RETAINED`, which does not: it is not a residual of the individual's identity).
 
-***
+---
 
 ### RetainedLocusClass
 
-> **RetainedLocusClass** = *typeof* [`RETAINED_LOCUS_CLASSES`](#retained_locus_classes)\[keyof *typeof* [`RETAINED_LOCUS_CLASSES`](#retained_locus_classes)\]
+> **RetainedLocusClass** = _typeof_ [`RETAINED_LOCUS_CLASSES`](#retained_locus_classes)\[keyof _typeof_ [`RETAINED_LOCUS_CLASSES`](#retained_locus_classes)\]
 
 A value from [RETAINED\_LOCUS\_CLASSES](#retained_locus_classes): the class a profile lists to keep, and an adapter
 checks before it passes a locus through.
@@ -1869,11 +1926,11 @@ import { RETAINED_LOCUS_CLASSES, type RetainedLocusClass } from "@cosyte/deid";
 const cls: RetainedLocusClass = RETAINED_LOCUS_CLASSES.ENCOUNTER_IDENTIFIERS;
 ```
 
-***
+---
 
 ### RetainedLocusPart
 
-> **RetainedLocusPart** = *typeof* [`LIMITED_DATA_SET_ADDRESS_PARTS`](#limited_data_set_address_parts)\[keyof *typeof* [`LIMITED_DATA_SET_ADDRESS_PARTS`](#limited_data_set_address_parts)\]
+> **RetainedLocusPart** = _typeof_ [`LIMITED_DATA_SET_ADDRESS_PARTS`](#limited_data_set_address_parts)\[keyof _typeof_ [`LIMITED_DATA_SET_ADDRESS_PARTS`](#limited_data_set_address_parts)\]
 
 A value from [LIMITED\_DATA\_SET\_ADDRESS\_PARTS](#limited_data_set_address_parts): the **named part** of an otherwise-excluded
 category that an adapter proposes keeping, and that [isRetainablePart](#isretainablepart) checks.
@@ -1886,11 +1943,11 @@ import { LIMITED_DATA_SET_ADDRESS_PARTS, type RetainedLocusPart } from "@cosyte/
 const part: RetainedLocusPart = LIMITED_DATA_SET_ADDRESS_PARTS.STATE;
 ```
 
-***
+---
 
 ### SafeHarborCategory
 
-> **SafeHarborCategory** = *typeof* [`SAFE_HARBOR_CATEGORIES`](#safe_harbor_categories)\[keyof *typeof* [`SAFE_HARBOR_CATEGORIES`](#safe_harbor_categories)\]
+> **SafeHarborCategory** = _typeof_ [`SAFE_HARBOR_CATEGORIES`](#safe_harbor_categories)\[keyof _typeof_ [`SAFE_HARBOR_CATEGORIES`](#safe_harbor_categories)\]
 
 A value from [SAFE\_HARBOR\_CATEGORIES](#safe_harbor_categories): the type a policy and a manifest entry carry.
 
@@ -1902,7 +1959,7 @@ import { SAFE_HARBOR_CATEGORIES, type SafeHarborCategory } from "@cosyte/deid";
 const c: SafeHarborCategory = SAFE_HARBOR_CATEGORIES.SSN;
 ```
 
-***
+---
 
 ### TransformName
 
@@ -1938,7 +1995,7 @@ const t: TransformName = "pseudonymize";
 > `const` **DEID\_DISPOSITION\_CODES**: `object`
 
 **Disposition codes**: the value-free record of what the engine did at a locus. Every manifest
-entry carries exactly one. They describe the *action and its residual*, never the value acted on.
+entry carries exactly one. They describe the _action and its residual_, never the value acted on.
 
 #### Type Declaration
 
@@ -1987,7 +2044,7 @@ the library. The library ships **no** NLP/PHI-detection engine; it orchestrates 
 redactor at free-text loci and records the outcome here. This code is **consumer-asserted, never a
 library guarantee**: "no findings" from a BYO redactor is not an attestation, and a redactor's
 completeness is the consumer's responsibility (Expert-Determination territory). The
-structural PHI removal the format adapters perform is unaffected: this covers only the free *prose*.
+structural PHI removal the format adapters perform is unaffected: this covers only the free _prose_.
 
 ##### DEID\_LOCUS\_BLOCKED
 
@@ -2006,7 +2063,7 @@ The entry names the party's structural locus and, in `partyRole`, the **role cod
 classified on**, so a retention decision that used to be silent can be audited. It carries no name,
 no identifier and no other value.
 
-It is deliberately **not** `DEID_RESIDUAL_RETAINED`: that code is a residual of the *individual's*
+It is deliberately **not** `DEID_RESIDUAL_RETAINED`: that code is a residual of the _individual's_
 own identity (a kept year, a safe ZIP prefix, a whole value a limited-data-set retention set kept)
 and feeds the determiner's retained-quasi-identifier inventory. A party outside the scope clause is
 a different fact and stays out of that inventory. The disposition-code set is additions-only.
@@ -2048,7 +2105,7 @@ import { DEID_DISPOSITION_CODES } from "@cosyte/deid";
 DEID_DISPOSITION_CODES.DEID_LOCUS_BLOCKED; // => "DEID_LOCUS_BLOCKED"
 ```
 
-***
+---
 
 ### EXPERT\_DETERMINATION\_DISCLAIMER
 
@@ -2066,7 +2123,7 @@ import { EXPERT_DETERMINATION_DISCLAIMER } from "@cosyte/deid";
 EXPERT_DETERMINATION_DISCLAIMER.includes("NOT a determination"); // => true
 ```
 
-***
+---
 
 ### FATAL\_CODES
 
@@ -2197,7 +2254,7 @@ name, a tag) and carries no value, no key and no offset. The fatal set is additi
 
 A [DeidProfile](#deidprofile) spec violates the **widen-never-narrow** contract: a per-site profile derived
 from a base profile may only move a category to an **equal-or-stronger** transform (more removal,
-never less), and may never re-weaken a category the base scrubs. A profile that would *reduce* the
+never less), and may never re-weaken a category the base scrubs. A profile that would _reduce_ the
 de-identification strength of any category is rejected, so a site preset can only ever tighten, not
 quietly loosen, the base standard's protection. The fatal set is additions-only.
 
@@ -2215,7 +2272,7 @@ import { FATAL_CODES } from "@cosyte/deid";
 FATAL_CODES.DEID_NO_KEY; // => "DEID_NO_KEY"
 ```
 
-***
+---
 
 ### KEYED\_TRANSFORMS
 
@@ -2223,7 +2280,7 @@ FATAL_CODES.DEID_NO_KEY; // => "DEID_NO_KEY"
 
 The transforms that require the consumer's key (and, for `date-shift`, a per-patient scope).
 
-***
+---
 
 ### LIMITED\_DATA\_SET\_ADDRESS\_PARTS
 
@@ -2262,7 +2319,7 @@ import { LIMITED_DATA_SET_ADDRESS_PARTS } from "@cosyte/deid";
 LIMITED_DATA_SET_ADDRESS_PARTS.ZIP_CODE; // => "zip-code"
 ```
 
-***
+---
 
 ### LIMITED\_DATA\_SET\_DIRECT\_IDENTIFIERS
 
@@ -2294,7 +2351,7 @@ LIMITED_DATA_SET_DIRECT_IDENTIFIERS.has(SAFE_HARBOR_CATEGORIES.MRN); // => true 
 LIMITED_DATA_SET_DIRECT_IDENTIFIERS.has(SAFE_HARBOR_CATEGORIES.DATES); // => false (retainable)
 ```
 
-***
+---
 
 ### LIMITED\_DATA\_SET\_PROFILE
 
@@ -2349,7 +2406,7 @@ import { LIMITED_DATA_SET_PROFILE } from "@cosyte/deid";
 LIMITED_DATA_SET_PROFILE.requiresContext; // => true (date-shift needs a per-patient key)
 ```
 
-***
+---
 
 ### LIMITED\_DATA\_SET\_RETENTION\_CLASSES
 
@@ -2371,7 +2428,7 @@ import { LIMITED_DATA_SET_RETENTION_CLASSES, RETAINED_LOCUS_CLASSES } from "@cos
 LIMITED_DATA_SET_RETENTION_CLASSES.has(RETAINED_LOCUS_CLASSES.ENCOUNTER_DATES); // => true
 ```
 
-***
+---
 
 ### NO\_RETAINED\_LOCI
 
@@ -2379,7 +2436,7 @@ LIMITED_DATA_SET_RETENTION_CLASSES.has(RETAINED_LOCUS_CLASSES.ENCOUNTER_DATES); 
 
 The empty retention set: the fail-closed default every entry point uses.
 
-***
+---
 
 ### OUTPUT\_LABEL
 
@@ -2396,7 +2453,7 @@ import { OUTPUT_LABEL } from "@cosyte/deid";
 OUTPUT_LABEL; // => "Safe-Harbor-transformed per the configured policy"
 ```
 
-***
+---
 
 ### RESTRICTED\_ZIP3
 
@@ -2414,7 +2471,7 @@ RESTRICTED_ZIP3.has("036"); // => true
 RESTRICTED_ZIP3.has("902"); // => false
 ```
 
-***
+---
 
 ### RESTRICTED\_ZIP3\_SOURCE
 
@@ -2431,7 +2488,7 @@ import { RESTRICTED_ZIP3_SOURCE } from "@cosyte/deid";
 RESTRICTED_ZIP3_SOURCE.census; // => "2000"
 ```
 
-***
+---
 
 ### RETAINED\_LOCUS\_CLASSES
 
@@ -2496,7 +2553,7 @@ import { RETAINED_LOCUS_CLASSES } from "@cosyte/deid";
 RETAINED_LOCUS_CLASSES.ENCOUNTER_DATES; // => "encounter-dates"
 ```
 
-***
+---
 
 ### SAFE\_HARBOR\_CATEGORIES
 
@@ -2624,7 +2681,7 @@ import { SAFE_HARBOR_CATEGORIES } from "@cosyte/deid";
 SAFE_HARBOR_CATEGORIES.MRN; // => "MRN"
 ```
 
-***
+---
 
 ### SAFE\_HARBOR\_CATEGORY\_META
 
@@ -2641,7 +2698,7 @@ import { SAFE_HARBOR_CATEGORY_META, SAFE_HARBOR_CATEGORIES } from "@cosyte/deid"
 SAFE_HARBOR_CATEGORY_META[SAFE_HARBOR_CATEGORIES.GEOGRAPHIC].letter; // => "B"
 ```
 
-***
+---
 
 ### SAFE\_HARBOR\_POLICY
 
@@ -2664,7 +2721,7 @@ import { SAFE_HARBOR_POLICY, SAFE_HARBOR_CATEGORIES } from "@cosyte/deid";
 SAFE_HARBOR_POLICY.transforms[SAFE_HARBOR_CATEGORIES.MRN]; // => "redact"
 ```
 
-***
+---
 
 ### SAFE\_HARBOR\_PROFILE
 
@@ -2684,7 +2741,7 @@ import { SAFE_HARBOR_PROFILE } from "@cosyte/deid";
 SAFE_HARBOR_PROFILE.standard; // => "safe-harbor"
 ```
 
-***
+---
 
 ### VERSION
 
@@ -2700,7 +2757,7 @@ import { VERSION } from "@cosyte/deid";
 typeof VERSION; // => "string"
 ```
 
-***
+---
 
 ### WITHHELD\_LOCUS\_TOKEN
 
@@ -2762,7 +2819,7 @@ import { assertLimitedDataSetRetention } from "@cosyte/deid";
 assertLimitedDataSetRetention("a profile", ["encounter-dates"]); // ok
 ```
 
-***
+---
 
 ### assertRetentionContract()
 
@@ -2806,7 +2863,7 @@ assertRetentionContract("limited-data-set", ["encounter-dates"]); // ok
 assertRetentionContract("safe-harbor", []); // ok (retains nothing)
 ```
 
-***
+---
 
 ### buildExpertDeterminationSupportReport()
 
@@ -2843,18 +2900,22 @@ The frozen, value-free support report.
 #### Example
 
 ```ts
-import { deidentify, buildExpertDeterminationSupportReport, SAFE_HARBOR_CATEGORIES } from "@cosyte/deid";
+import {
+  deidentify,
+  buildExpertDeterminationSupportReport,
+  SAFE_HARBOR_CATEGORIES,
+} from "@cosyte/deid";
 
 const { manifest } = deidentify(
   { loci: [{ path: "PID-5", kind: "name", category: SAFE_HARBOR_CATEGORIES.NAMES, value: "X" }] },
   {},
 );
 const report = buildExpertDeterminationSupportReport(manifest, { policy: "safe-harbor" });
-report.determination;   // => null
-report.policy;          // => "safe-harbor"
+report.determination; // => null
+report.policy; // => "safe-harbor"
 ```
 
-***
+---
 
 ### classifyPartyRole()
 
@@ -2871,7 +2932,7 @@ the same committed member. An absent, empty or unlisted code is `unknown` and **
 `string`
 
 The role code the format types at the party (`NM1-01` / `N1-01`; the role an HL7
-  v2.5.1 field definition names at an organisation-typed position).
+v2.5.1 field definition names at an organisation-typed position).
 
 ##### table
 
@@ -2895,7 +2956,7 @@ classifyPartyRole("36", table); // => { scope: "safe-harbor-subject", roleCode: 
 classifyPartyRole("zq", table); // => { scope: "unknown" }  (fails closed)
 ```
 
-***
+---
 
 ### createDeidContext()
 
@@ -2921,7 +2982,7 @@ An opaque, self-redacting context.
 #### Throws
 
 [DeidError](#deiderror) with code `DEID_NO_KEY` if the key (or an explicit seed) is empty, and
-  `DEID_KEY_TOO_SHORT` if either is shorter than 16 bytes.
+`DEID_KEY_TOO_SHORT` if either is shorter than 16 bytes.
 
 #### Example
 
@@ -2933,7 +2994,7 @@ import { createDeidContext } from "@cosyte/deid";
 const ctx = createDeidContext({ key: randomBytes(32), patientId: "patient-1" });
 ```
 
-***
+---
 
 ### createDeidRegistry()
 
@@ -2961,7 +3022,7 @@ An opaque, self-redacting corpus consistency handle.
 #### Throws
 
 [DeidError](#deiderror) with code `DEID_NO_KEY` if the key (or an explicit seed) is empty, and
-  `DEID_KEY_TOO_SHORT` if either is shorter than 16 bytes.
+`DEID_KEY_TOO_SHORT` if either is shorter than 16 bytes.
 
 #### Example
 
@@ -2973,7 +3034,7 @@ import { createDeidRegistry } from "@cosyte/deid";
 const registry = createDeidRegistry({ key: randomBytes(32) });
 ```
 
-***
+---
 
 ### dateShift()
 
@@ -3026,14 +3087,14 @@ const b = dateShift("2020-01-11", ctx);
 // a and b are shifted, but remain exactly 10 days apart.
 ```
 
-***
+---
 
 ### defineDeidPolicy()
 
 > **defineDeidPolicy**(`spec`): [`DeidPolicy`](#deidpolicy)
 
 Derive a custom policy from the Safe Harbor defaults. Unlisted categories keep the safe default, so
-a custom policy can only ever be built by *deviating* from Safe Harbor deliberately, never by
+a custom policy can only ever be built by _deviating_ from Safe Harbor deliberately, never by
 forgetting a category. The result is frozen.
 
 #### Parameters
@@ -3062,7 +3123,7 @@ const research = defineDeidPolicy({
 research.transforms[SAFE_HARBOR_CATEGORIES.NAMES]; // => "redact" (kept from Safe Harbor)
 ```
 
-***
+---
 
 ### defineDeidProfile()
 
@@ -3091,11 +3152,11 @@ A frozen [DeidProfile](#deidprofile).
 #### Throws
 
 [DeidError](#deiderror) `DEID_PROFILE_INVALID` if an override weakens a category, if
-  `retainedLoci` adds a retention class the base does not retain, or if the name reclaims a reserved
-  standard label; `DEID_POLICY_INVALID` if the base declares the `safe-harbor` standard while
-  carrying a derived-output pair, or if the derived policy violates the key/label contract (e.g. a
-  `safe-harbor`-labelled policy that date-shifts). A base refused at derive time is refused with
-  `DEID_PROFILE_INVALID` first: a profile that is refused never mints a policy to label.
+`retainedLoci` adds a retention class the base does not retain, or if the name reclaims a reserved
+standard label; `DEID_POLICY_INVALID` if the base declares the `safe-harbor` standard while
+carrying a derived-output pair, or if the derived policy violates the key/label contract (e.g. a
+`safe-harbor`-labelled policy that date-shifts). A base refused at derive time is refused with
+`DEID_PROFILE_INVALID` first: a profile that is refused never mints a policy to label.
 
 #### Example
 
@@ -3109,7 +3170,7 @@ const strict = defineDeidProfile({
 strict.policy.transforms[SAFE_HARBOR_CATEGORIES.GEOGRAPHIC]; // => "redact"
 ```
 
-***
+---
 
 ### deidentify()
 
@@ -3146,8 +3207,8 @@ The frozen [DeidResult](#deidresult): transformed document + value-free manifest
 #### Throws
 
 [DeidError](#deiderror) `EMPTY_INPUT` if the model is null or carries no locus list; `DEID_NO_KEY`
-  if a keyed transform is required but no key context was supplied; `DEID_POLICY_INVALID` if a
-  `safe-harbor`-labelled policy is asked to retain an identifying locus.
+if a keyed transform is required but no key context was supplied; `DEID_POLICY_INVALID` if a
+`safe-harbor`-labelled policy is asked to retain an identifying locus.
 
 #### Example
 
@@ -3155,14 +3216,23 @@ The frozen [DeidResult](#deidresult): transformed document + value-free manifest
 import { deidentify, SAFE_HARBOR_CATEGORIES } from "@cosyte/deid";
 
 const result = deidentify(
-  { loci: [{ path: "PID-19", kind: "identifier", category: SAFE_HARBOR_CATEGORIES.SSN, value: "SENTINEL" }] },
+  {
+    loci: [
+      {
+        path: "PID-19",
+        kind: "identifier",
+        category: SAFE_HARBOR_CATEGORIES.SSN,
+        value: "SENTINEL",
+      },
+    ],
+  },
   {},
 );
-result.document.loci[0]?.value;      // => null (removed)
-result.manifest[0]?.disposition;     // => "removed"
+result.document.loci[0]?.value; // => null (removed)
+result.manifest[0]?.disposition; // => "removed"
 ```
 
-***
+---
 
 ### formatExpertDeterminationSupportReport()
 
@@ -3189,13 +3259,16 @@ A Markdown string (value-free: categories, dispositions, loci, counts, never a v
 #### Example
 
 ```ts
-import { buildExpertDeterminationSupportReport, formatExpertDeterminationSupportReport } from "@cosyte/deid";
+import {
+  buildExpertDeterminationSupportReport,
+  formatExpertDeterminationSupportReport,
+} from "@cosyte/deid";
 
 const md = formatExpertDeterminationSupportReport(buildExpertDeterminationSupportReport([]));
 md.startsWith("# Expert-Determination support report"); // => true
 ```
 
-***
+---
 
 ### generalizeAge()
 
@@ -3217,7 +3290,7 @@ The age in years.
 [`GeneralizeOutcome`](#generalizeoutcome) \| `null`
 
 The `{ value, residual }` outcome (`residual: false` for `"90+"`, `true` for a kept age),
-  or `null` if the age is not a finite non-negative number.
+or `null` if the age is not a finite non-negative number.
 
 #### Example
 
@@ -3228,7 +3301,7 @@ generalizeAge(92)?.value; // => "90+"
 generalizeAge(89)?.value; // => "89"
 ```
 
-***
+---
 
 ### generalizeDate()
 
@@ -3259,10 +3332,10 @@ The `{ value: year, residual: true }` outcome, or `null` if no year is present.
 import { generalizeDate } from "@cosyte/deid";
 
 generalizeDate("2019-03-14")?.value; // => "2019"
-generalizeDate("not-a-date");        // => null
+generalizeDate("not-a-date"); // => null
 ```
 
-***
+---
 
 ### generalizeZip()
 
@@ -3285,7 +3358,7 @@ The ZIP code (5-digit, ZIP+4, or any form beginning with digits).
 [`GeneralizeOutcome`](#generalizeoutcome) \| `null`
 
 The `{ value, residual }` outcome (`residual: false` for `000`, `true` for a kept prefix),
-  or `null` if fewer than three leading digits are present.
+or `null` if fewer than three leading digits are present.
 
 #### Example
 
@@ -3296,7 +3369,7 @@ generalizeZip("90210")?.value; // => "902"
 generalizeZip("03601")?.value; // => "000"  (036 is a restricted prefix)
 ```
 
-***
+---
 
 ### isRetainableCategory()
 
@@ -3329,7 +3402,7 @@ isRetainableCategory(SAFE_HARBOR_CATEGORIES.MRN); // => false
 isRetainableCategory(SAFE_HARBOR_CATEGORIES.DATES); // => true
 ```
 
-***
+---
 
 ### isRetainablePart()
 
@@ -3385,7 +3458,7 @@ isRetainablePart(geo, SAFE_HARBOR_CATEGORIES.GEOGRAPHIC, LIMITED_DATA_SET_ADDRES
 isRetainablePart(geo, SAFE_HARBOR_CATEGORIES.NAMES, LIMITED_DATA_SET_ADDRESS_PARTS.STATE); // => false
 ```
 
-***
+---
 
 ### isRetainableZipCode()
 
@@ -3424,7 +3497,7 @@ isRetainableZipCode("62704"); // => true
 isRetainableZipCode("627"); // => false (a partial ZIP is not a zip code)
 ```
 
-***
+---
 
 ### keyedHash()
 
@@ -3463,7 +3536,7 @@ const ctx = createDeidContext({ key: process.env.DEID_KEY! });
 typeof keyedHash("value", ctx); // => "string"
 ```
 
-***
+---
 
 ### profileOptions()
 
@@ -3514,7 +3587,7 @@ The [DeidOptions](#deidoptions) for an adapter call.
 #### Throws
 
 [DeidError](#deiderror) `DEID_POLICY_INVALID` when the profile claims the `safe-harbor` label, on
-  either its policy name or its declared standard, while carrying a derived-output pair.
+either its policy name or its declared standard, while carrying a derived-output pair.
 
 #### Example
 
@@ -3525,7 +3598,7 @@ const opts = profileOptions(SAFE_HARBOR_PROFILE, createDeidContext({ key: proces
 opts.policy === SAFE_HARBOR_PROFILE.policy; // => true
 ```
 
-***
+---
 
 ### pseudonymize()
 
@@ -3564,7 +3637,7 @@ const ctx = createDeidContext({ key: process.env.DEID_KEY! });
 pseudonymize("MRN-123", ctx) === pseudonymize("MRN-123", ctx); // => true (consistent)
 ```
 
-***
+---
 
 ### redact()
 
@@ -3587,7 +3660,7 @@ import { redact } from "@cosyte/deid";
 redact(); // => null
 ```
 
-***
+---
 
 ### resolvePolicy()
 
@@ -3618,7 +3691,7 @@ import { resolvePolicy, SAFE_HARBOR_POLICY } from "@cosyte/deid";
 resolvePolicy("safe-harbor") === SAFE_HARBOR_POLICY; // => true
 ```
 
-***
+---
 
 ### retains()
 
@@ -3656,7 +3729,7 @@ retains(undefined, RETAINED_LOCUS_CLASSES.ENCOUNTER_DATES); // => false (fail cl
 retains(["encounter-dates"], RETAINED_LOCUS_CLASSES.ENCOUNTER_DATES); // => true
 ```
 
-***
+---
 
 ### unkeyedHash()
 
@@ -3664,7 +3737,7 @@ retains(["encounter-dates"], RETAINED_LOCUS_CLASSES.ENCOUNTER_DATES); // => true
 
 A **plain, unsalted SHA-256** digest: **NON-CONFORMING** to §164.514(c) and never used by the
 engine. It is re-identifiable for a small, enumerable identifier space (an attacker hashes every
-candidate and matches). Exported solely so the test suite can *prove* the reversibility hazard the
+candidate and matches). Exported solely so the test suite can _prove_ the reversibility hazard the
 keyed path avoids. **Do not use this to de-identify anything.**
 
 #### Parameters

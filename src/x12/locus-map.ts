@@ -95,6 +95,11 @@ export type X12ElementRule =
       readonly mode: Exclude<X12ElementMode, "block">;
       /** The Safe Harbor category driving the transform. */
       readonly category: SafeHarborCategory;
+      /**
+       * For `date` elements only: `true` when the element is a **date of birth**, so a year that shows
+       * an age over 89 is removed rather than kept (see `GenericLocus.dateOfBirth`).
+       */
+      readonly dateOfBirth?: boolean;
     };
 
 /**
@@ -532,7 +537,8 @@ export function isRecognizedX12Code(segId: string, element: number, value: strin
  *
  * - `N3`, Address Information: both address lines removed (street PHI, no clean generalization).
  * - `N4`, Geographic Location: city removed, ZIP generalized to 3 digits; state / country retained.
- * - `DMG`, Demographic Information: `DMG-02` date of birth generalized to year (only ever the
+ * - `DMG`, Demographic Information: `DMG-02` date of birth generalized to year, or removed when the
+ *   year shows an age over 89 (only ever the
  *   individual's: `DMG` appears solely in member loops), when it is a valid date in the `DMG-01` format;
  *   `DMG-03` gender retained when it is a gender code.
  * - `PER`, Administrative Communications Contact: contact name and every communication number removed;
@@ -575,7 +581,7 @@ export const X12_UNIVERSAL_SEGMENT_RULES: Readonly<Record<string, readonly X12El
       { element: 3, mode: "zip", category: C.GEOGRAPHIC }, // N4-03 Postal Code → 3-digit
     ],
     DMG: [
-      { element: 2, mode: "date", category: C.DATES }, // DMG-02 Date of Birth → year
+      { element: 2, mode: "date", category: C.DATES, dateOfBirth: true }, // DMG-02 Date of Birth → year
     ],
     PER: [
       { element: 2, mode: "redact", category: C.NAMES }, // PER-02 Name

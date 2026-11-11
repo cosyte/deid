@@ -346,7 +346,7 @@ export const RECOGNIZED_PERSON_ELEMENTS: ReadonlySet<string> = new Set<string>([
   "deceasedBoolean",
   "communication",
   "birthOrder",
-  "birthDate", // a date: generalized generically; recognized here so it is not blocked as unknown
+  "birthDate", // a date of birth: to year, or removed over 89; recognized so it is not blocked as unknown
   "deceasedDateTime", // a date: generalized generically
   // Structural links (references, walked; a Reference.display is blocked by the universal rule).
   "generalPractitioner",

@@ -221,13 +221,33 @@ function blockFreeText(out: FhirLocusAccumulator, node: FhirNode, path: string):
   );
 }
 
-/** Emit a date locus for a primitive whose value is a real calendar date; returns `true` if it did. */
-function dateEmit(out: FhirLocusAccumulator, node: FhirPrimitive, path: string): boolean {
+/** A year-only R4 `date` (`1950`): the coarsest precision the datatype allows. */
+const FHIR_YEAR_ONLY = /^[1-9]\d{3}$/;
+
+/**
+ * Emit a date locus for a primitive whose value is a real calendar date; returns `true` if it did.
+ * `dateOfBirth` marks a `birthDate`, which R4 defines only as a person's date of birth, so a year that
+ * shows an age over 89 is removed rather than kept. A birth date given as a **year alone** is a date
+ * too: it is the very year the rule reads, so it is located and recorded like a full one rather than
+ * kept by name.
+ */
+function dateEmit(
+  out: FhirLocusAccumulator,
+  node: FhirPrimitive,
+  path: string,
+  dateOfBirth = false,
+): boolean {
   const v = primitiveString(node);
-  if (!isFhirDateValue(v)) return false;
+  if (!isFhirDateValue(v) && !(dateOfBirth && FHIR_YEAR_ONLY.test(v))) return false;
   push(
     out,
-    { path, kind: "date", category: FHIR_DATE_CATEGORY, value: v },
+    {
+      path,
+      kind: "date",
+      category: FHIR_DATE_CATEGORY,
+      ...(dateOfBirth ? { dateOfBirth: true } : {}),
+      value: v,
+    },
     { node, edit: "set-primitive" },
   );
   return true;
@@ -654,7 +674,7 @@ function handleProperty(
   // the person map expected.
   if (!personCtx && sweepPersonalDatatypes(out, name, value, path, elementPath)) return;
   // A date-shaped primitive anywhere is a PHI date → generalized (fail closed on dates).
-  if (isPrimitive(value) && dateEmit(out, value, path)) return;
+  if (isPrimitive(value) && dateEmit(out, value, path, name === "birthDate")) return;
   // Fail-closed person sweep: a bare unrecognized string at a person resource's top level is blocked.
   if (isPersonTop && isStringPrimitive(value) && !RECOGNIZED_PERSON_ELEMENTS.has(name)) {
     blockNode(out, value, path);
