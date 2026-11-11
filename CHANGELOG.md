@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.2.9
+
+### Patch Changes
+
+- 8106052: X12 trace numbers and C-CDA ids with no extension are now replaced, and FHIR languages and NCPDP other payer fields are kept only in a strict format.
+
+  - **X12 trace numbers.** `TRN-02` is now replaced rather than kept: under the Safe Harbor default by a sequence number counted from 1 in the order the distinct trace numbers are met in one call, recorded as `DEID_IDENTIFIER_SUBSTITUTED`; under a keyed policy by the keyed surrogate. The same trace number gets the same replacement throughout the call, so a response's echo of a request's trace in the same interchange still matches. A request and its response de-identified in separate calls no longer match; a caller who reconciles them across calls needs a keyed policy, which does not claim Safe Harbor. A `TRN` with no `TRN-01` loses every value after it, as any segment missing its first required element does.
+  - **X12 single values.** A position kept as a bounded run of printable text (`TRN-03`, `TRN-04`, `BHT-03`, `CLP-07`, and the `ISA` and `GS` sender and receiver ids among them) is kept only as one value: a value holding the component or the repetition separator is removed and recorded as blocked.
+  - **X12 party numbers.** An 820 `ENT` now starts a new section, so a payee before it no longer vouches for a party-number `REF` after it. A provider `NM1` or `N1` that carries neither a name nor an identifier no longer vouches for one either, which matches the manifest: such a party has no `DEID_PARTY_ROLE_RETAINED` row.
+  - **C-CDA ids with no extension.** An `<id>` with no extension, or an empty one, is identified by its root, so the root is now replaced: in every header participation (it was removed before) and in the document's own `<id>` and `<setId>` (they were kept and counted before). Under the Safe Harbor default the replacement is a stand-in in the root's shape (an OID under `2.25`, a UUID, or a plain token), recorded as `DEID_IDENTIFIER_SUBSTITUTED`; under a keyed policy it is the keyed surrogate. Either is the same for the same root throughout the document, so a `setId` that repeats the `id` still repeats it. A clinical body `<id>` with a root the header replaced gets the same stand-in; any other body `<id>` is kept and counted as before. A caller that read an empty `root` as the sign of a removed id now finds a stand-in there.
+  - **FHIR `language`.** A person resource keeps `language` only as a language tag in canonical form whose primary subtag is one of the 184 two-letter ISO 639-1 codes, optionally followed by a four-letter script and a region (`en-US`, `es-419`, `zh-Hant-TW`). A short name such as `Smith` or `Mary-Ann`, a three-letter primary subtag, a variant, extension or private-use part, and other casing are removed and recorded as blocked.
+  - **NCPDP Telecom other payer fields.** The other payer id (`340-7C`) is kept only as five or six digits (a BIN or an NAIC company code); any other value is removed and recorded as blocked. The other payer processor control number (`MH`) is no longer in `TELECOM_SEGMENT_RETAIN_FIELDS["05"]` and is removed and recorded whatever it holds.
+
+  Outputs that move: a C-CDA document with an extension-less `<id>`, any X12 interchange with a `TRN`, and an NCPDP request whose other payer id is not five or six digits or that carries `MH`. The limitations page now lists which identifiers survive a pass and why, and the FHIR guide says that removing the conditional headers of a transaction Bundle can create duplicates on a server.
+
 ## 0.2.8
 
 ### Patch Changes
