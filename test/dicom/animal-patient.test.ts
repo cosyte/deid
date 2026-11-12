@@ -241,7 +241,12 @@ describe("the breed registration goes beyond Table E.1-1 and is removed", () => 
   it("names the removal as going beyond Table E.1-1 in a value-free warning", () => {
     const { warnings } = run(animalDataset());
     const warning = warnings.find((w) => w.code === BREED_REGISTRATION_REMOVED_CODE);
-    expect(warning?.message).toContain("beyond PS3.15 Table E.1-1");
+    expect(BREED_REGISTRATION_REMOVED_CODE).toBe("DICOM_BREED_REGISTRATION_REMOVED");
+    expect(warning?.message).toBe(
+      "Breed Registration Sequence (0010,2294) and Breed Registration Number (0010,2295) were " +
+        "removed, beyond PS3.15 Table E.1-1, which lists neither: a registration number names one " +
+        "animal, and its registry holds the owner's name and address",
+    );
     expect(warning?.message).not.toContain(FAKE.registrationNumber);
   });
 
@@ -286,7 +291,11 @@ describe("the breed registration goes beyond Table E.1-1 and is removed", () => 
     const thrown = thrownBy(() => deidentifyDicom(nested));
     expect(thrown).toBeInstanceOf(DeidError);
     expect((thrown as DeidError).code).toBe(FATAL_CODES.DEID_FORMAT_UNSUPPORTED);
-    expect((thrown as DeidError).message).toContain("(0010,2295)");
+    expect((thrown as DeidError).message).toBe(
+      "a breed registration attribute (0010,2295) was found inside a sequence this pass keeps; " +
+        "this adapter removes a breed registration only at the top level, where the Patient " +
+        "Module puts it, so nothing was de-identified.",
+    );
     expect((thrown as DeidError).message).not.toContain(FAKE.registrationNumber);
   });
 });
