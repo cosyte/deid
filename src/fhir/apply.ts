@@ -29,11 +29,14 @@
  *
  * **Primitive-extension guard.** A FHIR primitive can carry an `extension` (the JSON `_`-sibling) that
  * holds PHI (`_birthDate.extension[…]`). The structural walk does not descend that side-channel, so the
- * applier **fails closed**: every rebuilt primitive is emitted **without** its `extension` metadata (its
- * value and `id` are kept). The one exception is a part a rebuilt `Address` keeps, whose extensions the
- * extractor walks and blocks like every other extension. Primitive extensions are uncommon and demographic/annotative; dropping them
- * guarantees no `_`-sibling leak, at the documented cost of not preserving them (profile-aware retention
- * is not offered).
+ * applier **fails closed**: every primitive it writes is built anew from its value and its element `id`
+ * alone, **without** its `extension` metadata. The one exception is a part a rebuilt `Address` keeps,
+ * whose extensions the extractor walks and blocks like every other extension, and which are rebuilt
+ * through the same edits. Nothing else the reader kept on a primitive reaches the output: a
+ * `_`-sibling that arrived as a string, a number, a boolean, a `null` or a list rather than an object
+ * is not written back (the extractor records it as a block at its own locus). Primitive extensions are
+ * uncommon and demographic/annotative; dropping them guarantees no `_`-sibling leak, at the documented
+ * cost of not preserving them (profile-aware retention is not offered).
  *
  * **Transform labels (opt-in).** With `transformLabels`, every resource the rebuild changed (a value
  * transformed, removed or blocked, or a primitive extension dropped) gets the `meta.security` coding
@@ -109,27 +112,50 @@ type ResourceMark = FhirNode[] | undefined;
 /** The definition path above the first resource: no element path starts from it. */
 const ABOVE_RESOURCES = "";
 
-/** Re-emit a primitive without its `extension` side-channel (fail-closed), keeping value + `id`. */
-function stripPrimitive(node: FhirPrimitive): FhirNode {
-  if (node.extension === undefined) return node; // nothing to strip: preserve identity exactly
-  return node.id === undefined ? primitive(node.value) : primitive(node.value, { id: node.id });
+/**
+ * Write a primitive back from its value, its element `id` and the extensions the caller passes, and
+ * from nothing else. Whatever else the reader kept on the node does not reach the output: an
+ * `extension` the caller does not pass, and the text of a `_`-sibling that arrived as something other
+ * than an object (a string, a number, a boolean, a `null` or a list), which the reader keeps so its
+ * writer can hand it back. The extractor records that text as a block at the `_`-sibling's own locus.
+ */
+function rebuildPrimitive(node: FhirPrimitive, extension?: readonly FhirComplex[]): FhirPrimitive {
+  // Stryker disable ConditionalExpression: `primitive` writes no `id` or `extension` it is handed as undefined, so either branch builds the same node
+  return primitive(node.value, {
+    ...(node.id === undefined ? {} : { id: node.id }),
+    ...(extension === undefined ? {} : { extension }),
+  });
+  // Stryker restore ConditionalExpression
+}
+
+/**
+ * `true` when rebuilding the primitive leaves something of it behind: anything the reader kept beyond
+ * its value and its element `id`. The transform labels count it as a change.
+ */
+function carriesMoreThanValueAndId(node: FhirPrimitive): boolean {
+  return Object.keys(node).some((key) => key !== "kind" && key !== "value" && key !== "id");
 }
 
 /**
  * Re-emit a part an `Address` keeps. A primitive part keeps its value and its `id`, and each extension
  * on its `_`-sibling is rebuilt through the same edits as every other node, so what the extractor
  * blocked inside one (a `value[x]`, a key R4 does not define on an extension) is gone and the `url`
- * skeleton stays. A part the extractor blocked (any shape but a single string) is removed by its edit.
+ * skeleton stays. Nothing else on the part is written back. A part the extractor blocked (any shape
+ * but a single string) is removed by its edit.
  */
 function rebuildKeptPart(node: FhirNode, edits: ReadonlyMap<FhirNode, Edit>): Rebuilt {
   // The extractor blocks a kept part that is not a single string: its edit removes it.
   const edit = edits.get(node);
   if (edit !== undefined) return applyEdit(node, edit, edits);
-  if (!isPrimitive(node) || node.extension === undefined) return node;
+  // Stryker disable next-line ConditionalExpression: a part reached here is always a primitive, so the test only narrows the type
+  /* v8 ignore if -- every part that is not a string is blocked above; this guard narrows the type */
+  if (!isPrimitive(node)) return REMOVE;
   // The extractor never names an extension object itself, only what is inside one, so each is
-  // rebuilt property by property. `primitive` writes the `id` only when the part has one.
-  const extension = node.extension.map((ext) => rebuildComplex(ext, edits));
-  return primitive(node.value, { ...node, extension });
+  // rebuilt property by property.
+  return rebuildPrimitive(
+    node,
+    node.extension?.map((ext) => rebuildComplex(ext, edits)),
+  );
 }
 
 /** Rebuild an `Address` complex to the Safe Harbor residual: state / country + generalized 3-digit ZIP. */
@@ -230,7 +256,7 @@ function rebuildNode(node: FhirNode, edits: ReadonlyMap<FhirNode, Edit>): Rebuil
   const edit = edits.get(node);
   if (edit !== undefined) return applyEdit(node, edit, edits);
 
-  if (isPrimitive(node)) return stripPrimitive(node);
+  if (isPrimitive(node)) return rebuildPrimitive(node);
 
   if (isList(node)) {
     const items: FhirNode[] = [];
@@ -276,9 +302,8 @@ function rebuildLabeled(
   }
 
   if (isPrimitive(node)) {
-    const rebuilt = stripPrimitive(node);
-    if (rebuilt !== node) mark?.push(node);
-    return rebuilt;
+    if (carriesMoreThanValueAndId(node)) mark?.push(node);
+    return rebuildPrimitive(node);
   }
 
   if (isList(node)) {

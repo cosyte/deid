@@ -227,6 +227,10 @@ the identifier rule), and an empty one as `{}`.
   skeleton and the element `id` are kept when each is a string, everything else is not. The one
   exception is opt-in: [`keepPatientAnimal`](#keep-an-animal-patients-species-opt-in) keeps the coded
   species, breed and gender status of the `patient-animal` extension.
+- A **`_`-sibling that is not an object** (`"_status": "..."`, a number, a boolean, a `null`, or a
+  list in a repeating primitive's slot) is never written back, beside any primitive in any resource.
+  Every primitive the pass writes is built from its value, its element `id` and the extensions it
+  kept. The sibling is recorded as a block at its own locus (`Observation._status`), with no value.
 - A **swept `Address` the pass cannot read faithfully** is removed **whole**, never partly retained: a
   `postalCode` that is not a whole zip code (a four-digit `0110` still has three leading digits, and
   keeping them would retain a fragment of something that was never a ZIP), or an unexpected JSON shape

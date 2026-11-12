@@ -45,6 +45,7 @@ import {
   isComplex,
   isList,
   isPrimitive,
+  primitive,
   resourceType,
   type FhirComplex,
   type FhirNode,
@@ -1420,11 +1421,15 @@ export function extractFhirLoci(
   // in the manifest, so an unbounded one prefixes the whole audit with document content.
   const rt = safeLocusToken(resourceType(resource) ?? "", "fhirElementName");
   walkComplex(out, resource, rt, false, "");
+  const edits = new Map<FhirNode, FhirEditKind>();
+  for (const coord of out.coords) edits.set(coord.node, coord.edit);
+  // The same reach as the enumeration below, so a tree it cannot walk fails the same way.
+  enumerateOrFail(rt, () => {
+    blockSiblingTextBelow(out, resource, rt, edits);
+  });
 
   const residuals = new UnexaminedResidualBuilder();
   enumerateOrFail(rt, () => {
-    const edits = new Map<FhirNode, FhirEditKind>();
-    for (const coord of out.coords) edits.set(coord.node, coord.edit);
     recordUnexaminedFhirPositions(residuals, resource, rt, {
       edits,
       ruleReached: out.ruleReached,
@@ -1432,6 +1437,92 @@ export function extractFhirLoci(
     });
   });
   return { loci: out.loci, coords: out.coords, unexaminedResiduals: residuals.build() };
+}
+
+/**
+ * Block the text a primitive's `_`-sibling carried when it arrived as something other than an object:
+ * a string, a number, a boolean or a `null` (`_status: "…"`), or a list where none belongs. FHIR JSON
+ * gives that channel an `Element` object and nothing else, so the reader models no metadata in it and
+ * keeps the text only so that its writer can hand it back. No rule can read it, and the applier never
+ * writes it: every primitive it writes is built from the value, the element `id` and the extensions it
+ * decided. So the text is recorded as a block at the `_`-sibling's own locus (`Observation._status`),
+ * and the manifest row carries no value.
+ *
+ * The coordinate names a stand-in node rather than the primitive, so it never displaces the edit the
+ * pass made to the primitive's value; the applier visits only the tree's own nodes, so the stand-in
+ * writes nothing.
+ */
+function blockSiblingText(out: FhirLocusAccumulator, node: FhirPrimitive, path: string): void {
+  const text = node.nonObjectMetaSource ?? node.nestedArrayMetaSource;
+  if (text === undefined) return;
+  push(
+    out,
+    { path: underscoreSibling(path), kind: "unknown", value: text },
+    { node: primitive(undefined), edit: "drop" },
+  );
+}
+
+/**
+ * Find every primitive the applier writes back and block the `_`-sibling text it carried
+ * ({@link blockSiblingText}). The walk follows the applier: it stops below a node an edit removes or
+ * replaces whole (whose row already covers all of it), it reads a primitive whose value an edit
+ * rewrites (the primitive is still written, with a new value), and in a reduced `Address` it reads
+ * only the parts the applier keeps and the extensions on their `_`-siblings. A single reduced
+ * `Address` is located without an index, as its other rows are.
+ */
+function blockSiblingTextBelow(
+  out: FhirLocusAccumulator,
+  node: FhirNode,
+  path: string,
+  edits: ReadonlyMap<FhirNode, FhirEditKind>,
+): void {
+  const edit = edits.get(node);
+  if (isPrimitive(node)) {
+    if (edit !== "drop") blockSiblingText(out, node, path);
+    return;
+  }
+  // Stryker disable next-line ConditionalExpression: only an `Address` complex carries the address edit, so the type test only narrows the type
+  if (edit === "address" && isComplex(node)) {
+    blockKeptPartSiblingText(out, node, path, edits);
+    return;
+  }
+  if (edit !== undefined) return;
+  if (isList(node)) {
+    const single = node.items.length === 1;
+    node.items.forEach((item, i) => {
+      const itemPath = single && edits.get(item) === "address" ? path : idx(path, i);
+      blockSiblingTextBelow(out, item, itemPath, edits);
+    });
+    return;
+  }
+  node.properties.forEach((prop, i) => {
+    blockSiblingTextBelow(out, prop.value, join(path, elementSegment(prop.name, i)), edits);
+  });
+}
+
+/**
+ * {@link blockSiblingTextBelow} for a reduced `Address`: each part it keeps, and every extension on
+ * that part's `_`-sibling, which the applier writes back as the pass decided it.
+ */
+function blockKeptPartSiblingText(
+  out: FhirLocusAccumulator,
+  address: FhirComplex,
+  path: string,
+  edits: ReadonlyMap<FhirNode, FhirEditKind>,
+): void {
+  address.properties.forEach((prop, i) => {
+    const part = prop.value;
+    if (!FHIR_KEPT_ADDRESS_PARTS.has(prop.name) || edits.has(part)) return;
+    // Stryker disable next-line ConditionalExpression: a part reached here is always a primitive, so the test only narrows the type
+    /* v8 ignore if -- every part that is not a string is blocked above; this guard narrows the type */
+    if (!isPrimitive(part)) return;
+    const partPath = join(path, elementSegment(prop.name, i));
+    blockSiblingText(out, part, partPath);
+    const meta = join(underscoreSibling(partPath), "extension");
+    part.extension?.forEach((ext, j) => {
+      blockSiblingTextBelow(out, ext, idx(meta, j), edits);
+    });
+  });
 }
 
 /**

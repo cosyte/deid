@@ -145,9 +145,9 @@ Two things follow, and the second is the one that surprises people:
   **comments** and **processing instructions** an XML document is re-serialized with, each counted at
   its own carrier's coordinate; a FHIR primitive's **`_`-sibling element id**, which travels beside the
   value it annotates; and whatever a **partly** rewritten structure keeps, such as the state and country
-  of a generalized address, which are re-emitted with what rides beside them, bar what the pass
-  blocked there (in FHIR, every value and unknown key of an extension on their `_`-sibling, and a
-  part that is not a string, which is blocked whole).
+  of a generalized address, which are re-emitted with their element id and their extensions, bar what
+  the pass blocked there (in FHIR, every value and unknown key of an extension on their `_`-sibling,
+  and a part that is not a string, which is blocked whole).
 
 - **What is removed is not counted, and that is the point of the number.** The inventory measures what
   the pass _hands through_, so a position it deletes (an address line, a blocked narrative and every
@@ -337,7 +337,23 @@ Two things follow, and the second is the one that surprises people:
   anywhere else (on a clinical resource, in a backbone element, in a `Coding`, below a person
   resource's top level) is **passed through** and counted in `unexaminedResiduals` at its locus. A
   key on a `_`-sibling itself other than `id` and `extension` is not read by `@cosyte/fhir` and does
-  not reach the output.
+  not reach the output, and it gets no manifest row, since the parsed resource does not carry it.
+
+<a id="fhir-sibling-text"></a>
+
+- **A FHIR `_`-sibling that is not an object: blocked everywhere.** FHIR JSON gives a primitive's
+  `_`-sibling an object holding its `id` and `extension`. When one arrives as anything else (a string,
+  a number, a boolean or a `null` in `_status`, or a list in the slot of a repeating primitive),
+  `@cosyte/fhir` keeps its text so that its writer can hand it back. Every primitive the pass writes is
+  built from its value, its element `id` and the extensions the pass kept, and nothing else, so that
+  text never reaches the output. It is recorded as a block at the `_`-sibling's own locus
+  (`Observation._status`, `Patient.address._state`, `Observation.extension[0]._url`) with no value,
+  on every resource and at every depth: beside a code, in an extension, a modifier extension or a
+  nested extension, on a part an `Address` keeps and on an extension on one, in a contained resource
+  and in a `Bundle` entry, and in the `patient-animal` extension with `keepPatientAnimal` on or off.
+  Beside a primitive the pass removes, the text goes with it and the primitive's own row covers it. A
+  list beside a single value is refused by `@cosyte/fhir` (`PRIMITIVE_EXTENSION_MISALIGNED`) before
+  the pass runs.
 
 - **A FHIR element `id` is passed through and counted, not read.** An element `id` that is a string
   (`Observation.code.id`, a primitive's `_status.id`, the `id` of an extension, the `id` on the
