@@ -528,6 +528,12 @@ describe("a kept patient-animal code that does not fit its type", () => {
                   coding: [
                     { system: "http://example.org/zz animal", code: "zz-dog" },
                     { system: "http://example.org/zz-animal", code: "  Zzsmith" },
+                    // The text `true` fits the boolean pattern, but R4 writes a boolean as JSON.
+                    {
+                      system: "http://example.org/zz-animal",
+                      code: "zz-cat",
+                      userSelected: "true",
+                    },
                   ],
                 },
               },
@@ -544,6 +550,7 @@ describe("a kept patient-animal code that does not fit its type", () => {
     expect(manifest.map((m) => m.locus)).toEqual([
       "Patient.extension[0].extension[0].valueCodeableConcept.coding[0].system",
       "Patient.extension[0].extension[0].valueCodeableConcept.coding[1].code",
+      "Patient.extension[0].extension[0].valueCodeableConcept.coding[2].userSelected",
     ]);
   });
 });

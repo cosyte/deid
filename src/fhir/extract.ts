@@ -598,7 +598,7 @@ function blockExtensionProperty(
  * `uri`, the type it gives that `url`.
  */
 function keptAsUrl(name: string, value: FhirPrimitive): boolean {
-  return name !== "url" || fitsFhirFormat("uri", "Extension.url", primitiveString(value));
+  return name !== "url" || fitsFhirFormat("uri", undefined, primitiveString(value));
 }
 
 /** The two keys of an extension object that are structure rather than content: `url` and `id`. */
@@ -752,7 +752,7 @@ function keepAnimalConcept(out: FhirLocusAccumulator, concept: FhirNode, path: s
           isPrimitive(field.value) &&
           (field.name !== "display" || isCoding) &&
           (field.name !== "userSelected" || typeof field.value.value === "boolean") &&
-          fitsFormat(field.value, CODING_ELEMENTS.get(field.name) ?? null, `Coding.${field.name}`);
+          fitsFormat(field.value, CODING_ELEMENTS.get(field.name) ?? null, undefined);
         if (!keeps) {
           blockNode(out, field.value, join(codingPath, definedSegment("Coding", field.name, k)));
         }
