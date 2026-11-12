@@ -8,6 +8,8 @@
  * and in every place R4 types one. A caller who knows the content is safe names its kind in
  * `keepEmbeddedContent`, and each kept element is recorded as `DEID_EMBEDDED_CONTENT_RETAINED`. An
  * extension's `valueBase64Binary` and the narrative `div` were already removed, and no kind keeps them.
+ * A `Device`'s `udiCarrier.carrierAIDC` is a `base64Binary` too, but it holds a device identifier, so
+ * the device rule removes it whatever kind is kept (`./device-identifiers.test.ts`).
  *
  * Every value is synthetic and built here: the embedded document is a made-up note naming `Zzembed`.
  */
@@ -156,13 +158,6 @@ const POSITIONS: readonly (readonly [string, Json, string, string, FhirEmbeddedC
     "attachment.hash",
     docRef({ contentType: "text/plain", hash: B64 }),
     "DocumentReference.content[0].attachment.hash",
-    B64,
-    "base64-binary",
-  ],
-  [
-    "Device udiCarrier.carrierAIDC",
-    { resourceType: "Device", udiCarrier: [{ deviceIdentifier: "zz", carrierAIDC: B64 }] },
-    "Device.udiCarrier[0].carrierAIDC",
     B64,
     "base64-binary",
   ],

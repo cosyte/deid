@@ -88,6 +88,7 @@ of the residuals below.
 | **Every resource, by datatype**                                                                                        | any `HumanName`, any `Address`: `Organization.contact.name`, `Location.address`, `Organization.address`, a choice-type `locationAddress`            | name **removed**; address → the same safe **3-digit ZIP** (or `000`), finer geography dropped, that a person resource's address gets                                                                                                               |
 | **Every resource (the universal PHI vectors)**                                                                         | `identifier`, PHI-bearing dates, narrative `text.div`, `extension` / `modifierExtension` values, `Reference.display`                                | identifier **removed** under Safe Harbor, `system` retained (a consistent keyed surrogate by `system` only under a preset that does not claim the label); dates → **year**; narrative div / extension values / reference labels **blocked**        |
 | **Every resource's logical id**                                                                                        | the resource `id`; the id in a `Bundle.entry.fullUrl`, a `Reference.reference`, a `Bundle.entry.request.url` and a `Bundle.entry.response.location` | **replaced**, the same id by the same value throughout the call so every reference still resolves: a per-call stand-in under Safe Harbor, a keyed surrogate under a keyed policy (see [Resource ids and references](#resource-ids-and-references)) |
+| **`Device`**                                                                                                           | `serialNumber`, `lotNumber`, `distinctIdentifier`, `identifier`, and the UDI carrier's `deviceIdentifier`, `carrierHRF` and `carrierAIDC`           | **removed** under Safe Harbor and the Limited Data Set, category (M); the device's name, model, type and status kept (see [Device identifiers and serial numbers](#device-identifiers-and-serial-numbers))                                         |
 | **Contained resources and `Bundle` entries**                                                                           | each nested resource                                                                                                                                | **walked**: the resource role is re-derived at every `resourceType`, so a contained `RelatedPerson` or a Bundled `Patient` is transformed too                                                                                                      |
 | **Clinical resources**: `Observation`, `Condition`, `Encounter`, …                                                     | codes, values, units, statuses, reference ranges, reference wiring                                                                                  | **retained untouched** (the over-scrub guard); the wiring keeps every link, with the ids in it replaced                                                                                                                                            |
 
@@ -109,9 +110,9 @@ that tells it from a person's name. The rule leans on no sibling those other ele
 require: that would be an assumption about the document, and this pass validates no conformance.
 
 An identifier's Safe Harbor category is read from its `system` URI: the US-SSN system
-(`http://hl7.org/fhir/sid/us-ssn` or its OID form) routes to the SSN category, every other identifier
-to the medical record number category, and the configured policy's transform for that category is what
-runs, with the `system` retained either way. A `Reference.display` (usually a person's name) is
+(`http://hl7.org/fhir/sid/us-ssn` or its OID form) routes to the SSN category, a `Device`'s own
+`identifier` to the device identifier category (M), every other identifier to the medical record number
+category, and the configured policy's transform for that category is what runs, with the `system` retained either way. A `Reference.display` (usually a person's name) is
 blocked, while a `Coding.display` (a coded term such as `Sodium`) is retained: the two are distinguished
 structurally, not by the property name.
 
@@ -121,6 +122,52 @@ it sits, so a date in an unexpected element is caught too. A bare four-digit yea
 except at `birthDate`, where it is the very year the age rule reads: a year-only `birthDate` is
 located and recorded like a full one, and removed when it shows an age over 89; a clinical code that merely looks date-ish (`2951-2`, `1234-56`) is
 not mistaken for a date, so it survives.
+
+### Device identifiers and serial numbers
+
+Safe Harbor lists device identifiers and serial numbers as their own category, (M), and the Limited
+Data Set rule lists them among the direct identifiers it removes. On a `Device` the pass reads each
+element R4 defines to hold one as a category (M) identifier, so both presets remove its value, with a
+`DEID_CATEGORY_REMOVED` row at its locus that carries no value:
+
+| Element                              | What it holds                                                                       |
+| ------------------------------------ | ----------------------------------------------------------------------------------- |
+| `Device.serialNumber`                | the serial number of this one device                                                |
+| `Device.lotNumber`                   | the lot it was made in, which can hold this one device alone                        |
+| `Device.distinctIdentifier`          | the distinct identification code of a device that is a human cell or tissue product |
+| `Device.identifier`                  | its identifiers (a serial number, an asset tag), unless the system is an SSN's      |
+| `Device.udiCarrier.deviceIdentifier` | the device identifier part of the UDI                                               |
+| `Device.udiCarrier.carrierHRF`       | the whole UDI as printed, serial and lot numbers included                           |
+| `Device.udiCarrier.carrierAIDC`      | the same UDI as a barcode or RFID payload, in base64                                |
+
+They are found on a `Device` wherever it sits: on its own, contained in another resource, or in a
+`Bundle` entry. What describes the kind of device rather than the one device is kept: `deviceName`,
+`modelNumber`, `partNumber`, `type`, `status`, `manufacturer`, and the UDI's `issuer`, `jurisdiction`
+and `entryType`. A `carrierAIDC` is a `base64Binary`, but it is removed as category (M) even when you
+keep `base64-binary` content (see [Embedded content](#embedded-content-removed-by-default-kept-on-request)).
+A lot number is read as identifying the device because the resource does not say whether its lot
+holds one device or many.
+
+```ts runnable
+import { deidentifyFhirJson } from "@cosyte/deid/fhir";
+
+const input = JSON.stringify({
+  resourceType: "Device",
+  status: "active",
+  serialNumber: "ZZSN0001",
+  udiCarrier: [{ deviceIdentifier: "ZZDI0001", issuer: "http://hl7.org/fhir/NamingSystem/gs1-di" }],
+  modelNumber: "ZZ-MODEL-9",
+});
+
+const { json, manifest } = deidentifyFhirJson(input);
+json; // => '{"resourceType":"Device","status":"active","udiCarrier":[{"issuer":"http://hl7.org/fhir/NamingSystem/gs1-di"}],"modelNumber":"ZZ-MODEL-9"}'
+manifest.map((e) => `${e.locus} ${e.category}`); // => ["Device.serialNumber DEVICE", "Device.udiCarrier[0].deviceIdentifier DEVICE"]
+```
+
+A custom policy that assigns category (M) another transform gets it at these elements too. A
+`DeviceDefinition`, which describes a model of device rather than one device, is not read this way,
+and an identifier that names a device from another resource (`Observation.device.identifier`) is
+read by the identifier rule as any other identifier is.
 
 ## Resource ids and references
 
@@ -414,13 +461,13 @@ always was.
 
 If you know the content is safe for your recipient, name the kinds to keep in `keepEmbeddedContent`:
 
-| Kind              | Elements                                                                                                 |
-| ----------------- | -------------------------------------------------------------------------------------------------------- |
-| `attachment-data` | `Attachment.data`, wherever R4 types an `Attachment`                                                     |
-| `attachment-url`  | `Attachment.url`                                                                                         |
-| `binary-data`     | `Binary.data`                                                                                            |
-| `signature-data`  | `Signature.data`                                                                                         |
-| `base64-binary`   | every other `base64Binary` outside an extension: `Attachment.hash`, `Device.udiCarrier.carrierAIDC`, ... |
+| Kind              | Elements                                                                                           |
+| ----------------- | -------------------------------------------------------------------------------------------------- |
+| `attachment-data` | `Attachment.data`, wherever R4 types an `Attachment`                                               |
+| `attachment-url`  | `Attachment.url`                                                                                   |
+| `binary-data`     | `Binary.data`                                                                                      |
+| `signature-data`  | `Signature.data`                                                                                   |
+| `base64-binary`   | every other `base64Binary` outside an extension: `Attachment.hash`, `AuditEvent.entity.query`, ... |
 
 ```ts runnable
 import { deidentifyFhirJson } from "@cosyte/deid/fhir";
@@ -518,7 +565,9 @@ The option is off by default, so a call without it returns exactly what it retur
 
 - **No leak.** Every seeded PHI sentinel across the person resources, the universal vectors, the nested
   `contact` relative, and a contained resource is gone from the serialized output. An unmapped element or
-  extension that could carry PHI is blocked, never passed through in the clear.
+  extension that could carry PHI is blocked, never passed through in the clear. A `Device`'s serial,
+  lot and distinct identifier, its `identifier` value and its UDI carrier are gone too, under Safe
+  Harbor and the Limited Data Set, on a `Device` alone, contained, or in a `Bundle` entry.
 - **No over-scrub.** Clinical resources (observation and medication codes, values, units, result
   statuses, reference ranges, coded displays) are retained, and reference **wiring**
   (`Reference.reference` pointers) is preserved with the ids in it replaced, so intra-document linkage

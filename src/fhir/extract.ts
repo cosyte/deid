@@ -76,7 +76,7 @@ import {
 } from "@cosyte/fhir";
 
 import { isAgeCode, isBirthDateCode, type ObservationCodeSystem } from "../age-codes.js";
-import { SAFE_HARBOR_CATEGORIES } from "../categories.js";
+import { SAFE_HARBOR_CATEGORIES, type SafeHarborCategory } from "../categories.js";
 import { isWithheldToken, safeLocusToken, WITHHELD_LOCUS_TOKEN } from "../derived-token.js";
 import type { GenericLocus } from "../locus.js";
 import {
@@ -100,6 +100,9 @@ import {
   FHIR_BIRTH_DATE_ELEMENTS,
   FHIR_DATE_CATEGORY,
   FHIR_DEMOGRAPHIC_ELEMENTS,
+  FHIR_DEVICE_CATEGORY,
+  FHIR_DEVICE_IDENTIFIER_ELEMENTS,
+  FHIR_DEVICE_IDENTIFIER_PATH,
   FHIR_KEPT_ADDRESS_PARTS,
   HUMAN_NAME_ELEMENT_PATHS,
   PERSON_RESOURCE_TYPES,
@@ -413,8 +416,16 @@ function dateEmit(
   return true;
 }
 
-/** Extract one `Identifier` complex: the `value` primitive, routed to SSN (redact) or MRN (pseudonymize). */
-function handleIdentifier(out: FhirLocusAccumulator, id: FhirComplex, path: string): void {
+/**
+ * Extract one `Identifier` complex: the `value` primitive, routed to SSN (redact) or, by default, to
+ * `fallback`: MRN (pseudonymize), or (M) on a `Device`'s own identifier.
+ */
+function handleIdentifier(
+  out: FhirLocusAccumulator,
+  id: FhirComplex,
+  path: string,
+  fallback: SafeHarborCategory,
+): void {
   const valueNode = getProperty(id, "value");
   if (valueNode === undefined || !isPrimitive(valueNode)) return; // no value → nothing to transform
   const systemNode = getProperty(id, "system");
@@ -425,7 +436,7 @@ function handleIdentifier(out: FhirLocusAccumulator, id: FhirComplex, path: stri
     {
       path: join(path, "value"),
       kind: "identifier",
-      category: categoryForIdentifierSystem(system),
+      category: categoryForIdentifierSystem(system, fallback),
       value: primitiveString(valueNode),
     },
     { node: valueNode, edit: "set-primitive" },
@@ -437,7 +448,12 @@ function handleIdentifier(out: FhirLocusAccumulator, id: FhirComplex, path: stri
  * item that is not an object (a bare string where an `Identifier` belongs) is a shape the pass cannot
  * locate a value in, so it is blocked whole rather than handed through.
  */
-function handleIdentifiers(out: FhirLocusAccumulator, value: FhirNode, path: string): void {
+function handleIdentifiers(
+  out: FhirLocusAccumulator,
+  value: FhirNode,
+  path: string,
+  fallback: SafeHarborCategory,
+): void {
   const items = isList(value) ? value.items : [value];
   items.forEach((item, i) => {
     const itemPath = items.length > 1 ? idx(path, i) : path;
@@ -445,7 +461,7 @@ function handleIdentifiers(out: FhirLocusAccumulator, value: FhirNode, path: str
       blockNode(out, item, itemPath);
       return;
     }
-    handleIdentifier(out, item, itemPath);
+    handleIdentifier(out, item, itemPath, fallback);
   });
 }
 
@@ -815,6 +831,27 @@ function handleEmbeddedContent(
     { node: primitive(undefined), edit: "drop" },
   );
   out.ruleReached.add(value);
+}
+
+/**
+ * Decide an element that holds a device identifier or serial number
+ * ({@link FHIR_DEVICE_IDENTIFIER_ELEMENTS}): a primitive is a category (M) identifier locus written back
+ * in place, so the policy decides it (both presets remove it). R4 puts one primitive at each of those
+ * elements, so anything else there is blocked before the walk; the guard only narrows the type.
+ */
+function handleDeviceIdentifier(out: FhirLocusAccumulator, value: FhirNode, path: string): void {
+  // Stryker disable ConditionalExpression,BlockStatement,CallExpression: a structure or a list at one of these elements is blocked before the walk, so the guard only narrows the type
+  /* v8 ignore if -- R4 puts one primitive there, and anything else there is blocked before the walk */
+  if (!isPrimitive(value)) {
+    blockNode(out, value, path);
+    return;
+  }
+  // Stryker restore ConditionalExpression,BlockStatement,CallExpression
+  push(
+    out,
+    { path, kind: "identifier", category: FHIR_DEVICE_CATEGORY, value: primitiveString(value) },
+    { node: value, edit: "set-primitive" },
+  );
 }
 
 /** Recurse into a list value, applying the property rules to each item in document order. */
@@ -1392,6 +1429,12 @@ function handleProperty(
     out.ruleReached.add(value);
     return;
   }
+  // A device identifier or serial number is decided before the embedded-content rule, so keeping
+  // base64 content never keeps a `carrierAIDC`.
+  if (FHIR_DEVICE_IDENTIFIER_ELEMENTS.has(elementPath)) {
+    handleDeviceIdentifier(out, value, path);
+    return;
+  }
   const embedded = out.embedded.get(value);
   if (embedded !== undefined) {
     handleEmbeddedContent(out, embedded, value, path);
@@ -1415,7 +1458,11 @@ function handleProperty(
     return;
   }
   if (name === "identifier") {
-    handleIdentifiers(out, value, path);
+    const fallback =
+      elementPath === FHIR_DEVICE_IDENTIFIER_PATH
+        ? FHIR_DEVICE_CATEGORY
+        : SAFE_HARBOR_CATEGORIES.MRN;
+    handleIdentifiers(out, value, path, fallback);
     return;
   }
   if (name === "display" && !parentIsCoding && isPrimitive(value)) {
