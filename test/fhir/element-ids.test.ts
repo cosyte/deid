@@ -344,6 +344,16 @@ describe("what a kept address part hands through once its id is replaced", () =>
     ).toEqual(["Patient.address[0]._state.extension[0].url"]);
   });
 
+  it("a kept part with no id hands through its extension's url as before", () => {
+    expect(
+      residualsOf({
+        state: "IL",
+        _state: { extension: [{ url: "http://example.org/zz-s" }] },
+        postalCode: "62704",
+      }),
+    ).toEqual(["Patient.address[0]._state.extension[0].url"]);
+  });
+
   it("a kept part the pass blocked hands nothing through, the extension beside it included", () => {
     expect(
       residualsOf({
