@@ -66,6 +66,8 @@ const SENTINELS = [
   "ZZDURPHI",
   "ZZUNKNOWNSEG",
   "20260115", // header Date of Service → generalized to 2026
+  "20251203", // Claim 414-DE Date Prescription Written → generalized to 2025
+  "20251104", // Claim 457-EP Associated Prescription/Service Date → generalized to 2025
   // Unmapped identifier fields INSIDE PHI segments, must fail closed, not ride through:
   "ZZPATEMAIL", // 350-HN Patient E-Mail (Patient segment, unmapped)
   "ZZALTPATID", // an alternate patient id (Patient segment, unmapped)

@@ -68,9 +68,10 @@ standard, so the map keys off the field id directly.
 | **Insurance (`04`)**                                     | cardholder id (`C2`) + group id (`C1`) **removed** under Safe Harbor; cardholder name (`CC`/`CD`) removed; person code retained                                                                                                        |
 | **Prescriber (`03`)**                                    | prescriber id (`DB`) **removed**                                                                                                                                                                                                       |
 | **Coordination of Benefits (`05`)**                      | other-payer cardholder (`NU`) + group (`MJ`) ids **removed** under Safe Harbor; other-payer date (`E8`) → year                                                                                                                         |
+| **Claim (`07`)**                                         | Date Prescription Written (`DE`) + Associated Prescription/Service Date (`EP`) → year; every other Claim field retained                                                                                                                |
 | **Header**                                               | Date of Service → year                                                                                                                                                                                                                 |
 | **Free text** (`544-FY`, `504-F4`, `526-FQ`)             | **fails closed**: blocked, never scrubbed by a naive pass                                                                                                                                                                              |
-| **Clinical / financial** (`07`/`08`/`10`/`11`/`12`/`13`) | **retained untouched**: NDC drug codes, quantities, days-supply, pricing, DUR reason codes                                                                                                                                             |
+| **Clinical / financial** (`07`/`08`/`10`/`11`/`12`/`13`) | **retained untouched** but for the Claim dates above: NDC drug codes, quantities, days-supply, pricing, DUR reason codes                                                                                                               |
 | Any **unmapped / unknown** segment                       | **fails closed**: every field blocked                                                                                                                                                                                                  |
 
 The X12 adapter **retains** provider identity, while this adapter **removes** the prescriber id: a
@@ -85,6 +86,15 @@ BIN or an NAIC company code. A value in any other shape is blocked and recorded 
 field, which removes an other payer id in another form (a Health Industry Number, say). The other
 payer processor control number (`MH`) is not kept at all: it has no format that tells a plan's
 routing code from a short name, so it is blocked and recorded whatever it holds.
+
+The Claim segment is retained for its NDC, quantity and days supply, but two of its fields are dates
+of the individual's care: the Date Prescription Written (`414-DE`) and the Associated
+Prescription/Service Date (`457-EP`). Safe Harbor removes every element of such a date but the year,
+so each is handled the way the header Date of Service and the other payer date are: generalized to
+its year, recorded in the manifest as `07/DE` or `07/EP`, and shifted instead under a profile that
+shifts dates. `TELECOM_RETAINED_SEGMENT_RULES` lists them. The Pricing segment (`11`) carries amounts
+and codes and no date. The Prescriber segment (`03`) carries no date either, and removes every field
+but its id qualifier.
 
 ## NCPDP SCRIPT is refused
 
@@ -124,9 +134,10 @@ change: a parsed Telecom transaction is never a candidate for the refusal.
 
 ## Known limitation
 
-A retained clinical segment may carry a residual patient-related date the map does not surface (e.g. a
-previous date of fill): a documented limitation mirroring the HL7 and X12 adapters; forgetting one fails
-**safe** (retained, not leaked).
+A retained clinical or response segment may carry a residual patient-related date the map does not
+surface (e.g. a previous date of fill in a response DUR segment): a documented limitation mirroring
+the HL7 and X12 adapters. It is kept and counted as an unexamined residual, never passed through
+unrecorded.
 
 A Telecom message that carries more than one transaction is **refused** with a typed `DeidError`
 carrying `DEID_FORMAT_UNSUPPORTED`, with no partial output. Split it and de-identify each transaction on

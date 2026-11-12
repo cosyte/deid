@@ -140,7 +140,7 @@ describe("every adapter emits the same transformed document, byte for byte", () 
         "fhir": "9fc5255a8e8ac924da7090e2c56bcf0f",
         "hl7": "b0e71b72dd6f4078c43d1d7b767ef843",
         "hl7-encounter": "7aef4fa7fa7ed2ffd1ce4c05158e4773",
-        "ncpdp": "5bcb7ed60430babbbe494ecf729d36b6",
+        "ncpdp": "1be519592c20a5bff91bc62136fa8f1d",
         "x12": "7afec841b7487faa5774697142fb8514",
       }
     `);
@@ -557,6 +557,8 @@ describe("the other five adapters produce the same manifests, in the same order"
         "05/NU",
         "05/MJ",
         "05/E8",
+        "07/DE",
+        "07/EP",
         "08/FY",
         "08/FQ",
         "99/ZZ",

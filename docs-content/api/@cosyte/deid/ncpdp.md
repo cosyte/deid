@@ -12,7 +12,8 @@ adapter reaches NCPDP data **only** through `@cosyte/ncpdp`'s own exported Telec
 codec: it never touches a third-party substrate.
 
 **What it covers (Telecom vD.0).** The Patient (`01`), Prescriber (`03`), Insurance (`04`), and
-Coordination-of-Benefits (`05`) segments, plus the header's Date of Service:
+Coordination-of-Benefits (`05`) segments, the dates of the Claim segment (`07`), plus the header's
+Date of Service:
 - **Patient (`01`)**: name (`CA`/`CB`) and phone (`CQ`) removed; street (`CM`) and city (`CN`)
   removed; ZIP (`CP`) generalized to its safe 3-digit form; date of birth (`C4`) generalized to year;
   patient id (`CY`) pseudonymized. Gender and state retained.
@@ -22,6 +23,8 @@ Coordination-of-Benefits (`05`) segments, plus the header's Date of Service:
   NCPDP: the deliberate asymmetry with the X12 adapter, which retains provider identity).
 - **Coordination of Benefits (`05`)**: the other-payer cardholder id (`NU`) and group id (`MJ`)
   pseudonymized; the other-payer date (`E8`) generalized to year.
+- **Claim (`07`)**: the Date Prescription Written (`DE`) and the Associated Prescription/Service Date
+  (`EP`) generalized to year; every other Claim field retained.
 - **Header**: Date of Service generalized to year.
 
 **Fail closed.** A free-text field (`544-FY` DUR free text, `504-F4` response message) is blocked
@@ -253,10 +256,14 @@ patient identifier, so their values survive the over-scrub test byte-identical. 
 inside one of these still fails closed. A segment id that is neither mapped ([TELECOM\_LOCUS\_MAP](#telecom_locus_map))
 nor on this list is blocked field-by-field.
 
+A retained segment keeps every field but the ones [TELECOM\_RETAINED\_SEGMENT\_RULES](#telecom_retained_segment_rules) names: the
+Claim segment's dates of the individual's care (`414-DE`, `457-EP`) are generalized like any other
+date.
+
 **Documented limitation (mirrors the HL7 / X12 adapters).** A retained segment may carry a
-residual patient-related date (a `456-EW` associated prescription date, a `530-FU` previous date of
-fill) or a per-prescription reference (`402-D2` Rx reference number). Selective scrubbing of those
-residual loci is **not** performed; forgetting a clinical segment here fails **safe**: blocked, not
+residual patient-related date the rules do not name (a `530-FU` previous date of fill in a response
+DUR segment) or a per-prescription reference (`402-D2` Rx reference number). Each is counted as an
+unexamined residual, not scrubbed; forgetting a clinical segment here fails **safe**: blocked, not
 leaked.
 
 #### Example
@@ -265,6 +272,38 @@ leaked.
 import { TELECOM_RETAIN_SEGMENTS } from "@cosyte/deid/ncpdp";
 
 TELECOM_RETAIN_SEGMENTS.has("07"); // => true (Claim, NDC / quantity / pricing retained)
+```
+
+***
+
+### TELECOM\_RETAINED\_SEGMENT\_RULES
+
+> `const` **TELECOM\_RETAINED\_SEGMENT\_RULES**: `Readonly`\<`Record`\<`string`, `Readonly`\<`Record`\<`string`, [`TelecomFieldRule`](#telecomfieldrule)\>\>\>\>
+
+The **dated fields of a retained segment**: the fields of a recognized clinical / financial segment
+([TELECOM\_RETAIN\_SEGMENTS](#telecom_retain_segments)) that a rule reaches although the segment itself is retained. Every
+other field of such a segment is kept untouched and counted as an unexamined residual; a field named
+here is located and transformed by its rule, the same way a date in a mapped segment is.
+
+The Claim segment (`07`) carries two dates of the individual's care, and Safe Harbor removes every
+element of a date but the year from a date directly related to an individual:
+
+- `414-DE` Date Prescription Written, the day the prescriber wrote the patient's prescription;
+- `457-EP` Associated Prescription/Service Date, the date of the patient's earlier fill or service
+  this claim is tied to (a partial fill's completion, say).
+
+Both are treated as the header Date of Service (`401-D1`) and the other payer date (`443-E8`) are:
+generalized to the year under Safe Harbor, shifted under a profile that shifts dates. The Pricing
+segment (`11`) carries amounts and codes and no date, so it has no entry here; the Prescriber segment
+(`03`) is a mapped segment, where every field but its id qualifier is removed.
+
+#### Example
+
+```ts
+import { TELECOM_RETAINED_SEGMENT_RULES } from "@cosyte/deid/ncpdp";
+
+TELECOM_RETAINED_SEGMENT_RULES["07"]?.DE?.mode; // => "date"  (Date Prescription Written)
+TELECOM_RETAINED_SEGMENT_RULES["07"]?.D7; // => undefined (the NDC, retained)
 ```
 
 ***

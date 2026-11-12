@@ -519,7 +519,9 @@ Service carry the individual's identity: name / phone / street / city **removed*
 dates → year, patient / cardholder / group ids **removed** under Safe Harbor. The Prescriber (`03`) id is **removed**
 (a deliberate asymmetry with the X12 adapter's provider-retention stance). A free-text field
 (`544-FY` DUR, `504-F4` message) and any unmapped / unknown segment **fail closed**; the clinical /
-financial segments (NDC drug codes, quantities, days-supply, pricing, DUR codes) are retained untouched.
+financial segments (NDC drug codes, quantities, days-supply, pricing, DUR codes) are retained untouched,
+but for the Claim segment's Date Prescription Written (`414-DE`) and Associated Prescription/Service
+Date (`457-EP`), which go to the year like every other date.
 
 **NCPDP SCRIPT (ePrescribing XML) is REFUSED, not half-handled**: its parser's `serializeScript` emits
 only modeled fields (a round-trip drops unmodeled XML) and its `Patient` model has no address / phone /
