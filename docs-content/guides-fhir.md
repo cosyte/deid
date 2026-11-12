@@ -206,8 +206,11 @@ and an extension at any depth, and a primitive's `_`-sibling `id`. The same id g
 replacement throughout the call, so the `actionId` of a `relatedAction` in a `RequestGroup` or a
 `PlanDefinition`, which names an action's element id, is replaced by the same value and still
 resolves. Each replacement is recorded at its own position (`Observation.code.id`,
-`Observation._status.id`). An element id held as an object or a list is removed. What this does not
-reach is in [Limitations](./limitations.md#fhir-element-ids).
+`Observation._status.id`). An element id held as an object or a list is removed. An id inside
+something the pass blocks whole (under a key R4 does not define, in a structure where R4 puts a
+primitive, in a resource of a type R4 does not define) is removed with it rather than replaced, under
+that block's one row. What this does not reach is in
+[Limitations](./limitations.md#fhir-element-ids).
 
 ```ts runnable
 import { deidentifyFhirJson } from "@cosyte/deid/fhir";
@@ -261,10 +264,12 @@ manifest.map((entry) => entry.locus); // => ["Observation._status.id", "Observat
 - Every **key R4 does not define** where it sits is **blocked** whole, whatever it holds, at any
   depth of any resource or datatype: `Observation.zzNote`, `Observation.code.coding[0].zzNote`, a key
   in an `Identifier`, in `meta`, in a backbone, in a contained resource or in a `Bundle` entry. It is
-  recorded at its own locus with no value. So is every key of a structure where R4 puts a primitive,
-  and every key but the ones every resource carries on a resource of a type R4 does not define. The
-  names come from the R4 (4.0.1) definitions, and no option keeps such a key. See
-  [keys R4 does not define](./limitations.md#fhir-unknown-keys).
+  recorded at its own locus with no value. So is every value of a shape R4 does not define where it
+  sits: a string where a structure belongs (`"subject": "..."`, `"contained": ["..."]`), a
+  structure where a primitive belongs, a list where R4 puts one value and one value where it puts a
+  list. A resource whose `resourceType` is missing or not one R4 defines is removed whole, its type
+  and base fields included. The names and shapes come from the R4 (4.0.1) definitions, and no option
+  keeps such a value. See [keys R4 does not define](./limitations.md#fhir-unknown-keys).
 - An **extension on a primitive's `_`-sibling** that the output does not carry
   (`_birthDate.extension`, `_code.extension`) is recorded as blocked at its own locus
   (`Patient._birthDate.extension[0]`), one row each, so the manifest shows the drop.

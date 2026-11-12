@@ -325,14 +325,30 @@ Two things follow, and the second is the one that surprises people:
   alike. It is recorded at its own locus (`Observation.code.coding[0].zzNote`) with no value, under
   every profile and with every option at its default, and it is no longer counted as an unexamined
   residual. The names come from the R4 (4.0.1) definitions of every resource and datatype, a choice
-  element under each concrete name it is written as (`valueQuantity`). Every key of a structure where
-  R4 puts a primitive (`"status": { ... }`) is blocked the same way, and a resource of a type R4 does
-  not define keeps only what every resource carries (`id`, `meta`, `implicitRules`, `language`,
-  `text`, `contained`, `extension`, `modifierExtension`). A key inside a reduced `Address` that the
-  `Address` datatype does not define is removed by the reduction and recorded as well. No option
-  keeps such a key: a profile that adds elements outside an extension is not conformant R4, and its
-  content is blocked. This changes the output for any input that carries such a key: the key is gone
-  where it used to be passed through.
+  element under each concrete name it is written as (`valueQuantity`), with what it holds and
+  whether it repeats. A key inside a reduced `Address` that the `Address` datatype does not define is
+  removed by the reduction and recorded as well. No option keeps such a key: a profile that adds
+  elements outside an extension is not conformant R4, and its content is blocked. This changes the
+  output for any input that carries such a key: the key is gone where it used to be passed through.
+
+  The same holds for a value of a shape R4 does not define where it sits, read from the same
+  definitions: a string, a number, a boolean or a `null` where a structure belongs (a
+  `"subject": "..."` where R4 puts a `Reference`, a `"contained": ["..."]`, a `Bundle` entry's
+  `"resource": "..."`), a structure where a primitive belongs (`"status": { ... }`, a `HumanName`
+  sent where R4 puts a string), a list where R4 puts one value (`"code": [ ... ]`), one value where
+  R4 puts a list (`"identifier": { ... }`, `"note": { ... }`), and a `null` that pads no repeating
+  primitive. Each is blocked whole at its own locus (`Observation.subject`,
+  `Patient.generalPractitioner[0]`), with no value, whatever it holds, under every profile. Such a
+  value used to be passed through and counted, or read item by item by the rule for the element; a
+  caller who sent a single object where R4 puts a list now loses it, which is a loss of utility on a
+  document that is not conformant R4, not a leak.
+
+  A resource whose `resourceType` is missing or is not one R4 defines (a name R4 does not give a
+  resource, an abstract `Resource` or `DomainResource`, a datatype's name) is removed whole, wherever
+  it sits: at the root the output is `{}`, and contained or in a `Bundle` entry it is gone from its
+  list. Its type and every field it carries (`implicitRules`, `language`, `meta.source` among them)
+  are text a sender chose. It gets one blocked row at its own locus with no value, and at the root
+  that locus is `<withheld>`, so the type the sender wrote does not reach the manifest either.
 
   Inside an `extension` or a `modifierExtension`, at any depth and on every resource, only the `url`,
   the element `id` (replaced, as every element id is) and the nested extensions are kept. Every other
@@ -377,7 +393,10 @@ Two things follow, and the second is the one that surprises people:
   free text. Every element id the output keeps is replaced, on every resource and at every depth: the
   `id` of a datatype (`Observation.code.id`), a `Coding`, a backbone element, a `Bundle.entry`, an
   extension and a nested extension, and a primitive's `_`-sibling `id` (`Observation._status.id`, the
-  `_state.id` of a part an address keeps). The replacement is the one a resource's logical id gets,
+  `_state.id` of a part an address keeps). An id inside something the pass blocks whole is not
+  replaced but removed with it, under one row for the whole: under a key R4 does not define, in a
+  value of a shape R4 does not define where it sits (a structure where R4 puts a primitive), and in a
+  resource of a type R4 does not define. The replacement is the one a resource's logical id gets,
   under the same rule and in the same table: the same id is replaced by the same value throughout one
   call, a per-call sequence number under Safe Harbor and a keyed surrogate, flagged as a
   re-identification code, under a policy that pseudonymizes or hashes the medical record number
