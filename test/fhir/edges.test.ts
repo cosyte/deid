@@ -63,12 +63,17 @@ describe("deidentifyFhir, edge branches", () => {
   });
 
   it("de-identifies a resource that carries no resourceType (rootless generic complex)", () => {
-    const { json } = run({
+    // With no type to read it by, it carries only what every resource carries: the rest is blocked.
+    const { json, manifest } = run({
+      language: "en",
       identifier: [{ system: "http://h/mrn", value: "ZZROOTLESSMRN" }],
       effectiveDateTime: "2019-03-14",
     });
-    expect(json).not.toContain("ZZROOTLESSMRN");
-    expect(json).toContain('"effectiveDateTime":"2019"');
+    expect(json).toBe('{"language":"en"}');
+    expect(manifest.map((m) => m.locus)).toEqual([
+      "<withheld>.identifier",
+      "<withheld>.effectiveDateTime",
+    ]);
   });
 
   it("generalizes a person date carried in a list of dates", () => {

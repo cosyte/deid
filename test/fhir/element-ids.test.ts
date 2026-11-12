@@ -265,14 +265,16 @@ describe("a relatedAction's actionId resolves to the replaced action id", () => 
     expect(at(run.out, "action.1.relatedAction.0.actionId")).toBe(at(run.out, "action.0.id"));
   });
 
-  it("an actionId anywhere else is not read as a link", () => {
+  it("an actionId anywhere else is not read as a link: R4 defines none there, so it is blocked", () => {
     const run = pass({
       resourceType: "Basic",
       code: { text: "x" },
       relatedAction: [{ actionId: "zzplain" }],
     });
-    expect(at(run.out, "relatedAction.0.actionId")).toBe("zzplain");
-    expect(run.residuals).toContain("Basic.relatedAction[0].actionId");
+    expect(run.wire).not.toContain("zzplain");
+    expect(rows(run.manifest, "Basic.relatedAction")).toEqual([
+      expect.objectContaining({ disposition: "blocked" }),
+    ]);
   });
 });
 
@@ -423,7 +425,7 @@ describe("an element id beside a value the pass replaces, and in places the walk
     expect(rows(run.manifest, "Observation.code._id.id")).toHaveLength(1);
   });
 
-  it("the id of a resource-shaped object the walk does not read as a resource is replaced", () => {
+  it("a resource-shaped object under a key R4 does not define goes whole, its id with it", () => {
     const run = pass({
       resourceType: "Observation",
       status: "final",
@@ -437,7 +439,8 @@ describe("an element id beside a value the pass replaces, and in places the walk
       ],
     });
     expect(run.wire).not.toContain("ZZEIDINNER");
-    expect(rows(run.manifest, "Observation.identifier[0].zzInner.id")).toHaveLength(1);
+    expect(rows(run.manifest, "Observation.identifier[0].zzInner")).toHaveLength(1);
+    expect(rows(run.manifest, "Observation.identifier[0].zzInner.id")).toEqual([]);
   });
 
   it("a date-shaped action id and the actionId naming it get the same replacement", () => {
@@ -487,8 +490,12 @@ describe("an element id beside a value the pass replaces, and in places the walk
       intent: "plan",
       action: [{ relatedAction: [{ actionIdZz: "zzplain", relationship: "after" }] }],
     });
-    expect(at(run.out, "action.0.relatedAction.0.actionIdZz")).toBe("zzplain");
-    expect(run.residuals).toContain("RequestGroup.action[0].relatedAction[0].actionIdZz");
+    // R4 defines no such key, so it is blocked rather than read.
+    expect(run.wire).not.toContain("zzplain");
+    expect(at(run.out, "action.0.relatedAction.0.relationship")).toBe("after");
+    expect(rows(run.manifest, "RequestGroup.action[0].relatedAction[0].actionIdZz")).toEqual([
+      expect.objectContaining({ disposition: "blocked" }),
+    ]);
   });
 });
 

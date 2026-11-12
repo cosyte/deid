@@ -349,9 +349,9 @@ describe("an unknown key inside an extension is blocked", () => {
 });
 
 /**
- * Outside an extension the rule is the one the limitations page states: an unknown key on a person
- * resource's own top level is removed by the fail-closed person sweep, and an unknown key anywhere
- * else is handed through and named as an unexamined residual at its locus, never silently.
+ * Outside an extension the rule is the same: an unknown key is blocked at any depth of any resource,
+ * with a value-free row at its locus, and is no longer an unexamined residual
+ * (`./unknown-keys.test.ts` has the rest).
  */
 describe("an unknown key elsewhere in a resource", () => {
   function residuals(resource: unknown): string[] {
@@ -365,7 +365,7 @@ describe("an unknown key elsewhere in a resource", () => {
     expect(manifest.map((m) => m.locus)).toContain("Patient.zzNote");
   });
 
-  it("on a clinical resource, in a backbone and in a coding: handed through and counted", () => {
+  it("on a clinical resource, in a backbone and in a coding: removed, not counted", () => {
     const resource = {
       resourceType: "Observation",
       status: "final",
@@ -373,15 +373,15 @@ describe("an unknown key elsewhere in a resource", () => {
       code: { coding: [{ system: "http://loinc.org", code: "2951-2", zzNote: "ZZCLIN2" }] },
       component: [{ code: { text: "sodium" }, zzNote: "ZZCLIN3" }],
     };
-    const { json } = run(resource);
-    for (const v of ["ZZCLIN1", "ZZCLIN2", "ZZCLIN3"]) expect(json).toContain(v);
-    expect(residuals(resource)).toEqual(
-      expect.arrayContaining([
-        "Observation.zzNote",
-        "Observation.code.coding[0].zzNote",
-        "Observation.component[0].zzNote",
-      ]),
-    );
+    const { json, manifest } = run(resource);
+    for (const v of ["ZZCLIN1", "ZZCLIN2", "ZZCLIN3"]) expect(json).not.toContain(v);
+    const loci = [
+      "Observation.zzNote",
+      "Observation.code.coding[0].zzNote",
+      "Observation.component[0].zzNote",
+    ];
+    expect(manifest.map((m) => m.locus)).toEqual(expect.arrayContaining(loci));
+    for (const locus of loci) expect(residuals(resource)).not.toContain(locus);
   });
 
   it("on a `_`-sibling itself: not read by the parser, so it never reaches the output", () => {
@@ -394,13 +394,14 @@ describe("an unknown key elsewhere in a resource", () => {
     expect(json).toMatch(/"_status":\{"id":"\d+"\}/);
   });
 
-  it("below a person resource's top level: handed through and counted", () => {
+  it("below a person resource's top level: removed, not counted", () => {
     const resource = {
       resourceType: "Patient",
       communication: [{ language: { text: "en" }, zzNote: "ZZPERSONDEEP" }],
     };
-    const { json } = run(resource);
-    expect(json).toContain("ZZPERSONDEEP");
-    expect(residuals(resource)).toContain("Patient.communication[0].zzNote");
+    const { json, manifest } = run(resource);
+    expect(json).not.toContain("ZZPERSONDEEP");
+    expect(manifest.map((m) => m.locus)).toContain("Patient.communication[0].zzNote");
+    expect(residuals(resource)).not.toContain("Patient.communication[0].zzNote");
   });
 });

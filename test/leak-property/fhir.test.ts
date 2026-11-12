@@ -9,12 +9,14 @@
  * qualifier position (a `use`, a `system`, a `type` code, a `gender`), and nested structures: a
  * contained resource, a nested extension, a Bundle inside a Bundle.
  *
- * A sentinel under a key R4 does not define on an extension (in an `extension`, a `modifierExtension`,
- * a nested extension, a primitive's `_`-sibling extension, a kept address part's) is held to more than
- * the shared rule: it must be gone from the output, because an extension is blocked whatever it holds.
- * So is a sentinel inside a part a reduced `Address` keeps (`state`, `country`) that arrives as an
- * object or a list rather than a string. A sentinel under an unknown key anywhere else is held to the
- * shared rule.
+ * A sentinel under a key R4 does not define where it sits is held to more than the shared rule: it
+ * must be gone from the output and from the manifest, because such a key is blocked whatever it holds.
+ * That holds inside an extension (an `extension`, a `modifierExtension`, a nested extension, a
+ * primitive's `_`-sibling extension, a kept address part's) and everywhere else: at every kind of
+ * position (the top level, a datatype, a datatype inside one, a backbone, `meta`, the narrative, a
+ * structure where R4 puts a primitive, a contained resource, a Bundle entry and its request) on a
+ * person, a clinical and an infrastructure resource. So is a sentinel inside a part a reduced
+ * `Address` keeps (`state`, `country`) that arrives as an object or a list rather than a string.
  *
  * A primitive's `_`-sibling is held to the same stricter rule when it arrives as something other than
  * the `Element` object FHIR JSON gives it: a string, a number, a boolean, an object holding a key R4
@@ -72,6 +74,10 @@ const RESOURCE_TYPES = [
   "Coverage",
   "Claim",
   "DiagnosticReport",
+  "Device",
+  "Provenance",
+  "AuditEvent",
+  "Endpoint",
 ] as const;
 
 /** Elements typed as a datatype, where a plain string is the unexpected shape. */
@@ -509,6 +515,167 @@ const ELEMENT_ID_SPOTS: readonly {
 
 const elementIdArb: fc.Arbitrary<number> = fc.nat({ max: ELEMENT_ID_SPOTS.length - 1 });
 
+/**
+ * Each kind of position a key R4 does not define can sit at, each putting the case's sentinel under
+ * one: the top level (holding a string, a structure, a list), a datatype (`meta`, a `Coding` in
+ * `meta.tag`, the narrative, an `Identifier`), a datatype inside one (an identifier's `type` coding,
+ * `period` and `assigner`), a structure where R4 puts a primitive (`meta.versionId`), a backbone of
+ * the resource's own type, a contained resource's top level and a datatype in it, and a Bundle
+ * entry and its request (in a Bundle the resource contains).
+ */
+const UNKNOWN_KEY_SPOTS: readonly {
+  readonly where: string;
+  readonly put: (resource: JsonObject, sentinel: string) => void;
+}[] = [
+  { where: "zzTop", put: (r, s) => (r["zzTop"] = s) },
+  { where: "zzDetail", put: (r, s) => (r["zzDetail"] = { who: s, list: [s] }) },
+  { where: "zzItems", put: (r, s) => (r["zzItems"] = ["zz", s]) },
+  { where: "meta.zzOwner", put: (r, s) => (r["meta"] = { versionId: "1", zzOwner: s }) },
+  {
+    where: "meta.tag[0].zzNote",
+    put: (r, s) =>
+      (r["meta"] = { tag: [{ system: "http://example.org/t", code: "t", zzNote: s }] }),
+  },
+  { where: "meta.versionId.zz", put: (r, s) => (r["meta"] = { versionId: { zz: s } }) },
+  {
+    where: "text.zzNote",
+    put: (r, s) =>
+      (r["text"] = {
+        status: "generated",
+        div: '<div xmlns="http://www.w3.org/1999/xhtml">zz</div>',
+        zzNote: s,
+      }),
+  },
+  {
+    where: "identifier[].zzNote",
+    put: (r, s) => {
+      pushTo(r, "identifier", { system: "urn:oid:2.25.7", value: "zz1", zzNote: s });
+    },
+  },
+  {
+    where: "identifier[].type.coding[0].zzNote",
+    put: (r, s) => {
+      pushTo(r, "identifier", {
+        type: { coding: [{ system: "http://example.org/it", code: "MR", zzNote: s }] },
+        value: "zz1",
+      });
+    },
+  },
+  {
+    where: "identifier[].period.zzNote",
+    put: (r, s) => {
+      pushTo(r, "identifier", { value: "zz1", period: { start: "2020", zzNote: s } });
+    },
+  },
+  {
+    where: "identifier[].assigner.zzNote",
+    put: (r, s) => {
+      pushTo(r, "identifier", {
+        value: "zz1",
+        assigner: { reference: "Organization/zz1", zzNote: s },
+      });
+    },
+  },
+  {
+    where: "backbone.zzNote",
+    put: (r, s) => {
+      const type = typeof r["resourceType"] === "string" ? r["resourceType"] : "";
+      const [key, item] = BACKBONES[type] ?? ["zzBackbone", {}];
+      pushTo(r, key, { ...item, zzNote: s });
+    },
+  },
+  {
+    where: "contained[].zzNote",
+    put: (r, s) => {
+      pushTo(r, "contained", { resourceType: "Basic", id: "zzc", code: { text: "zz" }, zzNote: s });
+    },
+  },
+  {
+    where: "contained[].code.coding[0].zzNote",
+    put: (r, s) => {
+      pushTo(r, "contained", {
+        resourceType: "Patient",
+        id: "zzp",
+        maritalStatus: { coding: [{ code: "M", zzNote: s }] },
+      });
+    },
+  },
+  {
+    where: "contained[].entry[0].zzNote",
+    put: (r, s) => {
+      pushTo(r, "contained", {
+        resourceType: "Bundle",
+        type: "collection",
+        entry: [{ zzNote: s, resource: { resourceType: "Basic", code: { text: "zz" } } }],
+      });
+    },
+  },
+  {
+    where: "contained[].entry[0].request.zzNote",
+    put: (r, s) => {
+      pushTo(r, "contained", {
+        resourceType: "Bundle",
+        type: "transaction",
+        entry: [{ request: { method: "POST", url: "Basic", zzNote: s } }],
+      });
+    },
+  },
+];
+
+/** A backbone element R4 defines on each generated resource type: its key and an ordinary item. */
+const BACKBONES: Readonly<Record<string, readonly [string, JsonObject]>> = {
+  Patient: ["communication", { language: { text: "zz" } }],
+  RelatedPerson: ["communication", { language: { text: "zz" } }],
+  Practitioner: ["qualification", { code: { text: "zz" } }],
+  Person: ["link", { target: { reference: "Patient/zz1" } }],
+  Observation: ["component", { code: { text: "zz" } }],
+  Encounter: ["statusHistory", { status: "planned" }],
+  Condition: ["stage", { summary: { text: "zz" } }],
+  Organization: ["contact", { purpose: { text: "zz" } }],
+  Location: ["hoursOfOperation", { allDay: true }],
+  Coverage: ["class", { value: "zz" }],
+  Claim: ["supportingInfo", { sequence: 1 }],
+  DiagnosticReport: ["media", { link: { reference: "Media/zz1" } }],
+  Device: ["deviceName", { name: "zz pump", type: "user-friendly-name" }],
+  Provenance: ["agent", { who: { reference: "Device/zz1" } }],
+  AuditEvent: ["entity", { what: { reference: "Device/zz1" } }],
+  Endpoint: ["contact", { system: "url" }],
+};
+
+const unknownKeyArb: fc.Arbitrary<number> = fc.nat({ max: UNKNOWN_KEY_SPOTS.length - 1 });
+
+/** A sentinel under an unknown key as placed: where, and the sentinel that must not come back. */
+interface UnknownKeyPlaced {
+  readonly where: string;
+  readonly sentinel: string;
+}
+
+/** Write one sentinel under an unknown key into the resource. */
+function placeUnknownKey(resource: JsonObject, spot: number, sentinel: string): UnknownKeyPlaced {
+  const at = UNKNOWN_KEY_SPOTS[spot % UNKNOWN_KEY_SPOTS.length];
+  if (at === undefined) throw new Error("no unknown key spot");
+  at.put(resource, sentinel);
+  return { where: at.where, sentinel };
+}
+
+/**
+ * The stricter rule for a key R4 does not define: the sentinel is gone from the output and from the
+ * manifest. Being named as a residual is not enough.
+ */
+export function unknownKeyKept(
+  placed: readonly UnknownKeyPlaced[],
+  outcome: PassOutcome,
+): string[] {
+  const violations: string[] = [];
+  const manifest = JSON.stringify(outcome.manifest);
+  for (const p of placed) {
+    const label = `${p.sentinel} (unknown key at ${p.where})`;
+    if (outcome.output.includes(p.sentinel)) violations.push(`${label} survives in the output`);
+    if (manifest.includes(p.sentinel)) violations.push(`${label} is in the manifest`);
+  }
+  return violations;
+}
+
 /** An element id as placed: where, and the sentinel that must not come back. */
 interface ElementIdPlaced {
   readonly where: string;
@@ -643,6 +810,7 @@ export const caseArb = fc.record({
   placements: fc.array(placementArb, { minLength: 1, maxLength: 4 }),
   siblings: fc.array(siblingArb, { maxLength: 2 }),
   elementIds: fc.array(elementIdArb, { maxLength: 2 }),
+  unknownKeys: fc.array(unknownKeyArb, { maxLength: 2 }),
 });
 
 /** Set a value at a path of keys and indexes, creating objects and lists on the way. */
@@ -949,11 +1117,13 @@ export function build(value: {
   animalSpot?: number;
   siblings?: readonly SiblingPlacement[];
   elementIds?: readonly number[];
+  unknownKeys?: readonly number[];
 }): {
   raw: string;
   placed: Placement[];
   siblings: SiblingPlaced[];
   elementIds: ElementIdPlaced[];
+  unknownKeys: UnknownKeyPlaced[];
 } {
   const resource: JsonObject = {
     resourceType: value.type,
@@ -983,10 +1153,15 @@ export function build(value: {
     const placedId = placeElementId(resource, spot, sentinelAt(value.stem, idOffset + i));
     return { ...placedId, where: `${value.type}.${placedId.where}` };
   });
+  const keyOffset = idOffset + elementIds.length;
+  const unknownKeys = (value.unknownKeys ?? []).map((spot, i) => {
+    const placedKey = placeUnknownKey(resource, spot, sentinelAt(value.stem, keyOffset + i));
+    return { ...placedKey, where: `${value.type}.${placedKey.where}` };
+  });
   const doc: JsonObject = value.inBundle
     ? { resourceType: "Bundle", type: "collection", entry: [{ resource }] }
     : resource;
-  return { raw: JSON.stringify(doc), placed, siblings, elementIds };
+  return { raw: JSON.stringify(doc), placed, siblings, elementIds, unknownKeys };
 }
 
 /** Every locus, as the adapter writes one, at which a string holding the sentinel sits. */
@@ -1052,19 +1227,22 @@ export function checkCase(
     animalSpot?: number;
     siblings?: readonly SiblingPlacement[];
     elementIds?: readonly number[];
+    unknownKeys?: readonly number[];
   },
   tally: LeakTally,
   options: FhirDeidOptions = {},
 ): string[] {
-  const { raw, placed, siblings, elementIds } = build(value);
+  const { raw, placed, siblings, elementIds, unknownKeys } = build(value);
   // A `_`-sibling the input does not hold (a later write replaced it) is not swept.
   const held = siblings.filter((s) => s.text === undefined || raw.includes(s.text));
   // Likewise an element id a later write replaced.
   const ids = elementIds.filter((p) => raw.includes(p.sentinel));
+  // Likewise a sentinel under an unknown key.
+  const keys = unknownKeys.filter((p) => raw.includes(p.sentinel));
   // Non-vacuity: only a sentinel the input holds is swept, and a case must hold one. A later
   // placement can overwrite an earlier one at the same position.
   const present = placed.filter((p) => raw.includes(p.sentinel));
-  if (present.length === 0 && held.length === 0 && ids.length === 0) {
+  if (present.length === 0 && held.length === 0 && ids.length === 0 && keys.length === 0) {
     return ["no sentinel reached the input"];
   }
   const outcome = pass(raw, options);
@@ -1073,23 +1251,27 @@ export function checkCase(
     ...unknownExtensionKeyKept(present, outcome),
     ...siblingTextKept(held, outcome),
     ...elementIdKept(ids, outcome),
+    ...unknownKeyKept(keys, outcome),
   ];
 }
 
 /**
- * The stricter rule for a sentinel under a key R4 does not define on an extension, or inside a kept
- * address part that is not a string: it is gone from the output. Being named as a residual is not
- * enough there, because an extension is blocked whatever it holds and so is a part of that shape.
+ * The stricter rule for a sentinel under a key R4 does not define, on an extension or on a datatype
+ * (an extra component), or inside a kept address part that is not a string: it is gone from the
+ * output. Being named as a residual is not enough there, because such a key is blocked whatever it
+ * holds and so is a part of that shape.
  */
 export function unknownExtensionKeyKept(
   placed: readonly Placement[],
   outcome: PassOutcome,
 ): string[] {
   return placed
-    .filter((p) =>
-      [...UNKNOWN_EXTENSION_KEY_SPOTS, ...KEPT_ADDRESS_PART_SPOTS].some((spot) =>
-        p.where.endsWith(spot),
-      ),
+    .filter(
+      (p) =>
+        p.shape === "extra-component" ||
+        [...UNKNOWN_EXTENSION_KEY_SPOTS, ...KEPT_ADDRESS_PART_SPOTS].some((spot) =>
+          p.where.endsWith(spot),
+        ),
     )
     .filter((p) => outcome.output.includes(p.sentinel))
     .map((p) => `${p.sentinel} (${p.shape} at ${p.where}) survives where it must be removed`);
@@ -1108,6 +1290,7 @@ export const animalCaseArb = fc.record({
   animalSpot: fc.nat({ max: ANIMAL_SPOTS - 1 }),
   siblings: fc.array(siblingArb, { maxLength: 2 }),
   elementIds: fc.array(elementIdArb, { maxLength: 2 }),
+  unknownKeys: fc.array(unknownKeyArb, { maxLength: 2 }),
 });
 
 describe("the generated leak property: FHIR R4", () => {
@@ -1332,5 +1515,94 @@ describe("the FHIR sweep removes a sentinel written as an element id", () => {
     expect(elementIdKept(placed, { ...clean, manifest: [{ locus: "ZQLKTEETH02X" }] })).toEqual([
       "ZQLKTEETH02X (element id at Observation.code.id) is in the manifest",
     ]);
+  });
+});
+
+/**
+ * Each kind of position a key R4 does not define can sit at, on a person, a clinical and two
+ * infrastructure resources, alone and in a Bundle entry, through the same check as a generated case,
+ * so every one is run on every pull request whatever the seed draws. So is every extra component the
+ * generated placements use.
+ */
+describe("the FHIR sweep removes a sentinel under a key R4 does not define", () => {
+  const types = ["Patient", "Observation", "Device", "Provenance"];
+  const spots = UNKNOWN_KEY_SPOTS.map((spot, i) => [spot.where, i] as const);
+
+  it.each(spots)("%s", (_where, spot) => {
+    for (const type of types) {
+      for (const inBundle of [false, true]) {
+        const value = {
+          type,
+          inBundle,
+          filler: "abc",
+          stem: "ZQLKUKEY",
+          placements: [],
+          unknownKeys: [spot],
+        };
+        expect(checkCase(value, newTally())).toEqual([]);
+      }
+    }
+  });
+
+  it.each(EXTRA_PATHS.map((path) => [path.join(".")] as const))("extra component %s", (where) => {
+    const extra = EXTRA_PATHS.find((path) => path.join(".") === where) ?? [];
+    for (const type of types) {
+      const placement: FhirPlacement = {
+        shape: "extra-component",
+        element: "name",
+        code: ["status"],
+        extra,
+        nest: 0,
+      };
+      const value = {
+        type,
+        inBundle: false,
+        filler: "abc",
+        stem: "ZQLKXTRA",
+        placements: [placement],
+      };
+      expect(checkCase(value, newTally())).toEqual([]);
+    }
+  });
+
+  it("the case holds what it placed: the sentinel is in the input", () => {
+    for (const [, spot] of spots) {
+      for (const type of types) {
+        const { raw, unknownKeys } = build({
+          type,
+          inBundle: false,
+          filler: "abc",
+          stem: "ZQLKUKEY",
+          placements: [],
+          unknownKeys: [spot],
+        });
+        expect(unknownKeys).toHaveLength(1);
+        expect(raw).toContain(unknownKeys[0]?.sentinel);
+      }
+    }
+  });
+
+  it("the stricter rule has teeth: a sentinel under an unknown key in the output or the manifest is caught", () => {
+    const placed: UnknownKeyPlaced[] = [{ where: "Observation.zzTop", sentinel: "ZQLKTEETH03X" }];
+    const clean: PassOutcome = {
+      output: '{"resourceType":"Observation"}',
+      manifest: [],
+      unexaminedResiduals: [],
+      residualAt: () => true,
+      refused: false,
+    };
+    expect(unknownKeyKept(placed, clean)).toEqual([]);
+    expect(unknownKeyKept(placed, { ...clean, output: '{"zzTop":"ZQLKTEETH03X"}' })).toEqual([
+      "ZQLKTEETH03X (unknown key at Observation.zzTop) survives in the output",
+    ]);
+    expect(unknownKeyKept(placed, { ...clean, manifest: [{ locus: "ZQLKTEETH03X" }] })).toEqual([
+      "ZQLKTEETH03X (unknown key at Observation.zzTop) is in the manifest",
+    ]);
+    const extra: Placement[] = [
+      { sentinel: "ZQLKTEETH04X", shape: "extra-component", where: "Observation.code.label" },
+    ];
+    expect(
+      unknownExtensionKeyKept(extra, { ...clean, output: '{"code":{"label":"ZQLKTEETH04X"}}' }),
+    ).toHaveLength(1);
   });
 });

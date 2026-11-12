@@ -42,6 +42,12 @@
  * `PlanDefinition`, can be replaced alike and still resolve. An element id that is not a string
  * (an object, a list) is blocked. The applier writes an element id only from a replacement.
  *
+ * A **key R4 does not define** where it sits (`Observation.code.coding[0].zzNote`), at any depth of any
+ * resource or datatype, is blocked whole with a row at its own locus, read from the element names of
+ * the R4 definitions (`./element-names.js`). So is every key of a structure where R4 puts a primitive,
+ * and every key but the base ones of a resource of a type R4 does not define. An extension on a
+ * primitive's `_`-sibling that the output does not carry gets a row of its own.
+ *
  * The `@cosyte/fhir` model is **immutable**, so the extractor never edits the tree; the applier rebuilds
  * a fresh tree from these coordinates (see `./apply.js`).
  *
@@ -71,6 +77,7 @@ import {
 } from "../residual.js";
 import { isRetainableZipCode } from "../retention.js";
 import { carriesFhirPersonalEvidence, classifyFhirPersonalDatatype } from "./datatype.js";
+import { ANY_RESOURCE, fhirElementsOf, fhirResourceStructure } from "./element-names.js";
 import {
   FHIR_AGE_ELEMENTS,
   FHIR_AGE_RANGE_ELEMENTS,
@@ -159,6 +166,12 @@ interface FhirLocusAccumulator {
   readonly bases: ReadonlySet<string>;
   /** {@link FhirExtractOptions.keepPatientAnimal}: `true` only when the caller asked for it. */
   readonly keepPatientAnimal: boolean;
+  /**
+   * The values held under a key R4 does not define where it sits, found before the walk
+   * ({@link findUnknownKeys}). The walk blocks each one it reaches without reading it, and every other
+   * one the output would carry is blocked after it ({@link blockUnknownKeysBelow}).
+   */
+  readonly unknownKeys: ReadonlySet<FhirNode>;
 }
 
 /**
@@ -1235,6 +1248,11 @@ function handleProperty(
   elementPath: string,
 ): void {
   const { parentIsCoding } = parent;
+  // A key R4 does not define here is blocked whole, so no rule reads what it holds.
+  if (out.unknownKeys.has(value)) {
+    blockNode(out, value, path);
+    return;
+  }
   if (name === "resourceType") {
     // Retained (structural), and NAMED: the walk reads it to derive the person/clinical role at every
     // resource boundary, so the discriminant is a position the pass examined rather than one it missed.
@@ -1459,20 +1477,30 @@ export function extractFhirLoci(
   resource: FhirComplex,
   options: FhirExtractOptions = {},
 ): FhirExtraction {
+  // `resourceType` is a JSON string VALUE, not a checked identifier, and it is the ROOT of every path
+  // in the manifest, so an unbounded one prefixes the whole audit with document content.
+  const rt = safeLocusToken(resourceType(resource) ?? "", "fhirElementName");
+  let unknownKeys: ReadonlySet<FhirNode> = new Set();
+  // The same reach as the enumeration below, so a tree it cannot walk fails the same way.
+  enumerateOrFail(rt, () => {
+    unknownKeys = findUnknownKeys(resource);
+  });
   const out: FhirLocusAccumulator = {
     loci: [],
     coords: [],
     ruleReached: new Set<FhirNode>(),
     bases: fullUrlBases(resource),
     keepPatientAnimal: options.keepPatientAnimal === true,
+    unknownKeys,
   };
-  // `resourceType` is a JSON string VALUE, not a checked identifier, and it is the ROOT of every path
-  // in the manifest, so an unbounded one prefixes the whole audit with document content.
-  const rt = safeLocusToken(resourceType(resource) ?? "", "fhirElementName");
   walkComplex(out, resource, rt, false, "");
+  const ruled = new Map<FhirNode, FhirEditKind>();
+  for (const coord of out.coords) ruled.set(coord.node, coord.edit);
+  enumerateOrFail(rt, () => {
+    blockUnknownKeysBelow(out, resource, rt, ruled);
+  });
   const walked = new Map<FhirNode, FhirEditKind>();
   for (const coord of out.coords) walked.set(coord.node, coord.edit);
-  // The same reach as the enumeration below, so a tree it cannot walk fails the same way.
   enumerateOrFail(rt, () => {
     decideWrittenMetadataBelow(out, resource, rt, walked);
   });
@@ -1489,6 +1517,106 @@ export function extractFhirLoci(
     });
   });
   return { loci: out.loci, coords: out.coords, unexaminedResiduals: residuals.build() };
+}
+
+/**
+ * Find every value held under a key R4 does not define where it sits, at any depth of any resource
+ * or datatype, by the element names of the R4 definitions (`./element-names.js`): a key a resource,
+ * a datatype or a backbone element does not carry (`Observation.zzNote`,
+ * `Observation.code.coding[0].zzNote`, `Observation.component[0].zzNote`), and every key of a
+ * structure where R4 puts a primitive (`"status": { "zz": ... }`), which defines none. A resource is
+ * read by its own `resourceType`; one R4 does not define is read as carrying only what every resource
+ * carries.
+ *
+ * An extension is left to its own rule ({@link blockExtension}), which already keeps only its `url`,
+ * its `id` and its nested extensions. Every key named here is text a sender chose, so it is blocked
+ * whatever it holds ({@link blockUnknownKeysBelow}).
+ */
+function findUnknownKeys(resource: FhirComplex): ReadonlySet<FhirNode> {
+  const unknown = new Set<FhirNode>();
+  const visit = (node: FhirNode, structure: string | null): void => {
+    if (isList(node)) {
+      node.items.forEach((item) => {
+        visit(item, structure);
+      });
+      return;
+    }
+    if (!isComplex(node)) return;
+    // A structure where R4 puts a primitive defines no key at all, so every key in it is unknown. Its
+    // keys are named one by one rather than the structure whole, so a rule that reads the structure
+    // itself (a `HumanName` where R4 puts a string) still decides it first.
+    const resource = structure === ANY_RESOURCE;
+    const elements = fhirElementsOf(
+      resource ? fhirResourceStructure(resourceType(node)) : structure,
+    );
+    for (const prop of node.properties) {
+      if (resource && prop.name === "resourceType") continue;
+      const type = elements.get(prop.name);
+      if (type === undefined) unknown.add(prop.value);
+      else if (prop.name !== "extension" && prop.name !== "modifierExtension") {
+        visit(prop.value, type);
+      }
+    }
+  };
+  visit(resource, ANY_RESOURCE);
+  return unknown;
+}
+
+/**
+ * Block each value {@link findUnknownKeys} found that the output would carry, whole, at its own locus
+ * (`Observation.code.coding[0].zzNote`), with a manifest row that carries no value. The walk follows
+ * the applier: below a node an edit removes or replaces, the edit's own row covers what is there. A
+ * reduced `Address` is read as the `Address` it was taken for, wherever it sits: a key that datatype
+ * does not define is removed by the rebuild, and it is named all the same, so a manifest reader sees
+ * every key the pass took away for being one R4 does not define.
+ */
+function blockUnknownKeysBelow(
+  out: FhirLocusAccumulator,
+  node: FhirNode,
+  path: string,
+  edits: ReadonlyMap<FhirNode, FhirEditKind>,
+): void {
+  const edit = edits.get(node);
+  if (edit !== undefined && edit !== "address") return;
+  if (out.unknownKeys.has(node)) {
+    blockNode(out, node, path);
+    return;
+  }
+  if (isPrimitive(node)) return;
+  if (isList(node)) {
+    const single = node.items.length === 1;
+    node.items.forEach((item, i) => {
+      const itemPath = single && edits.get(item) === "address" ? path : idx(path, i);
+      blockUnknownKeysBelow(out, item, itemPath, edits);
+    });
+    return;
+  }
+  // A reduced `Address` keeps only its kept parts, so it is read by what that datatype defines.
+  const address = edit === "address" ? fhirElementsOf("Address") : undefined;
+  node.properties.forEach((prop, i) => {
+    const propPath = join(path, elementSegment(prop.name, i));
+    if (address === undefined) blockUnknownKeysBelow(out, prop.value, propPath, edits);
+    else if (!address.has(prop.name)) blockNode(out, prop.value, propPath);
+  });
+}
+
+/**
+ * Block each extension on a primitive's `_`-sibling that the applier does not write back, whole, at
+ * its own locus (`Observation._status.extension[0]`), with a manifest row that carries no value. The
+ * applier writes every primitive without its extensions (bar a part a reduced `Address` keeps, whose
+ * extensions are decided as every other extension is), so without a row a manifest reader could not
+ * see the drop. The coordinate names the extension, which the applier never visits, so it writes
+ * nothing.
+ */
+function blockPrimitiveExtensions(
+  out: FhirLocusAccumulator,
+  node: FhirPrimitive,
+  path: string,
+): void {
+  const meta = join(underscoreSibling(path), "extension");
+  node.extension?.forEach((ext, j) => {
+    blockNode(out, ext, idx(meta, j));
+  });
 }
 
 /**
@@ -1540,7 +1668,10 @@ function decideWrittenMetadataBelow(
 ): void {
   const edit = edits.get(node);
   if (isPrimitive(node)) {
-    if (edit !== "drop") blockSiblingText(out, node, path);
+    if (edit !== "drop") {
+      blockSiblingText(out, node, path);
+      blockPrimitiveExtensions(out, node, path);
+    }
     // Only a primitive written as it arrived keeps its id; an edited one is written without it.
     if (edit === undefined) replacePrimitiveId(out, node, path);
     return;
@@ -1572,7 +1703,10 @@ function decideWrittenMetadataBelow(
     ) {
       replaceElementId(out, prop.value, propPath);
       // Stryker disable next-line ConditionalExpression: a complex or a list carries no sibling text, so blocking it writes nothing and the test only narrows the type
-      if (isPrimitive(prop.value)) blockSiblingText(out, prop.value, propPath);
+      if (isPrimitive(prop.value)) {
+        blockSiblingText(out, prop.value, propPath);
+        blockPrimitiveExtensions(out, prop.value, propPath);
+      }
       return;
     }
     decideWrittenMetadataBelow(out, prop.value, propPath, edits);

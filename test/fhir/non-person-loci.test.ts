@@ -503,24 +503,22 @@ describe("fail closed: a newly reached element the pass cannot handle faithfully
     // item is claimed, so the item beside it is walked exactly as it always was. The sweep must not
     // take a neighbour with it in either direction.
     const { json, manifest, unexaminedResiduals } = run({
-      resourceType: "Organization",
-      vendorLocations: [
+      resourceType: "Encounter",
+      location: [
         { line: ["ZZORGSTREET"], city: "ZZORGCITY", state: "MA", postalCode: "02138" },
-        // Not a personal datatype: no marker, and `description` is on neither property set.
-        { description: "ZZLOCNAME", effectiveDateTime: "2019-03-14" },
+        // Not a personal datatype: no marker, and `status` and `period` are on neither property set.
+        { status: "active", period: { start: "2019-03-14" } },
       ],
     });
     expect(json).not.toContain("ZZORGSTREET");
     expect(json).not.toContain("ZZORGCITY");
-    expect(json).toContain("ZZLOCNAME"); // walked, not swept
-    expect(json).toContain('"effectiveDateTime":"2019"'); // and its universal date rule still ran
+    expect(json).toContain('"status":"active"'); // walked, not swept
+    expect(json).toContain('"start":"2019"'); // and its universal date rule still ran
     expect(manifest.map((m) => `${m.locus} ${m.category}`)).toEqual([
-      "Organization.vendorLocations[0] GEOGRAPHIC",
-      "Organization.vendorLocations[1].effectiveDateTime DATES",
+      "Encounter.location[0] GEOGRAPHIC",
+      "Encounter.location[1].period.start DATES",
     ]);
-    expect(unexaminedResiduals.map((r) => r.locus)).toEqual([
-      "Organization.vendorLocations[1].description",
-    ]);
+    expect(unexaminedResiduals.map((r) => r.locus)).toEqual(["Encounter.location[1].status"]);
   });
 
   it("claims EVERY item of a list at a TYPED element name, the unreadable ones included", () => {
@@ -551,20 +549,31 @@ describe("fail closed: a newly reached element the pass cannot handle faithfully
     // the enumerated typed element names the pass declines, counts the positions as unexamined, and
     // says so in `docs-content/limitations.md`.
     const { json, manifest, unexaminedResiduals } = run({
+      resourceType: "Questionnaire",
+      status: "active",
+      item: [{ linkId: "1", prefix: "ZZITEMPREFIX", text: "ZZITEMTEXT", type: "string" }],
+    });
+    expect(json).toContain("ZZITEMPREFIX");
+    expect(manifest).toEqual([]);
+    // Honest about it: every position it declined is on the unexamined inventory.
+    expect(unexaminedResiduals.map((r) => r.locus)).toEqual([
+      "Questionnaire.status",
+      "Questionnaire.item[0].linkId",
+      "Questionnaire.item[0].prefix",
+      "Questionnaire.item[0].text",
+      "Questionnaire.item[0].type",
+    ]);
+    // The same shape under a key R4 does not define is not left alone: the key is blocked whole.
+    const vendor = run({
       resourceType: "Claim",
       status: "active",
       accident: {
         vendorLocation: { line: ["ZZLOCSTREET"], city: "ZZLOCCITY", county: "ZZLOCCOUNTY" },
       },
     });
-    expect(json).toContain("ZZLOCSTREET");
-    expect(manifest).toEqual([]);
-    // Honest about it: every position it declined is on the unexamined inventory.
-    expect(unexaminedResiduals.map((r) => r.locus)).toEqual([
-      "Claim.status",
-      "Claim.accident.vendorLocation.line[0]",
-      "Claim.accident.vendorLocation.city",
-      "Claim.accident.vendorLocation.county",
+    expect(vendor.json).not.toContain("ZZLOC");
+    expect(vendor.manifest.map((m) => `${m.locus} ${m.disposition}`)).toEqual([
+      "Claim.accident.vendorLocation blocked",
     ]);
   });
 
@@ -603,10 +612,9 @@ describe("the residual inventory after the sweep widened", () => {
     id: "loc1",
     status: "active",
     name: "ZZLOCNAME",
-    // Not a personal datatype at all: no marker, `description` is on neither property set, and the
-    // element name is one R4 types as neither datatype, so the sweep declines it and the walk
-    // descends exactly as it always did.
-    vendorAddress: { description: "ZZLOCSTREET" },
+    // Not a personal datatype at all: a string R4 defines on a Location, at an element name R4
+    // types as neither datatype, so the sweep declines it and the walk passes it as it always did.
+    description: "ZZLOCSTREET",
   });
 
   it("a position the sweep now examines is no longer reported as unexamined", () => {
@@ -628,7 +636,7 @@ describe("the residual inventory after the sweep widened", () => {
     // NON-VACUITY: an element at the same position that the sweep does NOT reach still contributes
     // its positions, so the equality above is a measurement rather than an enumeration that stopped.
     expect(residuals(withUnsweptShape).total).toBe(residuals(withoutAddress).total + 1);
-    expect(residuals(withUnsweptShape).loci).toContain("Location.vendorAddress.description");
+    expect(residuals(withUnsweptShape).loci).toContain("Location.description");
     // The one row is the logical id's stand-in, a rule of its own; the sweep recorded nothing.
     expect(withUnsweptShape.manifest.map((m) => `${m.locus} ${m.code}`)).toEqual([
       `Location.id ${DEID_DISPOSITION_CODES.DEID_IDENTIFIER_SUBSTITUTED}`,

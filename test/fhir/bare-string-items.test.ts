@@ -229,13 +229,14 @@ describe("a bare string where an Address or a HumanName is expected, outside a p
       "CapabilityStatement.rest[0].address blocked",
     ]);
 
-    // The same backbone path on a resource that is not a CapabilityStatement is not that element.
+    // The same backbone path on a resource that is not a CapabilityStatement is not that element: R4
+    // gives an Organization no `messaging`, so the key is blocked whole.
     const lookalike = run({
       resourceType: "Organization",
       messaging: [{ endpoint: [{ address: "ZZLOOKALIKE" }] }],
     });
     expect(lookalike.json).not.toContain("ZZLOOKALIKE");
-    expect(rows(lookalike)).toEqual(["Organization.messaging[0].endpoint[0].address blocked"]);
+    expect(rows(lookalike)).toEqual(["Organization.messaging blocked"]);
   });
 
   it("removes AuditEvent.agent.network.address, a string that can be a person's IP address or phone", () => {

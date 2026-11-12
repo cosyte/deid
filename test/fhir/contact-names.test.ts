@@ -31,6 +31,7 @@ import {
   SAFE_HARBOR_PROFILE,
 } from "../../src/index.js";
 import { deidentifyFhir, deidentifyFhirJson } from "../../src/fhir/index.js";
+import { fhirElementsOf } from "../../src/fhir/element-names.js";
 
 const C = SAFE_HARBOR_CATEGORIES;
 const ctx = createDeidContext({ key: "contact-names-key-synthetic-hmac", patientId: "p-contact" });
@@ -192,9 +193,12 @@ describe("the name on every ContactDetail element R4 defines", () => {
 
   for (const [resourceType, element] of CONTACT_DETAIL_ELEMENTS) {
     it(`removes a string name at ${resourceType}.${element}.name as a name`, () => {
+      // The resource's own string, at `name` where R4 defines one and at `title` where it does not
+      // (`ChargeItemDefinition`, `ResearchStudy`): a key R4 does not define would be blocked.
+      const own = fhirElementsOf(resourceType)?.has("name") === true ? "name" : "title";
       const out = run({
         resourceType,
-        name: "ZZOWNCOMPUTERNAME",
+        [own]: "ZZOWNCOMPUTERNAME",
         [element]: [{ name: "ZZCONTACTNAME" }],
       });
       expect(out.json).not.toContain("ZZCONTACTNAME");
@@ -206,7 +210,7 @@ describe("the name on every ContactDetail element R4 defines", () => {
           disposition: "removed",
         }),
       ]);
-      expect(loci(out)).toEqual([`${resourceType}.name`]);
+      expect(loci(out)).toEqual([`${resourceType}.${own}`]);
     });
   }
 
@@ -468,9 +472,9 @@ describe("a name that is not a contact's, kept as it arrived", () => {
     }
   });
 
-  it("keeps a name on a backbone R4 does not type as a contact, and an Endpoint's ContactPoint", () => {
-    // `Endpoint.contact` is a ContactPoint, not a ContactDetail; a `name` R4 never put there is not a
-    // contact's name either, so it is counted as unexamined like any other unnamed position.
+  it("keeps an Endpoint's ContactPoint, and blocks a contact R4 does not define", () => {
+    // `Endpoint.contact` is a ContactPoint, not a ContactDetail, and is kept. A `contact` R4 never put
+    // on an Observation is a key it does not define there, so it is blocked whole, not read as one.
     const endpoint = {
       resourceType: "Endpoint",
       status: "active",
@@ -485,9 +489,9 @@ describe("a name that is not a contact's, kept as it arrived", () => {
       status: "final",
       contact: [{ name: "ZZOWNCOMPUTERNAME" }],
     };
-    const kept = run(lookalike);
-    expect(kept.json).toBe(JSON.stringify(lookalike));
-    expect(kept.manifest).toEqual([]);
-    expect(loci(kept)).toEqual(["Observation.status", "Observation.contact[0].name"]);
+    const blocked = run(lookalike);
+    expect(blocked.json).toBe('{"resourceType":"Observation","status":"final"}');
+    expect(rows(blocked)).toEqual(["Observation.contact blocked"]);
+    expect(loci(blocked)).toEqual(["Observation.status"]);
   });
 });

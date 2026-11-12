@@ -1098,9 +1098,10 @@ describe("corpus non-vacuity, the sweep and the corpus both have teeth", () => {
  * **The carriers the measurement counts but the pass does not remove.** The corpus above sweeps a
  * sentinel that must be gone from the wire; these positions are the opposite case and need their own
  * gate, because this phase **counts and does not scrub**. A value delivered as a CDATA section, a
- * comment or a processing instruction rides into the output on purpose, and so does a key R4 does not
- * define on a FHIR clinical resource. (A FHIR element id was one of these until the pass began to
- * replace every element id; `test/fhir/element-ids.test.ts` holds it to removal now.)
+ * comment or a processing instruction rides into the output on purpose, and so does the free text of a
+ * coded FHIR element (`CodeableConcept.text`). (A FHIR element id and a key R4 does not define were
+ * among these until the pass began to replace every element id and block every such key;
+ * `test/fhir/element-ids.test.ts` and `test/fhir/unknown-keys.test.ts` hold them to removal now.)
  *
  * So the wire keeps them, deliberately, and that is asserted rather than glossed - and the artifact a
  * determiner reads must still carry no byte of any of them. That is the exposure that cannot be
@@ -1122,13 +1123,13 @@ describe("counted, not removed: a carrier's value reaches the wire and never the
   const CARRIER_JSON = JSON.stringify({
     resourceType: "Observation",
     status: "final",
-    zzNote: "ZZCARRIERUNKNOWNKEY",
+    code: { text: "ZZCARRIERCODETEXT" },
   });
   const CARRIER_SENTINELS = [
     "ZZCARRIERCDATA",
     "ZZCARRIERCOMMENT",
     "ZZCARRIERPI",
-    "ZZCARRIERUNKNOWNKEY",
+    "ZZCARRIERCODETEXT",
   ];
 
   const ccda = deidentifyCcda(parseCcda(CARRIER_XML), {
@@ -1167,7 +1168,7 @@ describe("counted, not removed: a carrier's value reaches the wire and never the
         "component/structuredBody/component/section/entry/observation/zzPiNote/#processing-instruction/zzproc",
       ),
     ).toBe(true);
-    expect(loci.has("Observation.zzNote")).toBe(true);
+    expect(loci.has("Observation.code.text")).toBe(true);
   });
 
   it("and no value from any of them reaches the inventory, the report or its Markdown", () => {

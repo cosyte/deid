@@ -137,16 +137,20 @@ describe("identifiers and addresses in an unexpected shape", () => {
     ]);
   });
 
-  it("emits no locus for an Identifier with no readable value, and counts what it does carry", () => {
+  it("emits no locus for an Identifier with no readable value, and blocks a key R4 does not define", () => {
     const out = run({
       resourceType: "Patient",
       identifier: [{ system: "http://example.org/mrn" }, { value: { nested: "ZZNESTEDID" } }],
     });
-    expect(out.manifest).toEqual([]);
-    expect(loci(out)).toEqual([
-      "Patient.identifier[0].system",
-      "Patient.identifier[1].value.nested",
+    // A value held as an object defines no key, so what it holds is blocked at its own locus.
+    expect(out.json).not.toContain("ZZNESTEDID");
+    expect(out.manifest).toEqual([
+      expect.objectContaining({
+        locus: "Patient.identifier[1].value.nested",
+        disposition: "blocked",
+      }),
     ]);
+    expect(loci(out)).toEqual(["Patient.identifier[0].system"]);
   });
 
   it("reduces an Address with no postalCode to its kept parts", () => {
@@ -161,15 +165,17 @@ describe("identifiers and addresses in an unexpected shape", () => {
 
   it("removes a swept Address whole when its postalCode is not a primitive", () => {
     const out = run({
-      resourceType: "Observation",
-      status: "final",
-      valueAddress: { city: "ZZSWEPTCITY", postalCode: { nested: "02139" } },
+      resourceType: "Claim",
+      status: "active",
+      accident: {
+        locationAddress: { city: "ZZSWEPTCITY", postalCode: { nested: "02139" } },
+      },
     });
     expect(out.json).not.toContain("ZZSWEPTCITY");
-    expect(out.json).not.toContain("valueAddress");
+    expect(out.json).not.toContain("locationAddress");
     expect(out.manifest).toEqual([
       expect.objectContaining({
-        locus: "Observation.valueAddress",
+        locus: "Claim.accident.locationAddress",
         category: C.GEOGRAPHIC,
         disposition: "blocked",
       }),

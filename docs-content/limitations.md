@@ -273,28 +273,22 @@ Two things follow, and the second is the one that surprises people:
   other string R4 puts at `address`, `AuditEvent.agent.network.address`, holds a machine name, an IP
   address or a phone number, so it is blocked.
 
-- **Five FHIR surfaces this release still does not reach.** Three because no person is typed at the
+- **Three FHIR surfaces this release still does not reach**, because no person is typed at the
   position. A **`ContactPoint` outside a person resource**: a phone or an email on an `Organization`,
   a `Location`, or an `Endpoint` is passed through, because widening to telecom would put a payer's or a
   facility's own switchboard number in scope, which the HL7 v2 pass deliberately keeps (`IN1-7`, the
   insurer's own phone, is untouched there). An **organization's own `name`**: a plain string, never a
   `HumanName`, and administrative content rather than a person's identity. And the **individual's
-  employer carried as a separate `Organization` resource**, per the bullet above. The fourth is the
-  stated cost of the closed, shape-read classification: **a name or an address carrying a property R4
-  does not define, or carrying its only marker at a value shape R4 does not give that marker, at an
-  element name R4 does not type as one of the two datatypes.** The unrecognized sibling or the wrong
-  shape stops the classifier, and the fail-closed block is scoped to the typed element names, because
-  at any other name that same evidence is routinely something else entirely: `{ prefix }` alone is a
-  conformant `RequestGroup.action` and not a person, and blocking it would destroy conformant clinical
-  and structural content, which is the mirror defect and the one no re-run restores. At a typed
-  element name neither half is a residual: the standard promised a name or an address there, so
-  whatever the classifier declines is blocked whole. The
-  fifth is the scope of the sweep itself: **a name or an address inside a person resource, at a
-  property the demographic map does not list.** The map already decides `name`, `telecom`, `photo`, and
-  `address` there, so the datatype sweep does not run, and a vendor `Patient.alias` carrying
-  `{ family, given }` is passed through where the same bytes on an `Organization` are removed. All
-  five are passed through, and all five are counted as unexamined residual positions like anything
-  else no rule names.
+  employer carried as a separate `Organization` resource**, per the bullet above. All three are passed
+  through, and all three are counted as unexamined residual positions like anything else no rule
+  names. Two more that earlier releases named are now closed by the block on [keys R4 does not
+  define](#fhir-unknown-keys): a name or an address at an element name R4 does not type as one, and
+  one at a property of a person resource the demographic map does not list (a vendor
+  `Patient.alias`). A `family` or a `line` is a key R4 does not define at such a position, so it is
+  blocked, and `Patient.alias` is blocked whole. What still reaches the output there is content whose
+  every key R4 defines at its position, which is the conformant element itself (`{ prefix }` on a
+  `RequestGroup.action`, a numbered step and not a person), counted as unexamined like any other
+  value no rule names.
 
 <a id="fhir-resource-ids"></a>
 
@@ -323,22 +317,40 @@ Two things follow, and the second is the one that surprises people:
 
 <a id="fhir-unknown-keys"></a>
 
-- **FHIR keys R4 does not define: blocked inside an extension, counted elsewhere.** Inside an
-  `extension` or a `modifierExtension`, at any depth and on every resource, only the `url`, the
-  element `id` (replaced, as every element id is) and the nested extensions are kept. Every other key
-  is blocked and recorded at its own
-  locus (`Observation.extension[0].note`), with no value: a `value[x]`, and equally a key R4 does not
-  give an extension (`note`, `comment`, any name), whatever it holds. A `url` or an `id` that is not a
-  string (a number, a boolean, an object, a list) is blocked the same way. The same holds for an
-  extension on a primitive's `_`-sibling: one on the `state` or `country` an `Address` keeps is
-  blocked like this, and every other one is removed with the primitive's metadata. A `state` or
-  `country` an `Address` keeps that is not a string (an object, a list, a number, a boolean) is
-  blocked whole and recorded at its locus (`Patient.address.state`) on a person resource, and a swept
-  `Address` carrying one is removed whole. Outside an extension, an unknown key on a person resource's
-  own top level (`Patient.zzNote`) is removed by the fail-closed person sweep, and an unknown key
-  anywhere else (on a clinical resource, in a backbone element, in a `Coding`, below a person
-  resource's top level) is **passed through** and counted in `unexaminedResiduals` at its locus. A
-  key on a `_`-sibling itself other than `id` and `extension` is not read by `@cosyte/fhir` and does
+- **FHIR keys R4 does not define: blocked everywhere.** A key R4 does not define where it sits is
+  text a sender chose, so it is blocked whole, whatever it holds, at any depth of any resource or
+  datatype: at a resource's top level (`Observation.zzNote`), in a datatype (`Coding`, `Identifier`,
+  `Meta`, `Narrative`, a `Reference`), in a datatype inside one, in a backbone element, in a contained
+  resource and in a `Bundle` entry and its request, on person, clinical and infrastructure resources
+  alike. It is recorded at its own locus (`Observation.code.coding[0].zzNote`) with no value, under
+  every profile and with every option at its default, and it is no longer counted as an unexamined
+  residual. The names come from the R4 (4.0.1) definitions of every resource and datatype, a choice
+  element under each concrete name it is written as (`valueQuantity`). Every key of a structure where
+  R4 puts a primitive (`"status": { ... }`) is blocked the same way, and a resource of a type R4 does
+  not define keeps only what every resource carries (`id`, `meta`, `implicitRules`, `language`,
+  `text`, `contained`, `extension`, `modifierExtension`). A key inside a reduced `Address` that the
+  `Address` datatype does not define is removed by the reduction and recorded as well. No option
+  keeps such a key: a profile that adds elements outside an extension is not conformant R4, and its
+  content is blocked. This changes the output for any input that carries such a key: the key is gone
+  where it used to be passed through.
+
+  Inside an `extension` or a `modifierExtension`, at any depth and on every resource, only the `url`,
+  the element `id` (replaced, as every element id is) and the nested extensions are kept. Every other
+  key is blocked and recorded at its own locus (`Observation.extension[0].note`), with no value: a
+  `value[x]`, and equally a key R4 does not give an extension (`note`, `comment`, any name), whatever
+  it holds. A `url` or an `id` that is not a string (a number, a boolean, an object, a list) is
+  blocked the same way. An extension on a primitive's `_`-sibling is blocked like this on the
+  `state` or `country` an `Address` keeps; every other one is removed with the primitive's metadata,
+  and each one removed that way is recorded as blocked at its own locus
+  (`Patient._birthDate.extension[0]`), with no value, so a manifest reader sees the drop. A
+  primitive the pass removes takes its extensions with it, and its own row covers them. That costs a
+  row for each such extension and nothing else: none of the committed FHIR fixtures or the benchmark
+  documents carries one, so their manifests are unchanged, and a document that does carry them (a
+  birth time on `_birthDate`, a data-absent reason on a coding's `_code`) gets one more row for each
+  (`test/fhir/row-cost.test.ts` pins the counts). A `state` or `country` an `Address` keeps that is not a string (an
+  object, a list, a number, a boolean) is blocked whole and recorded at its locus
+  (`Patient.address.state`) on a person resource, and a swept `Address` carrying one is removed whole.
+  A key on a `_`-sibling itself other than `id` and `extension` is not read by `@cosyte/fhir` and does
   not reach the output, and it gets no manifest row, since the parsed resource does not carry it.
 
 <a id="fhir-sibling-text"></a>
