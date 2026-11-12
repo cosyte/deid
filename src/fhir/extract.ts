@@ -836,13 +836,17 @@ function handleEmbeddedContent(
 /**
  * Decide an element that holds a device identifier or serial number
  * ({@link FHIR_DEVICE_IDENTIFIER_ELEMENTS}): a primitive is a category (M) identifier locus written back
- * in place, so the policy decides it (both presets remove it), and anything else is blocked whole.
+ * in place, so the policy decides it (both presets remove it). R4 puts one primitive at each of those
+ * elements, so anything else there is blocked before the walk; the guard only narrows the type.
  */
 function handleDeviceIdentifier(out: FhirLocusAccumulator, value: FhirNode, path: string): void {
+  // Stryker disable ConditionalExpression,BlockStatement: a structure or a list at one of these elements is blocked before the walk, so the guard only narrows the type
+  /* v8 ignore if -- R4 puts one primitive there, and anything else there is blocked before the walk */
   if (!isPrimitive(value)) {
     blockNode(out, value, path);
     return;
   }
+  // Stryker restore ConditionalExpression,BlockStatement
   push(
     out,
     { path, kind: "identifier", category: FHIR_DEVICE_CATEGORY, value: primitiveString(value) },

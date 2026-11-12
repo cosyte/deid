@@ -372,14 +372,25 @@ describe("the device rule's records", () => {
     expect(coords.map((c) => c.edit)).toEqual(["set-primitive", "set-primitive"]);
   });
 
-  it("a value of a shape R4 does not give the element is blocked whole", () => {
-    const { resource } = parseResource(
-      JSON.stringify({ resourceType: "Device", serialNumber: { zz: "ZZSNSHAPE1" } }),
-    );
-    const { loci } = extractFhirLoci(resource);
-    expect(loci).toEqual([
-      expect.objectContaining({ path: "Device.serialNumber", kind: "unknown" }),
-    ]);
+  it.each([
+    ["an object", { zz: "ZZSNSHAPE1" }],
+    ["a list", ["ZZSNSHAPE1"]],
+    ["a list of objects", [{ zz: "ZZSNSHAPE1" }]],
+  ])("a value of a shape R4 does not give the element is blocked whole: %s", (_l, shape) => {
+    for (const fields of [
+      { serialNumber: shape },
+      { udiCarrier: [{ carrierAIDC: shape }] },
+      { udiCarrier: [{ deviceIdentifier: shape }] },
+    ]) {
+      const doc = { resourceType: "Device", ...fields };
+      const { loci } = extractFhirLoci(parseResource(JSON.stringify(doc)).resource);
+      expect(loci).toHaveLength(1);
+      expect(loci[0]).toMatchObject({ kind: "unknown" });
+      expect(loci[0]?.category).toBeUndefined();
+      for (const profile of PROFILES) {
+        expect(run(doc, profile).json).not.toContain("ZZSNSHAPE1");
+      }
+    }
   });
 });
 
