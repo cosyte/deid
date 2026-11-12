@@ -779,7 +779,8 @@ record compliant with anything. What a veterinary record does carry is its owner
 address, a phone number. That is personal data about a person, under privacy law in many places,
 whatever the patient is. So the library handles an animal record as it handles a human one, and the
 tables below say what that means for the fields only an animal record has. Each row is pinned by a
-test on a synthetic record (`test/hl7/animal-patient.test.ts`, `test/dicom/animal-patient.test.ts`).
+test on a synthetic record (`test/hl7/animal-patient.test.ts`, `test/dicom/animal-patient.test.ts`,
+`test/fhir/patient-animal.test.ts`).
 
 **HL7 v2.**
 
@@ -808,6 +809,21 @@ and address, so it leads to a person as surely as Responsible Person does. Table
 attribute, so the delegated Annex E pass keeps them; this adapter removes them at the top level, where
 the Patient Module puts them, and refuses a file that carries either one inside a sequence it keeps
 (`DEID_FORMAT_UNSUPPORTED`). No Annex E option keeps them.
+
+**FHIR R4.** The animal's kind is in the `patient-animal` extension, and every extension value is
+blocked by default. The `keepPatientAnimal` option of the FHIR adapter, off by default, keeps part of
+it.
+
+| Position                                                                                                                                             | What happens                                                                                                                                                                                |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `patient-animal` `species`, `breed`, `genderStatus`, their `valueCodeableConcept`                                                                    | removed by default, as every extension value is. With `keepPatientAnimal`, each `Coding`'s `system`, `version`, `code`, `userSelected` and `display` kept, counted in `unexaminedResiduals` |
+| the same concept's `text`, an `id` or extension on it, a property R4 does not define on it                                                           | removed and recorded, with the option or without                                                                                                                                            |
+| any other `value[x]` on those three (a `valueString`), any other sub-extension, a repeat of one of the three, a second `patient-animal`              | removed and recorded, with the option or without                                                                                                                                            |
+| an extension whose `url` only looks like `patient-animal` (a version suffix, `https`, a trailing slash, another case or host), every other extension | removed and recorded, with the option or without                                                                                                                                            |
+| `Patient.name` (the animal's name), `Patient.identifier` (a microchip number), `Patient.contact` (the owner)                                         | removed, replaced or generalized and recorded, as for a human patient                                                                                                                       |
+
+With the option on, a kept code is not read: a code system is the sender's choice, and a code that
+is really a name passes through. Keep it off unless the codes come from a terminology you trust.
 
 ## Put it to use
 

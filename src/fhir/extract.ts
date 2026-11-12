@@ -144,6 +144,31 @@ interface FhirLocusAccumulator {
    * base only when it is one of these, because only then can it resolve inside the document.
    */
   readonly bases: ReadonlySet<string>;
+  /** {@link FhirExtractOptions.keepPatientAnimal}: `true` only when the caller asked for it. */
+  readonly keepPatientAnimal: boolean;
+}
+
+/**
+ * Options for {@link extractFhirLoci}.
+ *
+ * @example
+ * ```ts
+ * import { type FhirExtractOptions } from "@cosyte/deid/fhir";
+ *
+ * const options: FhirExtractOptions = { keepPatientAnimal: true };
+ * ```
+ */
+export interface FhirExtractOptions {
+  /**
+   * Keep the species, breed and gender status of an animal patient. On a `Patient`, the first
+   * extension whose `url` is exactly {@link FHIR_PATIENT_ANIMAL_URL} keeps the `valueCodeableConcept`
+   * of its first `species`, `breed` and `genderStatus` sub-extension, as codes only: each `Coding`'s
+   * `system`, `version`, `code`, `userSelected` and `display`. Everything else in it is blocked as
+   * before: the concept's `text`, any other `value[x]` (a `valueString` among them), any other
+   * sub-extension, and any nested extension. Every other extension stays blocked. Off by default, so
+   * the output is unchanged unless a caller asks.
+   */
+  readonly keepPatientAnimal?: boolean;
 }
 
 /** Append a locus + its coordinate to the accumulator. */
@@ -449,17 +474,147 @@ function blockExtension(out: FhirLocusAccumulator, value: FhirNode, path: string
   }
   if (!isComplex(value)) return;
   value.properties.forEach((prop, i) => {
-    if (prop.name === "url") return; // structural: a definitional URI, never PHI
-    if (prop.name === "extension" || prop.name === "modifierExtension") {
-      blockExtension(out, prop.value, join(path, prop.name)); // nested extension: recurse
+    blockExtensionProperty(out, prop.name, prop.value, i, path);
+  });
+}
+
+/**
+ * The fail-closed rule for one property of an extension object: the `url` and any other structural
+ * child (`id`) are retained, a nested extension is blocked in turn, and a `value[x]` is blocked.
+ */
+function blockExtensionProperty(
+  out: FhirLocusAccumulator,
+  name: string,
+  value: FhirNode,
+  position: number,
+  path: string,
+): void {
+  // The `url` needs no test of its own: it is neither a nested extension nor a `value[x]`, so it falls
+  // through to the end and is retained (structural: a definitional URI, never PHI).
+  if (name === "extension" || name === "modifierExtension") {
+    blockExtension(out, value, join(path, name)); // nested extension: recurse
+    return;
+  }
+  if (name.startsWith("value")) {
+    // `startsWith` is a prefix test, not an identifier check: a key of "value" followed by any
+    // number of arbitrary bytes satisfies it, so the name is bounded before it is interpolated.
+    blockNode(out, value, join(path, elementSegment(name, position))); // value[x]: the PHI payload, dropped
+  }
+  // any other extension child (id) is structural and retained
+}
+
+/**
+ * The canonical URL of the R4 `patient-animal` extension, the one extension
+ * {@link FhirExtractOptions.keepPatientAnimal} keeps any value of. Matched exactly: a look-alike (a
+ * version suffix, another host, a trailing slash, a change of case) is an unknown extension.
+ */
+export const FHIR_PATIENT_ANIMAL_URL = "http://hl7.org/fhir/StructureDefinition/patient-animal";
+
+/** The three sub-extensions of `patient-animal`, by their relative `url`. */
+const PATIENT_ANIMAL_PARTS: ReadonlySet<string> = new Set(["species", "breed", "genderStatus"]);
+
+/** The `Coding` properties a kept animal code keeps, each a primitive. */
+const ANIMAL_CODING_PROPERTIES: ReadonlySet<string> = new Set([
+  "system",
+  "version",
+  "code",
+  "display",
+  "userSelected",
+]);
+
+/**
+ * Handle `Patient.extension` when {@link FhirExtractOptions.keepPatientAnimal} is on. The first item
+ * whose `url` is exactly {@link FHIR_PATIENT_ANIMAL_URL} is read by {@link keepPatientAnimal}; every
+ * other item, a second `patient-animal` among them, goes through the fail-closed rule unchanged.
+ */
+function handlePatientExtensions(out: FhirLocusAccumulator, value: FhirNode, path: string): void {
+  if (!isList(value)) {
+    blockExtension(out, value, path);
+    return;
+  }
+  let kept = false;
+  value.items.forEach((item, i) => {
+    const itemPath = idx(path, i);
+    if (!kept && isComplex(item) && primitiveProperty(item, "url") === FHIR_PATIENT_ANIMAL_URL) {
+      kept = true;
+      keepPatientAnimal(out, item, itemPath);
       return;
     }
-    if (prop.name.startsWith("value")) {
-      // `startsWith` is a prefix test, not an identifier check: a key of "value" followed by any
-      // number of arbitrary bytes satisfies it, so the name is bounded before it is interpolated.
-      blockNode(out, prop.value, join(path, elementSegment(prop.name, i))); // value[x]: the PHI payload, dropped
+    blockExtension(out, item, itemPath);
+  });
+}
+
+/**
+ * Read one `patient-animal` extension: in its `extension` list, the first `species`, `breed` and
+ * `genderStatus` sub-extension each keep a `valueCodeableConcept` ({@link keepAnimalConcept}). Every
+ * other property, sub-extension and `value[x]` is decided by the fail-closed rule, so a `valueString`
+ * under `species`, a fourth sub-extension, a repeat of one of the three, a nested extension and a
+ * `value[x]` on the extension itself are all blocked.
+ */
+function keepPatientAnimal(out: FhirLocusAccumulator, animal: FhirComplex, path: string): void {
+  animal.properties.forEach((prop, i) => {
+    if (prop.name !== "extension" || !isList(prop.value)) {
+      blockExtensionProperty(out, prop.name, prop.value, i, path);
+      return;
     }
-    // any other extension child (id) is structural and retained
+    const partsPath = join(path, "extension");
+    const seen = new Set<string>();
+    prop.value.items.forEach((part, j) => {
+      const partPath = idx(partsPath, j);
+      if (!isComplex(part)) {
+        blockExtension(out, part, partPath);
+        return;
+      }
+      const url = primitiveProperty(part, "url");
+      if (!PATIENT_ANIMAL_PARTS.has(url) || seen.has(url)) {
+        blockExtension(out, part, partPath);
+        return;
+      }
+      seen.add(url);
+      part.properties.forEach((partProp, k) => {
+        if (partProp.name === "valueCodeableConcept") {
+          keepAnimalConcept(out, partProp.value, join(partPath, partProp.name));
+          return;
+        }
+        blockExtensionProperty(out, partProp.name, partProp.value, k, partPath);
+      });
+    });
+  });
+}
+
+/**
+ * Keep a `CodeableConcept` an animal sub-extension carries, as codes only: each `Coding` keeps its
+ * `system`, `version`, `code`, `userSelected` and, beside a `code` or `system`, its `display`. The
+ * concept's free `text`, an `id`, an extension and any property R4 does not define there are blocked,
+ * and a shape other than a complex is blocked whole. What is kept is not examined: it is counted as an
+ * unexamined residual, as a clinical code is.
+ */
+function keepAnimalConcept(out: FhirLocusAccumulator, concept: FhirNode, path: string): void {
+  if (!isComplex(concept)) {
+    blockNode(out, concept, path);
+    return;
+  }
+  concept.properties.forEach((prop, i) => {
+    const propPath = join(path, elementSegment(prop.name, i));
+    if (prop.name !== "coding" || !isList(prop.value)) {
+      blockNode(out, prop.value, propPath);
+      return;
+    }
+    prop.value.items.forEach((coding, j) => {
+      const codingPath = idx(propPath, j);
+      if (!isComplex(coding)) {
+        blockNode(out, coding, codingPath);
+        return;
+      }
+      const isCoding = isCodingComplex(coding);
+      coding.properties.forEach((field, k) => {
+        const keeps =
+          ANIMAL_CODING_PROPERTIES.has(field.name) &&
+          isPrimitive(field.value) &&
+          (field.name !== "display" || isCoding);
+        if (!keeps) blockNode(out, field.value, join(codingPath, elementSegment(field.name, k)));
+      });
+    });
   });
 }
 
@@ -993,6 +1148,10 @@ function handleProperty(
     return;
   }
   if (handleLogicalIds(out, name, value, path, personCtx, isPersonTop, parent, elementPath)) return;
+  if (out.keepPatientAnimal && elementPath === "Patient.extension") {
+    handlePatientExtensions(out, value, path);
+    return;
+  }
   if (name === "extension" || name === "modifierExtension") {
     blockExtension(out, value, path);
     return;
@@ -1186,6 +1345,8 @@ function fullUrlBases(resource: FhirComplex): ReadonlySet<string> {
  * without deciding anything, so those positions are unexamined and the measurement says so.
  *
  * @param resource - The parsed FHIR resource (`parseResource(json).resource`).
+ * @param options - `keepPatientAnimal` keeps an animal patient's species, breed and gender status
+ *   (see {@link FhirExtractOptions}); off by default.
  * @returns The loci (for the engine), their index-aligned write-back coordinates, and the unexamined
  *   residual positions the pass hands through.
  * @throws {@link DeidError} `DEID_POSITIONS_UNENUMERABLE` when the resource's value-bearing positions
@@ -1200,12 +1361,16 @@ function fullUrlBases(resource: FhirComplex): ReadonlySet<string> {
  * loci.length; // number of located candidate values
  * ```
  */
-export function extractFhirLoci(resource: FhirComplex): FhirExtraction {
+export function extractFhirLoci(
+  resource: FhirComplex,
+  options: FhirExtractOptions = {},
+): FhirExtraction {
   const out: FhirLocusAccumulator = {
     loci: [],
     coords: [],
     ruleReached: new Set<FhirNode>(),
     bases: fullUrlBases(resource),
+    keepPatientAnimal: options.keepPatientAnimal === true,
   };
   // `resourceType` is a JSON string VALUE, not a checked identifier, and it is the ROOT of every path
   // in the manifest, so an unbounded one prefixes the whole audit with document content.

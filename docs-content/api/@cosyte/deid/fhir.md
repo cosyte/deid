@@ -63,7 +63,9 @@ honesty line is unchanged: the output is **"Safe-Harbor-transformed per the conf
 never "de-identified".
 
 **Known limitations.** Extension values are block-only (no profile-aware retention, a
-`us-core-*` demographic extension is dropped, not kept).
+`us-core-*` demographic extension is dropped, not kept), with one opt-in exception: under
+`keepPatientAnimal` the coded species, breed and gender status of the `patient-animal` extension
+are kept.
 Resource ids are replaced and the reference wiring is kept, with what that does not reach stated:
 the server base of a `fullUrl`, and of an absolute reference to it, is kept verbatim; and an id
 written anywhere else (`meta.versionId`, `meta.source`, `Bundle.link.url`, an `Attachment.url`, any
@@ -98,6 +100,11 @@ the pass did: each resource it changed carries the `meta.security` coding `REDAC
 Reason `masked` in its place, so the resource keeps its required elements. A contained resource is
 never labeled (R4 `dom-5`); its container is. The label says that some content was filtered out,
 never that the resource is de-identified. Off by default.
+
+**Animal patients, opt-in.** With `keepPatientAnimal: true` a `Patient`'s `patient-animal`
+extension keeps the coded `valueCodeableConcept` of its `species`, `breed` and `genderStatus`
+sub-extensions. Only that exact URL and those three parts: a look-alike URL, another sub-extension,
+a `valueString` and the concept's free `text` are blocked as every extension value is. Off by default.
 
 ## Interfaces
 
@@ -148,7 +155,7 @@ The model node to rewrite (a primitive, an `Address` complex, or a property-valu
 ### FhirDeidOptions
 
 Options for [deidentifyFhir](#deidentifyfhir) and [deidentifyFhirJson](#deidentifyfhirjson): the core's
-["@cosyte/deid".DeidOptions](../deid.md#deidoptions) plus the FHIR-only `transformLabels`.
+["@cosyte/deid".DeidOptions](../deid.md#deidoptions) plus the FHIR-only `transformLabels` and `keepPatientAnimal`.
 
 #### Example
 
@@ -174,6 +181,17 @@ The context carrying the consumer's key, required only when the policy uses a ke
 ###### Inherited from
 
 [`DeidOptions`](../deid.md#deidoptions).[`context`](../deid.md#context)
+
+##### keepPatientAnimal?
+
+> `readonly` `optional` **keepPatientAnimal?**: `boolean`
+
+Keep the species, breed and gender status of an animal patient, from the R4 `patient-animal`
+extension ([FHIR\_PATIENT\_ANIMAL\_URL](#fhir_patient_animal_url), matched exactly) on a `Patient`. Only the
+`valueCodeableConcept` of the `species`, `breed` and `genderStatus` sub-extensions is kept, as
+codes; the concept's `text`, any other `value[x]`, any other sub-extension and every other
+extension stay blocked. The kept codes are counted as unexamined residuals. Off by default, so the
+output is unchanged unless a caller asks. See [FhirExtractOptions](#fhirextractoptions).
 
 ##### policy?
 
@@ -300,6 +318,34 @@ carrying a non-empty value that neither a PHI rule nor the fail-closed person sw
 clinical resources' codes, units and statuses are the bulk of it, and that is the honest answer:
 nothing examined them. Counted and located, never transformed.
 
+***
+
+### FhirExtractOptions
+
+Options for [extractFhirLoci](#extractfhirloci).
+
+#### Example
+
+```ts
+import { type FhirExtractOptions } from "@cosyte/deid/fhir";
+
+const options: FhirExtractOptions = { keepPatientAnimal: true };
+```
+
+#### Properties
+
+##### keepPatientAnimal?
+
+> `readonly` `optional` **keepPatientAnimal?**: `boolean`
+
+Keep the species, breed and gender status of an animal patient. On a `Patient`, the first
+extension whose `url` is exactly [FHIR\_PATIENT\_ANIMAL\_URL](#fhir_patient_animal_url) keeps the `valueCodeableConcept`
+of its first `species`, `breed` and `genderStatus` sub-extension, as codes only: each `Coding`'s
+`system`, `version`, `code`, `userSelected` and `display`. Everything else in it is blocked as
+before: the concept's `text`, any other `value[x]` (a `valueString` among them), any other
+sub-extension, and any nested extension. Every other extension stays blocked. Off by default, so
+the output is unchanged unless a caller asks.
+
 ## Type Aliases
 
 ### FhirDemographicMode
@@ -401,6 +447,16 @@ import { FHIR_DEMOGRAPHIC_ELEMENTS } from "@cosyte/deid/fhir";
 FHIR_DEMOGRAPHIC_ELEMENTS.name;    // => "redact"
 FHIR_DEMOGRAPHIC_ELEMENTS.address; // => "address"
 ```
+
+***
+
+### FHIR\_PATIENT\_ANIMAL\_URL
+
+> `const` **FHIR\_PATIENT\_ANIMAL\_URL**: `"http://hl7.org/fhir/StructureDefinition/patient-animal"` = `"http://hl7.org/fhir/StructureDefinition/patient-animal"`
+
+The canonical URL of the R4 `patient-animal` extension, the one extension
+[FhirExtractOptions.keepPatientAnimal](#keeppatientanimal-1) keeps any value of. Matched exactly: a look-alike (a
+version suffix, another host, a trailing slash, a change of case) is an unknown extension.
 
 ***
 
@@ -656,7 +712,8 @@ The parsed FHIR resource to de-identify (`parseResource(json).resource`).
 
 The policy and (for keyed transforms, identifier pseudonymization) the key context.
   A keyed transform with no context is a fatal `DEID_NO_KEY`, never an unkeyed fallback.
-  `transformLabels` writes the transform labels (see [FhirDeidOptions](#fhirdeidoptions)).
+  `transformLabels` writes the transform labels and `keepPatientAnimal` keeps an animal patient's
+  species, breed and gender status (see [FhirDeidOptions](#fhirdeidoptions)).
 
 #### Returns
 
@@ -727,7 +784,7 @@ const { json, manifest } = deidentifyFhirJson(input, {
 
 ### extractFhirLoci()
 
-> **extractFhirLoci**(`resource`): [`FhirExtraction`](#fhirextraction)
+> **extractFhirLoci**(`resource`, `options?`): [`FhirExtraction`](#fhirextraction)
 
 Walk a parsed FHIR resource (or `Bundle`) and extract every PHI-bearing (or fail-closed) locus,
 structurally, from the `@cosyte/fhir` model. Never mutates the tree: the applier rebuilds a fresh
@@ -745,6 +802,13 @@ without deciding anything, so those positions are unexamined and the measurement
 `FhirComplex`
 
 The parsed FHIR resource (`parseResource(json).resource`).
+
+##### options?
+
+[`FhirExtractOptions`](#fhirextractoptions) = `{}`
+
+`keepPatientAnimal` keeps an animal patient's species, breed and gender status
+  (see [FhirExtractOptions](#fhirextractoptions)); off by default.
 
 #### Returns
 
