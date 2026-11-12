@@ -1,5 +1,41 @@
 # Changelog
 
+## 0.2.12
+
+### Patch Changes
+
+- 8ce91bb: The C-CDA adapter allocates less memory for each document it reads, and its output is unchanged.
+
+  - **What changed.** Locating PHI walks the document's tree up to three times, and each walk composed every element's path segments afresh, with two new maps for every element, leaves included. The segments of each element's children are now composed once per call and kept for the other walks, and an element with fewer than two children builds no map. The tree the pass edits is also dropped before the output is parsed, so it can be collected during that second parse.
+  - **What a caller changes.** Nothing. The transformed document, the manifest and the unexamined residuals are the same as before, position for position.
+
+- 43fae9a: The DICOM adapter now removes an animal patient's Breed Registration Sequence and Breed Registration Number, which PS3.15 Table E.1-1 does not list.
+
+  - **What changed in output.** Before, Breed Registration Sequence `(0010,2294)` and Breed Registration Number `(0010,2295)` left the pass unchanged and were only counted as unexamined residuals, because the delegated Annex E pass keeps what Table E.1-1 does not name. A registration number names one animal, and its registry holds the owner's name and address. Now both are removed at the top level, each removal gets a manifest row (`removed`, category (R)), a number inside the sequence gets its own row, and the result carries a `DICOM_BREED_REGISTRATION_REMOVED` warning naming the removal as going beyond Table E.1-1.
+  - **New refusal.** A file that carries either attribute inside a sequence the pass keeps is refused with `DEID_FORMAT_UNSUPPORTED`, as a cleaned coded list nested in a kept sequence already is.
+  - **New export.** `BREED_REGISTRATION_REMOVED_CODE` from `@cosyte/deid/dicom`.
+  - **What a caller changes.** Nothing for a file with no breed registration. A reader that expected the registration in the output now finds it gone, and a check on the warnings or the manifest sees the new entries.
+  - **Documented.** Known limitations gains an "Animal patients" section: what the HL7 v2 and DICOM adapters do with each field only an animal record has.
+
+- 8678793: The NCPDP Telecom adapter now generalizes the Claim segment's Date Prescription Written and Associated Prescription/Service Date to the year, as it does the Date of Service.
+
+  - **What changed in output.** Before, the Claim segment (`07`) was retained whole, so `414-DE` Date Prescription Written and `457-EP` Associated Prescription/Service Date left the pass unchanged and were only counted as unexamined residuals. Now each is a date locus in the Safe Harbor dates category: `20250602` becomes `2025` under Safe Harbor, it is shifted under a profile that shifts dates, and the manifest carries a row for `07/DE` and `07/EP`. They no longer appear in `unexaminedResiduals`. Every other Claim field, and every Pricing field, is kept as before.
+  - **New export.** `TELECOM_RETAINED_SEGMENT_RULES` from `@cosyte/deid/ncpdp` names the fields a rule reaches inside a retained segment: these two Claim dates.
+  - **What a caller changes.** Nothing to call differently. A reader that expected the full date in `414-DE` or `457-EP` now gets the year, and a check on the manifest or the residual list sees the two new rows in place of two residuals.
+
+- 4634c04: The NCPDP Telecom adapter now removes every Prior Authorization field but its type code, and generalizes the response DUR segment's Previous Date Of Fill to the year.
+
+  - **What changed in output.** Before, the Prior Authorization segment (`12`) was retained whole, so a representative's name and address, the request dates and the authorization number submitted (`462-EV`) left the pass unchanged and were only counted as unexamined residuals. Now the segment is mapped: the type code (`461-EU`) is kept when it has the form of a code, and every other populated field is removed and gets a manifest row (`12/EV`, `12/PE` and so on). In a response, the DUR / PPS segment's Previous Date Of Fill (`530-FU`) is now a date locus in the Safe Harbor dates category: `20250511` becomes `2025` under Safe Harbor, it is shifted under a profile that shifts dates, and the manifest carries a `24/FU` row. Neither appears in `unexaminedResiduals` any more.
+  - **New export.** `TELECOM_RETAIN_SEGMENT_REASONS` from `@cosyte/deid/ncpdp` gives the reason each kept segment is kept, and `TELECOM_RETAIN_SEGMENTS` is now read off it. `TELECOM_RETAINED_SEGMENT_RULES` gains the `24` entry; `TELECOM_LOCUS_MAP` and `TELECOM_SEGMENT_RETAIN_FIELDS` gain a `12` entry.
+  - **What a caller changes.** A check that `TELECOM_RETAIN_SEGMENTS` has `"12"` now reads false. A reader that expected Prior Authorization values or the full previous date of fill now finds them removed or cut to the year, and a check on the manifest or the residual list sees the new rows in place of the residuals.
+
+- 8b1a760: The NCPDP Telecom adapter now removes the Claim segment's Scheduled Prescription ID Number and Alternate ID, and generalizes the Clinical segment's Measurement Date to the year.
+
+  - **What changed in output.** Before, `454-EK` Scheduled Prescription ID Number and `330-CW` Alternate ID in the Claim segment (`07`), and `494-ZE` Measurement Date in the Clinical segment (`13`), left the pass unchanged and were only counted as unexamined residuals. Public Medicaid payer sheets name and place all three. Now `454-EK` and `330-CW` are removed under every profile, with a manifest row each (`07/EK`, `07/CW`): no public sheet gives their length or picture, so no surrogate is kept even under a profile that keeps other identifiers as keyed surrogates. Every `494-ZE` is a date locus in the Safe Harbor dates category: `20250301` becomes `2025` under Safe Harbor, it is shifted under a profile that shifts dates, and the manifest carries a `13/ZE` row. None of the three appears in `unexaminedResiduals` any more.
+  - **Changed export.** `TELECOM_RETAINED_SEGMENT_RULES` from `@cosyte/deid/ncpdp` gains `EK` and `CW` (mode `block`) in its `07` entry and a new `13` entry with `ZE` (mode `date`).
+  - **What a caller changes.** A step that removed these fields after the pass can stay or go: they are gone or cut to the year already. A check on the manifest or the residual list sees the new rows in place of the residuals, and a reader that expected the full measurement date now gets the year or a shifted date.
+  - **Sources.** The NCPDP guide lists the public payer sheets read for each field and the date they were read.
+
 ## 0.2.11
 
 ### Patch Changes
