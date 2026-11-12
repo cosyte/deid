@@ -145,8 +145,8 @@ Two things follow, and the second is the one that surprises people:
   **comments** and **processing instructions** an XML document is re-serialized with, each counted at
   its own carrier's coordinate; a FHIR primitive's **`_`-sibling element id**, which travels beside the
   value it annotates; and whatever a **partly** rewritten structure keeps, such as the state and country
-  of a generalized address, which are re-emitted exactly as they arrived along with anything riding
-  inside them.
+  of a generalized address, which are re-emitted with what rides beside them, bar what the pass
+  blocked there (in FHIR, every value and unknown key of an extension on their `_`-sibling).
 
 - **What is removed is not counted, and that is the point of the number.** The inventory measures what
   the pass _hands through_, so a position it deletes (an address line, a blocked narrative and every
@@ -318,6 +318,22 @@ Two things follow, and the second is the one that surprises people:
   calls gets two unrelated ids and one call's references do not resolve in another call's output;
   linkage across calls needs a keyed policy, which does not claim Safe Harbor. And a removed
   reference leaves the rest of its `Reference` in place, an empty one as `{}`.
+
+<a id="fhir-unknown-keys"></a>
+
+- **FHIR keys R4 does not define: blocked inside an extension, counted elsewhere.** Inside an
+  `extension` or a `modifierExtension`, at any depth and on every resource, only the `url`, the
+  element `id` and the nested extensions are kept. Every other key is blocked and recorded at its own
+  locus (`Observation.extension[0].note`), with no value: a `value[x]`, and equally a key R4 does not
+  give an extension (`note`, `comment`, any name), whatever it holds. A `url` or an `id` that is not a
+  single string is blocked the same way. The same holds for an extension on a primitive's `_`-sibling:
+  one on the `state` or `country` an `Address` keeps is blocked like this, and every other one is
+  removed with the primitive's metadata. Outside an extension, an unknown key on a person resource's
+  own top level (`Patient.zzNote`) is removed by the fail-closed person sweep, and an unknown key
+  anywhere else (on a clinical resource, in a backbone element, in a `Coding`, below a person
+  resource's top level) is **passed through** and counted in `unexaminedResiduals` at its locus. A
+  key on a `_`-sibling itself other than `id` and `extension` is not read by `@cosyte/fhir` and does
+  not reach the output.
 
 Vendor-proprietary loci absent from public specs are deferred, **not invented**: a quirk is encoded
 only when a real document, its identifiers removed, grounds it.
@@ -814,13 +830,13 @@ the Patient Module puts them, and refuses a file that carries either one inside 
 blocked by default. The `keepPatientAnimal` option of the FHIR adapter, off by default, keeps part of
 it.
 
-| Position                                                                                                                                             | What happens                                                                                                                                                                                |
-| ---------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `patient-animal` `species`, `breed`, `genderStatus`, their `valueCodeableConcept`                                                                    | removed by default, as every extension value is. With `keepPatientAnimal`, each `Coding`'s `system`, `version`, `code`, `userSelected` and `display` kept, counted in `unexaminedResiduals` |
-| the same concept's `text`, an `id` or extension on it, a property R4 does not define on it                                                           | removed and recorded, with the option or without                                                                                                                                            |
-| any other `value[x]` on those three (a `valueString`), any other sub-extension, a repeat of one of the three, a second `patient-animal`              | removed and recorded, with the option or without                                                                                                                                            |
-| an extension whose `url` only looks like `patient-animal` (a version suffix, `https`, a trailing slash, another case or host), every other extension | removed and recorded, with the option or without                                                                                                                                            |
-| `Patient.name` (the animal's name), `Patient.identifier` (a microchip number), `Patient.contact` (the owner)                                         | removed, replaced or generalized and recorded, as for a human patient                                                                                                                       |
+| Position                                                                                                                                             | What happens                                                                                                                                                                                            |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `patient-animal` `species`, `breed`, `genderStatus`, their `valueCodeableConcept`                                                                    | removed by default, as every extension value is. With `keepPatientAnimal`, each `Coding`'s `system`, `version`, `code`, `userSelected` (a boolean) and `display` kept, counted in `unexaminedResiduals` |
+| the same concept's `text`, an `id` or extension on it, a property R4 does not define on it or on a `Coding`, a `userSelected` that is not a boolean  | removed and recorded, with the option or without                                                                                                                                                        |
+| any other `value[x]` on those three (a `valueString`), any other sub-extension, a repeat of one of the three, a second `patient-animal`              | removed and recorded, with the option or without                                                                                                                                                        |
+| an extension whose `url` only looks like `patient-animal` (a version suffix, `https`, a trailing slash, another case or host), every other extension | removed and recorded, with the option or without                                                                                                                                                        |
+| `Patient.name` (the animal's name), `Patient.identifier` (a microchip number), `Patient.contact` (the owner)                                         | removed, replaced or generalized and recorded, as for a human patient                                                                                                                                   |
 
 With the option on, a kept code is not read: a code system is the sender's choice, and a code that
 is really a name passes through. Keep it off unless the codes come from a terminology you trust.

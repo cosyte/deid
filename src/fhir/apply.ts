@@ -18,7 +18,9 @@
  * - `set-primitive`: the primitive's value becomes the transformed string (a generalized date, a
  *   pseudonymized `Identifier.value`); a `null` result degrades to a drop.
  * - `address`: the `Address` complex is rebuilt to `state` + `country` + the generalized 3-digit
- *   `postalCode`, dropping every finer geographic component.
+ *   `postalCode`, dropping every finer geographic component. A kept `state` or `country` keeps its
+ *   `_`-sibling `id` and extensions, each extension rebuilt through the same edits, so what the
+ *   extractor blocked in one is gone.
  * - `age`: the `value` of an age `Quantity` is kept exactly as it arrived when the pass kept the age,
  *   and dropped otherwise (an age over 89, an age it could not read, or a surrogate a custom policy
  *   computed, which a number cannot hold).
@@ -28,7 +30,8 @@
  * **Primitive-extension guard.** A FHIR primitive can carry an `extension` (the JSON `_`-sibling) that
  * holds PHI (`_birthDate.extension[…]`). The structural walk does not descend that side-channel, so the
  * applier **fails closed**: every rebuilt primitive is emitted **without** its `extension` metadata (its
- * value and `id` are kept). Primitive extensions are uncommon and demographic/annotative; dropping them
+ * value and `id` are kept). The one exception is a part a rebuilt `Address` keeps, whose extensions the
+ * extractor walks and blocks like every other extension. Primitive extensions are uncommon and demographic/annotative; dropping them
  * guarantees no `_`-sibling leak, at the documented cost of not preserving them (profile-aware retention
  * is not offered).
  *

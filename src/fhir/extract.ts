@@ -163,9 +163,9 @@ export interface FhirExtractOptions {
    * Keep the species, breed and gender status of an animal patient. On a `Patient`, the first
    * extension whose `url` is exactly {@link FHIR_PATIENT_ANIMAL_URL} keeps the `valueCodeableConcept`
    * of its first `species`, `breed` and `genderStatus` sub-extension, as codes only: each `Coding`'s
-   * `system`, `version`, `code`, `userSelected` and `display`. Everything else in it is blocked as
-   * before: the concept's `text`, any other `value[x]` (a `valueString` among them), any other
-   * sub-extension, and any nested extension. Every other extension stays blocked. Off by default, so
+   * `system`, `version`, `code`, `userSelected` (a boolean only) and `display`. Everything else in it
+   * is blocked as before: the concept's `text`, any other `value[x]` (a `valueString` among them), any
+   * other sub-extension, any nested extension, and any key R4 does not define there. Every other extension stays blocked. Off by default, so
    * the output is unchanged unless a caller asks.
    */
   readonly keepPatientAnimal?: boolean;
@@ -609,8 +609,8 @@ function keepPatientAnimal(out: FhirLocusAccumulator, animal: FhirComplex, path:
 
 /**
  * Keep a `CodeableConcept` an animal sub-extension carries, as codes only: each `Coding` keeps its
- * `system`, `version`, `code`, `userSelected` and, beside a `code` or `system`, its `display`. The
- * concept's free `text`, an `id`, an extension and any property R4 does not define there are blocked,
+ * `system`, `version`, `code`, a boolean `userSelected` and, beside a `code` or `system`, its `display`.
+ * The concept's free `text`, an `id`, an extension and any property R4 does not define there are blocked,
  * and a shape other than a complex is blocked whole. What is kept is not examined: it is counted as an
  * unexamined residual, as a clinical code is.
  */
@@ -792,7 +792,7 @@ function personalAction(node: FhirNode, position: SweepPosition): PersonalAction
  *   case: there is no zip code to misread, and the element is reduced exactly as a person resource's
  *   address carrying none is.
  * - **A part Safe Harbor lets the applier keep is not a plain primitive.** `state` and `country` are
- *   re-emitted verbatim, metadata included, so an unexpected JSON shape at one of them would carry
+ *   re-emitted with their value and metadata, so an unexpected JSON shape at one of them would carry
  *   content out of the pass unread.
  */
 function sweptAddressZip(node: FhirComplex): string | null {
@@ -1426,7 +1426,8 @@ export function extractFhirLoci(
  *   at or below it reaches the output - not its value, not its `_`-sibling metadata.
  * - `rebuilds-address`: the `Address` complex is rebuilt from its parts. The finer geographic parts are
  *   dropped and `postalCode` is replaced, but every part in {@link FHIR_KEPT_ADDRESS_PARTS} is re-emitted
- *   **verbatim**, so its metadata rides through and is enumerated.
+ *   with its value and its metadata, so what the pass did not block in that metadata rides through and
+ *   is enumerated.
  *
  * A `Record` keyed by {@link FhirEditKind} makes this **exhaustive**: a new edit cannot be added without
  * deciding here what it hands through, which is what keeps the enumeration closed rather than merely
@@ -1474,8 +1475,9 @@ function underscoreSibling(path: string): string {
  * - **`id` always rides through.** Every primitive the applier re-emits is rebuilt keeping its value and
  *   its `id`, so a primitive that survives at all survives with its element id, whatever the pass decided
  *   about the value beside it.
- * - **`extension` rides through only where the applier re-emits the primitive verbatim**, which is the
- *   kept part of a rebuilt `Address`. Everywhere else the applier's primitive-extension guard drops it,
+ * - **`extension` rides through only where the applier re-emits the primitive with its metadata**,
+ *   which is the kept part of a rebuilt `Address`, and there only what the pass did not block in it
+ *   (the `url` and the element `id`). Everywhere else the applier's primitive-extension guard drops it,
  *   and a position the pass removes is not one it hands through.
  */
 function recordPrimitiveMetadata(
@@ -1544,13 +1546,14 @@ function recordUnexaminedFhirPositions(
 
 /**
  * Enumerate what a rebuilt `Address` hands through: the parts Safe Harbor permits it to keep, which the
- * applier re-emits **verbatim** rather than rebuilding.
+ * applier re-emits with their value and metadata rather than rebuilding them.
  *
  * The rule decided about each part's VALUE - keep the state and the country, drop the line and the city,
- * generalize the ZIP - so no part's value is a residual. It decided nothing about the metadata riding
- * beside a kept value, and the applier's verbatim re-emission carries that metadata into the output, so
- * the `_`-sibling `id` and extensions of a kept part are exactly the positions this measures. A dropped
- * part and the replaced `postalCode` contribute nothing: they do not reach the output at all.
+ * generalize the ZIP - so no part's value is a residual. The pass blocked the value and every unknown
+ * key of each extension on a kept part's `_`-sibling, and the applier honours those edits, so what is
+ * left of that metadata (the element `id`, each extension's `url` and `id`) is exactly the positions
+ * this measures. A dropped part and the replaced `postalCode` contribute nothing: they do not reach the
+ * output at all.
  */
 function recordKeptAddressParts(
   residuals: UnexaminedResidualBuilder,

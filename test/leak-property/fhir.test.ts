@@ -429,7 +429,9 @@ function animalExtension(
           {
             url: "species",
             valueCodeableConcept: {
-              coding: [{ system: "http://example.org/zz-animal", code: filler, userSelected: sentinel }],
+              coding: [
+                { system: "http://example.org/zz-animal", code: filler, userSelected: sentinel },
+              ],
             },
           },
         ]),
@@ -564,7 +566,7 @@ export function unknownExtensionKeyKept(
   return placed
     .filter((p) => UNKNOWN_EXTENSION_KEY_SPOTS.some((spot) => p.where.endsWith(spot)))
     .filter((p) => outcome.output.includes(p.sentinel))
-    .map((p) => `${p.sentinel} (${p.shape} at ${p.where}) is under an unknown extension key and survives`);
+    .map((p) => `${p.sentinel} (${p.shape} at ${p.where}) survives under an unknown extension key`);
 }
 
 /**

@@ -218,6 +218,16 @@ describe("an unknown key elsewhere in a resource", () => {
     );
   });
 
+  it("on a `_`-sibling itself: not read by the parser, so it never reaches the output", () => {
+    const { json } = run({
+      resourceType: "Observation",
+      status: "final",
+      _status: { id: "s1", note: "ZZSIBLINGNOTE" },
+    });
+    expect(json).not.toContain("ZZSIBLINGNOTE");
+    expect(json).toContain('"_status":{"id":"s1"}');
+  });
+
   it("below a person resource's top level: handed through and counted", () => {
     const resource = {
       resourceType: "Patient",
