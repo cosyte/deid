@@ -167,7 +167,7 @@ function fitsRetainedFormat(id: string, value: string): boolean {
   const format = RETAINED_FIELD_FORMATS[id];
   // Every field the retain list names has a format above, so no input reaches this; a field added to
   // that list without one would keep nothing, which is the safe direction.
-  /* v8 ignore next */
+  /* v8 ignore next -- every field the retain list names has a format above, so this never runs */
   if (format === undefined) return false;
   return format.test(value.trimEnd());
 }
