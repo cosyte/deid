@@ -258,8 +258,8 @@ manifest.map((entry) => entry.locus); // => ["Observation._status.id", "Observat
   the one on a `state` or `country` an `Address` keeps included. So is every key R4 does not define on
   an extension: a `note` or `comment` beside the `url` is blocked and recorded at its own position
   (`Observation.extension[0].<withheld>[1]`, the key itself withheld), as a value is. Extensions are the FHIR leak frontier; the `url`
-  skeleton is kept when it is a string, the element `id` is replaced as every element id is, and
-  everything else is not. The one
+  skeleton is kept verbatim, unread, when it is a string in R4's `uri` format (no white space), the
+  element `id` is replaced as every element id is, and everything else is not. The one
   exception is opt-in: [`keepPatientAnimal`](#keep-an-animal-patients-species-opt-in) keeps the coded
   species, breed and gender status of the `patient-animal` extension.
 - Every **key R4 does not define** where it sits is **blocked** whole, whatever it holds, at any
@@ -276,6 +276,15 @@ manifest.map((entry) => entry.locus); // => ["Observation._status.id", "Observat
   (`Observation.valueString`). A resource whose `resourceType` is missing or not one R4 defines is removed whole, its type
   and base fields included. The names and shapes come from the R4 (4.0.1) definitions, and no option
   keeps such a value. See [keys R4 does not define](./limitations.md#fhir-unknown-keys).
+- Every **primitive that does not fit the format R4 defines for its type** is **blocked** whole and
+  recorded at its own locus, with no value, at any depth and in choice elements: a name in
+  `effectiveDateTime` or `issued`, a `meta.versionId` with a space, a `code` with a leading space, a
+  `uri` with white space, an `integer` past its range, a `SampledData.data` that is not a series of
+  numbers. A `code` at an element R4 binds, required, to a value set it defines (`Encounter.status`,
+  `Observation.status`) must be one of that set's codes. The patterns, ranges and code sets come from
+  the R4 (4.0.1) definitions. A format stops only what it rules out: a name that fits a `code`, an
+  `id` or a `uri` (`Smith`) is kept and counted. See
+  [primitive formats](./limitations.md#fhir-primitive-formats).
 - An **extension on a primitive's `_`-sibling** that the output does not carry
   (`_birthDate.extension`, `_code.extension`) is recorded as blocked at its own locus
   (`Patient._birthDate.extension[0]`), one row each, so the manifest shows the drop.
@@ -283,6 +292,10 @@ manifest.map((entry) => entry.locus); // => ["Observation._status.id", "Observat
   list in a repeating primitive's slot) is never written back, beside any primitive in any resource.
   Every primitive the pass writes is built from its value, the replacement of its element `id` and
   the extensions it kept. The sibling is recorded as a block at its own locus (`Observation._status`), with no value.
+- A **`_`-sibling beside an element that is not a primitive** (`"_code": { ... }` beside a
+  `CodeableConcept`) is dropped by `@cosyte/fhir`, which raises `MISPLACED_PRIMITIVE_EXTENSION`; the
+  pass records a blocked row at its locus (`Observation._code`), with no value. `deidentifyFhirJson`
+  reads the parse issues itself; a caller of `deidentifyFhir` passes them as `parseIssues`.
 - A **swept `Address` the pass cannot read faithfully** is removed **whole**, never partly retained: a
   `postalCode` that is not a whole zip code (a four-digit `0110` still has three leading digits, and
   keeping them would retain a fragment of something that was never a ZIP), or an unexpected JSON shape

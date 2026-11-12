@@ -19,7 +19,7 @@ import {
   WITHHELD_LOCUS_TOKEN,
 } from "../../src/index.js";
 import { deidentifyFhirJson } from "../../src/fhir/index.js";
-import { fhirElementsOf } from "../../src/fhir/element-names.js";
+import { fhirElementsOf, fhirPrimitiveKind } from "../../src/fhir/element-names.js";
 
 const ctx = createDeidContext({ key: "primitive-kinds-synthetic-hmac", patientId: "p" });
 
@@ -267,18 +267,30 @@ describe("a primitive of a JSON type R4 does not define at its position is block
     });
   });
 
-  it("the R4 table records the JSON type of each primitive it defines", () => {
-    expect(fhirElementsOf("Observation").get("valueBoolean")).toBe("boolean");
-    expect(fhirElementsOf("Observation").get("valueInteger")).toBe("number");
-    expect(fhirElementsOf("Observation").get("valueString")).toBeNull();
-    expect(fhirElementsOf("Observation").get("status")).toBeNull();
-    expect(fhirElementsOf("Quantity").get("value")).toBe("number");
-    expect(fhirElementsOf("Bundle").get("total")).toBe("number");
-    expect(fhirElementsOf("Coding").get("userSelected")).toBe("boolean");
-    expect(fhirElementsOf("Patient").get("active")).toBe("boolean");
-    expect(fhirElementsOf("Patient").get("multipleBirthInteger")).toBe("number");
-    expect(fhirElementsOf("Attachment").get("size")).toBe("number");
-    expect(fhirElementsOf("QuestionnaireResponse.item.answer").get("valueDecimal")).toBe("number");
+  it("the R4 table records the type of each primitive it defines, and so its JSON type", () => {
+    const kinds: readonly (readonly [string, string, string | null, string])[] = [
+      ["Observation", "valueBoolean", "boolean", "boolean"],
+      ["Observation", "valueInteger", "integer", "number"],
+      ["Observation", "valueString", null, "string"],
+      ["Observation", "status", "code", "string"],
+      ["Quantity", "value", "decimal", "number"],
+      ["Bundle", "total", "unsignedInt", "number"],
+      ["Coding", "userSelected", "boolean", "boolean"],
+      ["Patient", "active", "boolean", "boolean"],
+      ["Patient", "multipleBirthInteger", "integer", "number"],
+      ["Attachment", "size", "unsignedInt", "number"],
+      ["QuestionnaireResponse.item.answer", "valueDecimal", "decimal", "number"],
+      ["Timing.repeat", "count", "positiveInt", "number"],
+      ["Meta", "versionId", "id", "string"],
+      ["Observation", "issued", "instant", "string"],
+    ];
+    for (const [structure, name, type, kind] of kinds) {
+      const held = fhirElementsOf(structure).get(name);
+      expect(held, `${structure}.${name}`).toBe(type);
+      expect(fhirPrimitiveKind(held ?? null), `${structure}.${name}`).toBe(kind);
+    }
+    expect(fhirPrimitiveKind("CodeableConcept")).toBeUndefined();
+    expect(fhirPrimitiveKind("Observation.component")).toBeUndefined();
   });
 });
 

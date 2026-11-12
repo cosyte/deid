@@ -26,6 +26,13 @@
  * `patient-animal` extension). What it held must be gone from the output and from the manifest, and
  * no `_`-sibling in the output may hold anything but an `Element` object.
  *
+ * So is a sentinel in a primitive that does not fit the format R4 defines for its type, or a code
+ * outside the value set R4 binds it to, required: an `id` with a space, a name where a date, a time
+ * or an instant belongs, a `uri` with white space, a `code` with a leading space, an `integer` or a
+ * `positiveInt` past its range, a `base64Binary` with a character it does not use, a `SampledData`
+ * series with a word in it, and an extension `url` that is no `uri`, on the resource's own `meta`,
+ * `text` and extensions and in a contained resource.
+ *
  * An element `id` is held to the stricter rule too: a sentinel written as the `id` of any element, at
  * every kind of position (a datatype, a `Coding`, a backbone, an extension at any depth, a primitive's
  * `_`-sibling, a kept address part and an extension on one, a contained resource, a Bundle entry, the
@@ -918,6 +925,172 @@ const UNKNOWN_KEY_SPOTS: readonly {
   },
 ];
 
+/** A contained `Observation` holding one value, for a position every generated type can carry. */
+function containedObservation(r: JsonObject, fields: JsonObject): void {
+  pushTo(r, "contained", { resourceType: "Observation", status: "final", ...fields });
+}
+
+/**
+ * Each place a primitive can arrive in a form that does not fit the format R4 defines for its type
+ * (or, for a code R4 binds, required, to a value set it defines, outside that set), with the
+ * sentinel in it: on the resource's own `meta`, `text` and extensions, which every generated type
+ * carries, and in a contained resource, at every kind R4 constrains. Each is blocked whole, so the
+ * sentinel is held to the stricter rule. `text` gives the form the sentinel takes in the input when
+ * it is not the sentinel itself.
+ */
+const FORMAT_SPOTS: readonly {
+  readonly where: string;
+  readonly put: (resource: JsonObject, sentinel: string) => void;
+  readonly text?: (sentinel: string) => string;
+}[] = [
+  { where: "meta.versionId (id)", put: (r, s) => (r["meta"] = { versionId: `${s} ${s}` }) },
+  { where: "meta.lastUpdated (instant)", put: (r, s) => (r["meta"] = { lastUpdated: s }) },
+  { where: "meta.source (uri)", put: (r, s) => (r["meta"] = { source: `urn:${s} zz` }) },
+  {
+    where: "meta.profile[1] (canonical)",
+    put: (r, s) => (r["meta"] = { profile: ["http://example.org/zz", `http://example.org/ ${s}`] }),
+  },
+  {
+    where: "meta.tag[0].code (code)",
+    put: (r, s) => (r["meta"] = { tag: [{ system: "http://example.org/t", code: ` ${s}` }] }),
+  },
+  {
+    where: "meta.security[0].system (uri)",
+    put: (r, s) => (r["meta"] = { security: [{ system: `${s} zz`, code: "zz" }] }),
+  },
+  {
+    where: "text.status (required code)",
+    put: (r, s) =>
+      (r["text"] = { status: s, div: '<div xmlns="http://www.w3.org/1999/xhtml">zz</div>' }),
+  },
+  { where: "implicitRules (uri)", put: (r, s) => (r["implicitRules"] = `${s} zz`) },
+  {
+    where: "extension[].url (uri)",
+    put: (r, s) => {
+      pushTo(r, "extension", { url: `http://example.org/${s} zz`, valueBoolean: true });
+    },
+  },
+  {
+    where: "a nested extension url (uri)",
+    put: (r, s) => {
+      pushTo(r, "extension", { url: "http://example.org/zz", extension: [{ url: `${s} zz` }] });
+    },
+  },
+  {
+    where: "contained Observation.status (required code)",
+    put: (r, s) => {
+      pushTo(r, "contained", { resourceType: "Observation", status: s });
+    },
+  },
+  {
+    where: "contained Encounter.status (required code)",
+    put: (r, s) => {
+      pushTo(r, "contained", { resourceType: "Encounter", status: s, class: { code: "zz" } });
+    },
+  },
+  {
+    where: "contained Observation.effectiveDateTime (dateTime)",
+    put: (r, s) => {
+      containedObservation(r, { effectiveDateTime: s });
+    },
+  },
+  {
+    where: "contained Observation.issued (instant)",
+    put: (r, s) => {
+      containedObservation(r, { issued: `${s}-01-01` });
+    },
+  },
+  {
+    where: "contained Observation.component[0].valueTime (time, choice)",
+    put: (r, s) => {
+      containedObservation(r, { component: [{ code: { text: "zz" }, valueTime: s }] });
+    },
+  },
+  {
+    where: "contained Observation.valueInteger (integer range)",
+    put: (r, s) => {
+      containedObservation(r, { valueInteger: numericSentinel(s) });
+    },
+    text: numericText,
+  },
+  {
+    where: "contained Observation.effectiveTiming.repeat.count (positiveInt range)",
+    put: (r, s) => {
+      containedObservation(r, { effectiveTiming: { repeat: { count: numericSentinel(s) } } });
+    },
+    text: numericText,
+  },
+  {
+    where: "contained Observation.valueSampledData.data",
+    put: (r, s) => {
+      containedObservation(r, {
+        valueSampledData: { origin: { value: 0 }, period: 1, dimensions: 1, data: `1 ${s} 2` },
+      });
+    },
+  },
+  {
+    where: "contained Observation.valueQuantity.comparator (required code)",
+    put: (r, s) => {
+      containedObservation(r, { valueQuantity: { value: 1, comparator: s } });
+    },
+  },
+  {
+    where: "contained Observation.code.coding[0].code (code)",
+    put: (r, s) => {
+      containedObservation(r, {
+        code: { coding: [{ system: "http://example.org/zz", code: `${s}  zz` }] },
+      });
+    },
+  },
+  {
+    where: "contained DocumentReference attachment.data (base64Binary)",
+    put: (r, s) => {
+      pushTo(r, "contained", {
+        resourceType: "DocumentReference",
+        status: "current",
+        content: [{ attachment: { data: `${s}!` } }],
+      });
+    },
+  },
+  {
+    where: "contained Device.udiCarrier[0].issuer (uri)",
+    put: (r, s) => {
+      pushTo(r, "contained", { resourceType: "Device", udiCarrier: [{ issuer: `${s} zz` }] });
+    },
+  },
+];
+
+const formatArb: fc.Arbitrary<number> = fc.nat({ max: FORMAT_SPOTS.length - 1 });
+
+/** A sentinel in a primitive that does not fit its type, as placed: where, and what must not come back. */
+interface FormatPlaced {
+  readonly where: string;
+  readonly sentinel: string;
+}
+
+/** Write one sentinel, in a form its type does not admit, into the resource. */
+function placeFormat(resource: JsonObject, spot: number, sentinel: string): FormatPlaced {
+  const at = FORMAT_SPOTS[spot % FORMAT_SPOTS.length];
+  if (at === undefined) throw new Error("no format spot");
+  at.put(resource, sentinel);
+  return { where: at.where, sentinel: at.text?.(sentinel) ?? sentinel };
+}
+
+/**
+ * The stricter rule for a primitive that does not fit the format R4 defines for its type: the
+ * sentinel is gone from the output and from the manifest. Being named as a residual is not enough.
+ */
+export function formatKept(placed: readonly FormatPlaced[], outcome: PassOutcome): string[] {
+  const violations: string[] = [];
+  const manifest = JSON.stringify(outcome.manifest);
+  for (const p of placed) {
+    const label = `${p.sentinel} (a value that does not fit its type at ${p.where})`;
+    if (outcome.output.includes(p.sentinel)) violations.push(`${label} survives in the output`);
+    if (manifest.includes(p.sentinel)) violations.push(`${label} is in the manifest`);
+  }
+  return violations;
+}
+
 /** A backbone element R4 defines on each generated resource type: its key and an ordinary item. */
 const BACKBONES: Readonly<Record<string, readonly [string, JsonObject]>> = {
   Patient: ["communication", { language: { text: "zz" } }],
@@ -1180,6 +1353,7 @@ export const caseArb = fc.record({
   siblings: fc.array(siblingArb, { maxLength: 2 }),
   elementIds: fc.array(elementIdArb, { maxLength: 2 }),
   unknownKeys: fc.array(unknownKeyArb, { maxLength: 2 }),
+  formats: fc.array(formatArb, { maxLength: 2 }),
 });
 
 /** Set a value at a path of keys and indexes, creating objects and lists on the way. */
@@ -1487,12 +1661,14 @@ export function build(value: {
   siblings?: readonly SiblingPlacement[];
   elementIds?: readonly number[];
   unknownKeys?: readonly number[];
+  formats?: readonly number[];
 }): {
   raw: string;
   placed: Placement[];
   siblings: SiblingPlaced[];
   elementIds: ElementIdPlaced[];
   unknownKeys: UnknownKeyPlaced[];
+  formats: FormatPlaced[];
 } {
   const resource: JsonObject = {
     resourceType: value.type,
@@ -1527,10 +1703,15 @@ export function build(value: {
     const placedKey = placeUnknownKey(resource, spot, sentinelAt(value.stem, keyOffset + i));
     return { ...placedKey, where: `${value.type}.${placedKey.where}` };
   });
+  const formatOffset = keyOffset + unknownKeys.length;
+  const formats = (value.formats ?? []).map((spot, i) => {
+    const placedFormat = placeFormat(resource, spot, sentinelAt(value.stem, formatOffset + i));
+    return { ...placedFormat, where: `${value.type}.${placedFormat.where}` };
+  });
   const doc: JsonObject = value.inBundle
     ? { resourceType: "Bundle", type: "collection", entry: [{ resource }] }
     : resource;
-  return { raw: JSON.stringify(doc), placed, siblings, elementIds, unknownKeys };
+  return { raw: JSON.stringify(doc), placed, siblings, elementIds, unknownKeys, formats };
 }
 
 /** Every locus, as the adapter writes one, at which a string holding the sentinel sits. */
@@ -1597,21 +1778,30 @@ export function checkCase(
     siblings?: readonly SiblingPlacement[];
     elementIds?: readonly number[];
     unknownKeys?: readonly number[];
+    formats?: readonly number[];
   },
   tally: LeakTally,
   options: FhirDeidOptions = {},
 ): string[] {
-  const { raw, placed, siblings, elementIds, unknownKeys } = build(value);
+  const { raw, placed, siblings, elementIds, unknownKeys, formats } = build(value);
   // A `_`-sibling the input does not hold (a later write replaced it) is not swept.
   const held = siblings.filter((s) => s.text === undefined || raw.includes(s.text));
   // Likewise an element id a later write replaced.
   const ids = elementIds.filter((p) => raw.includes(p.sentinel));
   // Likewise a sentinel under an unknown key.
   const keys = unknownKeys.filter((p) => raw.includes(p.sentinel));
+  // Likewise a sentinel in a primitive that does not fit its type.
+  const misfits = formats.filter((p) => raw.includes(p.sentinel));
   // Non-vacuity: only a sentinel the input holds is swept, and a case must hold one. A later
   // placement can overwrite an earlier one at the same position.
   const present = placed.filter((p) => raw.includes(p.sentinel));
-  if (present.length === 0 && held.length === 0 && ids.length === 0 && keys.length === 0) {
+  if (
+    present.length === 0 &&
+    held.length === 0 &&
+    ids.length === 0 &&
+    keys.length === 0 &&
+    misfits.length === 0
+  ) {
     return ["no sentinel reached the input"];
   }
   const outcome = pass(raw, options);
@@ -1621,6 +1811,7 @@ export function checkCase(
     ...siblingTextKept(held, outcome),
     ...elementIdKept(ids, outcome),
     ...unknownKeyKept(keys, outcome),
+    ...formatKept(misfits, outcome),
   ];
 }
 
@@ -1660,6 +1851,7 @@ export const animalCaseArb = fc.record({
   siblings: fc.array(siblingArb, { maxLength: 2 }),
   elementIds: fc.array(elementIdArb, { maxLength: 2 }),
   unknownKeys: fc.array(unknownKeyArb, { maxLength: 2 }),
+  formats: fc.array(formatArb, { maxLength: 2 }),
 });
 
 describe("the generated leak property: FHIR R4", () => {
@@ -1980,5 +2172,67 @@ describe("the FHIR sweep removes a sentinel under a key R4 does not define", () 
     expect(
       unknownExtensionKeyKept(extra, { ...clean, output: '{"code":{"label":"ZQLKTEETH04X"}}' }),
     ).toHaveLength(1);
+  });
+});
+
+/**
+ * Each place a primitive can arrive in a form that does not fit the format R4 defines for its type,
+ * on a person, a clinical and two infrastructure resources, alone and in a Bundle entry, with
+ * `keepPatientAnimal` off and on, through the same check as a generated case, so every one is run on
+ * every pull request whatever the seed draws.
+ */
+describe("the FHIR sweep removes a sentinel in a primitive that does not fit its type", () => {
+  const types = ["Patient", "Observation", "Device", "Provenance"];
+  const spots = FORMAT_SPOTS.map((spot, i) => [spot.where, i] as const);
+
+  it.each(spots)("%s", (_where, spot) => {
+    for (const type of types) {
+      for (const inBundle of [false, true]) {
+        for (const keepPatientAnimal of [false, true]) {
+          const value = {
+            type,
+            inBundle,
+            filler: "abc",
+            stem: "ZQLKFRMT",
+            placements: [],
+            formats: [spot],
+          };
+          expect(checkCase(value, newTally(), { keepPatientAnimal })).toEqual([]);
+        }
+      }
+    }
+  });
+
+  it("the case holds what it placed: the sentinel is in the input", () => {
+    for (const [, spot] of spots) {
+      const { raw, formats } = build({
+        type: "Observation",
+        inBundle: false,
+        filler: "abc",
+        stem: "ZQLKFRMT",
+        placements: [],
+        formats: [spot],
+      });
+      expect(formats).toHaveLength(1);
+      expect(raw).toContain(formats[0]?.sentinel);
+    }
+  });
+
+  it("the stricter rule has teeth: a misfit in the output or the manifest is caught", () => {
+    const placed: FormatPlaced[] = [{ where: "Observation.issued", sentinel: "ZQLKTEETH05X" }];
+    const clean: PassOutcome = {
+      output: '{"resourceType":"Observation"}',
+      manifest: [],
+      unexaminedResiduals: [],
+      residualAt: () => true,
+      refused: false,
+    };
+    expect(formatKept(placed, clean)).toEqual([]);
+    expect(formatKept(placed, { ...clean, output: '{"issued":"ZQLKTEETH05X"}' })).toEqual([
+      "ZQLKTEETH05X (a value that does not fit its type at Observation.issued) survives in the output",
+    ]);
+    expect(formatKept(placed, { ...clean, manifest: [{ locus: "ZQLKTEETH05X" }] })).toEqual([
+      "ZQLKTEETH05X (a value that does not fit its type at Observation.issued) is in the manifest",
+    ]);
   });
 });

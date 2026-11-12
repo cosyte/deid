@@ -49,8 +49,11 @@
  * sender's text too. So is a value of a shape R4 does not define where it sits (a primitive of another
  * JSON type than R4 gives it, a string where a `Reference` belongs, a structure where a primitive
  * belongs, a list where one value belongs and the reverse), and a resource whose `resourceType` is missing or not one R4
- * defines, whole. An extension on a primitive's `_`-sibling that the output does not carry gets a row
- * of its own.
+ * defines, whole. So is a primitive that does not fit the format R4 defines for its type, or a code
+ * outside the value set R4 binds it to, required (`./primitive-format.js`). An extension on a
+ * primitive's `_`-sibling that the output does not carry gets a row of its own, and so does a
+ * `_`-sibling the reader dropped for sitting beside a structure, when the caller passes the parse
+ * issues ({@link FhirExtractOptions.parseIssues}).
  *
  * The `@cosyte/fhir` model is **immutable**, so the extractor never edits the tree; the applier rebuilds
  * a fresh tree from these coordinates (see `./apply.js`).
@@ -66,6 +69,7 @@ import {
   primitive,
   resourceType,
   type FhirComplex,
+  type FhirIssue,
   type FhirNode,
   type FhirPrimitive,
   type FhirProperty,
@@ -108,6 +112,7 @@ import {
   isFhirDateValue,
   locationMayBeResidence,
 } from "./locus-map.js";
+import { fitsFhirFormat } from "./primitive-format.js";
 import { readFhirLiteral } from "./reference.js";
 
 /**
@@ -213,6 +218,16 @@ export interface FhirExtractOptions {
    * the output is unchanged unless a caller asks.
    */
   readonly keepPatientAnimal?: boolean;
+  /**
+   * The issues `parseResource` returned beside the resource. The reader drops a `_`-sibling written
+   * beside an element that is not a primitive (`"_code": { ... }` beside a `CodeableConcept`, or
+   * beside a list of structures), since FHIR JSON gives it no meaning there, and raises
+   * `MISPLACED_PRIMITIVE_EXTENSION` at the element. For each such issue the pass records a blocked
+   * row at the `_`-sibling's locus (`Observation._code`), with no value, so a manifest reader sees
+   * the drop. Every other issue is ignored. Without it, the dropped sibling gets no row, and nothing
+   * else changes.
+   */
+  readonly parseIssues?: readonly FhirIssue[];
 }
 
 /** Append a locus + its coordinate to the accumulator. */
@@ -568,13 +583,22 @@ function blockExtensionProperty(
     blockExtension(out, value, join(path, name)); // nested extension: recurse
     return;
   }
-  // Structural: the definitional `url`, kept, and the element `id`, replaced with every other element
-  // id, each as R4 types it, a single string. Either one in any other shape (a number, a boolean, an
-  // object, a list) is a structure no rule reads, and it goes.
-  if (EXTENSION_STRUCTURAL_KEYS.has(name) && holdsString(value)) return;
+  // Structural: the definitional `url`, kept verbatim, and the element `id`, replaced with every
+  // other element id, each as R4 types it, a single string, and the `url` in the format R4 defines
+  // for a `uri` (no white space). Either one in any other shape (a number, a boolean, an object, a
+  // list), or a `url` that is no `uri`, is a structure no rule reads, and it goes.
+  if (EXTENSION_STRUCTURAL_KEYS.has(name) && holdsString(value) && keptAsUrl(name, value)) return;
   // Everything else is the payload or free content: a `value[x]`, or a key R4 does not define on an
   // extension. A key R4 does not define there is the sender's text, so its row names its position.
   blockNode(out, value, join(path, definedSegment("Extension", name, position)));
+}
+
+/**
+ * `true` unless the key is an extension's `url` whose text does not fit the format R4 defines for a
+ * `uri`, the type it gives that `url`.
+ */
+function keptAsUrl(name: string, value: FhirPrimitive): boolean {
+  return name !== "url" || fitsFhirFormat("uri", "Extension.url", primitiveString(value));
 }
 
 /** The two keys of an extension object that are structure rather than content: `url` and `id`. */
@@ -721,11 +745,14 @@ function keepAnimalConcept(out: FhirLocusAccumulator, concept: FhirNode, path: s
       const isCoding = isCodingComplex(coding);
       coding.properties.forEach((field, k) => {
         // R4 types `userSelected` as a boolean: a string or a number there is content, not a flag.
+        // And each kept part fits the format R4 defines for its type (a `system` with no white space,
+        // a `code` with no space but a single one between its words).
         const keeps =
           ANIMAL_CODING_PROPERTIES.has(field.name) &&
           isPrimitive(field.value) &&
           (field.name !== "display" || isCoding) &&
-          (field.name !== "userSelected" || typeof field.value.value === "boolean");
+          (field.name !== "userSelected" || typeof field.value.value === "boolean") &&
+          fitsFormat(field.value, CODING_ELEMENTS.get(field.name) ?? null, `Coding.${field.name}`);
         if (!keeps) {
           blockNode(out, field.value, join(codingPath, definedSegment("Coding", field.name, k)));
         }
@@ -733,6 +760,9 @@ function keepAnimalConcept(out: FhirLocusAccumulator, concept: FhirNode, path: s
     });
   });
 }
+
+/** What R4 types each element of a `Coding` as. */
+const CODING_ELEMENTS = fhirElementsOf("Coding");
 
 /** Block the `div` of a `Narrative` (rendered PHI): at any depth (resource-, section-, entry-level). */
 function blockNarrativeDiv(out: FhirLocusAccumulator, narrative: FhirComplex, path: string): void {
@@ -1565,6 +1595,11 @@ export function extractFhirLoci(
     return { loci: out.loci, coords: out.coords, unexaminedResiduals: Object.freeze([]) };
   }
   walkComplex(out, resource, rt, false, "");
+  // The same reach as the enumeration below, so a tree it cannot walk fails the same way.
+  enumerateOrFail(rt, () => {
+    // Stryker disable next-line ArrayDeclaration: an issue that is not a misplaced sibling is passed over, so a filled default records the same nothing
+    recordMisplacedSiblings(out, resource, rt, options.parseIssues ?? []);
+  });
   const ruled = new Map<FhirNode, FhirEditKind>();
   for (const coord of out.coords) ruled.set(coord.node, coord.edit);
   enumerateOrFail(rt, () => {
@@ -1591,6 +1626,54 @@ export function extractFhirLoci(
   return { loci: out.loci, coords: out.coords, unexaminedResiduals: residuals.build() };
 }
 
+/** The issue the reader raises at an element a `_`-sibling was written beside that is not a primitive. */
+const MISPLACED_SIBLING = "MISPLACED_PRIMITIVE_EXTENSION";
+
+/**
+ * Record a blocked row, with no value, for each `_`-sibling the reader dropped because it was written
+ * beside an element that is not a primitive ({@link FhirExtractOptions.parseIssues}). The issue names
+ * the element as the reader wrote its position (`Bundle.entry[0].resource.code`), from the keys of
+ * the document, so the position is found in the tree and the row is written at the `_`-sibling of
+ * that element's own locus, with a key R4 does not define withheld as every other row withholds it
+ * (`Observation._code`). A position the tree does not hold, or holds below a value blocked whole (whose
+ * keys are the sender's text), is written as the withheld token at the root with the issue's place
+ * among the issues (`Observation._<withheld>[0]`). The coordinate names a
+ * stand-in primitive, which the applier never visits, so it writes nothing.
+ */
+function recordMisplacedSiblings(
+  out: FhirLocusAccumulator,
+  resource: FhirComplex,
+  rt: string,
+  issues: readonly FhirIssue[],
+): void {
+  const misplaced = issues.filter((issue) => issue.code === MISPLACED_SIBLING);
+  // Stryker disable next-line ConditionalExpression,BlockStatement: with no issue the walk below finds positions and records nothing, so the early return changes the time taken and nothing a test can read
+  if (misplaced.length === 0) return;
+  // Each position as the reader writes it, mapped to the locus this pass writes for it.
+  const loci = new Map<string, string>();
+  const visit = (node: FhirNode, expression: string, path: string): void => {
+    loci.set(expression, path);
+    // Below a value blocked whole, a key is the sender's text, and the value's own row covers it.
+    if (out.unknownKeys.has(node)) return;
+    if (isList(node)) {
+      node.items.forEach((item, i) => {
+        visit(item, idx(expression, i), idx(path, i));
+      });
+    } else if (isComplex(node)) {
+      node.properties.forEach((prop, i) => {
+        visit(prop.value, `${expression}.${prop.name}`, join(path, propertySegment(out, prop, i)));
+      });
+    }
+  };
+  // The resource is of a type R4 defines (one it does not is removed whole first), so the reader's
+  // root, its `resourceType`, is the root of this pass's loci too.
+  visit(resource, rt, rt);
+  misplaced.forEach((issue, k) => {
+    const path = loci.get(issue.expression) ?? join(rt, withheldSegment(k));
+    blockNode(out, primitive(undefined), underscoreSibling(path));
+  });
+}
+
 /**
  * Add to `unknown` every value whose place or shape R4 does not define, at any depth of any resource
  * or datatype, by the element names of the R4 definitions (`./element-names.js`):
@@ -1604,6 +1687,10 @@ export function extractFhirLoci(
  *   the one R4 gives it (a number where a string belongs, `"valueString": 42`; a string where a
  *   boolean, an integer or a decimal belongs, `"valueBoolean": "..."`), an array where a single value
  *   belongs and a single value where an array belongs, and a `null` that pads no repeating primitive;
+ * - a primitive that does not fit the format R4 defines for its type (`"effectiveDateTime": "..."`
+ *   that is no date, a `meta.versionId` with a space in it, an `integer` out of its range), or for
+ *   its element (`SampledData.data`), or a code outside the value set R4 defines and binds it to,
+ *   required (`Encounter.status`), where the definitions carry that set ({@link fitsFhirFormat});
  * - a resource whose `resourceType` is missing or not one R4 defines (an abstract resource, a
  *   datatype's name), wherever a resource sits.
  *
@@ -1617,21 +1704,29 @@ function findUnknownKeys(
   unknownNames: Set<FhirNode>,
 ): void {
   /** One element's value, which R4 writes as an array when it repeats and as one value otherwise. */
-  const visitElement = (node: FhirNode, structure: string | null, repeats: boolean): void => {
+  const visitElement = (
+    node: FhirNode,
+    structure: string | null,
+    repeats: boolean,
+    element: string,
+  ): void => {
     if (isList(node) !== repeats) {
       unknown.add(node);
       return;
     }
     if (isList(node)) {
       node.items.forEach((item) => {
-        visitItem(item, structure);
+        visitItem(item, structure, element);
       });
       return;
     }
-    visitItem(node, structure);
+    visitItem(node, structure, element);
   };
-  /** One value: a primitive of its JSON type where R4 puts one, a structure otherwise. */
-  const visitItem = (node: FhirNode, structure: string | null): void => {
+  /**
+   * One value: a primitive of its JSON type, in the format R4 defines for its type and element, where
+   * R4 puts one; a structure otherwise.
+   */
+  const visitItem = (node: FhirNode, structure: string | null, element?: string): void => {
     const kind = fhirPrimitiveKind(structure);
     if (kind !== undefined) {
       // A `null` the reader marks pads no repeating primitive, and an array in the value's own place
@@ -1640,7 +1735,8 @@ function findUnknownKeys(
         !isPrimitive(node) ||
         node.undefinedNull === true ||
         node.nestedArraySource !== undefined ||
-        !holdsKind(node, kind)
+        !holdsKind(node, kind) ||
+        !fitsFormat(node, structure, element)
       ) {
         unknown.add(node);
       }
@@ -1666,7 +1762,7 @@ function findUnknownKeys(
         unknown.add(prop.value);
         unknownNames.add(prop.value);
       } else if (prop.name !== "extension" && prop.name !== "modifierExtension") {
-        visitElement(prop.value, type, repeating.has(prop.name));
+        visitElement(prop.value, type, repeating.has(prop.name), `${own}.${prop.name}`);
       }
     }
   };
@@ -1685,6 +1781,29 @@ function holdsKind(node: FhirPrimitive, kind: FhirJsonKind): boolean {
   if (typeof value === "boolean") return kind === "boolean";
   return kind === "number";
 }
+
+/**
+ * `true` when a primitive holds no value (only a `_`-sibling) or an empty one, or a value whose text
+ * fits the format R4 defines for its type and element, and the code set of a required binding R4
+ * defines there ({@link fitsFhirFormat}). R4 gives no type an empty value, but one holds no text a
+ * sender could have put there, so it is left as it was. And at a `date`, a `dateTime` or an `instant`,
+ * a calendar date the date rule reads ({@link isFhirDateValue}) is left to that rule even where it is
+ * not the precision R4 gives the type (a day where an `instant` belongs, a time with no zone): the
+ * rule generalizes or keeps it as a date, and digits and separators carry no name.
+ */
+function fitsFormat(
+  node: FhirPrimitive,
+  type: string | null,
+  element: string | undefined,
+): boolean {
+  const text = primitiveString(node);
+  if (text.length === 0) return true;
+  if (DATE_TYPES.has(type) && isFhirDateValue(text)) return true;
+  return fitsFhirFormat(type, element, text);
+}
+
+/** The R4 primitive types that hold a calendar date, which the date rule reads. */
+const DATE_TYPES: ReadonlySet<string | null> = new Set(["date", "dateTime", "instant"]);
 
 /**
  * Block each value {@link findUnknownKeys} found that the output would carry, whole, at its own locus

@@ -308,7 +308,9 @@ Two things follow, and the second is the one that surprises people:
   server, is kept verbatim: it names the server, and a base that carries anything else carries it out.
   An **id written anywhere else** is passed through and counted as an unexamined position:
   `meta.versionId`, `meta.source`, a `Bundle.link.url` (a search link can carry a query on an
-  identifier), an `Attachment.url`, and any other uri, url or canonical. An element's own `id` is
+  identifier), an `Attachment.url`, and any other uri, url or canonical, when it fits the format R4
+  gives its type (one that does not is blocked, as [the item on primitive
+  formats](#fhir-primitive-formats) says). An element's own `id` is
   replaced, as the next item says. Under
   the Safe Harbor default the stand-ins are **per call**, so the same resource transformed in two
   calls gets two unrelated ids and one call's references do not resolve in another call's output;
@@ -366,7 +368,12 @@ Two things follow, and the second is the one that surprises people:
   (`Observation.extension[0].valueString`), and equally a key R4 does not give an extension (`note`,
   `comment`, any name), whatever it holds, whose row names its position and not the key
   (`Observation.extension[0].<withheld>[1]`). A `url` or an `id` that is not a string (a number, a boolean, an object, a list) is
-  blocked the same way. An extension on a primitive's `_`-sibling is blocked like this on the
+  blocked the same way, and so is a `url` that is not a `uri` by R4's format (one with white space in
+  it). **An extension's `url` that is a `uri` is kept verbatim, and it is not read:** it names the
+  extension's definition, and a sender who writes a name, an identifier or a query into it
+  (`http://example.org/Smith`, `urn:mrn:12345`) sends that text out unchanged. No option removes it,
+  since an extension without its `url` has no meaning; a caller whose senders may do this removes or
+  rewrites those extensions after the pass. An extension on a primitive's `_`-sibling is blocked like this on the
   `state` or `country` an `Address` keeps; every other one is removed with the primitive's metadata,
   and each one removed that way is recorded as blocked at its own locus
   (`Patient._birthDate.extension[0]`), with no value, so a manifest reader sees the drop. A
@@ -379,6 +386,73 @@ Two things follow, and the second is the one that surprises people:
   (`Patient.address.state`) on a person resource, and a swept `Address` carrying one is removed whole.
   A key on a `_`-sibling itself other than `id` and `extension` is not read by `@cosyte/fhir` and does
   not reach the output, and it gets no manifest row, since the parsed resource does not carry it.
+  A `_`-sibling written beside an element that is not a primitive (`"_code": { ... }` beside a
+  `CodeableConcept`, or beside a list of structures) is dropped whole by `@cosyte/fhir`, which raises
+  `MISPLACED_PRIMITIVE_EXTENSION` at the element, so it never reaches the output either; the pass
+  reads that issue and records a blocked row at the `_`-sibling's locus (`Observation._code`), with
+  no value. `deidentifyFhirJson` does this itself; a caller of `deidentifyFhir` who parsed the
+  resource passes the issues `parseResource` returned as `parseIssues` to get the same rows, and
+  without them the dropped sibling gets none. A sibling inside a value blocked whole, or at a place
+  the pass cannot find in the tree, is recorded at the root as the withheld token
+  (`Observation._<withheld>[0]`), so no key of the sender's reaches the row.
+
+<a id="fhir-primitive-formats"></a>
+
+- **A FHIR primitive that does not fit the format R4 defines for its type: blocked everywhere.**
+  Every primitive the pass keeps is checked against the format the R4 (4.0.1) definitions give its
+  type, read from the published definitions and generated into the same table as the element names:
+  the pattern each primitive type's definition carries, matched against the whole value, for a
+  `code`, an `id`, a `date`, a `dateTime`, an `instant`, a `time`, a `uri`, a `url`, a `canonical`,
+  an `oid`, a `uuid`, a `base64Binary`, an `integer`, a `positiveInt`, an `unsignedInt`, a `decimal`
+  and a `boolean`; and, for an `integer`, the range its definition gives, -2147483648 to 2147483647,
+  which a `positiveInt` and an `unsignedInt` take from the `integer` they derive from (their
+  patterns admit no sign, so a `positiveInt` is 1 or more and an `unsignedInt` 0 or more). A number
+  is read by the exact text it arrived as, never through a JavaScript number. A value that does not
+  fit is blocked whole and recorded at its own locus with no value, at every depth, in choice
+  elements, in contained resources and `Bundle` entries, under Safe Harbor, the Limited Data Set and
+  every other profile: a name in `effectiveDateTime` or `Observation.issued`, a `meta.versionId` with
+  a space in it, a `Coding.code` with a leading space or two spaces in a row, a `uri` with white
+  space, an `integer` past its range, a `positiveInt` of 0, a `base64Binary` with a character
+  outside its alphabet. `SampledData.data` is a `string`, but R4 defines it in words as decimal
+  values, or `E`, `L` and `U`, separated by a single space; its definition carries no pattern, so
+  the pass holds it to one written from those words, with R4's `decimal` pattern for each value. With
+  `keepPatientAnimal` on, each part of a kept animal `Coding` is held to its type too. With
+  `transformLabels` on, an element R4 requires that the pass removed this way carries the Data Absent
+  Reason in its place.
+
+  At an element of type `code` that R4 binds, **required**, to a value set R4 defines
+  (`Encounter.status`, `Observation.status`, `Narrative.status`, `Quantity.comparator`, an
+  `Address.use`), the code must also be one of that set's codes, read from the published value sets
+  (`https://hl7.org/fhir/R4/valuesets.json`): 338 such elements across 210 value sets. A name or a
+  dashed number in `Encounter.status` is therefore blocked. For 14 elements the published
+  definitions do not carry the whole value set, and there a code is held to the `code` format alone:
+  the MIME types (`urn:ietf:bcp:13`) at `Attachment.contentType`, `Binary.contentType`,
+  `CapabilityStatement.format` and `patchFormat`, `ElementDefinition.mapping.language`,
+  `Endpoint.payloadMimeType`, `Signature.sigFormat` and `targetFormat`,
+  `Subscription.channel.payload` and three `TestScript` action elements; the ISO 4217 currencies at
+  `Money.currency`; and `Composition.confidentiality`, bound to a value set published outside the
+  core definitions.
+
+  Two exceptions keep output unchanged where the value cannot carry a name. An empty value holds no
+  text, so it is left as it was. And at a `date`, a `dateTime` or an `instant`, a calendar date the
+  date rule reads is left to that rule even when it is not the precision R4 gives the type (a day
+  where an `instant` belongs, a time with no zone): it is generalized or kept as a date, as before.
+
+  **What still passes, and why.** A format check stops only text the format rules out, and R4's
+  formats rule out little. R4's own format for a `code` is any text with no white space at either
+  end and no run of white space inside (its pattern admits one space, tab or line break between two
+  words), so at an element of type `code` that no required binding to a set the definitions carry
+  covers (every `Coding.code`, and a code bound by an extensible, preferred or example binding) a
+  name (`Smith`, `John Smith`) or a dashed number fits and is kept. So does any text with no white
+  space in a `uri`, a `url` or a `canonical` (`urn:Smith`), up to 64 letters, digits, hyphens and
+  dots in an `id` (`Smith`, a dashed number), a word whose length is a multiple of four in a
+  `base64Binary`, a number in range in an `integer` or a `decimal` (a record number held as one), and
+  any text in a `string` or a `markdown`, which R4 constrains no further than JSON does (the
+  free-text rules decide those, as before). What passes is not read, and each such position the pass
+  hands through is counted in `unexaminedResiduals`, so a caller can find it. A caller who needs more
+  checks the codes against the code systems its recipient expects (a terminology server, or the
+  value sets of the profile it sends), before or after the pass, or removes the elements it does not
+  need.
 
 <a id="fhir-sibling-text"></a>
 

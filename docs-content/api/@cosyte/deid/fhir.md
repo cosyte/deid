@@ -62,6 +62,14 @@ types at a `ContactDetail`'s `name` (the individual to contact) is removed as a 
 honesty line is unchanged: the output is **"Safe-Harbor-transformed per the configured policy"**,
 never "de-identified".
 
+**Primitive formats.** Every primitive the pass keeps is checked against the format the R4
+definitions give its type (the pattern of a `code`, an `id`, a date kind, a `time`, a uri kind, an
+`oid`, a `uuid`, a `base64Binary`, a number kind and a `boolean`, and the range of an integer
+kind), and a `code` at an element R4 binds, required, to a value set it defines against that set's
+codes; a value that does not fit is blocked whole. A format stops only what it rules out: a name
+that fits a `code`, an `id` or a `uri` is kept and counted as unexamined. An extension's `url` is
+kept verbatim when it fits the `uri` format.
+
 **Known limitations.** Extension values are block-only (no profile-aware retention, a
 `us-core-*` demographic extension is dropped, not kept), with one opt-in exception: under
 `keepPatientAnimal` the coded species, breed and gender status of the `patient-animal` extension
@@ -69,7 +77,7 @@ are kept.
 Resource ids are replaced and the reference wiring is kept, with what that does not reach stated:
 the server base of a `fullUrl`, and of an absolute reference to it, is kept verbatim; and an id
 written anywhere else (`meta.versionId`, `meta.source`, `Bundle.link.url`, an `Attachment.url`, any
-other uri, and an element's own `id`) is passed through and counted as unexamined. Under the Safe
+other uri) that fits the format R4 gives its type is passed through and counted as unexamined. Under the Safe
 Harbor default the stand-ins are per call, so the same resource transformed in two calls gets two
 unrelated ids; linkage across calls needs a keyed policy, which does not claim Safe Harbor.
 Free text is blocked, not retained. A `note` (`Annotation` text, author and time, as one unit), a
@@ -192,6 +200,15 @@ extension ([FHIR\_PATIENT\_ANIMAL\_URL](#fhir_patient_animal_url), matched exact
 codes; the concept's `text`, any other `value[x]`, any other sub-extension and every other
 extension stay blocked. The kept codes are counted as unexamined residuals. Off by default, so the
 output is unchanged unless a caller asks. See [FhirExtractOptions](#fhirextractoptions).
+
+##### parseIssues?
+
+> `readonly` `optional` **parseIssues?**: readonly `FhirIssue`[]
+
+The issues `parseResource` returned beside the resource, so that each `_`-sibling the reader
+dropped for being written beside an element that is not a primitive gets a blocked row
+(`Observation._code`), with no value. [deidentifyFhirJson](#deidentifyfhirjson) passes them itself. See
+[FhirExtractOptions](#fhirextractoptions).
 
 ##### policy?
 
@@ -345,6 +362,18 @@ of its first `species`, `breed` and `genderStatus` sub-extension, as codes only:
 is blocked as before: the concept's `text`, any other `value[x]` (a `valueString` among them), any
 other sub-extension, any nested extension, and any key R4 does not define there. Every other extension stays blocked. Off by default, so
 the output is unchanged unless a caller asks.
+
+##### parseIssues?
+
+> `readonly` `optional` **parseIssues?**: readonly `FhirIssue`[]
+
+The issues `parseResource` returned beside the resource. The reader drops a `_`-sibling written
+beside an element that is not a primitive (`"_code": { ... }` beside a `CodeableConcept`, or
+beside a list of structures), since FHIR JSON gives it no meaning there, and raises
+`MISPLACED_PRIMITIVE_EXTENSION` at the element. For each such issue the pass records a blocked
+row at the `_`-sibling's locus (`Observation._code`), with no value, so a manifest reader sees
+the drop. Every other issue is ignored. Without it, the dropped sibling gets no row, and nothing
+else changes.
 
 ## Type Aliases
 
@@ -749,8 +778,10 @@ serializeResource(document); // transformed FHIR JSON
 > **deidentifyFhirJson**(`json`, `options?`): [`FhirDeidResult`](#fhirdeidresult) & `object`
 
 Convenience: parse raw FHIR JSON, de-identify it, and return the transformed resource, the serialized
-de-identified JSON, and the value-free manifest in one call. Parse warnings are not part of the de-id
-contract and are discarded here; call `parseResource` directly if you need them.
+de-identified JSON, and the value-free manifest in one call. The parse warnings are read for one
+thing: each `_`-sibling the reader dropped for being written beside an element that is not a
+primitive gets a blocked row ([FhirDeidOptions.parseIssues](#parseissues)). They are not returned; call
+`parseResource` directly if you need them.
 
 #### Parameters
 

@@ -782,7 +782,7 @@ describe("an extension on a primitive's `_`-sibling the output does not carry ge
 
 describe("the R4 element table", () => {
   it("reads a resource, a datatype, a backbone, a reused definition and a choice element", () => {
-    expect(fhirElementsOf("Observation")?.get("status")).toBeNull();
+    expect(fhirElementsOf("Observation")?.get("status")).toBe("code");
     expect(fhirElementsOf("Observation")?.get("code")).toBe("CodeableConcept");
     expect(fhirElementsOf("Observation")?.get("component")).toBe("Observation.component");
     expect(fhirElementsOf("Observation")?.get("valueQuantity")).toBe("Quantity");
