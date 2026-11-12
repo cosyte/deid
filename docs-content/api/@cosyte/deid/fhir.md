@@ -118,6 +118,12 @@ blocked row that carries no value. `keepEmbeddedContent` names the kinds to keep
 ([FHIR\_EMBEDDED\_CONTENT\_KINDS](#fhir_embedded_content_kinds)); each kept element is kept unread and recorded as
 `DEID_EMBEDDED_CONTENT_RETAINED`. An extension's value stays blocked whatever its type.
 
+**Device identifiers.** On a `Device`, the `serialNumber`, `lotNumber`, `distinctIdentifier`, every
+`identifier` value (but a Social Security number's) and the UDI carrier's `deviceIdentifier`,
+`carrierHRF` and `carrierAIDC` are category (M), device identifiers and serial numbers. Both presets
+remove each with a row that carries no value, and keeping embedded content does not keep a
+`carrierAIDC`. The device's name, model, type and status are kept.
+
 **Animal patients, opt-in.** With `keepPatientAnimal: true` a `Patient`'s `patient-animal`
 extension keeps the coded `valueCodeableConcept` of its `species`, `breed` and `genderStatus`
 sub-extensions. Only that exact URL and those three parts: a look-alike URL, another sub-extension,
@@ -463,11 +469,11 @@ A kind of FHIR element that embeds content the adapter does not read:
 - `binary-data`: a `Binary.data`;
 - `signature-data`: a `Signature.data`, the signature itself, which can enclose the signed content;
 - `base64-binary`: every other element R4 types as `base64Binary` (an `Attachment.hash`,
-  `Device.udiCarrier.carrierAIDC`, `AuditEvent.entity.query`, a `valueBase64Binary` outside an
-  extension).
+  `AuditEvent.entity.query`, a `valueBase64Binary` outside an extension).
 
 An extension's value is not among them: every extension value is blocked whatever its type, and no
-kind here keeps one.
+kind here keeps one. Nor is a `Device`'s `udiCarrier.carrierAIDC`: it holds the device's UDI, a
+device identifier, so it is removed as category (M) whatever kind is kept.
 
 #### Example
 

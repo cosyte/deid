@@ -465,8 +465,8 @@ Two things follow, and the second is the one that surprises people:
   `Communication.payload`, a `QuestionnaireResponse` answer, and every other place R4 types an
   `Attachment`), every `Attachment.url` (a link to that content, or a `data:` url that carries it),
   `Binary.data`, `Signature.data`, and every other element R4 types as `base64Binary` (an
-  `Attachment.hash`, `Device.udiCarrier.carrierAIDC`, `AuditEvent.entity.query`, a
-  `valueBase64Binary` in a `Parameters` value or a backbone). A `Patient.photo` is removed whole, an
+  `Attachment.hash`, `AuditEvent.entity.query`, a `valueBase64Binary` in a `Parameters` value or a
+  backbone). A `Device`'s `udiCarrier.carrierAIDC` is removed too, as a device identifier (below). A `Patient.photo` is removed whole, an
   extension's value (a `valueBase64Binary` or a `valueAttachment` among them) is blocked as every
   extension value is, and the narrative `div` is blocked as it always was.
 
@@ -484,6 +484,27 @@ Two things follow, and the second is the one that surprises people:
   them) in time exponential in a value built to fail at its end, so the pass never compiles R4's
   patterns: it checks each type by a scan written from its pattern and tested to accept exactly what
   the pattern accepts.
+
+- **A FHIR `Device`'s identifiers and serial numbers: removed as category (M).** Safe Harbor lists
+  device identifiers and serial numbers as category (M), and the Limited Data Set rule lists them
+  among the direct identifiers it removes. On a `Device`, alone, contained or in a `Bundle` entry,
+  the pass removes under both presets, each with a `DEID_CATEGORY_REMOVED` row (category (M)) that
+  carries no value: `serialNumber`, `lotNumber`, `distinctIdentifier`, every `identifier` value
+  (unless its system is a Social Security number's, which stays category (G)), and the UDI carrier's
+  `deviceIdentifier`, `carrierHRF` and `carrierAIDC`. A `carrierAIDC` is removed even when the
+  caller keeps `base64-binary` content. Before, under both presets, every one of them but
+  `identifier` and `carrierAIDC` passed unchanged, counted only in `unexaminedResiduals`, and a
+  `Device.identifier` was read as a medical record number, so the Limited Data Set gave it a keyed
+  surrogate.
+
+  A lot number is removed whether its lot holds one device or many, since the resource does not say
+  which. What describes the kind of device is kept: `deviceName`, `modelNumber`, `partNumber`,
+  `type`, `status`, `manufacturer`, and the UDI's `issuer`, `jurisdiction` and `entryType`; its
+  `manufactureDate` and `expirationDate` are dates, generalized as every date is. Two residuals stay:
+  a `DeviceDefinition`, which describes a model of device rather than one device, is not read this
+  way (its `udiDeviceIdentifier.deviceIdentifier` is kept, counted), and an identifier that names a
+  device from another resource (a `Reference.identifier` at `Observation.device`) is read as any other
+  identifier, so the Limited Data Set gives it a keyed surrogate as a medical record number.
 
 <a id="fhir-sibling-text"></a>
 

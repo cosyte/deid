@@ -993,6 +993,83 @@ function fhirResourceIdCase(keyed: boolean): CorpusCase {
   };
 }
 
+/**
+ * A FHIR **Device**'s identifiers and serial numbers, category (M), under the Safe Harbor default and
+ * the limited data set preset, which both remove them: the serial, lot and distinct identifier, the
+ * `identifier` value, and the UDI carrier's device identifier, its printed form and its barcode payload,
+ * on a top-level `Device` and on one contained in an `Observation`. What describes the kind of device
+ * survives: its name, model, type code and status.
+ */
+const FHIR_DEVICE_SENTINELS: readonly string[] = [
+  "ZZDEVSN0001",
+  "ZZDEVLOT001",
+  "ZZDEVDIST01",
+  "ZZDEVID0001",
+  "ZZDEVUDIDI1",
+  "ZZDEVHRFSN1",
+  "ZZDEVCONTSN",
+];
+
+function fhirDeviceCase(keyed: boolean): CorpusCase {
+  const aidc = Buffer.from("(01)00000000000000(21)ZZDEVAIDC1").toString("base64");
+  const raw = JSON.stringify({
+    resourceType: "Bundle",
+    type: "collection",
+    entry: [
+      {
+        resource: {
+          resourceType: "Device",
+          identifier: [{ system: "http://example.org/zz-asset", value: "ZZDEVID0001" }],
+          udiCarrier: [
+            {
+              deviceIdentifier: "ZZDEVUDIDI1",
+              issuer: "http://hl7.org/fhir/NamingSystem/gs1-di",
+              carrierAIDC: aidc,
+              carrierHRF: "(01)00000000000000(21)ZZDEVHRFSN1",
+              entryType: "barcode",
+            },
+          ],
+          status: "active",
+          distinctIdentifier: "ZZDEVDIST01",
+          lotNumber: "ZZDEVLOT001",
+          serialNumber: "ZZDEVSN0001",
+          deviceName: [{ name: "zz infusion pump", type: "user-friendly-name" }],
+          modelNumber: "ZZ-MODEL-9",
+          type: { coding: [{ system: "http://snomed.info/sct", code: "469829004" }] },
+        },
+      },
+      {
+        resource: {
+          resourceType: "Observation",
+          status: "final",
+          code: { coding: [{ system: "http://loinc.org", code: "2951-2" }] },
+          contained: [{ resourceType: "Device", id: "dev1", serialNumber: "ZZDEVCONTSN" }],
+          device: { reference: "#dev1" },
+          valueQuantity: { value: 140, unit: "mmol/L", system: "http://unitsofmeasure.org" },
+        },
+      },
+    ],
+  });
+  const ctx = createDeidContext({ key: "fhir-device-corpus-synthetic-key", patientId: "p-dev" });
+  const options = keyed
+    ? profileOptions(LIMITED_DATA_SET_PROFILE, ctx)
+    : profileOptions(SAFE_HARBOR_PROFILE, ctx);
+  const { document, manifest, unexaminedResiduals } = deidentifyFhir(
+    parseResource(raw).resource,
+    options,
+  );
+  return {
+    name: keyed ? "fhir-device-identifiers-keyed" : "fhir-device-identifiers",
+    deidWire: serializeResource(document),
+    manifest,
+    unexaminedResiduals,
+    originalWire: raw,
+    // The barcode payload is base64, so its own text is the sentinel.
+    sentinels: [...FHIR_DEVICE_SENTINELS, aidc],
+    survivors: ["zz infusion pump", "ZZ-MODEL-9", "469829004", "2951-2", "mmol/L", "barcode"],
+  };
+}
+
 function ccdaMissedCase(): CorpusCase {
   const ctx = createDeidContext({ key: "ccda-missed-corpus-synthetic-key", patientId: "p-ccda-m" });
   const sct = "2.16.840.1.113883.6.96";
@@ -1064,6 +1141,8 @@ const CASES: readonly CorpusCase[] = [
   ccdaMissedCase(),
   fhirResourceIdCase(false),
   fhirResourceIdCase(true),
+  fhirDeviceCase(false),
+  fhirDeviceCase(true),
 ];
 
 /** The one leak sweep every gate uses: deliberately the SAME function the tamper test attacks. */

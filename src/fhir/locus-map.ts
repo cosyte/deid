@@ -443,6 +443,53 @@ export function isFhirDateValue(value: string): boolean {
   return true;
 }
 
+/**
+ * The R4 element paths on a `Device` that hold a **device identifier or serial number**, Safe Harbor
+ * category (M) and one of the direct identifiers the Limited Data Set rule removes. Each is a locus of
+ * that category at the element, so both presets remove its value with a row that carries none:
+ *
+ * - `Device.serialNumber`: the serial number the manufacturer gave this one device.
+ * - `Device.lotNumber`: the lot the device was made in. A lot can hold one device or many, and the
+ *   resource does not say which, so it is read as identifying the device.
+ * - `Device.distinctIdentifier`: the distinct identification code of a device regulated as a human
+ *   cell, tissue or cellular product, which identifies the one device.
+ * - `Device.udiCarrier.deviceIdentifier`: the device identifier part of the UDI.
+ * - `Device.udiCarrier.carrierHRF`: the whole UDI as printed, its production part (serial and lot
+ *   numbers) included.
+ * - `Device.udiCarrier.carrierAIDC`: the same UDI as the barcode or RFID payload, in base64. It is
+ *   decided here, before the embedded-content rule, so keeping `base64-binary` content does not keep
+ *   it.
+ *
+ * `Device.identifier` is not listed: it is an `Identifier`, read by the identifier rule, which takes
+ * category (M) as the default on a `Device` ({@link FHIR_DEVICE_IDENTIFIER_PATH}). What describes the
+ * kind of device rather than the one device is not listed either and is kept: its `deviceName`,
+ * `modelNumber`, `partNumber`, `type`, `status`, `manufacturer` and the UDI's `issuer`,
+ * `jurisdiction` and `entryType`. An explicit enumeration by element path, never a name match, so
+ * `Medication.batch.lotNumber`, a drug's batch, is not read as a device's.
+ *
+ * @internal
+ */
+export const FHIR_DEVICE_IDENTIFIER_ELEMENTS: ReadonlySet<string> = new Set<string>([
+  "Device.serialNumber",
+  "Device.lotNumber",
+  "Device.distinctIdentifier",
+  "Device.udiCarrier.deviceIdentifier",
+  "Device.udiCarrier.carrierHRF",
+  "Device.udiCarrier.carrierAIDC",
+]);
+
+/**
+ * The R4 element path of a `Device`'s own `identifier`. An `Identifier` there names the device (its
+ * serial number, an asset tag), so a value under any system but a Social Security number's is category
+ * (M), not a medical record number.
+ *
+ * @internal
+ */
+export const FHIR_DEVICE_IDENTIFIER_PATH = "Device.identifier";
+
+/** The Safe Harbor category of a device identifier or serial number, (M). @internal */
+export const FHIR_DEVICE_CATEGORY: SafeHarborCategory = C.DEVICE;
+
 /** The Safe Harbor category carried by a PHI-bearing FHIR date locus. @internal */
 export const FHIR_DATE_CATEGORY: SafeHarborCategory = C.DATES;
 

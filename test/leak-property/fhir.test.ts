@@ -47,6 +47,12 @@
  * `Attachment.url` (a link, and a `data:` url) and in the narrative `div`. Each is removed by
  * default, so what it held must be gone from the output and from the manifest.
  *
+ * So is a sentinel at a `Device`'s **identifier or serial number**, category (M): its `serialNumber`,
+ * `lotNumber`, `distinctIdentifier`, `identifier` value and the UDI carrier's `deviceIdentifier`,
+ * `carrierHRF` and `carrierAIDC`, on a contained `Device` and on the resource itself. Each is removed
+ * under the default, so the sentinel must be gone from the output and from the manifest, and keeping
+ * every kind of embedded content does not keep a `carrierAIDC`.
+ *
  * Where a sentinel sits is read back from the input JSON, as the adapter writes a locus
  * (`Patient.name[0].family`), so the residual it must be named by is exact.
  */
@@ -56,7 +62,11 @@ import fc from "fast-check";
 import { parseResource, serializeResource } from "@cosyte/fhir";
 
 import { createDeidContext, DeidError, FATAL_CODES } from "../../src/index.js";
-import { deidentifyFhir, type FhirDeidOptions } from "../../src/fhir/index.js";
+import {
+  deidentifyFhir,
+  FHIR_EMBEDDED_CONTENT_KINDS,
+  type FhirDeidOptions,
+} from "../../src/fhir/index.js";
 import { fhirElementsOf } from "../../src/fhir/element-names.js";
 import {
   newTally,
@@ -1233,6 +1243,106 @@ const EMBEDDED_SPOTS: readonly {
 
 const embeddedArb: fc.Arbitrary<number> = fc.nat({ max: EMBEDDED_SPOTS.length - 1 });
 
+/** Write `fields` onto the resource when it is a `Device`, else onto a contained one. */
+function deviceFields(r: JsonObject, fields: JsonObject): void {
+  if (r["resourceType"] === "Device") Object.assign(r, fields);
+  else containedOf(r, "Device", fields);
+}
+
+/**
+ * Each place a `Device` holds a device identifier or serial number, with a sentinel in it: on a
+ * contained `Device`, and on the resource itself when it is one (a contained one otherwise). Each is
+ * removed under the default, so the sentinel is held to the stricter rule.
+ */
+const DEVICE_SPOTS: readonly {
+  readonly where: string;
+  readonly put: (resource: JsonObject, sentinel: string) => void;
+  readonly text?: (sentinel: string) => string;
+}[] = [
+  {
+    where: "contained Device serialNumber",
+    put: (r, s) => {
+      containedOf(r, "Device", { serialNumber: s });
+    },
+  },
+  {
+    where: "contained Device lotNumber",
+    put: (r, s) => {
+      containedOf(r, "Device", { lotNumber: s });
+    },
+  },
+  {
+    where: "contained Device distinctIdentifier",
+    put: (r, s) => {
+      containedOf(r, "Device", { distinctIdentifier: s });
+    },
+  },
+  {
+    where: "contained Device udiCarrier[0].deviceIdentifier",
+    put: (r, s) => {
+      containedOf(r, "Device", { udiCarrier: [{ deviceIdentifier: s }] });
+    },
+  },
+  {
+    where: "contained Device udiCarrier[0].carrierHRF",
+    put: (r, s) => {
+      containedOf(r, "Device", { udiCarrier: [{ carrierHRF: `(01)00000000000000(21)${s}` }] });
+    },
+  },
+  {
+    where: "contained Device udiCarrier[0].carrierAIDC",
+    put: (r, s) => {
+      containedOf(r, "Device", { udiCarrier: [{ carrierAIDC: embeddedNote(s) }] });
+    },
+    text: embeddedNote,
+  },
+  {
+    where: "contained Device identifier[0].value",
+    put: (r, s) => {
+      containedOf(r, "Device", { identifier: [{ system: "http://example.org/zz-sn", value: s }] });
+    },
+  },
+  {
+    where: "the Device's own serialNumber and lotNumber",
+    put: (r, s) => {
+      deviceFields(r, { serialNumber: s, lotNumber: `${s}-lot` });
+    },
+  },
+  {
+    where: "the Device's own udiCarrier, two of them",
+    put: (r, s) => {
+      deviceFields(r, {
+        udiCarrier: [{ deviceIdentifier: "zz" }, { deviceIdentifier: s, carrierHRF: s }],
+      });
+    },
+  },
+];
+
+const deviceArb: fc.Arbitrary<number> = fc.nat({ max: DEVICE_SPOTS.length - 1 });
+
+/** Write one sentinel, at a device identifier or serial number, into the resource. */
+function placeDevice(resource: JsonObject, spot: number, sentinel: string): FormatPlaced {
+  const at = DEVICE_SPOTS[spot % DEVICE_SPOTS.length];
+  if (at === undefined) throw new Error("no device spot");
+  at.put(resource, sentinel);
+  return { where: at.where, sentinel: at.text?.(sentinel) ?? sentinel };
+}
+
+/**
+ * The stricter rule for a device identifier or serial number: it is gone from the output and from
+ * the manifest. Being named as a residual is not enough, because it is removed by default.
+ */
+export function deviceKept(placed: readonly FormatPlaced[], outcome: PassOutcome): string[] {
+  const violations: string[] = [];
+  const manifest = JSON.stringify(outcome.manifest);
+  for (const p of placed) {
+    const label = `${p.sentinel} (a device identifier at ${p.where})`;
+    if (outcome.output.includes(p.sentinel)) violations.push(`${label} survives in the output`);
+    if (manifest.includes(p.sentinel)) violations.push(`${label} is in the manifest`);
+  }
+  return violations;
+}
+
 /** Write one sentinel, inside embedded content, into the resource. */
 function placeEmbedded(resource: JsonObject, spot: number, sentinel: string): FormatPlaced {
   const at = EMBEDDED_SPOTS[spot % EMBEDDED_SPOTS.length];
@@ -1549,6 +1659,7 @@ export const caseArb = fc.record({
   unknownKeys: fc.array(unknownKeyArb, { maxLength: 2 }),
   formats: fc.array(formatArb, { maxLength: 2 }),
   embedded: fc.array(embeddedArb, { maxLength: 2 }),
+  devices: fc.array(deviceArb, { maxLength: 2 }),
 });
 
 /** Set a value at a path of keys and indexes, creating objects and lists on the way. */
@@ -1858,6 +1969,7 @@ export function build(value: {
   unknownKeys?: readonly number[];
   formats?: readonly number[];
   embedded?: readonly number[];
+  devices?: readonly number[];
 }): {
   raw: string;
   placed: Placement[];
@@ -1866,6 +1978,7 @@ export function build(value: {
   unknownKeys: UnknownKeyPlaced[];
   formats: FormatPlaced[];
   embedded: FormatPlaced[];
+  devices: FormatPlaced[];
 } {
   const resource: JsonObject = {
     resourceType: value.type,
@@ -1914,6 +2027,11 @@ export function build(value: {
     );
     return { ...placedEmbedded, where: `${value.type}.${placedEmbedded.where}` };
   });
+  const deviceOffset = embeddedOffset + embedded.length;
+  const devices = (value.devices ?? []).map((spot, i) => {
+    const placedDevice = placeDevice(resource, spot, sentinelAt(value.stem, deviceOffset + i));
+    return { ...placedDevice, where: `${value.type}.${placedDevice.where}` };
+  });
   const doc: JsonObject = value.inBundle
     ? { resourceType: "Bundle", type: "collection", entry: [{ resource }] }
     : resource;
@@ -1925,6 +2043,7 @@ export function build(value: {
     unknownKeys,
     formats,
     embedded,
+    devices,
   };
 }
 
@@ -1994,11 +2113,13 @@ export function checkCase(
     unknownKeys?: readonly number[];
     formats?: readonly number[];
     embedded?: readonly number[];
+    devices?: readonly number[];
   },
   tally: LeakTally,
   options: FhirDeidOptions = {},
 ): string[] {
-  const { raw, placed, siblings, elementIds, unknownKeys, formats, embedded } = build(value);
+  const { raw, placed, siblings, elementIds, unknownKeys, formats, embedded, devices } =
+    build(value);
   // A `_`-sibling the input does not hold (a later write replaced it) is not swept.
   const held = siblings.filter((s) => s.text === undefined || raw.includes(s.text));
   // Likewise an element id a later write replaced.
@@ -2009,6 +2130,8 @@ export function checkCase(
   const misfits = formats.filter((p) => raw.includes(p.sentinel));
   // Likewise a sentinel in embedded content.
   const contents = embedded.filter((p) => raw.includes(p.sentinel));
+  // Likewise a sentinel at a device identifier.
+  const deviceIds = devices.filter((p) => raw.includes(p.sentinel));
   // Non-vacuity: only a sentinel the input holds is swept, and a case must hold one. A later
   // placement can overwrite an earlier one at the same position.
   const present = placed.filter((p) => raw.includes(p.sentinel));
@@ -2018,7 +2141,8 @@ export function checkCase(
     ids.length === 0 &&
     keys.length === 0 &&
     misfits.length === 0 &&
-    contents.length === 0
+    contents.length === 0 &&
+    deviceIds.length === 0
   ) {
     return ["no sentinel reached the input"];
   }
@@ -2031,6 +2155,7 @@ export function checkCase(
     ...unknownKeyKept(keys, outcome),
     ...formatKept(misfits, outcome),
     ...embeddedKept(contents, outcome),
+    ...deviceKept(deviceIds, outcome),
   ];
 }
 
@@ -2072,6 +2197,7 @@ export const animalCaseArb = fc.record({
   unknownKeys: fc.array(unknownKeyArb, { maxLength: 2 }),
   formats: fc.array(formatArb, { maxLength: 2 }),
   embedded: fc.array(embeddedArb, { maxLength: 2 }),
+  devices: fc.array(deviceArb, { maxLength: 2 }),
 });
 
 describe("the generated leak property: FHIR R4", () => {
@@ -2514,6 +2640,76 @@ describe("the FHIR sweep removes a sentinel in embedded content the pass does no
     ]);
     expect(embeddedKept(placed, { ...clean, manifest: [{ locus: "ZQLKTEETH06X" }] })).toEqual([
       "ZQLKTEETH06X (embedded content at Binary.data) is in the manifest",
+    ]);
+  });
+});
+
+/**
+ * Each place a `Device` holds a device identifier or serial number, on a person, a clinical, a
+ * `Device` and an infrastructure resource, alone and in a Bundle entry, with `keepPatientAnimal` off
+ * and on and with every kind of embedded content kept, through the same check as a generated case, so
+ * every one is run on every pull request whatever the seed draws.
+ */
+describe("the FHIR sweep removes a sentinel at a Device's identifier or serial number", () => {
+  const types = ["Patient", "Observation", "Device", "Provenance"];
+  const spots = DEVICE_SPOTS.map((spot, i) => [spot.where, i] as const);
+  const optionSets: readonly FhirDeidOptions[] = [
+    {},
+    { keepPatientAnimal: true },
+    { keepEmbeddedContent: [...FHIR_EMBEDDED_CONTENT_KINDS] },
+  ];
+
+  it.each(spots)("%s", (_where, spot) => {
+    for (const type of types) {
+      for (const inBundle of [false, true]) {
+        for (const options of optionSets) {
+          const value = {
+            type,
+            inBundle,
+            filler: "abc",
+            stem: "ZQLKDEVC",
+            placements: [],
+            devices: [spot],
+          };
+          expect(checkCase(value, newTally(), options)).toEqual([]);
+        }
+      }
+    }
+  });
+
+  it("the case holds what it placed: the identifier is in the input, on a Device", () => {
+    for (const type of ["Observation", "Device"]) {
+      for (const [, spot] of spots) {
+        const { raw, devices } = build({
+          type,
+          inBundle: false,
+          filler: "abc",
+          stem: "ZQLKDEVC",
+          placements: [],
+          devices: [spot],
+        });
+        expect(devices).toHaveLength(1);
+        expect(raw).toContain(devices[0]?.sentinel);
+        expect(raw).toContain('"resourceType":"Device"');
+      }
+    }
+  });
+
+  it("the stricter rule has teeth: an identifier in the output or the manifest is caught", () => {
+    const placed: FormatPlaced[] = [{ where: "Device.serialNumber", sentinel: "ZQLKTEETH07X" }];
+    const clean: PassOutcome = {
+      output: '{"resourceType":"Device"}',
+      manifest: [],
+      unexaminedResiduals: [],
+      residualAt: () => true,
+      refused: false,
+    };
+    expect(deviceKept(placed, clean)).toEqual([]);
+    expect(deviceKept(placed, { ...clean, output: '{"serialNumber":"ZQLKTEETH07X"}' })).toEqual([
+      "ZQLKTEETH07X (a device identifier at Device.serialNumber) survives in the output",
+    ]);
+    expect(deviceKept(placed, { ...clean, manifest: [{ locus: "ZQLKTEETH07X" }] })).toEqual([
+      "ZQLKTEETH07X (a device identifier at Device.serialNumber) is in the manifest",
     ]);
   });
 });

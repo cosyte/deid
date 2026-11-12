@@ -22,11 +22,11 @@
  * - `binary-data`: a `Binary.data`;
  * - `signature-data`: a `Signature.data`, the signature itself, which can enclose the signed content;
  * - `base64-binary`: every other element R4 types as `base64Binary` (an `Attachment.hash`,
- *   `Device.udiCarrier.carrierAIDC`, `AuditEvent.entity.query`, a `valueBase64Binary` outside an
- *   extension).
+ *   `AuditEvent.entity.query`, a `valueBase64Binary` outside an extension).
  *
  * An extension's value is not among them: every extension value is blocked whatever its type, and no
- * kind here keeps one.
+ * kind here keeps one. Nor is a `Device`'s `udiCarrier.carrierAIDC`: it holds the device's UDI, a
+ * device identifier, so it is removed as category (M) whatever kind is kept.
  *
  * @example
  * ```ts
