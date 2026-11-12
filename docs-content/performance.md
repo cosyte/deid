@@ -53,8 +53,8 @@ On a pull request, the `ci / bench-compare` job times the suite on the base buil
 build, interleaved on one runner, at each format's smallest size and the engine's. It is advisory
 and never fails. The Bench workflow (`.github/workflows/bench.yml`) takes a full reading, the
 budgets, the cold import of each entry and a profile on GitHub-hosted runners, one job per format.
-It runs on demand, on a pull request that changes `bench/` or the workflow, and on a push to `main`
-that changes `package.json`, which every release commit does.
+It runs on demand, on a pull request that changes `src/`, `bench/` or the workflow, and on a push to
+`main` that changes `package.json`, which every release commit does.
 
 ## How the numbers reach this page
 

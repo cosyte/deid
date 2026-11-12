@@ -115,7 +115,25 @@ export function deidentifyCcda(doc: CcdaDocument, options: DeidOptions = {}): Cc
   // The parser retains the source XML; re-parsing it yields a fresh DOM independent of the caller's
   // model, so nothing the caller holds is ever mutated. `toString()` throws only for a hand-constructed
   // document (never one from parseCcda): a documented, acceptable precondition.
-  const source = doc.toString();
+  const { xml, manifest, unexaminedResiduals } = transformCcdaXml(doc.toString(), options);
+  // The tree the pass edited was built and dropped inside `transformCcdaXml`, so nothing here holds
+  // it while the parser reads the output: it can be collected during that second parse rather than
+  // after it.
+  return { document: parseCcda(xml), manifest, unexaminedResiduals };
+}
+
+/** What {@link transformCcdaXml} hands back: the transformed XML and what the pass recorded. */
+interface CcdaTransformedXml {
+  readonly xml: string;
+  readonly manifest: readonly DeidManifestEntry[];
+  readonly unexaminedResiduals: readonly UnexaminedResidual[];
+}
+
+/**
+ * Parse the source into a fresh DOM, locate, transform and write back, and serialize it. The DOM is
+ * local to this call, so it is unreachable once the call returns.
+ */
+function transformCcdaXml(source: string, options: DeidOptions): CcdaTransformedXml {
   const dom = parseSecureXml(source, resolveLimits(undefined), () => {
     /* de-id re-parses spec-clean source; parse warnings are not part of the de-id contract */
   });
@@ -137,8 +155,11 @@ export function deidentifyCcda(doc: CcdaDocument, options: DeidOptions = {}): Cc
   const serializable: { toString(): string } = root;
   // The root element serializes without the XML declaration, which belongs to the document, not to
   // the element, so the declaration is always put back in front of it.
-  const xml = `${XML_DECLARATION}\n${serializable.toString()}`;
-  return { document: parseCcda(xml), manifest, unexaminedResiduals };
+  return {
+    xml: `${XML_DECLARATION}\n${serializable.toString()}`,
+    manifest,
+    unexaminedResiduals,
+  };
 }
 
 export {

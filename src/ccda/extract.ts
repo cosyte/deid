@@ -142,7 +142,18 @@ interface CcdaLocusAccumulator {
    * else it sits ({@link replaceRootsEverywhere}) leaves these alone.
    */
   readonly rootWritten: Set<Element>;
+  /** The path segments of each parent's element children, composed once per extraction. */
+  readonly segments: SegmentCache;
 }
+
+/** One element child of a parent and the path segment it prints. */
+interface ChildSegment {
+  readonly el: Element;
+  readonly path: string;
+}
+
+/** The segments of each parent's element children, kept for the length of one extraction. */
+type SegmentCache = Map<Element, readonly ChildSegment[]>;
 
 /**
  * Which of the applier's edits removes **every child node** of the element it is written onto, and
@@ -316,22 +327,72 @@ function hasAttr(el: Element, name: string): boolean {
  * Segments composed here are element names. The fixed-string segments (`structuredBody`,
  * `nonXMLBody/text`, and an interval's `low` / `high` / `center` bounds) do not pass through this
  * function and carry no index; the CDA schema allows each at most once at its position.
+ *
+ * One pass walks the tree up to three times (the sweeps, the closing root pass and the enumeration),
+ * so the segments of each parent are composed on its first visit and kept in `cache` for the others.
+ * The cache lives for one extraction only: the applier edits the tree after it, so segments kept
+ * across extractions could name children that are gone.
  */
-function childSegments(parent: Element): { el: Element; path: string }[] {
-  const named = childElements(parent).map((el) => {
-    const name = safeLocusToken(el.localName ?? "", "xmlName");
-    return { el, name, withheld: isWithheldToken(name) };
-  });
+function childSegments(cache: SegmentCache, parent: Element): readonly ChildSegment[] {
+  const cached = cache.get(parent);
+  // Stryker disable next-line ConditionalExpression: with the test always false, every visit composes the segments again and prints the same ones, so the mutant changes what is allocated and nothing a test can read
+  if (cached !== undefined) return cached;
+  const segments = segmentsOf(parent);
+  // Stryker disable next-line CallExpression: without the call, the next visit composes the segments again and prints the same ones, so the mutant changes what is allocated and nothing a test can read
+  cache.set(parent, segments);
+  return segments;
+}
+
+/**
+ * The segments of a parent's element children, composed afresh: the work {@link childSegments} does
+ * once per parent and keeps.
+ *
+ * Most elements have no element child or one, and a lone child shares its name with no sibling, so it
+ * is indexed only when its name was refused. The two maps that count siblings are built only where
+ * there are two or more: building them for every element was most of what a walk allocated.
+ */
+function segmentsOf(parent: Element): ChildSegment[] {
+  const elements = childElements(parent);
+  // Stryker disable next-line ConditionalExpression: with the test always false, a lone child takes the counting path and prints the same segment, so the mutant changes what is allocated and nothing a test can read
+  return elements.length < 2 ? loneSegments(elements) : countedSegments(elements);
+}
+
+/** The segment of each of fewer than two children: no sibling shares its name. */
+function loneSegments(elements: readonly Element[]): ChildSegment[] {
+  return elements.map((el) => ({ el, path: segment(nameOf(el), 0, false) }));
+}
+
+/** The segments of two or more children, each indexed among the siblings that print its name. */
+function countedSegments(elements: readonly Element[]): ChildSegment[] {
   const counts = new Map<string, number>();
-  for (const k of named) counts.set(k.name, (counts.get(k.name) ?? 0) + 1);
+  for (const el of elements) {
+    const name = nameOf(el);
+    counts.set(name, (counts.get(name) ?? 0) + 1);
+  }
   const seen = new Map<string, number>();
-  return named.map(({ el, name, withheld }) => {
+  return elements.map((el) => {
+    const name = nameOf(el);
     const idx = seen.get(name) ?? 0;
     seen.set(name, idx + 1);
     /* v8 ignore next -- `counts` was filled from these same names just above, so `?? 1` never runs */
-    const indexed = withheld || (counts.get(name) ?? 1) > 1;
-    return { el, path: indexed ? `${name}[${String(idx)}]` : name };
+    return { el, path: segment(name, idx, (counts.get(name) ?? 1) > 1) };
   });
+}
+
+/**
+ * An element's local name, bounded before it becomes a path segment ({@link safeLocusToken}). An
+ * element with no local name has nothing to print and reads withheld, as a refused name does.
+ */
+function nameOf(el: Element): string {
+  return safeLocusToken(el.localName ?? WITHHELD_LOCUS_TOKEN, "xmlName");
+}
+
+/**
+ * One child's path segment: its bounded name, with its index among the siblings that print the same
+ * name when it has such a sibling (`shared`) or when the name was refused ({@link childSegments}).
+ */
+function segment(name: string, idx: number, shared: boolean): string {
+  return shared || isWithheldToken(name) ? `${name}[${String(idx)}]` : name;
 }
 
 /** Join a running path with a child segment. */
@@ -445,7 +506,7 @@ function replaceRoot(
  */
 function replaceRootsEverywhere(out: CcdaLocusAccumulator, parent: Element, path: string): void {
   if (out.replacedRoots.size === 0) return;
-  for (const { el, path: seg } of childSegments(parent)) {
+  for (const { el, path: seg } of childSegments(out.segments, parent)) {
     const childPath = join(path, seg);
     const root = attr(el, "root");
     const category = root === undefined ? undefined : out.replacedRoots.get(root);
@@ -584,7 +645,7 @@ function blockUnknown(out: CcdaLocusAccumulator, el: Element, path: string): voi
  * recognized coded/administrative elements untouched, and **failing closed** on everything else.
  */
 function sweep(out: CcdaLocusAccumulator, el: Element, path: string): void {
-  for (const { el: childEl, path: seg } of childSegments(el)) {
+  for (const { el: childEl, path: seg } of childSegments(out.segments, el)) {
     const childPath = join(path, seg);
     if (childEl.namespaceURI !== V3_NS) {
       // Foreign / sdtc namespace: unrecognized structure. Fail closed on any value, then descend.
@@ -675,7 +736,7 @@ function pushAge(out: CcdaLocusAccumulator, el: Element, path: string): void {
  * which §164.514(b)(2)(i)(C) aggregates over 89.
  */
 function actAgeObservation(out: CcdaLocusAccumulator, observation: Element, path: string): void {
-  for (const { el, path: seg } of childSegments(observation)) {
+  for (const { el, path: seg } of childSegments(out.segments, observation)) {
     if (el.namespaceURI !== V3_NS || el.localName !== "value") continue;
     const valuePath = join(path, seg);
     nameAttributeNS(out, el, XSI_NS, "type");
@@ -694,7 +755,7 @@ function actAgeObservation(out: CcdaLocusAccumulator, observation: Element, path
  * human-readable narrative (or a reference into it), never a clinical value.
  */
 function blockNarrative(out: CcdaLocusAccumulator, el: Element, path: string): void {
-  for (const { el: child, path: seg } of childSegments(el)) {
+  for (const { el: child, path: seg } of childSegments(out.segments, el)) {
     const childPath = join(path, seg);
     if (child.namespaceURI === V3_NS && (child.localName ?? "") === "text") {
       const narrative = text(child);
@@ -804,11 +865,12 @@ export function extractCcdaLoci(root: Element): CcdaExtraction {
     named: new Map<Element, NamedPositions>(),
     replacedRoots: new Map<string, SafeHarborCategory>(),
     rootWritten: new Set<Element>(),
+    segments: new Map<Element, readonly ChildSegment[]>(),
   };
   // The body is walked after the header, so every root the header replaces is known when the body
   // meets the same root. CDA puts the body last anyway; this holds for a document that does not.
   const bodies: { el: Element; path: string }[] = [];
-  for (const { el, path } of childSegments(root)) {
+  for (const { el, path } of childSegments(out.segments, root)) {
     if (el.namespaceURI !== V3_NS) {
       blockUnknown(out, el, path);
       sweep(out, el, path);
@@ -843,7 +905,7 @@ export function extractCcdaLoci(root: Element): CcdaExtraction {
   enumerateOrFail(rootName, () => {
     // The root element's own positions print under its name; its children print from the same empty
     // base the sweep composes their loci from, so an enumerated position and a locus agree on "where".
-    recordUnexaminedCcdaPositions(residuals, root, rootName, "", out.named);
+    recordUnexaminedCcdaPositions(residuals, root, rootName, "", out.named, out.segments);
   });
   return { loci: out.loci, coords: out.coords, unexaminedResiduals: residuals.build() };
 }
@@ -962,6 +1024,7 @@ function recordUnexaminedCcdaPositions(
   ownPath: string,
   childBase: string,
   covered: CcdaCoverage,
+  segments: SegmentCache,
 ): void {
   recordOwnPositions(residuals, el, ownPath, covered);
   // An edit that deletes every child node of this element (a cleared `<name>`, a blocked narrative
@@ -969,8 +1032,8 @@ function recordUnexaminedCcdaPositions(
   // below through, so the descent continues under it - an `<addr>` keeps its state / country children.
   if (covered.get(el)?.subtree === true) return;
   recordOwnCharacterData(residuals, el, ownPath);
-  for (const { el: child, path: seg } of childSegments(el)) {
+  for (const { el: child, path: seg } of childSegments(segments, el)) {
     const childPath = join(childBase, seg);
-    recordUnexaminedCcdaPositions(residuals, child, childPath, childPath, covered);
+    recordUnexaminedCcdaPositions(residuals, child, childPath, childPath, covered, segments);
   }
 }
