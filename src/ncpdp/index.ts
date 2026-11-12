@@ -10,9 +10,9 @@
  * (`TelecomTransaction` / `TelecomSegment` / `TelecomField`) and its `parseTelecom` / `serializeTelecom`
  * codec: it never touches a third-party substrate.
  *
- * **What it covers (Telecom vD.0).** The Patient (`01`), Prescriber (`03`), Insurance (`04`), and
- * Coordination-of-Benefits (`05`) segments, the dates of the Claim segment (`07`), plus the header's
- * Date of Service:
+ * **What it covers (Telecom vD.0).** The Patient (`01`), Prescriber (`03`), Insurance (`04`),
+ * Coordination-of-Benefits (`05`) and Prior Authorization (`12`) segments, the dates of the Claim
+ * segment (`07`) and of the response DUR segment (`24`), plus the header's Date of Service:
  * - **Patient (`01`)**: name (`CA`/`CB`) and phone (`CQ`) removed; street (`CM`) and city (`CN`)
  *   removed; ZIP (`CP`) generalized to its safe 3-digit form; date of birth (`C4`) generalized to year;
  *   patient id (`CY`) pseudonymized. Gender and state retained.
@@ -24,6 +24,9 @@
  *   pseudonymized; the other-payer date (`E8`) generalized to year.
  * - **Claim (`07`)**: the Date Prescription Written (`DE`) and the Associated Prescription/Service Date
  *   (`EP`) generalized to year; every other Claim field retained.
+ * - **Prior Authorization (`12`)**: the type code (`EU`) kept in the form of a code; the number
+ *   submitted (`EV`) and every other field (a representative's name or address, say) removed.
+ * - **Response DUR / PPS (`24`)**: the Previous Date Of Fill (`FU`) generalized to year.
  * - **Header**: Date of Service generalized to year.
  *
  * **Fail closed.** A free-text field (`544-FY` DUR free text, `504-F4` response message) is blocked
@@ -167,6 +170,7 @@ export {
   TELECOM_SEGMENT_RETAIN_FIELDS,
   TELECOM_FREE_TEXT_FIELDS,
   TELECOM_RETAIN_SEGMENTS,
+  TELECOM_RETAIN_SEGMENT_REASONS,
   TELECOM_RETAINED_SEGMENT_RULES,
   type TelecomFieldMode,
   type TelecomFieldRule,

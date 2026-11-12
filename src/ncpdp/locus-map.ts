@@ -9,12 +9,15 @@
  * (e.g. `311-CB`) are globally unique in the standard, so keying off the field id is correct and
  * bypass-resistant: a corrupt Segment Identification (`AM`) cannot route a value away from its rule.
  *
- * The three PHI-bearing segments: Patient (`01`), Prescriber (`03`), Insurance (`04`), and the other-payer
- * Coordination of Benefits segment (`05`): carry the individual's and the cardholder's identity. The
- * clinical / financial / pharmacy segments (`02`, `07`, `08`, `10`, `11`, `12`, `13`) and the adjudication
- * response segments carry NDC drug codes, quantities, days-supply, pricing, and DUR reason codes, no
- * direct patient identifier, and are **retained untouched** (the over-scrub guard), except a free-text
- * field, which **fails closed**. A segment id that is neither mapped nor retained is blocked field-by-field.
+ * The PHI-bearing segments: Patient (`01`), Prescriber (`03`), Insurance (`04`), the other-payer
+ * Coordination of Benefits segment (`05`), and Prior Authorization (`12`): carry the individual's, the
+ * cardholder's or a representative's identity, and keep only the fields a list names. The clinical /
+ * financial / pharmacy segments (`02`, `07`, `08`, `10`, `11`, `13`) and the adjudication response
+ * segments carry NDC drug codes, quantities, days-supply, pricing, and DUR reason codes, and are
+ * **retained** (the over-scrub guard), each for the reason {@link TELECOM_RETAIN_SEGMENT_REASONS} gives,
+ * except a free-text field, which **fails closed**, and a dated field a rule names
+ * ({@link TELECOM_RETAINED_SEGMENT_RULES}). A segment id that is neither mapped nor retained is blocked
+ * field-by-field.
  *
  * Field positions are grounded in the NCPDP Telecommunication Standard vD.0 segment definitions and the
  * sibling `@cosyte/ncpdp` field model (`FIELD_NAMES`, the Patient / Insurance / Prescriber decoders).
@@ -105,6 +108,18 @@ const COB_05: Readonly<Record<string, TelecomFieldRule>> = {
 };
 
 /**
+ * The **Prior Authorization segment (`12`)** field map. Besides the authorization's type and number, the
+ * segment may carry the name and address of a person acting for the patient and the dates of the
+ * request, and the field tables we hold name only the type code (`461-EU`) and the number submitted
+ * (`462-EV`). So the segment is mapped rather than retained: the number submitted, an authorization
+ * number issued for this patient, is removed, the type code is kept in the form of a code, and every
+ * other populated field fails closed like an unlisted field of any mapped segment.
+ */
+const PRIOR_AUTH_12: Readonly<Record<string, TelecomFieldRule>> = {
+  EV: { mode: "block" }, // 462-EV Prior Authorization Number Submitted → removed
+};
+
+/**
  * The full NCPDP Telecom locus map: segment id → its mapped PHI-bearing fields. A segment absent from
  * this map is either a recognized clinical / financial segment (retained, {@link TELECOM_RETAIN_SEGMENTS})
  * or an unknown segment (failed closed by the extractor).
@@ -123,6 +138,7 @@ export const TELECOM_LOCUS_MAP: Readonly<
   "03": PRESCRIBER_03,
   "04": INSURANCE_04,
   "05": COB_05,
+  "12": PRIOR_AUTH_12,
 });
 
 /**
@@ -186,6 +202,9 @@ export const TELECOM_SEGMENT_RETAIN_FIELDS: Readonly<Record<string, ReadonlySet<
       // Not "MH", the Other Payer Processor Control Number: up to ten letters or digits with no format
       // that tells a plan's routing code from a short name, so it is removed with the unlisted fields.
     ]),
+    // Prior Authorization (12): the type code only; the number submitted (EV) is removed and every
+    // other field (a representative's name or address, a request date) falls through to a block.
+    "12": new Set<string>(["EU"]), // 461-EU Prior Authorization Type Code
   });
 
 /**
@@ -204,45 +223,73 @@ export const TELECOM_SEGMENT_RETAIN_FIELDS: Readonly<Record<string, ReadonlySet<
 export const TELECOM_FREE_TEXT_FIELDS: ReadonlySet<string> = new Set<string>(["FY", "F4", "FQ"]);
 
 /**
+ * **Why each kept Telecom segment is kept**: segment id → the reason it is retained rather than mapped.
+ * A segment is kept whole only with a reason listed here, and {@link TELECOM_RETAIN_SEGMENTS} is read off
+ * this table, so the two cannot drift apart. The reasons are the over-scrub guard: each segment carries
+ * the drug, quantity, pricing, clinical or adjudication values a released claim exists to keep, and
+ * removing them would destroy what the output is for.
+ *
+ * Kept is not unexamined: a free-text field in any of them fails closed, a dated field
+ * {@link TELECOM_RETAINED_SEGMENT_RULES} names is transformed, and every other populated field is counted
+ * as an unexamined residual.
+ *
+ * @example
+ * ```ts
+ * import { TELECOM_RETAIN_SEGMENT_REASONS } from "@cosyte/deid/ncpdp";
+ *
+ * TELECOM_RETAIN_SEGMENT_REASONS["11"]; // => "Pricing: the amounts claimed and their qualifiers."
+ * TELECOM_RETAIN_SEGMENT_REASONS["12"]; // => undefined (Prior Authorization is mapped, not kept)
+ * ```
+ */
+export const TELECOM_RETAIN_SEGMENT_REASONS: Readonly<Record<string, string>> = Object.freeze({
+  "02": "Pharmacy Provider: the dispensing pharmacy's own identifiers, not the patient's.",
+  "07":
+    "Claim: the product, quantity, days supply and fill of the prescription; its dates are " +
+    "reached by a rule.",
+  "08": "DUR / PPS: the reason, professional service and result of service codes; free text fails closed.",
+  "10": "Compound: the ingredient product ids, quantities and costs.",
+  "11": "Pricing: the amounts claimed and their qualifiers.",
+  "13": "Clinical: the diagnosis codes and measurements the claim carries.",
+  "20": "Response Message: the payer's message, which fails closed as free text.",
+  "21":
+    "Response Status: the status, reject codes and the payer's authorization number; the " +
+    "additional message fails closed.",
+  "22": "Response Claim: the reference number and qualifier of the claim answered.",
+  "23": "Response Pricing: the amounts paid and the basis of reimbursement.",
+  "24":
+    "Response DUR / PPS: the alert codes and the quantity of a previous fill; its previous date " +
+    "of fill is reached by a rule and its free text fails closed.",
+});
+
+/**
  * The recognized **clinical / financial / pharmacy** Telecom segments retained (passed through
- * untouched): the positive half of the fail-closed rule (the analogue of the HL7 / X12 retain lists).
- * They carry NDC drug codes, quantities, days-supply, pricing amounts, and DUR reason codes, no direct
- * patient identifier, so their values survive the over-scrub test byte-identical. A free-text field
- * inside one of these still fails closed. A segment id that is neither mapped ({@link TELECOM_LOCUS_MAP})
- * nor on this list is blocked field-by-field.
+ * untouched): the positive half of the fail-closed rule (the analogue of the HL7 / X12 retain lists),
+ * read off {@link TELECOM_RETAIN_SEGMENT_REASONS}, so a segment is kept only with a listed reason. They
+ * carry NDC drug codes, quantities, days-supply, pricing amounts, and DUR reason codes, so their values
+ * survive the over-scrub test byte-identical. A free-text field inside one of these still fails closed.
+ * A segment id that is neither mapped ({@link TELECOM_LOCUS_MAP}) nor on this list is blocked
+ * field-by-field. Prior Authorization (`12`) is mapped, not kept.
  *
  * A retained segment keeps every field but the ones {@link TELECOM_RETAINED_SEGMENT_RULES} names: the
- * Claim segment's dates of the individual's care (`414-DE`, `457-EP`) are generalized like any other
- * date.
+ * Claim segment's dates of the individual's care (`414-DE`, `457-EP`) and the response DUR segment's
+ * Previous Date Of Fill (`530-FU`) are generalized like any other date.
  *
- * **Documented limitation (mirrors the HL7 / X12 adapters).** A retained segment may carry a
- * residual patient-related date the rules do not name (a `530-FU` previous date of fill in a response
- * DUR segment) or a per-prescription reference (`402-D2` Rx reference number). Each is counted as an
- * unexamined residual, not scrubbed; forgetting a clinical segment here fails **safe**: blocked, not
- * leaked.
+ * **Documented limitation (mirrors the HL7 / X12 adapters).** A retained segment may carry a field the
+ * field tables we hold do not place, or a per-prescription reference (`402-D2` Rx reference number).
+ * Each is kept and counted as an unexamined residual, never passed through unrecorded; forgetting a
+ * clinical segment here fails **safe**: blocked, not leaked.
  *
  * @example
  * ```ts
  * import { TELECOM_RETAIN_SEGMENTS } from "@cosyte/deid/ncpdp";
  *
  * TELECOM_RETAIN_SEGMENTS.has("07"); // => true (Claim, NDC / quantity / pricing retained)
+ * TELECOM_RETAIN_SEGMENTS.has("12"); // => false (Prior Authorization, mapped)
  * ```
  */
-export const TELECOM_RETAIN_SEGMENTS: ReadonlySet<string> = new Set<string>([
-  "02", // Pharmacy Provider (the pharmacy's own id, not the patient)
-  "07", // Claim (NDC, quantity, days supply, DAW, Rx reference number)
-  "08", // DUR / PPS (reason / professional-service / result-of-service codes)
-  "10", // Compound (ingredient NDCs, quantities, costs)
-  "11", // Pricing (ingredient cost, dispensing fee, patient pay, monetary)
-  "12", // Prior Authorization (type / number)
-  "13", // Clinical (diagnosis codes, measurements)
-  // Response segments (adjudication results, status / pricing / DUR codes and amounts).
-  "20", // Response Message (free-text 504-F4 still fails closed)
-  "21", // Response Status
-  "22", // Response Claim
-  "23", // Response Pricing
-  "24", // Response DUR / PPS
-]);
+export const TELECOM_RETAIN_SEGMENTS: ReadonlySet<string> = new Set<string>(
+  Object.keys(TELECOM_RETAIN_SEGMENT_REASONS),
+);
 
 /**
  * The **Claim segment (`07`)** fields a rule reaches although the segment is retained: its two dates of
@@ -251,6 +298,14 @@ export const TELECOM_RETAIN_SEGMENTS: ReadonlySet<string> = new Set<string>([
 const CLAIM_07_DATES: Readonly<Record<string, TelecomFieldRule>> = Object.freeze({
   DE: { mode: "date", category: C.DATES }, // 414-DE Date Prescription Written → year
   EP: { mode: "date", category: C.DATES }, // 457-EP Associated Prescription/Service Date → year
+});
+
+/**
+ * The **Response DUR / PPS segment (`24`)** field a rule reaches although the segment is retained: the
+ * Previous Date Of Fill, the day the patient's earlier, conflicting prescription was filled.
+ */
+const RESPONSE_DUR_24_DATES: Readonly<Record<string, TelecomFieldRule>> = Object.freeze({
+  FU: { mode: "date", category: C.DATES }, // 530-FU Previous Date Of Fill → year
 });
 
 /**
@@ -266,7 +321,11 @@ const CLAIM_07_DATES: Readonly<Record<string, TelecomFieldRule>> = Object.freeze
  * - `457-EP` Associated Prescription/Service Date, the date of the patient's earlier fill or service
  *   this claim is tied to (a partial fill's completion, say).
  *
- * Both are treated as the header Date of Service (`401-D1`) and the other payer date (`443-E8`) are:
+ * The response DUR / PPS segment (`24`) carries one: `530-FU` Previous Date Of Fill, the day the
+ * patient's earlier prescription that the alert is about was filled. `@cosyte/ncpdp` names it in its
+ * field table and lifts it as the alert's previous date of fill.
+ *
+ * Each is treated as the header Date of Service (`401-D1`) and the other payer date (`443-E8`) are:
  * generalized to the year under Safe Harbor, shifted under a profile that shifts dates. The Pricing
  * segment (`11`) carries amounts and codes and no date, so it has no entry here; the Prescriber segment
  * (`03`) is a mapped segment, where every field but its id qualifier is removed.
@@ -277,10 +336,12 @@ const CLAIM_07_DATES: Readonly<Record<string, TelecomFieldRule>> = Object.freeze
  *
  * TELECOM_RETAINED_SEGMENT_RULES["07"]?.DE?.mode; // => "date"  (Date Prescription Written)
  * TELECOM_RETAINED_SEGMENT_RULES["07"]?.D7; // => undefined (the NDC, retained)
+ * TELECOM_RETAINED_SEGMENT_RULES["24"]?.FU?.mode; // => "date"  (Previous Date Of Fill)
  * ```
  */
 export const TELECOM_RETAINED_SEGMENT_RULES: Readonly<
   Record<string, Readonly<Record<string, TelecomFieldRule>>>
 > = Object.freeze({
   "07": CLAIM_07_DATES,
+  "24": RESPONSE_DUR_24_DATES,
 });

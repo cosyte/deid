@@ -62,17 +62,19 @@ is required and calling without one when the transaction needs it is a fatal `DE
 Telecom is a flat sequence of segments of `{ id, value }` fields. Field ids are globally unique in the
 standard, so the map keys off the field id directly.
 
-| Segment / locus                                          | Handling                                                                                                                                                                                                                               |
-| -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Patient (`01`)**                                       | name (`CA`/`CB`) + phone (`CQ`) removed; street (`CM`) + city (`CN`) removed; ZIP (`CP`) → 3-digit; DOB (`C4`) → year (removed when it shows an age over 89); patient id (`CY`) **removed** under Safe Harbor; gender + state retained |
-| **Insurance (`04`)**                                     | cardholder id (`C2`) + group id (`C1`) **removed** under Safe Harbor; cardholder name (`CC`/`CD`) removed; person code retained                                                                                                        |
-| **Prescriber (`03`)**                                    | prescriber id (`DB`) **removed**                                                                                                                                                                                                       |
-| **Coordination of Benefits (`05`)**                      | other-payer cardholder (`NU`) + group (`MJ`) ids **removed** under Safe Harbor; other-payer date (`E8`) → year                                                                                                                         |
-| **Claim (`07`)**                                         | Date Prescription Written (`DE`) + Associated Prescription/Service Date (`EP`) → year; every other Claim field retained                                                                                                                |
-| **Header**                                               | Date of Service → year                                                                                                                                                                                                                 |
-| **Free text** (`544-FY`, `504-F4`, `526-FQ`)             | **fails closed**: blocked, never scrubbed by a naive pass                                                                                                                                                                              |
-| **Clinical / financial** (`07`/`08`/`10`/`11`/`12`/`13`) | **retained untouched** but for the Claim dates above: NDC drug codes, quantities, days-supply, pricing, DUR reason codes                                                                                                               |
-| Any **unmapped / unknown** segment                       | **fails closed**: every field blocked                                                                                                                                                                                                  |
+| Segment / locus                                                                  | Handling                                                                                                                                                                                                                                    |
+| -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Patient (`01`)**                                                               | name (`CA`/`CB`) + phone (`CQ`) removed; street (`CM`) + city (`CN`) removed; ZIP (`CP`) → 3-digit; DOB (`C4`) → year (removed when it shows an age over 89); patient id (`CY`) **removed** under Safe Harbor; gender + state retained      |
+| **Insurance (`04`)**                                                             | cardholder id (`C2`) + group id (`C1`) **removed** under Safe Harbor; cardholder name (`CC`/`CD`) removed; person code retained                                                                                                             |
+| **Prescriber (`03`)**                                                            | prescriber id (`DB`) **removed**                                                                                                                                                                                                            |
+| **Coordination of Benefits (`05`)**                                              | other-payer cardholder (`NU`) + group (`MJ`) ids **removed** under Safe Harbor; other-payer date (`E8`) → year                                                                                                                              |
+| **Claim (`07`)**                                                                 | Date Prescription Written (`DE`) + Associated Prescription/Service Date (`EP`) → year; every other Claim field retained                                                                                                                     |
+| **Prior Authorization (`12`)**                                                   | type code (`EU`) kept in the form of a code; the number submitted (`EV`) and every other field (a representative's name or address, a request date) **removed**                                                                             |
+| **Response DUR / PPS (`24`)**                                                    | Previous Date Of Fill (`FU`) → year; the alert codes and the quantity of the previous fill retained                                                                                                                                         |
+| **Header**                                                                       | Date of Service → year                                                                                                                                                                                                                      |
+| **Free text** (`544-FY`, `504-F4`, `526-FQ`)                                     | **fails closed**: blocked, never scrubbed by a naive pass                                                                                                                                                                                   |
+| **Clinical / financial / response** (`02`/`07`/`08`/`10`/`11`/`13`/`20` to `24`) | **retained untouched** but for the dates above, each segment for the reason `TELECOM_RETAIN_SEGMENT_REASONS` lists: NDC drug codes, quantities, days-supply, pricing, DUR reason codes; every other field counted as an unexamined residual |
+| Any **unmapped / unknown** segment                                               | **fails closed**: every field blocked                                                                                                                                                                                                       |
 
 The X12 adapter **retains** provider identity, while this adapter **removes** the prescriber id: a
 deliberate asymmetry.
@@ -95,6 +97,19 @@ its year, recorded in the manifest as `07/DE` or `07/EP`, and shifted instead un
 shifts dates. `TELECOM_RETAINED_SEGMENT_RULES` lists them. The Pricing segment (`11`) carries amounts
 and codes and no date. The Prescriber segment (`03`) carries no date either, and removes every field
 but its id qualifier.
+
+The response DUR / PPS segment (`24`) is kept for its alert codes, but its Previous Date Of Fill
+(`530-FU`) is the day the patient's earlier prescription was filled: it goes to the year as `24/FU`,
+like the Claim dates.
+
+The Prior Authorization segment (`12`) is no longer kept whole. Besides the authorization's type and
+number it may carry the name and address of a person acting for the patient, and the field tables we
+hold name only the type code (`461-EU`) and the number submitted (`462-EV`). So the segment keeps the
+type code in the form of a code, removes the number submitted (an authorization number issued for
+this patient), and removes and records every other populated field, whatever its id.
+
+Every segment kept whole has a reason in `TELECOM_RETAIN_SEGMENT_REASONS`, and
+`TELECOM_RETAIN_SEGMENTS` is read off that table, so a segment is never kept without one.
 
 ## NCPDP SCRIPT is refused
 
@@ -134,10 +149,14 @@ change: a parsed Telecom transaction is never a candidate for the refusal.
 
 ## Known limitation
 
-A retained clinical or response segment may carry a residual patient-related date the map does not
-surface (e.g. a previous date of fill in a response DUR segment): a documented limitation mirroring
-the HL7 and X12 adapters. It is kept and counted as an unexamined residual, never passed through
-unrecorded.
+A retained clinical or response segment may carry a field the field tables we hold do not place, or a
+per-prescription reference such as the Rx reference number (`402-D2`): a documented limitation
+mirroring the HL7 and X12 adapters. Each is kept and counted as an unexamined residual, never passed
+through unrecorded. Three fields a Claim or Clinical segment is said to carry are in that set because
+no field table we hold places them: a Scheduled Prescription ID Number (`454-EK`) and an Alternate ID
+(`330-CW`) in the Claim segment, and a Measurement Date (`494-ZE`) in the Clinical segment. If your
+transactions carry them, remove them after the pass: the residual list names each one it found as
+`07/EK`, `07/CW` or `13/ZE`.
 
 A Telecom message that carries more than one transaction is **refused** with a typed `DeidError`
 carrying `DEID_FORMAT_UNSUPPORTED`, with no partial output. Split it and de-identify each transaction on
@@ -158,8 +177,10 @@ before you release the output, with a table of what this adapter does not cover.
   [`TelecomDeidResult`](./api/@cosyte/deid/ncpdp.md#telecomdeidresult)
 - [`TELECOM_LOCUS_MAP`](./api/@cosyte/deid/ncpdp.md#telecom_locus_map),
   [`TELECOM_FREE_TEXT_FIELDS`](./api/@cosyte/deid/ncpdp.md#telecom_free_text_fields) and
-  [`TELECOM_RETAIN_SEGMENTS`](./api/@cosyte/deid/ncpdp.md#telecom_retain_segments): the map this page
-  describes
+  [`TELECOM_RETAIN_SEGMENTS`](./api/@cosyte/deid/ncpdp.md#telecom_retain_segments),
+  [`TELECOM_RETAIN_SEGMENT_REASONS`](./api/@cosyte/deid/ncpdp.md#telecom_retain_segment_reasons) and
+  [`TELECOM_RETAINED_SEGMENT_RULES`](./api/@cosyte/deid/ncpdp.md#telecom_retained_segment_rules): the
+  map this page describes
 - [`NCPDP_SCRIPT_REFUSAL_MESSAGE`](./api/@cosyte/deid/ncpdp.md#ncpdp_script_refusal_message) and
   [`NCPDP_MULTI_TRANSACTION_REFUSAL_MESSAGE`](./api/@cosyte/deid/ncpdp.md#ncpdp_multi_transaction_refusal_message)
 - [`DeidError`](./api/@cosyte/deid.md#deiderror) and
