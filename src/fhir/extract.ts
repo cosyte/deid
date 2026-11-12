@@ -1477,14 +1477,7 @@ export function extractFhirLoci(
   resource: FhirComplex,
   options: FhirExtractOptions = {},
 ): FhirExtraction {
-  // `resourceType` is a JSON string VALUE, not a checked identifier, and it is the ROOT of every path
-  // in the manifest, so an unbounded one prefixes the whole audit with document content.
-  const rt = safeLocusToken(resourceType(resource) ?? "", "fhirElementName");
-  let unknownKeys: ReadonlySet<FhirNode> = new Set();
-  // The same reach as the enumeration below, so a tree it cannot walk fails the same way.
-  enumerateOrFail(rt, () => {
-    unknownKeys = findUnknownKeys(resource);
-  });
+  const unknownKeys = new Set<FhirNode>();
   const out: FhirLocusAccumulator = {
     loci: [],
     coords: [],
@@ -1493,6 +1486,13 @@ export function extractFhirLoci(
     keepPatientAnimal: options.keepPatientAnimal === true,
     unknownKeys,
   };
+  // `resourceType` is a JSON string VALUE, not a checked identifier, and it is the ROOT of every path
+  // in the manifest, so an unbounded one prefixes the whole audit with document content.
+  const rt = safeLocusToken(resourceType(resource) ?? "", "fhirElementName");
+  // The same reach as the enumeration below, so a tree it cannot walk fails the same way.
+  enumerateOrFail(rt, () => {
+    findUnknownKeys(resource, unknownKeys);
+  });
   walkComplex(out, resource, rt, false, "");
   const ruled = new Map<FhirNode, FhirEditKind>();
   for (const coord of out.coords) ruled.set(coord.node, coord.edit);
@@ -1501,6 +1501,7 @@ export function extractFhirLoci(
   });
   const walked = new Map<FhirNode, FhirEditKind>();
   for (const coord of out.coords) walked.set(coord.node, coord.edit);
+  // The same reach as the enumeration below, so a tree it cannot walk fails the same way.
   enumerateOrFail(rt, () => {
     decideWrittenMetadataBelow(out, resource, rt, walked);
   });
@@ -1520,9 +1521,9 @@ export function extractFhirLoci(
 }
 
 /**
- * Find every value held under a key R4 does not define where it sits, at any depth of any resource
- * or datatype, by the element names of the R4 definitions (`./element-names.js`): a key a resource,
- * a datatype or a backbone element does not carry (`Observation.zzNote`,
+ * Add to `unknown` every value held under a key R4 does not define where it sits, at any depth of
+ * any resource or datatype, by the element names of the R4 definitions (`./element-names.js`): a
+ * key a resource, a datatype or a backbone element does not carry (`Observation.zzNote`,
  * `Observation.code.coding[0].zzNote`, `Observation.component[0].zzNote`), and every key of a
  * structure where R4 puts a primitive (`"status": { "zz": ... }`), which defines none. A resource is
  * read by its own `resourceType`; one R4 does not define is read as carrying only what every resource
@@ -1532,8 +1533,7 @@ export function extractFhirLoci(
  * its `id` and its nested extensions. Every key named here is text a sender chose, so it is blocked
  * whatever it holds ({@link blockUnknownKeysBelow}).
  */
-function findUnknownKeys(resource: FhirComplex): ReadonlySet<FhirNode> {
-  const unknown = new Set<FhirNode>();
+function findUnknownKeys(resource: FhirComplex, unknown: Set<FhirNode>): void {
   const visit = (node: FhirNode, structure: string | null): void => {
     if (isList(node)) {
       node.items.forEach((item) => {
@@ -1559,7 +1559,6 @@ function findUnknownKeys(resource: FhirComplex): ReadonlySet<FhirNode> {
     }
   };
   visit(resource, ANY_RESOURCE);
-  return unknown;
 }
 
 /**
