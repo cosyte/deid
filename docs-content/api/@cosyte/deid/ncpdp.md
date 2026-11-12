@@ -11,9 +11,9 @@ adapter reaches NCPDP data **only** through `@cosyte/ncpdp`'s own exported Telec
 (`TelecomTransaction` / `TelecomSegment` / `TelecomField`) and its `parseTelecom` / `serializeTelecom`
 codec: it never touches a third-party substrate.
 
-**What it covers (Telecom vD.0).** The Patient (`01`), Prescriber (`03`), Insurance (`04`), and
-Coordination-of-Benefits (`05`) segments, the dates of the Claim segment (`07`), plus the header's
-Date of Service:
+**What it covers (Telecom vD.0).** The Patient (`01`), Prescriber (`03`), Insurance (`04`),
+Coordination-of-Benefits (`05`) and Prior Authorization (`12`) segments, the dates of the Claim
+segment (`07`) and of the response DUR segment (`24`), plus the header's Date of Service:
 - **Patient (`01`)**: name (`CA`/`CB`) and phone (`CQ`) removed; street (`CM`) and city (`CN`)
   removed; ZIP (`CP`) generalized to its safe 3-digit form; date of birth (`C4`) generalized to year;
   patient id (`CY`) pseudonymized. Gender and state retained.
@@ -25,6 +25,9 @@ Date of Service:
   pseudonymized; the other-payer date (`E8`) generalized to year.
 - **Claim (`07`)**: the Date Prescription Written (`DE`) and the Associated Prescription/Service Date
   (`EP`) generalized to year; every other Claim field retained.
+- **Prior Authorization (`12`)**: the type code (`EU`) kept in the form of a code; the number
+  submitted (`EV`) and every other field (a representative's name or address, say) removed.
+- **Response DUR / PPS (`24`)**: the Previous Date Of Fill (`FU`) generalized to year.
 - **Header**: Date of Service generalized to year.
 
 **Fail closed.** A free-text field (`544-FY` DUR free text, `504-F4` response message) is blocked
@@ -245,26 +248,51 @@ TELECOM_LOCUS_MAP["01"]?.CB?.category; // => "NAMES"  (Patient Last Name)
 
 ***
 
+### TELECOM\_RETAIN\_SEGMENT\_REASONS
+
+> `const` **TELECOM\_RETAIN\_SEGMENT\_REASONS**: `Readonly`\<`Record`\<`string`, `string`\>\>
+
+**Why each kept Telecom segment is kept**: segment id → the reason it is retained rather than mapped.
+A segment is kept whole only with a reason listed here, and [TELECOM\_RETAIN\_SEGMENTS](#telecom_retain_segments) is read off
+this table, so the two cannot drift apart. The reasons are the over-scrub guard: each segment carries
+the drug, quantity, pricing, clinical or adjudication values a released claim exists to keep, and
+removing them would destroy what the output is for.
+
+Kept is not unexamined: a free-text field in any of them fails closed, a dated field
+[TELECOM\_RETAINED\_SEGMENT\_RULES](#telecom_retained_segment_rules) names is transformed, and every other populated field is counted
+as an unexamined residual.
+
+#### Example
+
+```ts
+import { TELECOM_RETAIN_SEGMENT_REASONS } from "@cosyte/deid/ncpdp";
+
+TELECOM_RETAIN_SEGMENT_REASONS["11"]; // => "Pricing: the amounts claimed and their qualifiers."
+TELECOM_RETAIN_SEGMENT_REASONS["12"]; // => undefined (Prior Authorization is mapped, not kept)
+```
+
+***
+
 ### TELECOM\_RETAIN\_SEGMENTS
 
 > `const` **TELECOM\_RETAIN\_SEGMENTS**: `ReadonlySet`\<`string`\>
 
 The recognized **clinical / financial / pharmacy** Telecom segments retained (passed through
-untouched): the positive half of the fail-closed rule (the analogue of the HL7 / X12 retain lists).
-They carry NDC drug codes, quantities, days-supply, pricing amounts, and DUR reason codes, no direct
-patient identifier, so their values survive the over-scrub test byte-identical. A free-text field
-inside one of these still fails closed. A segment id that is neither mapped ([TELECOM\_LOCUS\_MAP](#telecom_locus_map))
-nor on this list is blocked field-by-field.
+untouched): the positive half of the fail-closed rule (the analogue of the HL7 / X12 retain lists),
+read off [TELECOM\_RETAIN\_SEGMENT\_REASONS](#telecom_retain_segment_reasons), so a segment is kept only with a listed reason. They
+carry NDC drug codes, quantities, days-supply, pricing amounts, and DUR reason codes, so their values
+survive the over-scrub test byte-identical. A free-text field inside one of these still fails closed.
+A segment id that is neither mapped ([TELECOM\_LOCUS\_MAP](#telecom_locus_map)) nor on this list is blocked
+field-by-field. Prior Authorization (`12`) is mapped, not kept.
 
 A retained segment keeps every field but the ones [TELECOM\_RETAINED\_SEGMENT\_RULES](#telecom_retained_segment_rules) names: the
-Claim segment's dates of the individual's care (`414-DE`, `457-EP`) are generalized like any other
-date.
+Claim segment's dates of the individual's care (`414-DE`, `457-EP`) and the response DUR segment's
+Previous Date Of Fill (`530-FU`) are generalized like any other date.
 
-**Documented limitation (mirrors the HL7 / X12 adapters).** A retained segment may carry a
-residual patient-related date the rules do not name (a `530-FU` previous date of fill in a response
-DUR segment) or a per-prescription reference (`402-D2` Rx reference number). Each is counted as an
-unexamined residual, not scrubbed; forgetting a clinical segment here fails **safe**: blocked, not
-leaked.
+**Documented limitation (mirrors the HL7 / X12 adapters).** A retained segment may carry a field the
+field tables we hold do not place, or a per-prescription reference (`402-D2` Rx reference number).
+Each is kept and counted as an unexamined residual, never passed through unrecorded; forgetting a
+clinical segment here fails **safe**: blocked, not leaked.
 
 #### Example
 
@@ -272,6 +300,7 @@ leaked.
 import { TELECOM_RETAIN_SEGMENTS } from "@cosyte/deid/ncpdp";
 
 TELECOM_RETAIN_SEGMENTS.has("07"); // => true (Claim, NDC / quantity / pricing retained)
+TELECOM_RETAIN_SEGMENTS.has("12"); // => false (Prior Authorization, mapped)
 ```
 
 ***
@@ -292,7 +321,11 @@ element of a date but the year from a date directly related to an individual:
 - `457-EP` Associated Prescription/Service Date, the date of the patient's earlier fill or service
   this claim is tied to (a partial fill's completion, say).
 
-Both are treated as the header Date of Service (`401-D1`) and the other payer date (`443-E8`) are:
+The response DUR / PPS segment (`24`) carries one: `530-FU` Previous Date Of Fill, the day the
+patient's earlier prescription that the alert is about was filled. `@cosyte/ncpdp` names it in its
+field table and lifts it as the alert's previous date of fill.
+
+Each is treated as the header Date of Service (`401-D1`) and the other payer date (`443-E8`) are:
 generalized to the year under Safe Harbor, shifted under a profile that shifts dates. The Pricing
 segment (`11`) carries amounts and codes and no date, so it has no entry here; the Prescriber segment
 (`03`) is a mapped segment, where every field but its id qualifier is removed.
@@ -304,6 +337,7 @@ import { TELECOM_RETAINED_SEGMENT_RULES } from "@cosyte/deid/ncpdp";
 
 TELECOM_RETAINED_SEGMENT_RULES["07"]?.DE?.mode; // => "date"  (Date Prescription Written)
 TELECOM_RETAINED_SEGMENT_RULES["07"]?.D7; // => undefined (the NDC, retained)
+TELECOM_RETAINED_SEGMENT_RULES["24"]?.FU?.mode; // => "date"  (Previous Date Of Fill)
 ```
 
 ***

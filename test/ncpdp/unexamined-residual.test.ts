@@ -148,9 +148,10 @@ describe("NCPDP Telecom RESPONSE: the header the pass actually emits is the one 
   });
 
   it("NEGATIVE CONTROL: never a response field the pass blocked", () => {
-    // The two free-text fields fail closed inside an otherwise-retained response segment: a rule
-    // reached them, so they are examined and may not appear in the measurement.
-    expect(manifest.map((e) => e.locus)).toEqual(["20/F4", "24/FQ"]);
+    // The two free-text fields fail closed inside an otherwise-retained response segment, and the DUR
+    // segment's previous date of fill goes to its year: a rule reached each, so each is examined and
+    // may not appear in the measurement.
+    expect(manifest.map((e) => e.locus)).toEqual(["20/F4", "24/FU", "24/FQ"]);
     for (const entry of manifest) expect(loci.has(entry.locus)).toBe(false);
   });
 

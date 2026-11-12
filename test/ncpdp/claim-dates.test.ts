@@ -118,7 +118,7 @@ describe("NCPDP Telecom Claim segment dates", () => {
   });
 
   it("names exactly the two Claim dates in the retained-segment rules", () => {
-    expect(Object.keys(TELECOM_RETAINED_SEGMENT_RULES)).toEqual(["07"]);
+    expect(Object.keys(TELECOM_RETAINED_SEGMENT_RULES).sort()).toEqual(["07", "24"]);
     expect(Object.keys(TELECOM_RETAINED_SEGMENT_RULES["07"] ?? {}).sort()).toEqual(["DE", "EP"]);
   });
 });

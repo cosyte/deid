@@ -132,6 +132,11 @@ describe("every adapter emits the same transformed document, byte for byte", () 
   // THE C-CDA DIGEST MOVED A SECOND TIME, DELIBERATELY. The restricted ZIP list now follows the 2020
   // Census, which restricts `205`, so the author's `20500` becomes `000` where it was `205`. The
   // control below puts `205` back and requires the pin from before it, so nothing else moved.
+  //
+  // THE NCPDP DIGEST MOVED AGAIN, DELIBERATELY. The fixture gained a Prior Authorization segment
+  // (`12`) carrying a representative's name and address; the segment is now mapped, so its type code
+  // is kept and every other field is removed and recorded. The NCPDP manifest below gains those rows.
+  // The other five digests are unmoved.
   it("the six adapters' transformed documents are unchanged", () => {
     expect(transformedDocumentDigests()).toMatchInlineSnapshot(`
       {
@@ -140,7 +145,7 @@ describe("every adapter emits the same transformed document, byte for byte", () 
         "fhir": "9fc5255a8e8ac924da7090e2c56bcf0f",
         "hl7": "b0e71b72dd6f4078c43d1d7b767ef843",
         "hl7-encounter": "7aef4fa7fa7ed2ffd1ce4c05158e4773",
-        "ncpdp": "1be519592c20a5bff91bc62136fa8f1d",
+        "ncpdp": "3c100052f0d6238deb590d606dec553c",
         "x12": "7afec841b7487faa5774697142fb8514",
       }
     `);
@@ -559,6 +564,13 @@ describe("the other five adapters produce the same manifests, in the same order"
         "05/E8",
         "07/DE",
         "07/EP",
+        "12/EV",
+        "12/PE",
+        "12/PF",
+        "12/PG",
+        "12/PH",
+        "12/PJ",
+        "12/PK",
         "08/FY",
         "08/FQ",
         "99/ZZ",

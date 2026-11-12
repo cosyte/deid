@@ -717,10 +717,38 @@ function ncpdpCase(): CorpusCase {
       "ZZPRESCRIBERNAME",
       "20251203", // 414-DE Date Prescription Written, generalized to its year
       "20251104", // 457-EP Associated Prescription/Service Date, generalized to its year
+      // The Prior Authorization segment (12) keeps only its type code: a representative's name and
+      // address, and the authorization number submitted, are removed.
+      "ZZAUTHREPFIRST",
+      "ZZAUTHREPLAST",
+      "ZZAUTHREPSTREET",
+      "ZZAUTHREPCITY",
+      "44199",
+      "90000000001",
     ],
     // Distinctive survivors only: the NDC and pharmacy IDs (bare 441/1985 could recur). The fixture's
     // other payer id is letters and digits, which the pass no longer keeps (only five or six digits).
     survivors: ["00071015527", "PHARM123"],
+  };
+}
+
+/** The adjudication response: its free text fails closed and its previous date of fill is cut. */
+function ncpdpResponseCase(): CorpusCase {
+  const ctx = createDeidContext({ key: "ncpdp-corpus-synthetic-hmac-key", patientId: "p-ncpdp" });
+  const raw = FIX("ncpdp", "telecom-b1-response.ncpdp");
+  const { telecom, manifest, unexaminedResiduals } = deidentifyTelecomString(raw, { context: ctx });
+  return {
+    name: "ncpdp-response",
+    deidWire: telecom,
+    manifest,
+    unexaminedResiduals,
+    originalWire: raw,
+    sentinels: [
+      "ZZRESPMSG",
+      "ZZRESPFQ",
+      "20251020", // 530-FU Previous Date Of Fill, generalized to its year
+    ],
+    survivors: ["AUTH0000001", "RX0000001"],
   };
 }
 
@@ -952,6 +980,7 @@ const CASES: readonly CorpusCase[] = [
   x12PersonsCase(),
   x12PremiumCase(),
   ncpdpCase(),
+  ncpdpResponseCase(),
   dicomCase(),
   hl7MissedCase(),
   fhirMissedCase(),

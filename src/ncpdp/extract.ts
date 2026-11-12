@@ -6,7 +6,8 @@
  * and coordinates are produced in the same order, so `result.document.loci[i]` corresponds to `coords[i]`.
  *
  * PHI is located **structurally**, per the cited {@link "./locus-map.js"}: the Patient (`01`),
- * Prescriber (`03`), Insurance (`04`), and Coordination-of-Benefits (`05`) segment fields, the dated
+ * Prescriber (`03`), Insurance (`04`), Coordination-of-Benefits (`05`) and Prior Authorization (`12`)
+ * segment fields, the dated
  * fields of a retained segment ({@link TELECOM_RETAINED_SEGMENT_RULES}), plus the header's Date of
  * Service. A free-text field ({@link TELECOM_FREE_TEXT_FIELDS}) **fails closed**
  * wherever it appears; a recognized clinical / financial segment is retained untouched (the over-scrub
@@ -132,7 +133,8 @@ function emitRule(
 const NCPDP_AMOUNT = /^[0-9]{0,9}[0-9{}A-R]$/;
 
 /**
- * The format of each field a person, prescriber, insurance or coordination of benefits segment keeps
+ * The format of each field a person, prescriber, insurance, coordination of benefits or prior
+ * authorization segment keeps
  * (`TELECOM_SEGMENT_RETAIN_FIELDS`), from its NCPDP Telecom vD.0 definition: a one- or two-character
  * code, a count, an amount, a state code, or an other payer id of five or six digits. A field the list
  * keeps and this table does not name keeps nothing.
@@ -160,6 +162,7 @@ const RETAINED_FIELD_FORMATS: Readonly<Record<string, RegExp>> = {
   "6E": /^[0-9A-Z]{1,2}$/, // Other Payer-Patient Responsibility Amount Qualifier
   "7E": NCPDP_AMOUNT, // Other Payer-Patient Responsibility Amount
   NT: /^[0-9]$/, // Other Payer ID Count
+  EU: /^[0-9A-Z]{1,2}$/, // Prior Authorization Type Code
 };
 
 /** Whether a kept field's value, trailing padding aside, has the format its definition gives it. */

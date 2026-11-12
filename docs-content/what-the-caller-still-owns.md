@@ -261,25 +261,25 @@ From [De-identify an X12 interchange](./guides-x12.md#known-limitations).
 
 ### NCPDP Telecom
 
-| Not covered                                                                                         | What the pass does                                | What you do                                    |
-| --------------------------------------------------------------------------------------------------- | ------------------------------------------------- | ---------------------------------------------- |
-| NCPDP SCRIPT                                                                                        | Refuses with `DEID_FORMAT_UNSUPPORTED`, no output | Use another route for ePrescribing documents   |
-| A message with more than one transaction, or more than one Patient or Claim segment                 | Refuses with `DEID_FORMAT_UNSUPPORTED`, no output | Split it, one patient per transmission         |
-| Free-text fields                                                                                    | Blocks them                                       | Bring a redactor if you need the prose         |
-| Fields of retained segments and of the fixed header the map does not name (a previous date of fill) | Keeps them, counted                               | Filter them if your recipient may not see them |
-| An other payer id (`340-7C`) of five or six digits                                                  | Keeps it                                          | Remove it after the pass if you need it gone   |
+| Not covered                                                                                        | What the pass does                                | What you do                                    |
+| -------------------------------------------------------------------------------------------------- | ------------------------------------------------- | ---------------------------------------------- |
+| NCPDP SCRIPT                                                                                       | Refuses with `DEID_FORMAT_UNSUPPORTED`, no output | Use another route for ePrescribing documents   |
+| A message with more than one transaction, or more than one Patient or Claim segment                | Refuses with `DEID_FORMAT_UNSUPPORTED`, no output | Split it, one patient per transmission         |
+| Free-text fields                                                                                   | Blocks them                                       | Bring a redactor if you need the prose         |
+| Fields of retained segments and of the fixed header the map does not name (an Rx reference number) | Keeps them, counted                               | Filter them if your recipient may not see them |
+| An other payer id (`340-7C`) of five or six digits                                                 | Keeps it                                          | Remove it after the pass if you need it gone   |
 
 From [De-identify an NCPDP Telecom transaction](./guides-ncpdp.md#known-limitation).
 
 ### DICOM
 
-| Not covered                                        | What the pass does                                    | What you do                                            |
-| -------------------------------------------------- | ----------------------------------------------------- | ------------------------------------------------------ |
-| Burned-in text and faces in the pixels             | Flags `burnedInAnnotationHazard`; never cleans pixels | Do not release an image on its metadata alone          |
-| Annex E options other than the three offered       | Refuses them; none named is the full Basic Profile    | Nothing: this is the stricter direction                |
-| A coded list nested in a kept sequence, with Clean Descriptors | Refuses with `DEID_FORMAT_UNSUPPORTED`, no output | Run without Clean Descriptors for that file |
-| Replacement-UID consistency across calls           | Holds within one call only                            | Pass one shared `uidMap` to every call that must agree |
-| Attributes the Annex E report does not account for | Keeps them, counted, nested sequence items included   | Filter them if your recipient may not see them         |
+| Not covered                                                    | What the pass does                                    | What you do                                            |
+| -------------------------------------------------------------- | ----------------------------------------------------- | ------------------------------------------------------ |
+| Burned-in text and faces in the pixels                         | Flags `burnedInAnnotationHazard`; never cleans pixels | Do not release an image on its metadata alone          |
+| Annex E options other than the three offered                   | Refuses them; none named is the full Basic Profile    | Nothing: this is the stricter direction                |
+| A coded list nested in a kept sequence, with Clean Descriptors | Refuses with `DEID_FORMAT_UNSUPPORTED`, no output     | Run without Clean Descriptors for that file            |
+| Replacement-UID consistency across calls                       | Holds within one call only                            | Pass one shared `uidMap` to every call that must agree |
+| Attributes the Annex E report does not account for             | Keeps them, counted, nested sequence items included   | Filter them if your recipient may not see them         |
 
 From [De-identify a DICOM file](./guides-dicom.md#known-limitations).
 
