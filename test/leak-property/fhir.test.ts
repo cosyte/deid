@@ -39,6 +39,14 @@
  * slot of a repeating primitive, the `patient-animal` extension), must be gone from the output and
  * from the manifest, since the pass replaces every element id.
  *
+ * So is a sentinel in **embedded content** the pass does not read: a made-up note naming it, in
+ * valid base64, at an `Attachment.data` (a `DocumentReference`, a `Media`, a `DiagnosticReport`'s
+ * presented form, a `QuestionnaireResponse` answer, an extension's `valueAttachment`), an
+ * `Attachment.hash`, a `Binary.data`, a `Signature.data`, a `Device`'s `carrierAIDC`, an
+ * `AuditEvent` query and an extension's `valueBase64Binary`, or the sentinel itself in an
+ * `Attachment.url` (a link, and a `data:` url) and in the narrative `div`. Each is removed by
+ * default, so what it held must be gone from the output and from the manifest.
+ *
  * Where a sentinel sits is read back from the input JSON, as the adapter writes a locus
  * (`Patient.name[0].family`), so the residual it must be named by is exact.
  */
@@ -1062,6 +1070,192 @@ const FORMAT_SPOTS: readonly {
 
 const formatArb: fc.Arbitrary<number> = fc.nat({ max: FORMAT_SPOTS.length - 1 });
 
+/** A made-up note naming the sentinel, in valid base64: what an embedded document looks like. */
+function embeddedNote(sentinel: string): string {
+  return Buffer.from(`<note>Patient ${sentinel}</note>`).toString("base64");
+}
+
+/** Push a contained resource of the given type and fields. */
+function containedOf(r: JsonObject, resourceType: string, fields: JsonObject): void {
+  pushTo(r, "contained", { resourceType, ...fields });
+}
+
+/**
+ * Each place embedded content can sit, with a sentinel in it: in a contained resource (which every
+ * generated type can carry), in an extension and in the narrative. Each is removed by default, so the
+ * sentinel is held to the stricter rule. `text` gives what must not come back when it is not the
+ * sentinel itself (the base64 of the note naming it).
+ */
+const EMBEDDED_SPOTS: readonly {
+  readonly where: string;
+  readonly put: (resource: JsonObject, sentinel: string) => void;
+  readonly text?: (sentinel: string) => string;
+}[] = [
+  {
+    where: "contained DocumentReference attachment.data",
+    put: (r, s) => {
+      containedOf(r, "DocumentReference", {
+        status: "current",
+        content: [{ attachment: { contentType: "text/plain", data: embeddedNote(s) } }],
+      });
+    },
+    text: embeddedNote,
+  },
+  {
+    where: "contained DocumentReference attachment.url (link)",
+    put: (r, s) => {
+      containedOf(r, "DocumentReference", {
+        status: "current",
+        content: [{ attachment: { url: `http://example.org/fhir/Binary/${s}` } }],
+      });
+    },
+  },
+  {
+    where: "contained DocumentReference attachment.url (data: url)",
+    put: (r, s) => {
+      containedOf(r, "DocumentReference", {
+        status: "current",
+        content: [{ attachment: { url: `data:text/plain;base64,${embeddedNote(s)}` } }],
+      });
+    },
+    text: embeddedNote,
+  },
+  {
+    where: "contained DocumentReference attachment.hash",
+    put: (r, s) => {
+      containedOf(r, "DocumentReference", {
+        status: "current",
+        content: [{ attachment: { hash: embeddedNote(s) } }],
+      });
+    },
+    text: embeddedNote,
+  },
+  {
+    where: "contained Media content.data",
+    put: (r, s) => {
+      containedOf(r, "Media", { status: "completed", content: { data: embeddedNote(s) } });
+    },
+    text: embeddedNote,
+  },
+  {
+    where: "contained DiagnosticReport presentedForm[0].data",
+    put: (r, s) => {
+      containedOf(r, "DiagnosticReport", {
+        status: "final",
+        code: { text: "zz" },
+        presentedForm: [{ data: embeddedNote(s) }],
+      });
+    },
+    text: embeddedNote,
+  },
+  {
+    where: "contained QuestionnaireResponse answer valueAttachment.data",
+    put: (r, s) => {
+      containedOf(r, "QuestionnaireResponse", {
+        status: "completed",
+        item: [{ linkId: "1", answer: [{ valueAttachment: { data: embeddedNote(s) } }] }],
+      });
+    },
+    text: embeddedNote,
+  },
+  {
+    where: "contained Binary.data",
+    put: (r, s) => {
+      containedOf(r, "Binary", { contentType: "text/plain", data: embeddedNote(s) });
+    },
+    text: embeddedNote,
+  },
+  {
+    where: "contained Provenance signature[0].data",
+    put: (r, s) => {
+      containedOf(r, "Provenance", {
+        target: [{ reference: "#zz" }],
+        recorded: "2020-01-01T00:00:00Z",
+        agent: [{ who: { display: "zz" } }],
+        signature: [
+          {
+            type: [{ system: "urn:iso-astm:E1762-95:2013", code: "1.2.840.10065.1.12.1.1" }],
+            when: "2020-01-01T00:00:00Z",
+            who: { display: "zz" },
+            data: embeddedNote(s),
+          },
+        ],
+      });
+    },
+    text: embeddedNote,
+  },
+  {
+    where: "contained Device udiCarrier[0].carrierAIDC",
+    put: (r, s) => {
+      containedOf(r, "Device", { udiCarrier: [{ carrierAIDC: embeddedNote(s) }] });
+    },
+    text: embeddedNote,
+  },
+  {
+    where: "contained AuditEvent entity[0].query",
+    put: (r, s) => {
+      containedOf(r, "AuditEvent", {
+        type: { code: "zz" },
+        recorded: "2020-01-01T00:00:00Z",
+        agent: [{ requestor: true }],
+        source: { observer: { display: "zz" } },
+        entity: [{ query: embeddedNote(s) }],
+      });
+    },
+    text: embeddedNote,
+  },
+  {
+    where: "extension[].valueBase64Binary",
+    put: (r, s) => {
+      pushTo(r, "extension", { url: "http://example.org/zz", valueBase64Binary: embeddedNote(s) });
+    },
+    text: embeddedNote,
+  },
+  {
+    where: "extension[].valueAttachment.data",
+    put: (r, s) => {
+      pushTo(r, "extension", {
+        url: "http://example.org/zz",
+        valueAttachment: { data: embeddedNote(s) },
+      });
+    },
+    text: embeddedNote,
+  },
+  {
+    where: "text.div",
+    put: (r, s) =>
+      (r["text"] = {
+        status: "generated",
+        div: `<div xmlns="http://www.w3.org/1999/xhtml">${s}</div>`,
+      }),
+  },
+];
+
+const embeddedArb: fc.Arbitrary<number> = fc.nat({ max: EMBEDDED_SPOTS.length - 1 });
+
+/** Write one sentinel, inside embedded content, into the resource. */
+function placeEmbedded(resource: JsonObject, spot: number, sentinel: string): FormatPlaced {
+  const at = EMBEDDED_SPOTS[spot % EMBEDDED_SPOTS.length];
+  if (at === undefined) throw new Error("no embedded spot");
+  at.put(resource, sentinel);
+  return { where: at.where, sentinel: at.text?.(sentinel) ?? sentinel };
+}
+
+/**
+ * The stricter rule for embedded content: what it held is gone from the output and from the
+ * manifest. Being named as a residual is not enough, because it is removed by default.
+ */
+export function embeddedKept(placed: readonly FormatPlaced[], outcome: PassOutcome): string[] {
+  const violations: string[] = [];
+  const manifest = JSON.stringify(outcome.manifest);
+  for (const p of placed) {
+    const label = `${p.sentinel} (embedded content at ${p.where})`;
+    if (outcome.output.includes(p.sentinel)) violations.push(`${label} survives in the output`);
+    if (manifest.includes(p.sentinel)) violations.push(`${label} is in the manifest`);
+  }
+  return violations;
+}
+
 /** A sentinel in a primitive that does not fit its type, as placed: where, and what must not come back. */
 interface FormatPlaced {
   readonly where: string;
@@ -1354,6 +1548,7 @@ export const caseArb = fc.record({
   elementIds: fc.array(elementIdArb, { maxLength: 2 }),
   unknownKeys: fc.array(unknownKeyArb, { maxLength: 2 }),
   formats: fc.array(formatArb, { maxLength: 2 }),
+  embedded: fc.array(embeddedArb, { maxLength: 2 }),
 });
 
 /** Set a value at a path of keys and indexes, creating objects and lists on the way. */
@@ -1662,6 +1857,7 @@ export function build(value: {
   elementIds?: readonly number[];
   unknownKeys?: readonly number[];
   formats?: readonly number[];
+  embedded?: readonly number[];
 }): {
   raw: string;
   placed: Placement[];
@@ -1669,6 +1865,7 @@ export function build(value: {
   elementIds: ElementIdPlaced[];
   unknownKeys: UnknownKeyPlaced[];
   formats: FormatPlaced[];
+  embedded: FormatPlaced[];
 } {
   const resource: JsonObject = {
     resourceType: value.type,
@@ -1708,10 +1905,27 @@ export function build(value: {
     const placedFormat = placeFormat(resource, spot, sentinelAt(value.stem, formatOffset + i));
     return { ...placedFormat, where: `${value.type}.${placedFormat.where}` };
   });
+  const embeddedOffset = formatOffset + formats.length;
+  const embedded = (value.embedded ?? []).map((spot, i) => {
+    const placedEmbedded = placeEmbedded(
+      resource,
+      spot,
+      sentinelAt(value.stem, embeddedOffset + i),
+    );
+    return { ...placedEmbedded, where: `${value.type}.${placedEmbedded.where}` };
+  });
   const doc: JsonObject = value.inBundle
     ? { resourceType: "Bundle", type: "collection", entry: [{ resource }] }
     : resource;
-  return { raw: JSON.stringify(doc), placed, siblings, elementIds, unknownKeys, formats };
+  return {
+    raw: JSON.stringify(doc),
+    placed,
+    siblings,
+    elementIds,
+    unknownKeys,
+    formats,
+    embedded,
+  };
 }
 
 /** Every locus, as the adapter writes one, at which a string holding the sentinel sits. */
@@ -1779,11 +1993,12 @@ export function checkCase(
     elementIds?: readonly number[];
     unknownKeys?: readonly number[];
     formats?: readonly number[];
+    embedded?: readonly number[];
   },
   tally: LeakTally,
   options: FhirDeidOptions = {},
 ): string[] {
-  const { raw, placed, siblings, elementIds, unknownKeys, formats } = build(value);
+  const { raw, placed, siblings, elementIds, unknownKeys, formats, embedded } = build(value);
   // A `_`-sibling the input does not hold (a later write replaced it) is not swept.
   const held = siblings.filter((s) => s.text === undefined || raw.includes(s.text));
   // Likewise an element id a later write replaced.
@@ -1792,6 +2007,8 @@ export function checkCase(
   const keys = unknownKeys.filter((p) => raw.includes(p.sentinel));
   // Likewise a sentinel in a primitive that does not fit its type.
   const misfits = formats.filter((p) => raw.includes(p.sentinel));
+  // Likewise a sentinel in embedded content.
+  const contents = embedded.filter((p) => raw.includes(p.sentinel));
   // Non-vacuity: only a sentinel the input holds is swept, and a case must hold one. A later
   // placement can overwrite an earlier one at the same position.
   const present = placed.filter((p) => raw.includes(p.sentinel));
@@ -1800,7 +2017,8 @@ export function checkCase(
     held.length === 0 &&
     ids.length === 0 &&
     keys.length === 0 &&
-    misfits.length === 0
+    misfits.length === 0 &&
+    contents.length === 0
   ) {
     return ["no sentinel reached the input"];
   }
@@ -1812,6 +2030,7 @@ export function checkCase(
     ...elementIdKept(ids, outcome),
     ...unknownKeyKept(keys, outcome),
     ...formatKept(misfits, outcome),
+    ...embeddedKept(contents, outcome),
   ];
 }
 
@@ -1852,6 +2071,7 @@ export const animalCaseArb = fc.record({
   elementIds: fc.array(elementIdArb, { maxLength: 2 }),
   unknownKeys: fc.array(unknownKeyArb, { maxLength: 2 }),
   formats: fc.array(formatArb, { maxLength: 2 }),
+  embedded: fc.array(embeddedArb, { maxLength: 2 }),
 });
 
 describe("the generated leak property: FHIR R4", () => {
@@ -2233,6 +2453,67 @@ describe("the FHIR sweep removes a sentinel in a primitive that does not fit its
     ]);
     expect(formatKept(placed, { ...clean, manifest: [{ locus: "ZQLKTEETH05X" }] })).toEqual([
       "ZQLKTEETH05X (a value that does not fit its type at Observation.issued) is in the manifest",
+    ]);
+  });
+});
+
+/**
+ * Each place embedded content can sit, on a person, a clinical and two infrastructure resources,
+ * alone and in a Bundle entry, with `keepPatientAnimal` off and on, through the same check as a
+ * generated case, so every one is run on every pull request whatever the seed draws.
+ */
+describe("the FHIR sweep removes a sentinel in embedded content the pass does not read", () => {
+  const types = ["Patient", "Observation", "Device", "Provenance"];
+  const spots = EMBEDDED_SPOTS.map((spot, i) => [spot.where, i] as const);
+
+  it.each(spots)("%s", (_where, spot) => {
+    for (const type of types) {
+      for (const inBundle of [false, true]) {
+        for (const keepPatientAnimal of [false, true]) {
+          const value = {
+            type,
+            inBundle,
+            filler: "abc",
+            stem: "ZQLKEMBD",
+            placements: [],
+            embedded: [spot],
+          };
+          expect(checkCase(value, newTally(), { keepPatientAnimal })).toEqual([]);
+        }
+      }
+    }
+  });
+
+  it("the case holds what it placed: the content is in the input", () => {
+    for (const [, spot] of spots) {
+      const { raw, embedded } = build({
+        type: "Observation",
+        inBundle: false,
+        filler: "abc",
+        stem: "ZQLKEMBD",
+        placements: [],
+        embedded: [spot],
+      });
+      expect(embedded).toHaveLength(1);
+      expect(raw).toContain(embedded[0]?.sentinel);
+    }
+  });
+
+  it("the stricter rule has teeth: content in the output or the manifest is caught", () => {
+    const placed: FormatPlaced[] = [{ where: "Binary.data", sentinel: "ZQLKTEETH06X" }];
+    const clean: PassOutcome = {
+      output: '{"resourceType":"Binary"}',
+      manifest: [],
+      unexaminedResiduals: [],
+      residualAt: () => true,
+      refused: false,
+    };
+    expect(embeddedKept(placed, clean)).toEqual([]);
+    expect(embeddedKept(placed, { ...clean, output: '{"data":"ZQLKTEETH06X"}' })).toEqual([
+      "ZQLKTEETH06X (embedded content at Binary.data) survives in the output",
+    ]);
+    expect(embeddedKept(placed, { ...clean, manifest: [{ locus: "ZQLKTEETH06X" }] })).toEqual([
+      "ZQLKTEETH06X (embedded content at Binary.data) is in the manifest",
     ]);
   });
 });

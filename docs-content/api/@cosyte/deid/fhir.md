@@ -19,7 +19,10 @@ JSON substrate, so `@cosyte/deid` declares no third-party runtime dependency of 
 - **Every resource (the universal vectors that leak from any type):** `identifier` pseudonymized by
   `system` (a US-SSN system removed); PHI-bearing **dates** → year; the narrative **`text.div`** blocked
   at any depth; **extension** values blocked (the fail-closed frontier, an unknown extension can carry
-  any PHI, incl. an MRN in a local extension); a `Reference.display` (a person label) blocked.
+  any PHI, incl. an MRN in a local extension); a `Reference.display` (a person label) blocked;
+  **embedded content** the pass does not read (an `Attachment.data` or `Attachment.url`, a
+  `Binary.data`, a `Signature.data`, every other `base64Binary`) removed, unless the caller keeps
+  its kind (below).
 - **Every resource, by DATATYPE:** outside a person resource a `HumanName` is removed and an
   `Address` is reduced to the safe 3-digit ZIP **wherever the graph puts it**, so
   `Organization.contact.name` and `Location.address` are treated exactly as `Patient.name` and
@@ -76,8 +79,7 @@ kept verbatim when it fits the `uri` format.
 are kept.
 Resource ids are replaced and the reference wiring is kept, with what that does not reach stated:
 the server base of a `fullUrl`, and of an absolute reference to it, is kept verbatim; and an id
-written anywhere else (`meta.versionId`, `meta.source`, `Bundle.link.url`, an `Attachment.url`, any
-other uri) that fits the format R4 gives its type is passed through and counted as unexamined. Under the Safe
+written anywhere else (`meta.versionId`, `meta.source`, `Bundle.link.url`, any other uri) that fits the format R4 gives its type is passed through and counted as unexamined. Under the Safe
 Harbor default the stand-ins are per call, so the same resource transformed in two calls gets two
 unrelated ids; linkage across calls needs a keyed policy, which does not claim Safe Harbor.
 Free text is blocked, not retained. A `note` (`Annotation` text, author and time, as one unit), a
@@ -108,6 +110,13 @@ the pass did: each resource it changed carries the `meta.security` coding `REDAC
 Reason `masked` in its place, so the resource keeps its required elements. A contained resource is
 never labeled (R4 `dom-5`); its container is. The label says that some content was filtered out,
 never that the resource is de-identified. Off by default.
+
+**Embedded content, opt-in.** An `Attachment.data`, an `Attachment.url`, a `Binary.data`, a
+`Signature.data` and every other `base64Binary` outside an extension can hold a whole document (a
+scanned form, a PDF, a C-CDA) that the pass does not read, so each is removed by default with a
+blocked row that carries no value. `keepEmbeddedContent` names the kinds to keep
+([FHIR\_EMBEDDED\_CONTENT\_KINDS](#fhir_embedded_content_kinds)); each kept element is kept unread and recorded as
+`DEID_EMBEDDED_CONTENT_RETAINED`. An extension's value stays blocked whatever its type.
 
 **Animal patients, opt-in.** With `keepPatientAnimal: true` a `Patient`'s `patient-animal`
 extension keeps the coded `valueCodeableConcept` of its `species`, `breed` and `genderStatus`
@@ -163,7 +172,8 @@ The model node to rewrite (a primitive, an `Address` complex, or a property-valu
 ### FhirDeidOptions
 
 Options for [deidentifyFhir](#deidentifyfhir) and [deidentifyFhirJson](#deidentifyfhirjson): the core's
-["@cosyte/deid".DeidOptions](../deid.md#deidoptions) plus the FHIR-only `transformLabels` and `keepPatientAnimal`.
+["@cosyte/deid".DeidOptions](../deid.md#deidoptions) plus the FHIR-only `transformLabels`, `keepPatientAnimal` and
+`keepEmbeddedContent`.
 
 #### Example
 
@@ -189,6 +199,17 @@ The context carrying the consumer's key, required only when the policy uses a ke
 ###### Inherited from
 
 [`DeidOptions`](../deid.md#deidoptions).[`context`](../deid.md#context)
+
+##### keepEmbeddedContent?
+
+> `readonly` `optional` **keepEmbeddedContent?**: readonly [`FhirEmbeddedContentKind`](#fhirembeddedcontentkind)[]
+
+The kinds of embedded content to keep, from [FHIR\_EMBEDDED\_CONTENT\_KINDS](#fhir_embedded_content_kinds). Content the pass
+does not read (an `Attachment.data`, an `Attachment.url`, a `Binary.data`, a `Signature.data`, any
+other `base64Binary` outside an extension) can hold a whole document, so it is removed by default,
+with a blocked row that carries no value. A kind named here is kept as it arrived, unread, and each
+kept element gets a `DEID_EMBEDDED_CONTENT_RETAINED` row at its locus. Name a kind only for content
+you know carries nothing that identifies a person. Empty by default. See [FhirExtractOptions](#fhirextractoptions).
 
 ##### keepPatientAnimal?
 
@@ -351,6 +372,18 @@ const options: FhirExtractOptions = { keepPatientAnimal: true };
 
 #### Properties
 
+##### keepEmbeddedContent?
+
+> `readonly` `optional` **keepEmbeddedContent?**: readonly [`FhirEmbeddedContentKind`](#fhirembeddedcontentkind)[]
+
+The kinds of embedded content to keep ([FhirEmbeddedContentKind](#fhirembeddedcontentkind)). An element that embeds
+content the pass does not read (an `Attachment.data`, an `Attachment.url`, a `Binary.data`, a
+`Signature.data`, any other `base64Binary` outside an extension) is removed by default, with a
+blocked row that carries no value. Naming its kind here keeps it as it arrived, unread, and
+records the keep at its locus as `DEID_EMBEDDED_CONTENT_RETAINED`. Name a kind only for content
+you know carries nothing that identifies a person. Empty by default, so nothing is kept unless a
+caller asks.
+
 ##### keepPatientAnimal?
 
 > `readonly` `optional` **keepPatientAnimal?**: `boolean`
@@ -416,6 +449,36 @@ How the applier rewrites one extracted locus onto a fresh copy of the node it ca
 
 ***
 
+### FhirEmbeddedContentKind
+
+> **FhirEmbeddedContentKind** = `"attachment-data"` \| `"attachment-url"` \| `"binary-data"` \| `"signature-data"` \| `"base64-binary"`
+
+A kind of FHIR element that embeds content the adapter does not read:
+
+- `attachment-data`: an `Attachment.data`, wherever an `Attachment` sits (`DocumentReference`,
+  `Media`, `DiagnosticReport.presentedForm`, `Communication.payload`, a `QuestionnaireResponse`
+  answer, a `Parameters` value, and every other place R4 types one);
+- `attachment-url`: an `Attachment.url`, which points at the attachment's content (a server url, a
+  relative reference to a `Binary`, or a `data:` url that carries the content itself);
+- `binary-data`: a `Binary.data`;
+- `signature-data`: a `Signature.data`, the signature itself, which can enclose the signed content;
+- `base64-binary`: every other element R4 types as `base64Binary` (an `Attachment.hash`,
+  `Device.udiCarrier.carrierAIDC`, `AuditEvent.entity.query`, a `valueBase64Binary` outside an
+  extension).
+
+An extension's value is not among them: every extension value is blocked whatever its type, and no
+kind here keeps one.
+
+#### Example
+
+```ts
+import { type FhirEmbeddedContentKind } from "@cosyte/deid/fhir";
+
+const kind: FhirEmbeddedContentKind = "attachment-data";
+```
+
+***
+
 ### FhirPersonalDatatype
 
 > **FhirPersonalDatatype** = `"human-name"` \| `"address"`
@@ -478,6 +541,22 @@ import { FHIR_DEMOGRAPHIC_ELEMENTS } from "@cosyte/deid/fhir";
 
 FHIR_DEMOGRAPHIC_ELEMENTS.name;    // => "redact"
 FHIR_DEMOGRAPHIC_ELEMENTS.address; // => "address"
+```
+
+***
+
+### FHIR\_EMBEDDED\_CONTENT\_KINDS
+
+> `const` **FHIR\_EMBEDDED\_CONTENT\_KINDS**: readonly [`FhirEmbeddedContentKind`](#fhirembeddedcontentkind)[]
+
+Every [FhirEmbeddedContentKind](#fhirembeddedcontentkind), in a fixed order: the values `keepEmbeddedContent` accepts.
+
+#### Example
+
+```ts
+import { FHIR_EMBEDDED_CONTENT_KINDS } from "@cosyte/deid/fhir";
+
+FHIR_EMBEDDED_CONTENT_KINDS.includes("binary-data"); // => true
 ```
 
 ***

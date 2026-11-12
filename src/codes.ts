@@ -232,6 +232,16 @@ export const DEID_DISPOSITION_CODES = {
    * `reidentificationCode` is `false`. The disposition-code set is additions-only.
    */
   DEID_IDENTIFIER_SUBSTITUTED: "DEID_IDENTIFIER_SUBSTITUTED",
+  /**
+   * **Embedded content** the pass does not read (a FHIR `Attachment.data`, `Binary.data` or
+   * `Signature.data`, another `base64Binary`, an `Attachment.url`) was **kept as it arrived because
+   * the caller asked for that kind of element to be kept**. Such content can hold a whole document (a
+   * scanned form, a PDF, a C-CDA), and by default it is removed and recorded as
+   * `DEID_LOCUS_BLOCKED`; this row records, at the element's own locus, that the caller's opt-in kept
+   * it instead. The pass read nothing inside it, so its category is the catch-all (R) and it is not a
+   * residual the pass examined. The row carries no value. The disposition-code set is additions-only.
+   */
+  DEID_EMBEDDED_CONTENT_RETAINED: "DEID_EMBEDDED_CONTENT_RETAINED",
 } as const;
 
 /**

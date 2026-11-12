@@ -303,13 +303,21 @@ describe("a primitive that fits the format R4 defines for its type is kept as it
     ],
   };
 
-  it("each kind, under every profile, with no row", () => {
+  it("each kind, under every profile, with no row but the kept base64Binary's", () => {
     for (const profile of PROFILES) {
-      const { json, manifest } = run(conformant, profile);
+      // A base64Binary is embedded content, removed unless its kind is kept, and a kept one is
+      // recorded; its format is checked all the same.
+      const { json, manifest } = deidentifyFhirJson(JSON.stringify(conformant), {
+        ...profileOptions(profile, ctx),
+        keepEmbeddedContent: ["base64-binary"],
+      });
       expect(JSON.parse(json), profile.name).toEqual(
         JSON.parse(serializeResource(parseResource(JSON.stringify(conformant)).resource)),
       );
-      expect(manifest, profile.name).toEqual([]);
+      expect(
+        manifest.map((e) => [e.locus, e.code]),
+        profile.name,
+      ).toEqual([["Parameters.parameter[8].valueBase64Binary", "DEID_EMBEDDED_CONTENT_RETAINED"]]);
     }
   });
 
