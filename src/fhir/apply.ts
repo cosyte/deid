@@ -126,7 +126,11 @@ function rebuildKeptPart(node: FhirNode, edits: ReadonlyMap<FhirNode, Edit>): Fh
   const extension: FhirComplex[] = [];
   for (const ext of node.extension) {
     const rebuilt = rebuildNode(ext, edits);
-    if (rebuilt !== REMOVE && isComplex(rebuilt)) extension.push(rebuilt);
+    // The extractor never names an extension object itself (it blocks what is inside one), so a
+    // complex always rebuilds to a complex; the guard keeps anything else out rather than writing it.
+    /* v8 ignore next -- an extension object rebuilds to a complex, never to a removal */
+    if (rebuilt === REMOVE || !isComplex(rebuilt)) continue;
+    extension.push(rebuilt);
   }
   return primitive(node.value, {
     ...(node.id === undefined ? {} : { id: node.id }),

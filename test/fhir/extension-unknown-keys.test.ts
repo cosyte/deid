@@ -140,6 +140,17 @@ describe("an unknown key inside an extension is blocked", () => {
     expect(JSON.stringify(manifest)).not.toMatch(/ZZ(STATE|C)(NOTE|VALUE)/);
   });
 
+  it("writes no empty extension list on a kept address part", () => {
+    const { json } = run({
+      resourceType: "Patient",
+      address: [{ state: "IL", _state: { extension: [] }, postalCode: "62704" }],
+    });
+    expect(JSON.parse(json)).toEqual({
+      resourceType: "Patient",
+      address: [{ state: "IL", postalCode: "627" }],
+    });
+  });
+
   it.each([
     ["safe harbor", SAFE_HARBOR_PROFILE],
     ["limited data set", LIMITED_DATA_SET_PROFILE],
