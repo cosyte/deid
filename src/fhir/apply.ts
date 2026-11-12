@@ -26,11 +26,14 @@
  *   computed, which a number cannot hold).
  * - `reference`: a literal carrying a logical id is rebuilt as the structure around the id followed by
  *   the replacement, with any `/_history/vid` suffix dropped; a `null` result drops it.
+ * - `primitive-id`: a primitive written back as it arrived takes the replacement as its element id; a
+ *   `null` result writes it with no id.
  *
  * **Primitive-extension guard.** A FHIR primitive can carry an `extension` (the JSON `_`-sibling) that
  * holds PHI (`_birthDate.extension[…]`). The structural walk does not descend that side-channel, so the
- * applier **fails closed**: every primitive it writes is built anew from its value and its element `id`
- * alone, **without** its `extension` metadata. The one exception is a part a rebuilt `Address` keeps,
+ * applier **fails closed**: every primitive it writes is built anew from its value and the replacement
+ * the extractor located for its element `id` alone, **without** its `extension` metadata. A primitive's
+ * element id as it arrived is never written: one with no replacement is written with no id. The one exception is a part a rebuilt `Address` keeps,
  * whose extensions the extractor walks and blocks like every other extension, and which are rebuilt
  * through the same edits. Nothing else the reader kept on a primitive reaches the output: a
  * `_`-sibling that arrived as a string, a number, a boolean, a `null` or a list rather than an object
@@ -113,39 +116,45 @@ type ResourceMark = FhirNode[] | undefined;
 const ABOVE_RESOURCES = "";
 
 /**
- * Write a primitive back from its value, its element `id` and the extensions the caller passes, and
- * from nothing else. Whatever else the reader kept on the node does not reach the output: an
- * `extension` the caller does not pass, and the text of a `_`-sibling that arrived as something other
- * than an object (a string, a number, a boolean, a `null` or a list), which the reader keeps so its
- * writer can hand it back. The extractor records that text as a block at the `_`-sibling's own locus.
+ * Write a primitive back from its value, the element id the caller passes (the replacement of the one
+ * it arrived with) and the extensions the caller passes, and from nothing else. Whatever else the
+ * reader kept on the node does not reach the output: the element `id` it arrived with, an `extension`
+ * the caller does not pass, and the text of a `_`-sibling that arrived as something other than an
+ * object (a string, a number, a boolean, a `null` or a list), which the reader keeps so its writer can
+ * hand it back. The extractor records that text as a block at the `_`-sibling's own locus.
  */
-function rebuildPrimitive(node: FhirPrimitive, extension?: readonly FhirComplex[]): FhirPrimitive {
+function rebuildPrimitive(
+  node: FhirPrimitive,
+  id?: string | null,
+  extension?: readonly FhirComplex[],
+): FhirPrimitive {
   // Stryker disable ConditionalExpression: `primitive` writes no `id` or `extension` it is handed as undefined, so either branch builds the same node
-  const id = node.id === undefined ? {} : { id: node.id };
+  const replaced = typeof id === "string" ? { id } : {};
   const kept = extension === undefined ? {} : { extension };
   // Stryker restore ConditionalExpression
-  return primitive(node.value, { ...id, ...kept });
+  return primitive(node.value, { ...replaced, ...kept });
 }
 
 /**
  * `true` when rebuilding the primitive leaves something of it behind: anything the reader kept beyond
- * its value and its element `id`. The transform labels count it as a change.
+ * its value. The transform labels count it as a change.
  */
-function carriesMoreThanValueAndId(node: FhirPrimitive): boolean {
-  return Object.keys(node).some((key) => key !== "kind" && key !== "value" && key !== "id");
+function carriesMoreThanValue(node: FhirPrimitive): boolean {
+  return Object.keys(node).some((key) => key !== "kind" && key !== "value");
 }
 
 /**
- * Re-emit a part an `Address` keeps. A primitive part keeps its value and its `id`, and each extension
- * on its `_`-sibling is rebuilt through the same edits as every other node, so what the extractor
- * blocked inside one (a `value[x]`, a key R4 does not define on an extension) is gone and the `url`
- * skeleton stays. Nothing else on the part is written back. A part the extractor blocked (any shape
- * but a single string) is removed by its edit.
+ * Re-emit a part an `Address` keeps. A primitive part keeps its value and takes its replaced `id`, and
+ * each extension on its `_`-sibling is rebuilt through the same edits as every other node, so what the
+ * extractor blocked inside one (a `value[x]`, a key R4 does not define on an extension) is gone and the
+ * `url` skeleton stays. Nothing else on the part is written back. A part the extractor blocked (any
+ * shape but a single string) is removed by its edit.
  */
 function rebuildKeptPart(node: FhirNode, edits: ReadonlyMap<FhirNode, Edit>): Rebuilt {
-  // The extractor blocks a kept part that is not a single string: its edit removes it.
+  // The extractor blocks a kept part that is not a single string: its edit removes it. The one other
+  // edit a kept part can carry is the replacement of its element id.
   const edit = edits.get(node);
-  if (edit !== undefined) return applyEdit(node, edit, edits);
+  if (edit !== undefined && edit.edit !== "primitive-id") return applyEdit(node, edit, edits);
   // Stryker disable next-line ConditionalExpression: a part reached here is always a primitive, so the test only narrows the type
   /* v8 ignore if -- every part that is not a string is blocked above; this guard narrows the type */
   if (!isPrimitive(node)) return REMOVE;
@@ -153,6 +162,7 @@ function rebuildKeptPart(node: FhirNode, edits: ReadonlyMap<FhirNode, Edit>): Re
   // rebuilt property by property.
   return rebuildPrimitive(
     node,
+    edit?.value,
     node.extension?.map((ext) => rebuildComplex(ext, edits)),
   );
 }
@@ -219,6 +229,13 @@ function applyEdit(node: FhirNode, edit: Edit, edits: ReadonlyMap<FhirNode, Edit
         : REMOVE;
     case "reference":
       return rebuildLiteral(node, edit.value);
+    case "primitive-id":
+      // The extractor names only a primitive written as it arrived; anything else drops rather than
+      // writes.
+      // Stryker disable next-line ConditionalExpression: the extractor's primitive-id coordinate always names a primitive, so the test only narrows the type
+      /* v8 ignore if -- the extractor's primitive-id coordinate always names a primitive */
+      if (!isPrimitive(node)) return REMOVE;
+      return rebuildPrimitive(node, edit.value);
   }
 }
 
@@ -301,7 +318,7 @@ function rebuildLabeled(
   }
 
   if (isPrimitive(node)) {
-    if (carriesMoreThanValueAndId(node)) mark?.push(node);
+    if (carriesMoreThanValue(node)) mark?.push(node);
     return rebuildPrimitive(node);
   }
 

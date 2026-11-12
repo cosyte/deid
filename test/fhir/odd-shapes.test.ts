@@ -48,7 +48,7 @@ function loci(result: { readonly unexaminedResiduals: readonly { locus: string }
 }
 
 describe("primitive metadata and free text in an unexpected shape", () => {
-  it("drops a primitive's extension and keeps its id when its _-sibling carries both", () => {
+  it("drops a primitive's extension and replaces its id when its _-sibling carries both", () => {
     const out = run({
       resourceType: "Observation",
       status: "final",
@@ -58,9 +58,10 @@ describe("primitive metadata and free text in an unexpected shape", () => {
       },
     });
     expect(out.json).not.toContain("ZZSTATUSEXT");
-    expect(out.json).toContain('"_status":{"id":"s1"}');
-    // The id it kept is handed through, so it is counted rather than passed in silence.
-    expect(loci(out)).toContain("Observation._status.id");
+    expect(out.json).toMatch(/"_status":\{"id":"\d+"\}/);
+    // The id is replaced, so it has a manifest row and is not counted as handed through.
+    expect(loci(out)).not.toContain("Observation._status.id");
+    expect(out.manifest.map((m) => m.locus)).toContain("Observation._status.id");
   });
 
   it("drops a primitive's _-sibling whole when it carries an extension and no id", () => {
@@ -104,18 +105,24 @@ describe("primitive metadata and free text in an unexpected shape", () => {
     expect(loci(out)).toContain("Observation.text.status");
   });
 
-  it("blocks a false extension value as it blocks any other, keeping the url and id", () => {
+  it("blocks a false extension value as it blocks any other, keeping the url and replacing the id", () => {
     const out = run({
       resourceType: "Patient",
       extension: [{ url: "http://example.org/flag", id: "e1", valueBoolean: false }],
     });
     expect(out.json).not.toContain("valueBoolean");
     expect(out.json).toContain('"url":"http://example.org/flag"');
+    expect(out.json).not.toContain('"e1"');
     expect(out.manifest).toEqual([
       expect.objectContaining({
         locus: "Patient.extension[0].valueBoolean",
         disposition: "blocked",
         category: C.OTHER_UNIQUE_ID,
+      }),
+      expect.objectContaining({
+        locus: "Patient.extension[0].id",
+        disposition: "transformed",
+        category: C.MRN,
       }),
     ]);
   });
@@ -199,9 +206,10 @@ describe("a root that is not a complex", () => {
     } as unknown as FhirComplex;
     const { document, manifest, unexaminedResiduals } = deidentifyFhir(forged, { context: ctx });
     expect(document).toEqual(complex([]));
-    expect(manifest).toEqual([]);
-    // Its value at the root path, and its id at the root's `_`-sibling.
-    expect(unexaminedResiduals.map((r) => r.locus)).toEqual(["Patient", "_Patient.id"]);
+    // Its id at the root's `_`-sibling is replaced, as every element id is, and its value is counted.
+    expect(manifest.map((m) => m.locus)).toEqual(["_Patient.id"]);
+    expect(JSON.stringify(manifest)).not.toContain("r1");
+    expect(unexaminedResiduals.map((r) => r.locus)).toEqual(["Patient"]);
   });
 });
 

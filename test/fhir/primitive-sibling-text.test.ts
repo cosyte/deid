@@ -309,9 +309,8 @@ describe("a `_`-sibling that is not an object, anywhere else", () => {
     const labeled = run(observation({ _status: S }), { transformLabels: true });
     expectGone(labeled);
     expect(labeled.json).toContain('"security"');
-    const untouched = run(observation({ _status: { id: "s1" } }), { transformLabels: true });
+    const untouched = run(observation({}), { transformLabels: true });
     expect(untouched.json).not.toContain('"security"');
-    expect(untouched.json).toContain('"_status":{"id":"s1"}');
   });
 
   it("is not a residual: what the pass removes is not handed through", () => {

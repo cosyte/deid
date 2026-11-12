@@ -235,13 +235,15 @@ describe("closure: a FHIR primitive's side-channel metadata", () => {
   const wire = serializeResource(result.document);
   const loci = new Set(result.unexaminedResiduals.map((r) => r.locus));
 
-  it("the element id survives the pass and the primitive extension does not", () => {
-    expect(wire).toContain("ZZELEMENTID");
+  it("the element id is replaced and the primitive extension is dropped", () => {
+    expect(wire).not.toContain("ZZELEMENTID");
+    expect(wire).toContain('"_status":{"id":"');
     expect(wire).not.toContain("ZZPRIMEXT"); // the applier's primitive-extension guard drops it
   });
 
-  it("counts the element id at its `_`-sibling locus", () => {
-    expect(loci.has("Observation._status.id")).toBe(true);
+  it("does not count the element id, which is decided: its row is in the manifest", () => {
+    expect(loci.has("Observation._status.id")).toBe(false);
+    expect(result.manifest.map((m) => m.locus)).toContain("Observation._status.id");
   });
 
   it("does NOT count the extension the applier removed: a measurement, not a guess", () => {
@@ -274,17 +276,17 @@ describe("closure: what a rebuilt FHIR address KEEPS is enumerated", () => {
   const wire = serializeResource(result.document);
   const loci = new Set(result.unexaminedResiduals.map((r) => r.locus));
 
-  it("the kept parts keep their element id, their extensions lose every value; the rest is gone", () => {
+  it("the kept parts have their element id replaced, their extensions lose every value; the rest is gone", () => {
     expect(wire).not.toContain("ZZSTREET");
     expect(wire).not.toContain("ZZLINEID");
     expect(wire).not.toContain("ZZZIPID"); // postalCode is REPLACED by a fresh primitive
-    expect(wire).toContain("ZZSTATEID");
+    expect(wire).not.toContain("ZZSTATEID"); // replaced, as every element id is
     expect(wire).toContain("http://zz.example"); // the extension's url is structure, and kept
     expect(wire).not.toContain("ZZSTATEEXT"); // its value is blocked, as every extension value is
   });
 
-  it("counts the kept part's element id and the url of its extension, not the blocked value", () => {
-    expect(loci.has("Patient.address[0]._state.id")).toBe(true);
+  it("counts the url of the kept part's extension, not its replaced element id or the blocked value", () => {
+    expect(loci.has("Patient.address[0]._state.id")).toBe(false);
     expect(loci.has("Patient.address[0]._state.extension[0].url")).toBe(true);
     expect(loci.has("Patient.address[0]._state.extension[0].valueString")).toBe(false);
   });

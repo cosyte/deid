@@ -143,11 +143,11 @@ Two things follow, and the second is the one that surprises people:
   enumeration is derived from what each parser's model can carry, so it reaches the places a value is
   easy to overlook: XML character data delivered as a **CDATA section** rather than as text, and the
   **comments** and **processing instructions** an XML document is re-serialized with, each counted at
-  its own carrier's coordinate; a FHIR primitive's **`_`-sibling element id**, which travels beside the
-  value it annotates; and whatever a **partly** rewritten structure keeps, such as the state and country
-  of a generalized address, which are re-emitted with their element id and their extensions, bar what
-  the pass blocked there (in FHIR, every value and unknown key of an extension on their `_`-sibling,
-  and a part that is not a string, which is blocked whole).
+  its own carrier's coordinate; and whatever a **partly** rewritten structure keeps, such as the state
+  and country of a generalized address, which are re-emitted with their extensions, bar what the pass
+  blocked or replaced there (in FHIR, every value and unknown key of an extension on their
+  `_`-sibling, every element id, which is replaced, and a part that is not a string, which is blocked
+  whole).
 
 - **What is removed is not counted, and that is the point of the number.** The inventory measures what
   the pass _hands through_, so a position it deletes (an address line, a blocked narrative and every
@@ -314,7 +314,8 @@ Two things follow, and the second is the one that surprises people:
   server, is kept verbatim: it names the server, and a base that carries anything else carries it out.
   An **id written anywhere else** is passed through and counted as an unexamined position:
   `meta.versionId`, `meta.source`, a `Bundle.link.url` (a search link can carry a query on an
-  identifier), an `Attachment.url`, any other uri, url or canonical, and an element's own `id`. Under
+  identifier), an `Attachment.url`, and any other uri, url or canonical. An element's own `id` is
+  replaced, as the next item says. Under
   the Safe Harbor default the stand-ins are **per call**, so the same resource transformed in two
   calls gets two unrelated ids and one call's references do not resolve in another call's output;
   linkage across calls needs a keyed policy, which does not claim Safe Harbor. And a removed
@@ -324,7 +325,8 @@ Two things follow, and the second is the one that surprises people:
 
 - **FHIR keys R4 does not define: blocked inside an extension, counted elsewhere.** Inside an
   `extension` or a `modifierExtension`, at any depth and on every resource, only the `url`, the
-  element `id` and the nested extensions are kept. Every other key is blocked and recorded at its own
+  element `id` (replaced, as every element id is) and the nested extensions are kept. Every other key
+  is blocked and recorded at its own
   locus (`Observation.extension[0].note`), with no value: a `value[x]`, and equally a key R4 does not
   give an extension (`note`, `comment`, any name), whatever it holds. A `url` or an `id` that is not a
   string (a number, a boolean, an object, a list) is blocked the same way. The same holds for an
@@ -345,7 +347,8 @@ Two things follow, and the second is the one that surprises people:
   `_`-sibling an object holding its `id` and `extension`. When one arrives as anything else (a string,
   a number, a boolean or a `null` in `_status`, or a list in the slot of a repeating primitive),
   `@cosyte/fhir` keeps its text so that its writer can hand it back. Every primitive the pass writes is
-  built from its value, its element `id` and the extensions the pass kept, and nothing else, so that
+  built from its value, the replacement of its element `id` and the extensions the pass kept, and
+  nothing else, so that
   text never reaches the output. It is recorded as a block at the `_`-sibling's own locus
   (`Observation._status`, `Patient.address._state`, `Observation.extension[0]._url`) with no value,
   on every resource and at every depth: beside a code, in an extension, a modifier extension or a
@@ -355,11 +358,28 @@ Two things follow, and the second is the one that surprises people:
   list beside a single value is refused by `@cosyte/fhir` (`PRIMITIVE_EXTENSION_MISALIGNED`) before
   the pass runs.
 
-- **A FHIR element `id` is passed through and counted, not read.** An element `id` that is a string
-  (`Observation.code.id`, a primitive's `_status.id`, the `id` of an extension, the `id` on the
-  `_state` of a kept address part) is kept as it arrived and counted in `unexaminedResiduals` at its
-  locus, so an element `id` holding free text reaches the output today. R4 gives an element `id` no
-  meaning beyond the document; review the residuals if a sender may put content there.
+<a id="fhir-element-ids"></a>
+
+- **A FHIR element `id` is replaced, never kept.** R4 lets every element carry an `id`, gives it no
+  meaning beyond the document, and puts no limit on what a sender writes there, so the pass reads it as
+  free text. Every element id the output keeps is replaced, on every resource and at every depth: the
+  `id` of a datatype (`Observation.code.id`), a `Coding`, a backbone element, a `Bundle.entry`, an
+  extension and a nested extension, and a primitive's `_`-sibling `id` (`Observation._status.id`, the
+  `_state.id` of a part an address keeps). The replacement is the one a resource's logical id gets,
+  under the same rule and in the same table: the same id is replaced by the same value throughout one
+  call, a per-call sequence number under Safe Harbor and a keyed surrogate, flagged as a
+  re-identification code, under a policy that pseudonymizes or hashes the medical record number
+  category. Each has a manifest row at its locus (`Observation.code.id`), with no value. A policy that
+  neither withholds nor keys that category removes every element id instead. An element id that is
+  not a string (an object, a list) is removed and recorded.
+
+  We replace rather than remove so that a link to an element id still resolves: the `actionId` of a
+  `relatedAction` in a `RequestGroup` or a `PlanDefinition`, at any depth of nested actions, is
+  replaced by the same value as the action it names. No other element is read as a link to an
+  element id, so a reference to one written anywhere else no longer resolves, and keeps the id it
+  named: a `StructureDefinition`'s `contentReference`, the fixture ids a `TestScript` names, and a
+  fragment in a narrative or an extension (both of which the pass already removes). A reader that
+  relied on an element id's text (a slice name inside an element id) loses it.
 
 Vendor-proprietary loci absent from public specs are deferred, **not invented**: a quirk is encoded
 only when a real document, its identifiers removed, grounds it.
