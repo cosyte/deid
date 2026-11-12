@@ -310,10 +310,11 @@ interface Format {
   readonly min?: bigint;
   readonly max?: bigint;
   /**
-   * For an integer kind, the most characters a value in its range can hold. Its pattern admits no
-   * leading zero, so a longer value is out of range, and it is refused before it is read as a number.
+   * The most characters a value can hold: for an integer kind, the most a value in its range can
+   * hold (its pattern admits no leading zero, so a longer value is out of range, and it is refused
+   * before it is read as a number); for every other type, no limit.
    */
-  readonly longest?: number;
+  readonly longest: number;
 }
 
 /** Every primitive type R4 constrains further than a JSON string, by its type code. */
@@ -329,7 +330,7 @@ const FORMATS: ReadonlyMap<string | null, Format> = new Map(
             max: BigInt(f.max),
             longest: Math.max(String(f.min).length, String(f.max).length),
           };
-    return [type, { scan: SCANS[type], ...bounds }];
+    return [type, { scan: SCANS[type], longest: Infinity, ...bounds }];
   }),
 );
 
@@ -380,7 +381,7 @@ export function fitsFhirFormat(
   const format = FORMATS.get(type);
   if (format !== undefined) {
     // Stryker disable next-line ConditionalExpression: a value longer than this is out of range, which the range check below finds too; this only spares reading a long value as a number
-    if (format.longest !== undefined && text.length > format.longest) return false;
+    if (text.length > format.longest) return false;
     if (!reads(format.scan, text)) return false;
     // An integer kind's text is digits with at most a sign, so it reads as a whole number exactly.
     if (format.min !== undefined && BigInt(text) < format.min) return false;
