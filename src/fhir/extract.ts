@@ -514,6 +514,7 @@ const EXTENSION_STRUCTURAL_KEYS: ReadonlySet<string> = new Set(["url", "id"]);
  * extension's `url` and `id` and an address's `state` and `country`.
  */
 function holdsString(node: FhirNode): node is FhirPrimitive {
+  // Stryker disable next-line ConditionalExpression: only a primitive has a `value`, so with the first test always true a complex or a list still fails the second, and the mutant changes nothing a test can read
   return isPrimitive(node) && typeof node.value === "string";
 }
 
@@ -1581,9 +1582,10 @@ function recordKeptAddressParts(
     const part = prop.value;
     // A part the pass blocked (any shape but a string) is removed whole: nothing of it is handed through.
     if (state.edits.has(part)) return;
-    /* v8 ignore next -- every part that is not a string is blocked above; this guard narrows the type */
-    // Stryker disable next-line ConditionalExpression: a part reached here is always a primitive, so the test only narrows the type
+    // Stryker disable ConditionalExpression: a part reached here is always a primitive, so the test only narrows the type
+    /* v8 ignore if -- every part that is not a string is blocked above; this guard narrows the type */
     if (!isPrimitive(part)) return;
+    // Stryker restore ConditionalExpression
     recordPrimitiveMetadata(residuals, part, join(path, elementSegment(prop.name, i)), state, true);
   });
 }

@@ -200,6 +200,8 @@ describe("an unknown key inside an extension is blocked", () => {
       address: [{ city: "ZZCITY", state: 900000008, country: false, postalCode: "62704" }],
     });
     expect(json).not.toMatch(/ZZCITY|90000000|false/);
+    // removed whole, as a swept address carrying an object there is: no ZIP fragment either
+    expect(JSON.parse(json)).toEqual({ resourceType: "Organization" });
   });
 
   it("writes no empty extension list on a kept address part", () => {
