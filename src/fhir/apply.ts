@@ -232,9 +232,10 @@ function applyEdit(node: FhirNode, edit: Edit, edits: ReadonlyMap<FhirNode, Edit
     case "primitive-id":
       // The extractor names only a primitive written as it arrived; anything else drops rather than
       // writes.
-      /* v8 ignore next -- the extractor's primitive-id coordinate always names a primitive */
       // Stryker disable next-line ConditionalExpression: the extractor's primitive-id coordinate always names a primitive, so the test only narrows the type
-      return isPrimitive(node) ? rebuildPrimitive(node, edit.value) : REMOVE;
+      /* v8 ignore if -- the extractor's primitive-id coordinate always names a primitive */
+      if (!isPrimitive(node)) return REMOVE;
+      return rebuildPrimitive(node, edit.value);
   }
 }
 

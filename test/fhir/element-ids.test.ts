@@ -400,6 +400,29 @@ describe("an element id beside a value the pass replaces, and in places the walk
     expect(rows(run.manifest, "Observation.identifier[0].zzInner.id")).toHaveLength(1);
   });
 
+  it("an empty actionId names nothing: it is kept empty and gets no row", () => {
+    const run = pass({
+      resourceType: "RequestGroup",
+      status: "active",
+      intent: "plan",
+      action: [{ relatedAction: [{ actionId: "", relationship: "after" }] }],
+    });
+    expect(at(run.out, "action.0.relatedAction.0.actionId")).toBe("");
+    expect(rows(run.manifest, "RequestGroup.action[0].relatedAction[0].actionId")).toEqual([]);
+  });
+
+  it("an actionId held as an object is removed and recorded", () => {
+    const run = pass({
+      resourceType: "PlanDefinition",
+      status: "active",
+      action: [{ relatedAction: [{ actionId: { zz: "ZZEIDACTIONOBJ" }, relationship: "after" }] }],
+    });
+    expect(run.wire).not.toContain("ZZEIDACTIONOBJ");
+    expect(rows(run.manifest, "PlanDefinition.action[0].relatedAction[0].actionId")).toHaveLength(
+      1,
+    );
+  });
+
   it("a key beside a relatedAction's actionId that only starts like it is not read as a link", () => {
     const run = pass({
       resourceType: "RequestGroup",
