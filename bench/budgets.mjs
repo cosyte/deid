@@ -17,6 +17,10 @@
 // resident peak in `pnpm bench:profile`, which counts every byte. A size the reading skipped (a
 // single call longer than its warmup can settle) is timed by the profile too.
 //
+// When the reading carries the parser alone beside a format's text in, text out benchmark, a last
+// table splits each of those rows into the parser's share and the adapter's, so a row over budget
+// is attributed by measurement rather than by guess.
+//
 // It prints a Markdown table and always exits 0 when it could read the reading: the budgets are
 // advisory, and a finding is a number to act on, not a red check. It exits 2 when it cannot read it.
 
@@ -42,6 +46,52 @@ function bytesPerSecond(c) {
 function mib(bytes) {
   if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(2)} MiB`;
   return `${(bytes / 1024).toFixed(1)} KiB`;
+}
+
+const END_TO_END = ": text in, text out";
+const PARSER_ALONE = ": parser alone, text in, text out";
+
+function ms(value) {
+  return value >= 100 ? `${value.toFixed(0)} ms` : `${value.toFixed(3)} ms`;
+}
+
+/**
+ * Each text in, text out row beside the parser alone on the same input: how much of the pass's
+ * time and peak heap the parser takes with no de-identification between its read and its write,
+ * and what is left for the adapter. A share is a ratio of two measures taken in one job.
+ */
+function attribution(cases) {
+  const parser = new Map();
+  for (const c of cases) {
+    if (c.benchmark.endsWith(PARSER_ALONE)) {
+      parser.set(`${c.benchmark.slice(0, -PARSER_ALONE.length)}\n${c.size}`, c);
+    }
+  }
+  if (parser.size === 0) return [];
+  const lines = [
+    "",
+    "Where a text in, text out pass goes: the parser alone (read and write back, nothing de-identified) on the same input, its share of the pass, and the multiple of the input it peaks at on its own.",
+    "",
+    "| Format | Size | Pass, per op | Parser, per op | Parser's time | Pass, peak heap | Parser, peak heap | Parser's peak | Parser alone, multiple |",
+    "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+  ];
+  for (const c of cases) {
+    if (!c.benchmark.endsWith(END_TO_END)) continue;
+    const format = c.benchmark.slice(0, -END_TO_END.length);
+    const p = parser.get(`${format}\n${c.size}`);
+    if (p === undefined) continue;
+    const time = (x) => (x.throughput.status === "measured" ? x.throughput.medianMsPerOp : undefined);
+    const peak = (x) => (x.peak !== null && x.peak.status === "measured" ? x.peak.peakHeapBytes : undefined);
+    const share = (part, whole) =>
+      part === undefined || whole === undefined ? "n/a" : `${((part / whole) * 100).toFixed(0)}%`;
+    const cell = (v, f) => (v === undefined ? "not measured" : f(v));
+    const [passMs, parserMs, passPeak, parserPeak] = [time(c), time(p), peak(c), peak(p)];
+    const perInput = p.bytesPerPass === null ? undefined : p.bytesPerPass / p.inputsPerPass;
+    lines.push(
+      `| ${format} | ${c.size} | ${cell(passMs, ms)} | ${cell(parserMs, ms)} | ${share(parserMs, passMs)} | ${cell(passPeak, mib)} | ${cell(parserPeak, mib)} | ${share(parserPeak, passPeak)} | ${parserPeak === undefined || perInput === undefined ? "n/a" : `${(parserPeak / perInput).toFixed(2)}x`} |`,
+    );
+  }
+  return lines;
 }
 
 function main(argv) {
@@ -124,6 +174,8 @@ function main(argv) {
       `| ${benchmark} | ${first.size} | ${last.size} | ${mib(small)}/s | ${mib(large)}/s | ${(kept * 100).toFixed(0)}% | ${kept >= THROUGHPUT_KEPT ? "yes" : "**no**"} |`,
     );
   }
+
+  lines.push(...attribution(cases));
 
   if (importCost !== null) {
     const own = importCost.medianMs - importCost.emptyMedianMs;

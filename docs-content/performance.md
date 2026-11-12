@@ -20,23 +20,26 @@ Three instruments, all in the repository, all on synthetic input built in code b
 `bench/shapes.mjs`. No file is read and no patient data is involved, so a run is the same anywhere.
 
 - **The benchmark suite**, `bench/deid.bench.mjs`, on `@cosyte/bench`, against the built entries a
-  consumer imports. Each format (HL7 v2, FHIR R4, C-CDA, X12 837P, DICOM) has two benchmarks: text
-  in, text out (parse, transform and write, what a consumer runs), and the adapter alone on a model
-  parsed beforehand. The policy engine has two more, on the format-agnostic locus model: the
-  built-in Safe Harbor policy, and a keyed policy that pseudonymizes, shifts dates and hashes
-  through HMAC. Every benchmark runs at the size a feed sends all day and at sizes well past it:
-  up to a batch of 1,000 HL7 v2 messages, a FHIR Bundle of 10,000 entries, a C-CDA document of
-  1,000 results, an X12 interchange of 5,000 claims, an Enhanced CT of 200 frames, and 100,000
-  loci; [Current numbers](#current-numbers) gives each input's size. A reading gives throughput, latency at
-  the 50th, 95th and 99th percentiles, allocations per call, peak heap, a long run for leaks, and
-  the cold import with every file it loads and its gzip size.
+  consumer imports. Each format (HL7 v2, FHIR R4, C-CDA, X12 837P, NCPDP Telecom, DICOM) has three
+  benchmarks: text in, text out (parse, transform and write, what a consumer runs); the adapter
+  alone on a model parsed beforehand; and the parser alone, text in, text out with nothing
+  de-identified between the read and the write, so the time and memory of a pass can be split into
+  the parser's share and the adapter's. The policy engine has two more, on the format-agnostic locus
+  model: the built-in Safe Harbor policy, and a keyed policy that pseudonymizes, shifts dates and
+  hashes through HMAC. Every benchmark runs at the size a feed sends all day and at sizes well past
+  it: up to a batch of 1,000 HL7 v2 messages, a FHIR Bundle of 10,000 entries, a C-CDA document of
+  1,000 results, an X12 interchange of 5,000 claims, a batch of 10,000 NCPDP Telecom claims (one
+  transmission a line), an Enhanced CT of 200 frames, and 100,000 loci;
+  [Current numbers](#current-numbers) gives each input's size. A reading gives throughput, latency at the
+  50th, 95th and 99th percentiles, allocations per call, peak heap, a long run for leaks, and the
+  cold import with every file it loads and its gzip size.
 - **The budgets**, `bench/budgets.mjs`, read from a reading: peak heap under 20 times the input for
-  a dense shape (HL7 v2, FHIR, C-CDA, X12 and the engine, many small values); peak memory under 3
-  times the input for DICOM, whose bytes are almost all Pixel Data (read from the resident peak in
-  the profile, since a Buffer is outside the V8 heap); throughput, in bytes a second, not falling
-  by more than half from a shape's smallest size to its largest; and a cold import under 15 ms for
-  each published entry, read by `bench/imports.mjs`. The budgets are advisory: a miss is a number
-  to act on, not a red check.
+  a dense shape (HL7 v2, FHIR, C-CDA, X12, NCPDP and the engine, many small values); peak memory
+  under 3 times the input for DICOM, whose bytes are almost all Pixel Data (read from the resident
+  peak in the profile, since a Buffer is outside the V8 heap); throughput, in bytes a second, not
+  falling by more than half from a shape's smallest size to its largest; and a cold import
+  under 15 ms for each published entry, read by `bench/imports.mjs`. The budgets are advisory: a
+  miss is a number to act on, not a red check.
 - **The scaling gate**, `test/perf/scaling-gate.perf.ts`, run by `pnpm test:perf` in the
   `ci / scaling-gate` job on every pull request. For each format adapter and the policy engine it
   asks one question: does the cost of a pass grow faster than its input? It times 4 times the
