@@ -70,7 +70,7 @@ import {
 
 import { isAgeCode, isBirthDateCode, type ObservationCodeSystem } from "../age-codes.js";
 import { SAFE_HARBOR_CATEGORIES } from "../categories.js";
-import { isWithheldToken, safeLocusToken } from "../derived-token.js";
+import { isWithheldToken, safeLocusToken, WITHHELD_LOCUS_TOKEN } from "../derived-token.js";
 import type { GenericLocus } from "../locus.js";
 import {
   enumerateOrFail,
@@ -1509,8 +1509,9 @@ export function extractFhirLoci(
   };
   // `resourceType` is a JSON string VALUE, not a checked identifier, and it is the ROOT of every path
   // in the manifest, so an unbounded one prefixes the whole audit with document content. Only a type
-  // R4 defines is written there; any other is the sender's text, and is withheld.
-  const rt = safeLocusToken(fhirResourceStructure(resourceType(resource)) ?? "", "fhirElementName");
+  // R4 defines (a name from the R4 table, so a bounded one) is written there; any other is the
+  // sender's text, and is withheld.
+  const rt = fhirResourceStructure(resourceType(resource)) ?? WITHHELD_LOCUS_TOKEN;
   // The same reach as the enumeration below, so a tree it cannot walk fails the same way.
   enumerateOrFail(rt, () => {
     findUnknownKeys(resource, unknownKeys);
@@ -1610,6 +1611,7 @@ function findUnknownKeys(resource: FhirComplex, unknown: Set<FhirNode>): void {
     for (const prop of node.properties) {
       if (resource && prop.name === "resourceType") continue;
       const type = elements.get(prop.name);
+      // Stryker disable next-line ConditionalExpression: a value under a key R4 does not define is blocked whole either way, here or below as a value of no structure R4 defines
       if (type === undefined) unknown.add(prop.value);
       else if (prop.name !== "extension" && prop.name !== "modifierExtension") {
         visitElement(prop.value, type, repeating.has(prop.name));

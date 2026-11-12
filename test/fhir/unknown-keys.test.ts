@@ -561,6 +561,17 @@ describe("a value of a shape R4 does not define where it sits is blocked", () =>
     expect(manifest.map((m) => `${m.locus} ${m.disposition}`)).toEqual([
       "Observation.performer[0] blocked",
     ]);
+    // Blocked where the walk meets it, so the manifest follows the document's order.
+    const ordered = run({
+      resourceType: "Observation",
+      status: "final",
+      performer: ["ZZPERFORMER"],
+      note: [{ text: "ZZNOTE" }],
+    });
+    expect(ordered.manifest.map((m) => m.locus)).toEqual([
+      "Observation.performer[0]",
+      "Observation.note",
+    ]);
   });
 
   it("the shapes R4 defines are kept as they arrive", () => {
