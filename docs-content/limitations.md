@@ -770,6 +770,45 @@ default Safe Harbor policy dates are generalized to the year and no offset is in
 per-patient offsets matter, split the document per patient and give each part its own context
 (`registry.forPatient(...)`).
 
+## Animal patients
+
+Our categories are the 18 identifier categories of the HIPAA Safe Harbor method
+(§164.514(b)(2)(i)), and HIPAA is about health information on people. A record about an animal is
+outside HIPAA, so the Safe Harbor list was not written for it, and nothing here makes a veterinary
+record compliant with anything. What a veterinary record does carry is its owner: a name, an
+address, a phone number. That is personal data about a person, under privacy law in many places,
+whatever the patient is. So the library handles an animal record as it handles a human one, and the
+tables below say what that means for the fields only an animal record has. Each row is pinned by a
+test on a synthetic record (`test/hl7/animal-patient.test.ts`, `test/dicom/animal-patient.test.ts`).
+
+**HL7 v2.**
+
+| Position                                                          | What happens                                                                      |
+| ----------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| `PID-35` Species Code, `PID-36` Breed Code                        | kept whole: they describe a kind of animal, and the locus map does not name them  |
+| `PID-37` Strain, `PID-38` Production Class Code                   | kept whole, for the same reason                                                   |
+| `PID-5` Patient Name (the animal's name, often with the owner's)  | removed, recorded under Names                                                     |
+| `PID-3` identifier list, a microchip number (type `MCN`) included | each identifier replaced or removed and recorded, as any other `PID-3` identifier |
+| `NK1` the owner: name, address, phone                             | removed or generalized and recorded, as for a human patient's next of kin         |
+
+**DICOM.** PS3.15 Table E.1-1 names three of the veterinary Patient Module attributes. This adapter
+removes two more that it does not name.
+
+| Attribute                                                                          | What happens                                                                                                                       |
+| ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| Patient Species Description and Code Sequence `(0010,2201/2202)`                   | kept: Table E.1-1 has no row for them, so they are counted in `unexaminedResiduals` and get no manifest row                        |
+| Patient Breed Description and Code Sequence `(0010,2292/2293)`                     | kept, the same way                                                                                                                 |
+| Patient's Sex Neutered `(0010,2203)`                                               | removed and recorded under the Basic Profile; kept and recorded `retained` under Retain Patient Characteristics                    |
+| Responsible Person `(0010,2297)`, Responsible Organization `(0010,2299)`           | removed and recorded (Table E.1-1 `X`)                                                                                             |
+| Responsible Person Role `(0010,2298)`                                              | kept: a coded role such as `OWNER`, not a person                                                                                   |
+| Breed Registration Sequence `(0010,2294)`, Breed Registration Number `(0010,2295)` | **removed beyond Table E.1-1**, recorded `removed` under category (R), and named by the `DICOM_BREED_REGISTRATION_REMOVED` warning |
+
+A breed registration number names one animal, and the registry that issued it holds the owner's name
+and address, so it leads to a person as surely as Responsible Person does. Table E.1-1 lists neither
+attribute, so the delegated Annex E pass keeps them; this adapter removes them at the top level, where
+the Patient Module puts them, and refuses a file that carries either one inside a sequence it keeps
+(`DEID_FORMAT_UNSUPPORTED`). No Annex E option keeps them.
+
 ## Put it to use
 
 - [What the caller still owns](./what-the-caller-still-owns.md): the checklist before you release
