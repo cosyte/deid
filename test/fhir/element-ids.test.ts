@@ -272,7 +272,7 @@ describe("a relatedAction's actionId resolves to the replaced action id", () => 
       relatedAction: [{ actionId: "zzplain" }],
     });
     expect(run.wire).not.toContain("zzplain");
-    expect(rows(run.manifest, "Basic.relatedAction")).toEqual([
+    expect(rows(run.manifest, "Basic.<withheld>[2]")).toEqual([
       expect.objectContaining({ disposition: "blocked" }),
     ]);
   });
@@ -382,14 +382,17 @@ describe("an element id that is not a string, or is empty", () => {
     expect(rows(run.manifest, "Observation.component[0].id")).toHaveLength(1);
   });
 
-  it("an id holding a number is replaced like a string", () => {
+  it("an id holding a number, a JSON type R4 does not give it, is removed whole and recorded", () => {
     const run = pass({
       resourceType: "Observation",
       status: "final",
       code: { id: 900000017, text: "x" },
     });
     expect(run.wire).not.toContain("900000017");
-    expect(at(run.out, "code.id")).toMatch(/^\d+$/);
+    expect(at(run.out, "code.id")).toBeUndefined();
+    expect(rows(run.manifest, "Observation.code.id")).toEqual([
+      expect.objectContaining({ disposition: "blocked" }),
+    ]);
   });
 
   it("an empty id carries nothing and gets no row", () => {
@@ -439,8 +442,8 @@ describe("an element id beside a value the pass replaces, and in places the walk
       ],
     });
     expect(run.wire).not.toContain("ZZEIDINNER");
-    expect(rows(run.manifest, "Observation.identifier[0].zzInner")).toHaveLength(1);
-    expect(rows(run.manifest, "Observation.identifier[0].zzInner.id")).toEqual([]);
+    expect(rows(run.manifest, "Observation.identifier[0].<withheld>[2]")).toHaveLength(1);
+    expect(rows(run.manifest, "Observation.identifier[0].<withheld>[2].id")).toEqual([]);
   });
 
   it("a date-shaped action id and the actionId naming it get the same replacement", () => {
@@ -493,7 +496,7 @@ describe("an element id beside a value the pass replaces, and in places the walk
     // R4 defines no such key, so it is blocked rather than read.
     expect(run.wire).not.toContain("zzplain");
     expect(at(run.out, "action.0.relatedAction.0.relationship")).toBe("after");
-    expect(rows(run.manifest, "RequestGroup.action[0].relatedAction[0].actionIdZz")).toEqual([
+    expect(rows(run.manifest, "RequestGroup.action[0].relatedAction[0].<withheld>[0]")).toEqual([
       expect.objectContaining({ disposition: "blocked" }),
     ]);
   });

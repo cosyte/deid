@@ -8,7 +8,9 @@
  * datatype. Each element is written under the resource, datatype or backbone element it belongs to,
  * by its name and, when it holds a structure, the type of that structure: a complex datatype, a
  * backbone element (by its path), the path another element's definition is reused from
- * (`contentReference`), or `Resource`, and whether it repeats (its `max` above 1), which JSON writes
+ * (`contentReference`), or `Resource`; when it holds a primitive, the JSON type R4 gives that
+ * primitive when it is not a string (`boolean`, or `number` for an `integer`, a `decimal`, a
+ * `positiveInt` and an `unsignedInt`); and whether it repeats (its `max` above 1), which JSON writes
  * as an array. A choice element is written under each concrete name
  * (`value[x]` as `valueQuantity`, `valueString`, ...). Only names and types are kept, never a
  * description. Nothing reads the network at build, test or run time: this script is run by hand
@@ -55,6 +57,20 @@ interface StructureDefinition {
   readonly derivation?: string;
   readonly snapshot?: { readonly element: readonly ElementDefinition[] };
 }
+
+/**
+ * The JSON type of each R4 primitive that JSON does not write as a string (json.html: a `boolean` as
+ * a JSON boolean, an `integer`, a `decimal`, a `positiveInt` and an `unsignedInt` as a JSON number),
+ * by its type code. Every other primitive is a JSON string, an element id and an extension `url` (typed
+ * `http://hl7.org/fhirpath/System.String` in the snapshots) among them.
+ */
+const JSON_KINDS: ReadonlyMap<string, string> = new Map([
+  ["boolean", "boolean"],
+  ["integer", "number"],
+  ["decimal", "number"],
+  ["positiveInt", "number"],
+  ["unsignedInt", "number"],
+]);
 
 interface DefinitionBundle {
   readonly entry: readonly { readonly resource: StructureDefinition }[];
@@ -111,7 +127,8 @@ async function main(): Promise<void> {
         // An extension is decided by its own rule, which reads no table, so it is written as a name.
         if (code === "Extension") return undefined;
         if (code === "Resource") return "Resource";
-        return complexTypes.has(code) ? code : undefined;
+        // A primitive JSON writes as a boolean or a number is written by that JSON type.
+        return complexTypes.has(code) ? code : JSON_KINDS.get(code);
       };
       if (name.endsWith("[x]")) {
         const base = name.slice(0, -3);
@@ -140,10 +157,12 @@ async function main(): Promise<void> {
   const out = `/**
  * Every element name FHIR R4 defines, by the resource, datatype or backbone element it belongs to, as
  * the R4 (4.0.1) definitions publish them (retrieved from \`${SOURCES.join("` and `")}\`).
- * Each entry is a space-separated list: a name alone holds a primitive or an extension, and
- * \`name:Type\` holds a structure, named by its datatype, by \`.\` for a backbone element (its own
- * path), by the backbone path whose definition it reuses, or by \`Resource\` (any resource, read by
- * its own \`resourceType\`). A trailing \`*\` marks an element that repeats, which JSON writes as an
+ * Each entry is a space-separated list: a name alone holds a primitive JSON writes as a string, or
+ * an extension; \`name:boolean\` and \`name:number\` hold a primitive JSON writes as a boolean or a
+ * number (an \`integer\`, a \`decimal\`, a \`positiveInt\`, an \`unsignedInt\`); and \`name:Type\`
+ * holds a structure, named by its datatype, by \`.\` for a backbone element (its own path), by the
+ * backbone path whose definition it reuses, or by \`Resource\` (any resource, read by its own
+ * \`resourceType\`). A trailing \`*\` marks an element that repeats, which JSON writes as an
  * array; every other element is written as a single value. A choice element is listed under each
  * concrete name it is written as. A token (\`@D\`) stands for the names every structure of a kind
  * starts with ({@link FHIR_ELEMENT_BASES}).

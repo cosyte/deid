@@ -469,7 +469,8 @@ describe("a name that is not a contact's, kept as it arrived", () => {
 
   it("keeps an Endpoint's ContactPoint, and blocks a contact R4 does not define", () => {
     // `Endpoint.contact` is a ContactPoint, not a ContactDetail, and is kept. A `contact` R4 never put
-    // on an Observation is a key it does not define there, so it is blocked whole, not read as one.
+    // on an Observation is a key it does not define there, so it is blocked whole, not read as one, and
+    // its row names its position, not the key.
     const endpoint = {
       resourceType: "Endpoint",
       status: "active",
@@ -486,7 +487,7 @@ describe("a name that is not a contact's, kept as it arrived", () => {
     };
     const blocked = run(lookalike);
     expect(blocked.json).toBe('{"resourceType":"Observation","status":"final"}');
-    expect(rows(blocked)).toEqual(["Observation.contact blocked"]);
+    expect(rows(blocked)).toEqual(["Observation.<withheld>[2] blocked"]);
     expect(loci(blocked)).toEqual(["Observation.status"]);
   });
 });

@@ -36,9 +36,11 @@ describe("an unknown key inside an extension is blocked", () => {
     });
     expect(json).not.toContain("ZZEXTNOTE");
     expect(json).toContain('"url":"http://example.org/x"');
-    const row = manifest.find((m) => m.locus === "Observation.extension[0].note");
+    const row = manifest.find((m) => m.locus === "Observation.extension[0].<withheld>[1]");
     expect(row?.disposition).toBe("blocked");
     expect(JSON.stringify(manifest)).not.toContain("ZZEXTNOTE");
+    // the row names the key's position, never the key the sender chose
+    expect(JSON.stringify(manifest)).not.toContain("note");
   });
 
   it("on a person resource and in a modifier extension", () => {
@@ -50,8 +52,8 @@ describe("an unknown key inside an extension is blocked", () => {
     expect(json).not.toContain("ZZEXTNOTE");
     expect(json).not.toContain("ZZMODNOTE");
     const loci = manifest.map((m) => m.locus);
-    expect(loci).toContain("Patient.extension[0].note");
-    expect(loci).toContain("Patient.modifierExtension[0].comment");
+    expect(loci).toContain("Patient.extension[0].<withheld>[1]");
+    expect(loci).toContain("Patient.modifierExtension[0].<withheld>[1]");
   });
 
   it("at every depth: a nested extension, a backbone, a contained resource, a Bundle entry", () => {
@@ -135,9 +137,9 @@ describe("an unknown key inside an extension is blocked", () => {
     expect(json).toContain('"url":"http://example.org/s"');
     // a single address is located without an index, as every single occurrence is
     const loci = manifest.map((m) => m.locus);
-    expect(loci).toContain("Patient.address._state.extension[0].note");
+    expect(loci).toContain("Patient.address._state.extension[0].<withheld>[1]");
     expect(loci).toContain("Patient.address._state.extension[0].valueString");
-    expect(loci).toContain("Patient.address._country.extension[0].extension[0].n");
+    expect(loci).toContain("Patient.address._country.extension[0].extension[0].<withheld>[1]");
     expect(JSON.stringify(manifest)).not.toMatch(/ZZ(STATE|C)(NOTE|VALUE)/);
   });
 
@@ -256,8 +258,10 @@ describe("an unknown key inside an extension is blocked", () => {
       JSON.stringify({ resourceType: "Observation", status: "final", extension: [UNKNOWN] }),
     );
     const { loci, unexaminedResiduals } = extractFhirLoci(resource);
-    expect(loci.map((l) => l.path)).toContain("Observation.extension[0].note");
-    expect(unexaminedResiduals.map((r) => r.locus)).not.toContain("Observation.extension[0].note");
+    expect(loci.map((l) => l.path)).toContain("Observation.extension[0].<withheld>[1]");
+    expect(unexaminedResiduals.map((r) => r.locus)).not.toContain(
+      "Observation.extension[0].<withheld>[1]",
+    );
   });
 
   it("blocks a url or an id that is not a single string", () => {
@@ -362,7 +366,7 @@ describe("an unknown key elsewhere in a resource", () => {
   it("on a person resource's own top level: removed", () => {
     const { json, manifest } = run({ resourceType: "Patient", gender: "male", zzNote: "ZZTOP" });
     expect(json).not.toContain("ZZTOP");
-    expect(manifest.map((m) => m.locus)).toContain("Patient.zzNote");
+    expect(manifest.map((m) => m.locus)).toContain("Patient.<withheld>[2]");
   });
 
   it("on a clinical resource, in a backbone and in a coding: removed, not counted", () => {
@@ -376,9 +380,9 @@ describe("an unknown key elsewhere in a resource", () => {
     const { json, manifest } = run(resource);
     for (const v of ["ZZCLIN1", "ZZCLIN2", "ZZCLIN3"]) expect(json).not.toContain(v);
     const loci = [
-      "Observation.zzNote",
-      "Observation.code.coding[0].zzNote",
-      "Observation.component[0].zzNote",
+      "Observation.<withheld>[2]",
+      "Observation.code.coding[0].<withheld>[2]",
+      "Observation.component[0].<withheld>[1]",
     ];
     expect(manifest.map((m) => m.locus)).toEqual(expect.arrayContaining(loci));
     for (const locus of loci) expect(residuals(resource)).not.toContain(locus);
@@ -401,7 +405,7 @@ describe("an unknown key elsewhere in a resource", () => {
     };
     const { json, manifest } = run(resource);
     expect(json).not.toContain("ZZPERSONDEEP");
-    expect(manifest.map((m) => m.locus)).toContain("Patient.communication[0].zzNote");
-    expect(residuals(resource)).not.toContain("Patient.communication[0].zzNote");
+    expect(manifest.map((m) => m.locus)).toContain("Patient.communication[0].<withheld>[1]");
+    expect(residuals(resource)).not.toContain("Patient.communication[0].<withheld>[1]");
   });
 });

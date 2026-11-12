@@ -1,10 +1,12 @@
 /**
  * Every element name FHIR R4 defines, by the resource, datatype or backbone element it belongs to, as
  * the R4 (4.0.1) definitions publish them (retrieved from `https://hl7.org/fhir/R4/profiles-types.json` and `https://hl7.org/fhir/R4/profiles-resources.json`).
- * Each entry is a space-separated list: a name alone holds a primitive or an extension, and
- * `name:Type` holds a structure, named by its datatype, by `.` for a backbone element (its own
- * path), by the backbone path whose definition it reuses, or by `Resource` (any resource, read by
- * its own `resourceType`). A trailing `*` marks an element that repeats, which JSON writes as an
+ * Each entry is a space-separated list: a name alone holds a primitive JSON writes as a string, or
+ * an extension; `name:boolean` and `name:number` hold a primitive JSON writes as a boolean or a
+ * number (an `integer`, a `decimal`, a `positiveInt`, an `unsignedInt`); and `name:Type`
+ * holds a structure, named by its datatype, by `.` for a backbone element (its own path), by the
+ * backbone path whose definition it reuses, or by `Resource` (any resource, read by its own
+ * `resourceType`). A trailing `*` marks an element that repeats, which JSON writes as an
  * array; every other element is written as a single value. A choice element is listed under each
  * concrete name it is written as. A token (`@D`) stands for the names every structure of a kind
  * starts with ({@link FHIR_ELEMENT_BASES}).
@@ -19,10 +21,10 @@
 export const FHIR_ELEMENT_NAMES: Readonly<Record<string, string>> = {
   Account:
     "@D identifier:Identifier* status type:CodeableConcept name subject:Reference* servicePeriod:Period coverage:.* owner:Reference description guarantor:.* partOf:Reference",
-  "Account.coverage": "@B coverage:Reference priority",
-  "Account.guarantor": "@B party:Reference onHold period:Period",
+  "Account.coverage": "@B coverage:Reference priority:number",
+  "Account.guarantor": "@B party:Reference onHold:boolean period:Period",
   ActivityDefinition:
-    "@D url identifier:Identifier* version name title subtitle status experimental subjectCodeableConcept:CodeableConcept subjectReference:Reference date publisher contact:ContactDetail* description useContext:UsageContext* jurisdiction:CodeableConcept* purpose usage copyright approvalDate lastReviewDate effectivePeriod:Period topic:CodeableConcept* author:ContactDetail* editor:ContactDetail* reviewer:ContactDetail* endorser:ContactDetail* relatedArtifact:RelatedArtifact* library* kind profile code:CodeableConcept intent priority doNotPerform timingTiming:Timing timingDateTime timingAge:Age timingPeriod:Period timingRange:Range timingDuration:Duration location:Reference participant:.* productReference:Reference productCodeableConcept:CodeableConcept quantity:Quantity dosage:Dosage* bodySite:CodeableConcept* specimenRequirement:Reference* observationRequirement:Reference* observationResultRequirement:Reference* transform dynamicValue:.*",
+    "@D url identifier:Identifier* version name title subtitle status experimental:boolean subjectCodeableConcept:CodeableConcept subjectReference:Reference date publisher contact:ContactDetail* description useContext:UsageContext* jurisdiction:CodeableConcept* purpose usage copyright approvalDate lastReviewDate effectivePeriod:Period topic:CodeableConcept* author:ContactDetail* editor:ContactDetail* reviewer:ContactDetail* endorser:ContactDetail* relatedArtifact:RelatedArtifact* library* kind profile code:CodeableConcept intent priority doNotPerform:boolean timingTiming:Timing timingDateTime timingAge:Age timingPeriod:Period timingRange:Range timingDuration:Duration location:Reference participant:.* productReference:Reference productCodeableConcept:CodeableConcept quantity:Quantity dosage:Dosage* bodySite:CodeableConcept* specimenRequirement:Reference* observationRequirement:Reference* observationResultRequirement:Reference* transform dynamicValue:.*",
   "ActivityDefinition.dynamicValue": "@B path expression:Expression",
   "ActivityDefinition.participant": "@B type role:CodeableConcept",
   Address: "@E use type text line* city district state postalCode country period:Period",
@@ -31,23 +33,23 @@ export const FHIR_ELEMENT_NAMES: Readonly<Record<string, string>> = {
   "AdverseEvent.suspectEntity": "@B instance:Reference causality:.*",
   "AdverseEvent.suspectEntity.causality":
     "@B assessment:CodeableConcept productRelatedness author:Reference method:CodeableConcept",
-  Age: "@E value comparator unit system code",
+  Age: "@E value:number comparator unit system code",
   AllergyIntolerance:
     "@D identifier:Identifier* clinicalStatus:CodeableConcept verificationStatus:CodeableConcept type category* criticality code:CodeableConcept patient:Reference encounter:Reference onsetDateTime onsetAge:Age onsetPeriod:Period onsetRange:Range onsetString recordedDate recorder:Reference asserter:Reference lastOccurrence note:Annotation* reaction:.*",
   "AllergyIntolerance.reaction":
     "@B substance:CodeableConcept manifestation:CodeableConcept* description onset severity exposureRoute:CodeableConcept note:Annotation*",
   Annotation: "@E authorReference:Reference authorString time text",
   Appointment:
-    "@D identifier:Identifier* status cancelationReason:CodeableConcept serviceCategory:CodeableConcept* serviceType:CodeableConcept* specialty:CodeableConcept* appointmentType:CodeableConcept reasonCode:CodeableConcept* reasonReference:Reference* priority description supportingInformation:Reference* start end minutesDuration slot:Reference* created comment patientInstruction basedOn:Reference* participant:.* requestedPeriod:Period*",
+    "@D identifier:Identifier* status cancelationReason:CodeableConcept serviceCategory:CodeableConcept* serviceType:CodeableConcept* specialty:CodeableConcept* appointmentType:CodeableConcept reasonCode:CodeableConcept* reasonReference:Reference* priority:number description supportingInformation:Reference* start end minutesDuration:number slot:Reference* created comment patientInstruction basedOn:Reference* participant:.* requestedPeriod:Period*",
   "Appointment.participant":
     "@B type:CodeableConcept* actor:Reference required status period:Period",
   AppointmentResponse:
     "@D identifier:Identifier* appointment:Reference start end participantType:CodeableConcept* actor:Reference participantStatus comment",
-  Attachment: "@E contentType language data url size hash title creation",
+  Attachment: "@E contentType language data url size:number hash title creation",
   AuditEvent:
     "@D type:Coding subtype:Coding* action period:Period recorded outcome outcomeDesc purposeOfEvent:CodeableConcept* agent:.* source:. entity:.*",
   "AuditEvent.agent":
-    "@B type:CodeableConcept role:CodeableConcept* who:Reference altId name requestor location:Reference policy* media:Coding network:. purposeOfUse:CodeableConcept*",
+    "@B type:CodeableConcept role:CodeableConcept* who:Reference altId name requestor:boolean location:Reference policy* media:Coding network:. purposeOfUse:CodeableConcept*",
   "AuditEvent.agent.network": "@B address type",
   "AuditEvent.entity":
     "@B what:Reference type:Coding role:Coding lifecycle:Coding securityLabel:Coding* name description query detail:.*",
@@ -58,104 +60,107 @@ export const FHIR_ELEMENT_NAMES: Readonly<Record<string, string>> = {
     "@D identifier:Identifier* code:CodeableConcept subject:Reference created author:Reference",
   Binary: "@R contentType securityContext:Reference data",
   BiologicallyDerivedProduct:
-    "@D identifier:Identifier* productCategory productCode:CodeableConcept status request:Reference* quantity parent:Reference* collection:. processing:.* manipulation:. storage:.*",
+    "@D identifier:Identifier* productCategory productCode:CodeableConcept status request:Reference* quantity:number parent:Reference* collection:. processing:.* manipulation:. storage:.*",
   "BiologicallyDerivedProduct.collection":
     "@B collector:Reference source:Reference collectedDateTime collectedPeriod:Period",
   "BiologicallyDerivedProduct.manipulation": "@B description timeDateTime timePeriod:Period",
   "BiologicallyDerivedProduct.processing":
     "@B description procedure:CodeableConcept additive:Reference timeDateTime timePeriod:Period",
-  "BiologicallyDerivedProduct.storage": "@B description temperature scale duration:Period",
+  "BiologicallyDerivedProduct.storage": "@B description temperature:number scale duration:Period",
   BodyStructure:
-    "@D identifier:Identifier* active morphology:CodeableConcept location:CodeableConcept locationQualifier:CodeableConcept* description image:Attachment* patient:Reference",
-  Bundle: "@R identifier:Identifier type timestamp total link:.* entry:.* signature:Signature",
+    "@D identifier:Identifier* active:boolean morphology:CodeableConcept location:CodeableConcept locationQualifier:CodeableConcept* description image:Attachment* patient:Reference",
+  Bundle:
+    "@R identifier:Identifier type timestamp total:number link:.* entry:.* signature:Signature",
   "Bundle.entry": "@B link:Bundle.link* fullUrl resource:Resource search:. request:. response:.",
   "Bundle.entry.request": "@B method url ifNoneMatch ifModifiedSince ifMatch ifNoneExist",
   "Bundle.entry.response": "@B status location etag lastModified outcome:Resource",
-  "Bundle.entry.search": "@B mode score",
+  "Bundle.entry.search": "@B mode score:number",
   "Bundle.link": "@B relation url",
   CapabilityStatement:
-    "@D url version name title status experimental date publisher contact:ContactDetail* description useContext:UsageContext* jurisdiction:CodeableConcept* purpose copyright kind instantiates* imports* software:. implementation:. fhirVersion format* patchFormat* implementationGuide* rest:.* messaging:.* document:.*",
+    "@D url version name title status experimental:boolean date publisher contact:ContactDetail* description useContext:UsageContext* jurisdiction:CodeableConcept* purpose copyright kind instantiates* imports* software:. implementation:. fhirVersion format* patchFormat* implementationGuide* rest:.* messaging:.* document:.*",
   "CapabilityStatement.document": "@B mode documentation profile",
   "CapabilityStatement.implementation": "@B description url custodian:Reference",
-  "CapabilityStatement.messaging": "@B endpoint:.* reliableCache documentation supportedMessage:.*",
+  "CapabilityStatement.messaging":
+    "@B endpoint:.* reliableCache:number documentation supportedMessage:.*",
   "CapabilityStatement.messaging.endpoint": "@B protocol:Coding address",
   "CapabilityStatement.messaging.supportedMessage": "@B mode definition",
   "CapabilityStatement.rest":
     "@B mode documentation security:. resource:.* interaction:.* searchParam:CapabilityStatement.rest.resource.searchParam* operation:CapabilityStatement.rest.resource.operation* compartment*",
   "CapabilityStatement.rest.interaction": "@B code documentation",
   "CapabilityStatement.rest.resource":
-    "@B type profile supportedProfile* documentation interaction:.* versioning readHistory updateCreate conditionalCreate conditionalRead conditionalUpdate conditionalDelete referencePolicy* searchInclude* searchRevInclude* searchParam:.* operation:.*",
+    "@B type profile supportedProfile* documentation interaction:.* versioning readHistory:boolean updateCreate:boolean conditionalCreate:boolean conditionalRead conditionalUpdate:boolean conditionalDelete referencePolicy* searchInclude* searchRevInclude* searchParam:.* operation:.*",
   "CapabilityStatement.rest.resource.interaction": "@B code documentation",
   "CapabilityStatement.rest.resource.operation": "@B name definition documentation",
   "CapabilityStatement.rest.resource.searchParam": "@B name definition type documentation",
-  "CapabilityStatement.rest.security": "@B cors service:CodeableConcept* description",
+  "CapabilityStatement.rest.security": "@B cors:boolean service:CodeableConcept* description",
   "CapabilityStatement.software": "@B name version releaseDate",
   CarePlan:
     "@D identifier:Identifier* instantiatesCanonical* instantiatesUri* basedOn:Reference* replaces:Reference* partOf:Reference* status intent category:CodeableConcept* title description subject:Reference encounter:Reference period:Period created author:Reference contributor:Reference* careTeam:Reference* addresses:Reference* supportingInfo:Reference* goal:Reference* activity:.* note:Annotation*",
   "CarePlan.activity":
     "@B outcomeCodeableConcept:CodeableConcept* outcomeReference:Reference* progress:Annotation* reference:Reference detail:.",
   "CarePlan.activity.detail":
-    "@B kind instantiatesCanonical* instantiatesUri* code:CodeableConcept reasonCode:CodeableConcept* reasonReference:Reference* goal:Reference* status statusReason:CodeableConcept doNotPerform scheduledTiming:Timing scheduledPeriod:Period scheduledString location:Reference performer:Reference* productCodeableConcept:CodeableConcept productReference:Reference dailyAmount:Quantity quantity:Quantity description",
+    "@B kind instantiatesCanonical* instantiatesUri* code:CodeableConcept reasonCode:CodeableConcept* reasonReference:Reference* goal:Reference* status statusReason:CodeableConcept doNotPerform:boolean scheduledTiming:Timing scheduledPeriod:Period scheduledString location:Reference performer:Reference* productCodeableConcept:CodeableConcept productReference:Reference dailyAmount:Quantity quantity:Quantity description",
   CareTeam:
     "@D identifier:Identifier* status category:CodeableConcept* name subject:Reference encounter:Reference period:Period participant:.* reasonCode:CodeableConcept* reasonReference:Reference* managingOrganization:Reference* telecom:ContactPoint* note:Annotation*",
   "CareTeam.participant":
     "@B role:CodeableConcept* member:Reference onBehalfOf:Reference period:Period",
   CatalogEntry:
-    "@D identifier:Identifier* type:CodeableConcept orderable referencedItem:Reference additionalIdentifier:Identifier* classification:CodeableConcept* status validityPeriod:Period validTo lastUpdated additionalCharacteristic:CodeableConcept* additionalClassification:CodeableConcept* relatedEntry:.*",
+    "@D identifier:Identifier* type:CodeableConcept orderable:boolean referencedItem:Reference additionalIdentifier:Identifier* classification:CodeableConcept* status validityPeriod:Period validTo lastUpdated additionalCharacteristic:CodeableConcept* additionalClassification:CodeableConcept* relatedEntry:.*",
   "CatalogEntry.relatedEntry": "@B relationtype item:Reference",
   ChargeItem:
-    "@D identifier:Identifier* definitionUri* definitionCanonical* status partOf:Reference* code:CodeableConcept subject:Reference context:Reference occurrenceDateTime occurrencePeriod:Period occurrenceTiming:Timing performer:.* performingOrganization:Reference requestingOrganization:Reference costCenter:Reference quantity:Quantity bodysite:CodeableConcept* factorOverride priceOverride:Money overrideReason enterer:Reference enteredDate reason:CodeableConcept* service:Reference* productReference:Reference productCodeableConcept:CodeableConcept account:Reference* note:Annotation* supportingInformation:Reference*",
+    "@D identifier:Identifier* definitionUri* definitionCanonical* status partOf:Reference* code:CodeableConcept subject:Reference context:Reference occurrenceDateTime occurrencePeriod:Period occurrenceTiming:Timing performer:.* performingOrganization:Reference requestingOrganization:Reference costCenter:Reference quantity:Quantity bodysite:CodeableConcept* factorOverride:number priceOverride:Money overrideReason enterer:Reference enteredDate reason:CodeableConcept* service:Reference* productReference:Reference productCodeableConcept:CodeableConcept account:Reference* note:Annotation* supportingInformation:Reference*",
   "ChargeItem.performer": "@B function:CodeableConcept actor:Reference",
   ChargeItemDefinition:
-    "@D url identifier:Identifier* version title derivedFromUri* partOf* replaces* status experimental date publisher contact:ContactDetail* description useContext:UsageContext* jurisdiction:CodeableConcept* copyright approvalDate lastReviewDate effectivePeriod:Period code:CodeableConcept instance:Reference* applicability:.* propertyGroup:.*",
+    "@D url identifier:Identifier* version title derivedFromUri* partOf* replaces* status experimental:boolean date publisher contact:ContactDetail* description useContext:UsageContext* jurisdiction:CodeableConcept* copyright approvalDate lastReviewDate effectivePeriod:Period code:CodeableConcept instance:Reference* applicability:.* propertyGroup:.*",
   "ChargeItemDefinition.applicability": "@B description language expression",
   "ChargeItemDefinition.propertyGroup":
     "@B applicability:ChargeItemDefinition.applicability* priceComponent:.*",
   "ChargeItemDefinition.propertyGroup.priceComponent":
-    "@B type code:CodeableConcept factor amount:Money",
+    "@B type code:CodeableConcept factor:number amount:Money",
   Claim:
     "@D identifier:Identifier* status type:CodeableConcept subType:CodeableConcept use patient:Reference billablePeriod:Period created enterer:Reference insurer:Reference provider:Reference priority:CodeableConcept fundsReserve:CodeableConcept related:.* prescription:Reference originalPrescription:Reference payee:. referral:Reference facility:Reference careTeam:.* supportingInfo:.* diagnosis:.* procedure:.* insurance:.* accident:. item:.* total:Money",
   "Claim.accident":
     "@B date type:CodeableConcept locationAddress:Address locationReference:Reference",
   "Claim.careTeam":
-    "@B sequence provider:Reference responsible role:CodeableConcept qualification:CodeableConcept",
+    "@B sequence:number provider:Reference responsible:boolean role:CodeableConcept qualification:CodeableConcept",
   "Claim.diagnosis":
-    "@B sequence diagnosisCodeableConcept:CodeableConcept diagnosisReference:Reference type:CodeableConcept* onAdmission:CodeableConcept packageCode:CodeableConcept",
+    "@B sequence:number diagnosisCodeableConcept:CodeableConcept diagnosisReference:Reference type:CodeableConcept* onAdmission:CodeableConcept packageCode:CodeableConcept",
   "Claim.insurance":
-    "@B sequence focal identifier:Identifier coverage:Reference businessArrangement preAuthRef* claimResponse:Reference",
+    "@B sequence:number focal:boolean identifier:Identifier coverage:Reference businessArrangement preAuthRef* claimResponse:Reference",
   "Claim.item":
-    "@B sequence careTeamSequence* diagnosisSequence* procedureSequence* informationSequence* revenue:CodeableConcept category:CodeableConcept productOrService:CodeableConcept modifier:CodeableConcept* programCode:CodeableConcept* servicedDate servicedPeriod:Period locationCodeableConcept:CodeableConcept locationAddress:Address locationReference:Reference quantity:Quantity unitPrice:Money factor net:Money udi:Reference* bodySite:CodeableConcept subSite:CodeableConcept* encounter:Reference* detail:.*",
+    "@B sequence:number careTeamSequence:number* diagnosisSequence:number* procedureSequence:number* informationSequence:number* revenue:CodeableConcept category:CodeableConcept productOrService:CodeableConcept modifier:CodeableConcept* programCode:CodeableConcept* servicedDate servicedPeriod:Period locationCodeableConcept:CodeableConcept locationAddress:Address locationReference:Reference quantity:Quantity unitPrice:Money factor:number net:Money udi:Reference* bodySite:CodeableConcept subSite:CodeableConcept* encounter:Reference* detail:.*",
   "Claim.item.detail":
-    "@B sequence revenue:CodeableConcept category:CodeableConcept productOrService:CodeableConcept modifier:CodeableConcept* programCode:CodeableConcept* quantity:Quantity unitPrice:Money factor net:Money udi:Reference* subDetail:.*",
+    "@B sequence:number revenue:CodeableConcept category:CodeableConcept productOrService:CodeableConcept modifier:CodeableConcept* programCode:CodeableConcept* quantity:Quantity unitPrice:Money factor:number net:Money udi:Reference* subDetail:.*",
   "Claim.item.detail.subDetail":
-    "@B sequence revenue:CodeableConcept category:CodeableConcept productOrService:CodeableConcept modifier:CodeableConcept* programCode:CodeableConcept* quantity:Quantity unitPrice:Money factor net:Money udi:Reference*",
+    "@B sequence:number revenue:CodeableConcept category:CodeableConcept productOrService:CodeableConcept modifier:CodeableConcept* programCode:CodeableConcept* quantity:Quantity unitPrice:Money factor:number net:Money udi:Reference*",
   "Claim.payee": "@B type:CodeableConcept party:Reference",
   "Claim.procedure":
-    "@B sequence type:CodeableConcept* date procedureCodeableConcept:CodeableConcept procedureReference:Reference udi:Reference*",
+    "@B sequence:number type:CodeableConcept* date procedureCodeableConcept:CodeableConcept procedureReference:Reference udi:Reference*",
   "Claim.related": "@B claim:Reference relationship:CodeableConcept reference:Identifier",
   "Claim.supportingInfo":
-    "@B sequence category:CodeableConcept code:CodeableConcept timingDate timingPeriod:Period valueBoolean valueString valueQuantity:Quantity valueAttachment:Attachment valueReference:Reference reason:CodeableConcept",
+    "@B sequence:number category:CodeableConcept code:CodeableConcept timingDate timingPeriod:Period valueBoolean:boolean valueString valueQuantity:Quantity valueAttachment:Attachment valueReference:Reference reason:CodeableConcept",
   ClaimResponse:
     "@D identifier:Identifier* status type:CodeableConcept subType:CodeableConcept use patient:Reference created insurer:Reference requestor:Reference request:Reference outcome disposition preAuthRef preAuthPeriod:Period payeeType:CodeableConcept item:.* addItem:.* adjudication:ClaimResponse.item.adjudication* total:.* payment:. fundsReserve:CodeableConcept formCode:CodeableConcept form:Attachment processNote:.* communicationRequest:Reference* insurance:.* error:.*",
   "ClaimResponse.addItem":
-    "@B itemSequence* detailSequence* subdetailSequence* provider:Reference* productOrService:CodeableConcept modifier:CodeableConcept* programCode:CodeableConcept* servicedDate servicedPeriod:Period locationCodeableConcept:CodeableConcept locationAddress:Address locationReference:Reference quantity:Quantity unitPrice:Money factor net:Money bodySite:CodeableConcept subSite:CodeableConcept* noteNumber* adjudication:ClaimResponse.item.adjudication* detail:.*",
+    "@B itemSequence:number* detailSequence:number* subdetailSequence:number* provider:Reference* productOrService:CodeableConcept modifier:CodeableConcept* programCode:CodeableConcept* servicedDate servicedPeriod:Period locationCodeableConcept:CodeableConcept locationAddress:Address locationReference:Reference quantity:Quantity unitPrice:Money factor:number net:Money bodySite:CodeableConcept subSite:CodeableConcept* noteNumber:number* adjudication:ClaimResponse.item.adjudication* detail:.*",
   "ClaimResponse.addItem.detail":
-    "@B productOrService:CodeableConcept modifier:CodeableConcept* quantity:Quantity unitPrice:Money factor net:Money noteNumber* adjudication:ClaimResponse.item.adjudication* subDetail:.*",
+    "@B productOrService:CodeableConcept modifier:CodeableConcept* quantity:Quantity unitPrice:Money factor:number net:Money noteNumber:number* adjudication:ClaimResponse.item.adjudication* subDetail:.*",
   "ClaimResponse.addItem.detail.subDetail":
-    "@B productOrService:CodeableConcept modifier:CodeableConcept* quantity:Quantity unitPrice:Money factor net:Money noteNumber* adjudication:ClaimResponse.item.adjudication*",
-  "ClaimResponse.error": "@B itemSequence detailSequence subDetailSequence code:CodeableConcept",
+    "@B productOrService:CodeableConcept modifier:CodeableConcept* quantity:Quantity unitPrice:Money factor:number net:Money noteNumber:number* adjudication:ClaimResponse.item.adjudication*",
+  "ClaimResponse.error":
+    "@B itemSequence:number detailSequence:number subDetailSequence:number code:CodeableConcept",
   "ClaimResponse.insurance":
-    "@B sequence focal coverage:Reference businessArrangement claimResponse:Reference",
-  "ClaimResponse.item": "@B itemSequence noteNumber* adjudication:.* detail:.*",
+    "@B sequence:number focal:boolean coverage:Reference businessArrangement claimResponse:Reference",
+  "ClaimResponse.item": "@B itemSequence:number noteNumber:number* adjudication:.* detail:.*",
   "ClaimResponse.item.adjudication":
-    "@B category:CodeableConcept reason:CodeableConcept amount:Money value",
+    "@B category:CodeableConcept reason:CodeableConcept amount:Money value:number",
   "ClaimResponse.item.detail":
-    "@B detailSequence noteNumber* adjudication:ClaimResponse.item.adjudication* subDetail:.*",
+    "@B detailSequence:number noteNumber:number* adjudication:ClaimResponse.item.adjudication* subDetail:.*",
   "ClaimResponse.item.detail.subDetail":
-    "@B subDetailSequence noteNumber* adjudication:ClaimResponse.item.adjudication*",
+    "@B subDetailSequence:number noteNumber:number* adjudication:ClaimResponse.item.adjudication*",
   "ClaimResponse.payment":
     "@B type:CodeableConcept adjustment:Money adjustmentReason:CodeableConcept date amount:Money identifier:Identifier",
-  "ClaimResponse.processNote": "@B number type text language:CodeableConcept",
+  "ClaimResponse.processNote": "@B number:number type text language:CodeableConcept",
   "ClaimResponse.total": "@B category:CodeableConcept amount:Money",
   ClinicalImpression:
     "@D identifier:Identifier* status statusReason:CodeableConcept code:CodeableConcept description subject:Reference encounter:Reference effectiveDateTime effectivePeriod:Period date assessor:Reference previous:Reference problem:Reference* investigation:.* protocol* summary finding:.* prognosisCodeableConcept:CodeableConcept* prognosisReference:Reference* supportingInfo:Reference* note:Annotation*",
@@ -163,26 +168,26 @@ export const FHIR_ELEMENT_NAMES: Readonly<Record<string, string>> = {
     "@B itemCodeableConcept:CodeableConcept itemReference:Reference basis",
   "ClinicalImpression.investigation": "@B code:CodeableConcept item:Reference*",
   CodeSystem:
-    "@D url identifier:Identifier* version name title status experimental date publisher contact:ContactDetail* description useContext:UsageContext* jurisdiction:CodeableConcept* purpose copyright caseSensitive valueSet hierarchyMeaning compositional versionNeeded content supplements count filter:.* property:.* concept:.*",
+    "@D url identifier:Identifier* version name title status experimental:boolean date publisher contact:ContactDetail* description useContext:UsageContext* jurisdiction:CodeableConcept* purpose copyright caseSensitive:boolean valueSet hierarchyMeaning compositional:boolean versionNeeded:boolean content supplements count:number filter:.* property:.* concept:.*",
   "CodeSystem.concept":
     "@B code display definition designation:.* property:.* concept:CodeSystem.concept*",
   "CodeSystem.concept.designation": "@B language use:Coding value",
   "CodeSystem.concept.property":
-    "@B code valueCode valueCoding:Coding valueString valueInteger valueBoolean valueDateTime valueDecimal",
+    "@B code valueCode valueCoding:Coding valueString valueInteger:number valueBoolean:boolean valueDateTime valueDecimal:number",
   "CodeSystem.filter": "@B code description operator* value",
   "CodeSystem.property": "@B code uri description type",
   CodeableConcept: "@E coding:Coding* text",
-  Coding: "@E system version code display userSelected",
+  Coding: "@E system version code display userSelected:boolean",
   Communication:
     "@D identifier:Identifier* instantiatesCanonical* instantiatesUri* basedOn:Reference* partOf:Reference* inResponseTo:Reference* status statusReason:CodeableConcept category:CodeableConcept* priority medium:CodeableConcept* subject:Reference topic:CodeableConcept about:Reference* encounter:Reference sent received recipient:Reference* sender:Reference reasonCode:CodeableConcept* reasonReference:Reference* payload:.* note:Annotation*",
   "Communication.payload":
     "@B contentString contentAttachment:Attachment contentReference:Reference",
   CommunicationRequest:
-    "@D identifier:Identifier* basedOn:Reference* replaces:Reference* groupIdentifier:Identifier status statusReason:CodeableConcept category:CodeableConcept* priority doNotPerform medium:CodeableConcept* subject:Reference about:Reference* encounter:Reference payload:.* occurrenceDateTime occurrencePeriod:Period authoredOn requester:Reference recipient:Reference* sender:Reference reasonCode:CodeableConcept* reasonReference:Reference* note:Annotation*",
+    "@D identifier:Identifier* basedOn:Reference* replaces:Reference* groupIdentifier:Identifier status statusReason:CodeableConcept category:CodeableConcept* priority doNotPerform:boolean medium:CodeableConcept* subject:Reference about:Reference* encounter:Reference payload:.* occurrenceDateTime occurrencePeriod:Period authoredOn requester:Reference recipient:Reference* sender:Reference reasonCode:CodeableConcept* reasonReference:Reference* note:Annotation*",
   "CommunicationRequest.payload":
     "@B contentString contentAttachment:Attachment contentReference:Reference",
   CompartmentDefinition:
-    "@D url version name status experimental date publisher contact:ContactDetail* description useContext:UsageContext* purpose code search resource:.*",
+    "@D url version name status experimental:boolean date publisher contact:ContactDetail* description useContext:UsageContext* purpose code search:boolean resource:.*",
   "CompartmentDefinition.resource": "@B code param* documentation",
   Composition:
     "@D identifier:Identifier status type:CodeableConcept category:CodeableConcept* subject:Reference encounter:Reference date author:Reference* title confidentiality attester:.* custodian:Reference relatesTo:.* event:.* section:.*",
@@ -192,7 +197,7 @@ export const FHIR_ELEMENT_NAMES: Readonly<Record<string, string>> = {
   "Composition.section":
     "@B title code:CodeableConcept author:Reference* focus:Reference text:Narrative mode orderedBy:CodeableConcept entry:Reference* emptyReason:CodeableConcept section:Composition.section*",
   ConceptMap:
-    "@D url identifier:Identifier version name title status experimental date publisher contact:ContactDetail* description useContext:UsageContext* jurisdiction:CodeableConcept* purpose copyright sourceUri sourceCanonical targetUri targetCanonical group:.*",
+    "@D url identifier:Identifier version name title status experimental:boolean date publisher contact:ContactDetail* description useContext:UsageContext* jurisdiction:CodeableConcept* purpose copyright sourceUri sourceCanonical targetUri targetCanonical group:.*",
   "ConceptMap.group": "@B source sourceVersion target targetVersion element:.* unmapped:.",
   "ConceptMap.group.element": "@B code display target:.*",
   "ConceptMap.group.element.target":
@@ -210,9 +215,9 @@ export const FHIR_ELEMENT_NAMES: Readonly<Record<string, string>> = {
     "@B type period:Period actor:.* action:CodeableConcept* securityLabel:Coding* purpose:Coding* class:Coding* code:CodeableConcept* dataPeriod:Period data:.* provision:Consent.provision*",
   "Consent.provision.actor": "@B role:CodeableConcept reference:Reference",
   "Consent.provision.data": "@B meaning reference:Reference",
-  "Consent.verification": "@B verified verifiedWith:Reference verificationDate",
+  "Consent.verification": "@B verified:boolean verifiedWith:Reference verificationDate",
   ContactDetail: "@E name telecom:ContactPoint*",
-  ContactPoint: "@E system value use rank period:Period",
+  ContactPoint: "@E system value use rank:number period:Period",
   Contract:
     "@D identifier:Identifier* url version status legalState:CodeableConcept instantiatesCanonical:Reference instantiatesUri contentDerivative:CodeableConcept issued applies:Period expirationType:CodeableConcept subject:Reference* authority:Reference* domain:Reference* site:Reference* name title subtitle alias* author:Reference scope:CodeableConcept topicCodeableConcept:CodeableConcept topicReference:Reference type:CodeableConcept subType:CodeableConcept* contentDefinition:. term:.* supportingInfo:Reference* relevantHistory:Reference* signer:.* friendly:.* legal:.* rule:.* legallyBindingAttachment:Attachment legallyBindingReference:Reference",
   "Contract.contentDefinition":
@@ -224,47 +229,48 @@ export const FHIR_ELEMENT_NAMES: Readonly<Record<string, string>> = {
   "Contract.term":
     "@B identifier:Identifier issued applies:Period topicCodeableConcept:CodeableConcept topicReference:Reference type:CodeableConcept subType:CodeableConcept text securityLabel:.* offer:. asset:.* action:.* group:Contract.term*",
   "Contract.term.action":
-    "@B doNotPerform type:CodeableConcept subject:.* intent:CodeableConcept linkId* status:CodeableConcept context:Reference contextLinkId* occurrenceDateTime occurrencePeriod:Period occurrenceTiming:Timing requester:Reference* requesterLinkId* performerType:CodeableConcept* performerRole:CodeableConcept performer:Reference performerLinkId* reasonCode:CodeableConcept* reasonReference:Reference* reason* reasonLinkId* note:Annotation* securityLabelNumber*",
+    "@B doNotPerform:boolean type:CodeableConcept subject:.* intent:CodeableConcept linkId* status:CodeableConcept context:Reference contextLinkId* occurrenceDateTime occurrencePeriod:Period occurrenceTiming:Timing requester:Reference* requesterLinkId* performerType:CodeableConcept* performerRole:CodeableConcept performer:Reference performerLinkId* reasonCode:CodeableConcept* reasonReference:Reference* reason* reasonLinkId* note:Annotation* securityLabelNumber:number*",
   "Contract.term.action.subject": "@B reference:Reference* role:CodeableConcept",
   "Contract.term.asset":
-    "@B scope:CodeableConcept type:CodeableConcept* typeReference:Reference* subtype:CodeableConcept* relationship:Coding context:.* condition periodType:CodeableConcept* period:Period* usePeriod:Period* text linkId* answer:Contract.term.offer.answer* securityLabelNumber* valuedItem:.*",
+    "@B scope:CodeableConcept type:CodeableConcept* typeReference:Reference* subtype:CodeableConcept* relationship:Coding context:.* condition periodType:CodeableConcept* period:Period* usePeriod:Period* text linkId* answer:Contract.term.offer.answer* securityLabelNumber:number* valuedItem:.*",
   "Contract.term.asset.context": "@B reference:Reference code:CodeableConcept* text",
   "Contract.term.asset.valuedItem":
-    "@B entityCodeableConcept:CodeableConcept entityReference:Reference identifier:Identifier effectiveTime quantity:Quantity unitPrice:Money factor points net:Money payment paymentDate responsible:Reference recipient:Reference linkId* securityLabelNumber*",
+    "@B entityCodeableConcept:CodeableConcept entityReference:Reference identifier:Identifier effectiveTime quantity:Quantity unitPrice:Money factor:number points:number net:Money payment paymentDate responsible:Reference recipient:Reference linkId* securityLabelNumber:number*",
   "Contract.term.offer":
-    "@B identifier:Identifier* party:.* topic:Reference type:CodeableConcept decision:CodeableConcept decisionMode:CodeableConcept* answer:.* text linkId* securityLabelNumber*",
+    "@B identifier:Identifier* party:.* topic:Reference type:CodeableConcept decision:CodeableConcept decisionMode:CodeableConcept* answer:.* text linkId* securityLabelNumber:number*",
   "Contract.term.offer.answer":
-    "@B valueBoolean valueDecimal valueInteger valueDate valueDateTime valueTime valueString valueUri valueAttachment:Attachment valueCoding:Coding valueQuantity:Quantity valueReference:Reference",
+    "@B valueBoolean:boolean valueDecimal:number valueInteger:number valueDate valueDateTime valueTime valueString valueUri valueAttachment:Attachment valueCoding:Coding valueQuantity:Quantity valueReference:Reference",
   "Contract.term.offer.party": "@B reference:Reference* role:CodeableConcept",
   "Contract.term.securityLabel":
-    "@B number* classification:Coding category:Coding* control:Coding*",
+    "@B number:number* classification:Coding category:Coding* control:Coding*",
   Contributor: "@E type name contact:ContactDetail*",
-  Count: "@E value comparator unit system code",
+  Count: "@E value:number comparator unit system code",
   Coverage:
-    "@D identifier:Identifier* status type:CodeableConcept policyHolder:Reference subscriber:Reference subscriberId beneficiary:Reference dependent relationship:CodeableConcept period:Period payor:Reference* class:.* order network costToBeneficiary:.* subrogation contract:Reference*",
+    "@D identifier:Identifier* status type:CodeableConcept policyHolder:Reference subscriber:Reference subscriberId beneficiary:Reference dependent relationship:CodeableConcept period:Period payor:Reference* class:.* order:number network costToBeneficiary:.* subrogation:boolean contract:Reference*",
   "Coverage.class": "@B type:CodeableConcept value name",
   "Coverage.costToBeneficiary":
     "@B type:CodeableConcept valueQuantity:Quantity valueMoney:Money exception:.*",
   "Coverage.costToBeneficiary.exception": "@B type:CodeableConcept period:Period",
   CoverageEligibilityRequest:
     "@D identifier:Identifier* status priority:CodeableConcept purpose* patient:Reference servicedDate servicedPeriod:Period created enterer:Reference provider:Reference insurer:Reference facility:Reference supportingInfo:.* insurance:.* item:.*",
-  "CoverageEligibilityRequest.insurance": "@B focal coverage:Reference businessArrangement",
+  "CoverageEligibilityRequest.insurance": "@B focal:boolean coverage:Reference businessArrangement",
   "CoverageEligibilityRequest.item":
-    "@B supportingInfoSequence* category:CodeableConcept productOrService:CodeableConcept modifier:CodeableConcept* provider:Reference quantity:Quantity unitPrice:Money facility:Reference diagnosis:.* detail:Reference*",
+    "@B supportingInfoSequence:number* category:CodeableConcept productOrService:CodeableConcept modifier:CodeableConcept* provider:Reference quantity:Quantity unitPrice:Money facility:Reference diagnosis:.* detail:Reference*",
   "CoverageEligibilityRequest.item.diagnosis":
     "@B diagnosisCodeableConcept:CodeableConcept diagnosisReference:Reference",
-  "CoverageEligibilityRequest.supportingInfo": "@B sequence information:Reference appliesToAll",
+  "CoverageEligibilityRequest.supportingInfo":
+    "@B sequence:number information:Reference appliesToAll:boolean",
   CoverageEligibilityResponse:
     "@D identifier:Identifier* status purpose* patient:Reference servicedDate servicedPeriod:Period created requestor:Reference request:Reference outcome disposition insurer:Reference insurance:.* preAuthRef form:CodeableConcept error:.*",
   "CoverageEligibilityResponse.error": "@B code:CodeableConcept",
   "CoverageEligibilityResponse.insurance":
-    "@B coverage:Reference inforce benefitPeriod:Period item:.*",
+    "@B coverage:Reference inforce:boolean benefitPeriod:Period item:.*",
   "CoverageEligibilityResponse.insurance.item":
-    "@B category:CodeableConcept productOrService:CodeableConcept modifier:CodeableConcept* provider:Reference excluded name description network:CodeableConcept unit:CodeableConcept term:CodeableConcept benefit:.* authorizationRequired authorizationSupporting:CodeableConcept* authorizationUrl",
+    "@B category:CodeableConcept productOrService:CodeableConcept modifier:CodeableConcept* provider:Reference excluded:boolean name description network:CodeableConcept unit:CodeableConcept term:CodeableConcept benefit:.* authorizationRequired:boolean authorizationSupporting:CodeableConcept* authorizationUrl",
   "CoverageEligibilityResponse.insurance.item.benefit":
-    "@B type:CodeableConcept allowedUnsignedInt allowedString allowedMoney:Money usedUnsignedInt usedString usedMoney:Money",
+    "@B type:CodeableConcept allowedUnsignedInt:number allowedString allowedMoney:Money usedUnsignedInt:number usedString usedMoney:Money",
   DataRequirement:
-    "@E type profile* subjectCodeableConcept:CodeableConcept subjectReference:Reference mustSupport* codeFilter:.* dateFilter:.* limit sort:.*",
+    "@E type profile* subjectCodeableConcept:CodeableConcept subjectReference:Reference mustSupport* codeFilter:.* dateFilter:.* limit:number sort:.*",
   "DataRequirement.codeFilter": "@E path searchParam valueSet code:Coding*",
   "DataRequirement.dateFilter":
     "@E path searchParam valueDateTime valuePeriod:Period valueDuration:Duration",
@@ -284,7 +290,8 @@ export const FHIR_ELEMENT_NAMES: Readonly<Record<string, string>> = {
     "@D identifier:Identifier* udiDeviceIdentifier:.* manufacturerString manufacturerReference:Reference deviceName:.* modelNumber type:CodeableConcept specialization:.* version* safety:CodeableConcept* shelfLifeStorage:ProductShelfLife* physicalCharacteristics:ProdCharacteristic languageCode:CodeableConcept* capability:.* property:.* owner:Reference contact:ContactPoint* url onlineInformation note:Annotation* quantity:Quantity parentDevice:Reference material:.*",
   "DeviceDefinition.capability": "@B type:CodeableConcept description:CodeableConcept*",
   "DeviceDefinition.deviceName": "@B name type",
-  "DeviceDefinition.material": "@B substance:CodeableConcept alternate allergenicIndicator",
+  "DeviceDefinition.material":
+    "@B substance:CodeableConcept alternate:boolean allergenicIndicator:boolean",
   "DeviceDefinition.property":
     "@B type:CodeableConcept valueQuantity:Quantity* valueCode:CodeableConcept*",
   "DeviceDefinition.specialization": "@B systemType version",
@@ -295,13 +302,13 @@ export const FHIR_ELEMENT_NAMES: Readonly<Record<string, string>> = {
   DeviceRequest:
     "@D identifier:Identifier* instantiatesCanonical* instantiatesUri* basedOn:Reference* priorRequest:Reference* groupIdentifier:Identifier status intent priority codeReference:Reference codeCodeableConcept:CodeableConcept parameter:.* subject:Reference encounter:Reference occurrenceDateTime occurrencePeriod:Period occurrenceTiming:Timing authoredOn requester:Reference performerType:CodeableConcept performer:Reference reasonCode:CodeableConcept* reasonReference:Reference* insurance:Reference* supportingInfo:Reference* note:Annotation* relevantHistory:Reference*",
   "DeviceRequest.parameter":
-    "@B code:CodeableConcept valueCodeableConcept:CodeableConcept valueQuantity:Quantity valueRange:Range valueBoolean",
+    "@B code:CodeableConcept valueCodeableConcept:CodeableConcept valueQuantity:Quantity valueRange:Range valueBoolean:boolean",
   DeviceUseStatement:
     "@D identifier:Identifier* basedOn:Reference* status subject:Reference derivedFrom:Reference* timingTiming:Timing timingPeriod:Period timingDateTime recordedOn source:Reference device:Reference reasonCode:CodeableConcept* reasonReference:Reference* bodySite:CodeableConcept note:Annotation*",
   DiagnosticReport:
     "@D identifier:Identifier* basedOn:Reference* status category:CodeableConcept* code:CodeableConcept subject:Reference encounter:Reference effectiveDateTime effectivePeriod:Period issued performer:Reference* resultsInterpreter:Reference* specimen:Reference* result:Reference* imagingStudy:Reference* media:.* conclusion conclusionCode:CodeableConcept* presentedForm:Attachment*",
   "DiagnosticReport.media": "@B comment link:Reference",
-  Distance: "@E value comparator unit system code",
+  Distance: "@E value:number comparator unit system code",
   DocumentManifest:
     "@D masterIdentifier:Identifier identifier:Identifier* status type:CodeableConcept subject:Reference created author:Reference* recipient:Reference* source description content:Reference* related:.*",
   "DocumentManifest.related": "@B identifier:Identifier ref:Reference",
@@ -313,10 +320,10 @@ export const FHIR_ELEMENT_NAMES: Readonly<Record<string, string>> = {
   "DocumentReference.relatesTo": "@B code target:Reference",
   DomainResource: "@D",
   Dosage:
-    "@B sequence text additionalInstruction:CodeableConcept* patientInstruction timing:Timing asNeededBoolean asNeededCodeableConcept:CodeableConcept site:CodeableConcept route:CodeableConcept method:CodeableConcept doseAndRate:.* maxDosePerPeriod:Ratio maxDosePerAdministration:Quantity maxDosePerLifetime:Quantity",
+    "@B sequence:number text additionalInstruction:CodeableConcept* patientInstruction timing:Timing asNeededBoolean:boolean asNeededCodeableConcept:CodeableConcept site:CodeableConcept route:CodeableConcept method:CodeableConcept doseAndRate:.* maxDosePerPeriod:Ratio maxDosePerAdministration:Quantity maxDosePerLifetime:Quantity",
   "Dosage.doseAndRate":
     "@E type:CodeableConcept doseRange:Range doseQuantity:Quantity rateRatio:Ratio rateRange:Range rateQuantity:Quantity",
-  Duration: "@E value comparator unit system code",
+  Duration: "@E value:number comparator unit system code",
   EffectEvidenceSynthesis:
     "@D url identifier:Identifier* version name title status date publisher contact:ContactDetail* description note:Annotation* useContext:UsageContext* jurisdiction:CodeableConcept* copyright approvalDate lastReviewDate effectivePeriod:Period topic:CodeableConcept* author:ContactDetail* editor:ContactDetail* reviewer:ContactDetail* endorser:ContactDetail* relatedArtifact:RelatedArtifact* synthesisType:CodeableConcept studyType:CodeableConcept population:Reference exposure:Reference exposureAlternative:Reference outcome:Reference sampleSize:. resultsByExposure:.* effectEstimate:.* certainty:.*",
   "EffectEvidenceSynthesis.certainty":
@@ -324,28 +331,29 @@ export const FHIR_ELEMENT_NAMES: Readonly<Record<string, string>> = {
   "EffectEvidenceSynthesis.certainty.certaintySubcomponent":
     "@B type:CodeableConcept rating:CodeableConcept* note:Annotation*",
   "EffectEvidenceSynthesis.effectEstimate":
-    "@B description type:CodeableConcept variantState:CodeableConcept value unitOfMeasure:CodeableConcept precisionEstimate:.*",
+    "@B description type:CodeableConcept variantState:CodeableConcept value:number unitOfMeasure:CodeableConcept precisionEstimate:.*",
   "EffectEvidenceSynthesis.effectEstimate.precisionEstimate":
-    "@B type:CodeableConcept level from to",
+    "@B type:CodeableConcept level:number from:number to:number",
   "EffectEvidenceSynthesis.resultsByExposure":
     "@B description exposureState variantState:CodeableConcept riskEvidenceSynthesis:Reference",
-  "EffectEvidenceSynthesis.sampleSize": "@B description numberOfStudies numberOfParticipants",
+  "EffectEvidenceSynthesis.sampleSize":
+    "@B description numberOfStudies:number numberOfParticipants:number",
   Element: "@E",
   ElementDefinition:
-    "@B path representation* sliceName sliceIsConstraining label code:Coding* slicing:. short definition comment requirements alias* min max base:. contentReference type:.* defaultValueBase64Binary defaultValueBoolean defaultValueCanonical defaultValueCode defaultValueDate defaultValueDateTime defaultValueDecimal defaultValueId defaultValueInstant defaultValueInteger defaultValueMarkdown defaultValueOid defaultValuePositiveInt defaultValueString defaultValueTime defaultValueUnsignedInt defaultValueUri defaultValueUrl defaultValueUuid defaultValueAddress:Address defaultValueAge:Age defaultValueAnnotation:Annotation defaultValueAttachment:Attachment defaultValueCodeableConcept:CodeableConcept defaultValueCoding:Coding defaultValueContactPoint:ContactPoint defaultValueCount:Count defaultValueDistance:Distance defaultValueDuration:Duration defaultValueHumanName:HumanName defaultValueIdentifier:Identifier defaultValueMoney:Money defaultValuePeriod:Period defaultValueQuantity:Quantity defaultValueRange:Range defaultValueRatio:Ratio defaultValueReference:Reference defaultValueSampledData:SampledData defaultValueSignature:Signature defaultValueTiming:Timing defaultValueContactDetail:ContactDetail defaultValueContributor:Contributor defaultValueDataRequirement:DataRequirement defaultValueExpression:Expression defaultValueParameterDefinition:ParameterDefinition defaultValueRelatedArtifact:RelatedArtifact defaultValueTriggerDefinition:TriggerDefinition defaultValueUsageContext:UsageContext defaultValueDosage:Dosage defaultValueMeta:Meta meaningWhenMissing orderMeaning fixedBase64Binary fixedBoolean fixedCanonical fixedCode fixedDate fixedDateTime fixedDecimal fixedId fixedInstant fixedInteger fixedMarkdown fixedOid fixedPositiveInt fixedString fixedTime fixedUnsignedInt fixedUri fixedUrl fixedUuid fixedAddress:Address fixedAge:Age fixedAnnotation:Annotation fixedAttachment:Attachment fixedCodeableConcept:CodeableConcept fixedCoding:Coding fixedContactPoint:ContactPoint fixedCount:Count fixedDistance:Distance fixedDuration:Duration fixedHumanName:HumanName fixedIdentifier:Identifier fixedMoney:Money fixedPeriod:Period fixedQuantity:Quantity fixedRange:Range fixedRatio:Ratio fixedReference:Reference fixedSampledData:SampledData fixedSignature:Signature fixedTiming:Timing fixedContactDetail:ContactDetail fixedContributor:Contributor fixedDataRequirement:DataRequirement fixedExpression:Expression fixedParameterDefinition:ParameterDefinition fixedRelatedArtifact:RelatedArtifact fixedTriggerDefinition:TriggerDefinition fixedUsageContext:UsageContext fixedDosage:Dosage fixedMeta:Meta patternBase64Binary patternBoolean patternCanonical patternCode patternDate patternDateTime patternDecimal patternId patternInstant patternInteger patternMarkdown patternOid patternPositiveInt patternString patternTime patternUnsignedInt patternUri patternUrl patternUuid patternAddress:Address patternAge:Age patternAnnotation:Annotation patternAttachment:Attachment patternCodeableConcept:CodeableConcept patternCoding:Coding patternContactPoint:ContactPoint patternCount:Count patternDistance:Distance patternDuration:Duration patternHumanName:HumanName patternIdentifier:Identifier patternMoney:Money patternPeriod:Period patternQuantity:Quantity patternRange:Range patternRatio:Ratio patternReference:Reference patternSampledData:SampledData patternSignature:Signature patternTiming:Timing patternContactDetail:ContactDetail patternContributor:Contributor patternDataRequirement:DataRequirement patternExpression:Expression patternParameterDefinition:ParameterDefinition patternRelatedArtifact:RelatedArtifact patternTriggerDefinition:TriggerDefinition patternUsageContext:UsageContext patternDosage:Dosage patternMeta:Meta example:.* minValueDate minValueDateTime minValueInstant minValueTime minValueDecimal minValueInteger minValuePositiveInt minValueUnsignedInt minValueQuantity:Quantity maxValueDate maxValueDateTime maxValueInstant maxValueTime maxValueDecimal maxValueInteger maxValuePositiveInt maxValueUnsignedInt maxValueQuantity:Quantity maxLength condition* constraint:.* mustSupport isModifier isModifierReason isSummary binding:. mapping:.*",
-  "ElementDefinition.base": "@E path min max",
+    "@B path representation* sliceName sliceIsConstraining:boolean label code:Coding* slicing:. short definition comment requirements alias* min:number max base:. contentReference type:.* defaultValueBase64Binary defaultValueBoolean:boolean defaultValueCanonical defaultValueCode defaultValueDate defaultValueDateTime defaultValueDecimal:number defaultValueId defaultValueInstant defaultValueInteger:number defaultValueMarkdown defaultValueOid defaultValuePositiveInt:number defaultValueString defaultValueTime defaultValueUnsignedInt:number defaultValueUri defaultValueUrl defaultValueUuid defaultValueAddress:Address defaultValueAge:Age defaultValueAnnotation:Annotation defaultValueAttachment:Attachment defaultValueCodeableConcept:CodeableConcept defaultValueCoding:Coding defaultValueContactPoint:ContactPoint defaultValueCount:Count defaultValueDistance:Distance defaultValueDuration:Duration defaultValueHumanName:HumanName defaultValueIdentifier:Identifier defaultValueMoney:Money defaultValuePeriod:Period defaultValueQuantity:Quantity defaultValueRange:Range defaultValueRatio:Ratio defaultValueReference:Reference defaultValueSampledData:SampledData defaultValueSignature:Signature defaultValueTiming:Timing defaultValueContactDetail:ContactDetail defaultValueContributor:Contributor defaultValueDataRequirement:DataRequirement defaultValueExpression:Expression defaultValueParameterDefinition:ParameterDefinition defaultValueRelatedArtifact:RelatedArtifact defaultValueTriggerDefinition:TriggerDefinition defaultValueUsageContext:UsageContext defaultValueDosage:Dosage defaultValueMeta:Meta meaningWhenMissing orderMeaning fixedBase64Binary fixedBoolean:boolean fixedCanonical fixedCode fixedDate fixedDateTime fixedDecimal:number fixedId fixedInstant fixedInteger:number fixedMarkdown fixedOid fixedPositiveInt:number fixedString fixedTime fixedUnsignedInt:number fixedUri fixedUrl fixedUuid fixedAddress:Address fixedAge:Age fixedAnnotation:Annotation fixedAttachment:Attachment fixedCodeableConcept:CodeableConcept fixedCoding:Coding fixedContactPoint:ContactPoint fixedCount:Count fixedDistance:Distance fixedDuration:Duration fixedHumanName:HumanName fixedIdentifier:Identifier fixedMoney:Money fixedPeriod:Period fixedQuantity:Quantity fixedRange:Range fixedRatio:Ratio fixedReference:Reference fixedSampledData:SampledData fixedSignature:Signature fixedTiming:Timing fixedContactDetail:ContactDetail fixedContributor:Contributor fixedDataRequirement:DataRequirement fixedExpression:Expression fixedParameterDefinition:ParameterDefinition fixedRelatedArtifact:RelatedArtifact fixedTriggerDefinition:TriggerDefinition fixedUsageContext:UsageContext fixedDosage:Dosage fixedMeta:Meta patternBase64Binary patternBoolean:boolean patternCanonical patternCode patternDate patternDateTime patternDecimal:number patternId patternInstant patternInteger:number patternMarkdown patternOid patternPositiveInt:number patternString patternTime patternUnsignedInt:number patternUri patternUrl patternUuid patternAddress:Address patternAge:Age patternAnnotation:Annotation patternAttachment:Attachment patternCodeableConcept:CodeableConcept patternCoding:Coding patternContactPoint:ContactPoint patternCount:Count patternDistance:Distance patternDuration:Duration patternHumanName:HumanName patternIdentifier:Identifier patternMoney:Money patternPeriod:Period patternQuantity:Quantity patternRange:Range patternRatio:Ratio patternReference:Reference patternSampledData:SampledData patternSignature:Signature patternTiming:Timing patternContactDetail:ContactDetail patternContributor:Contributor patternDataRequirement:DataRequirement patternExpression:Expression patternParameterDefinition:ParameterDefinition patternRelatedArtifact:RelatedArtifact patternTriggerDefinition:TriggerDefinition patternUsageContext:UsageContext patternDosage:Dosage patternMeta:Meta example:.* minValueDate minValueDateTime minValueInstant minValueTime minValueDecimal:number minValueInteger:number minValuePositiveInt:number minValueUnsignedInt:number minValueQuantity:Quantity maxValueDate maxValueDateTime maxValueInstant maxValueTime maxValueDecimal:number maxValueInteger:number maxValuePositiveInt:number maxValueUnsignedInt:number maxValueQuantity:Quantity maxLength:number condition* constraint:.* mustSupport:boolean isModifier:boolean isModifierReason isSummary:boolean binding:. mapping:.*",
+  "ElementDefinition.base": "@E path min:number max",
   "ElementDefinition.binding": "@E strength description valueSet",
   "ElementDefinition.constraint": "@E key requirements severity human expression xpath source",
   "ElementDefinition.example":
-    "@E label valueBase64Binary valueBoolean valueCanonical valueCode valueDate valueDateTime valueDecimal valueId valueInstant valueInteger valueMarkdown valueOid valuePositiveInt valueString valueTime valueUnsignedInt valueUri valueUrl valueUuid valueAddress:Address valueAge:Age valueAnnotation:Annotation valueAttachment:Attachment valueCodeableConcept:CodeableConcept valueCoding:Coding valueContactPoint:ContactPoint valueCount:Count valueDistance:Distance valueDuration:Duration valueHumanName:HumanName valueIdentifier:Identifier valueMoney:Money valuePeriod:Period valueQuantity:Quantity valueRange:Range valueRatio:Ratio valueReference:Reference valueSampledData:SampledData valueSignature:Signature valueTiming:Timing valueContactDetail:ContactDetail valueContributor:Contributor valueDataRequirement:DataRequirement valueExpression:Expression valueParameterDefinition:ParameterDefinition valueRelatedArtifact:RelatedArtifact valueTriggerDefinition:TriggerDefinition valueUsageContext:UsageContext valueDosage:Dosage valueMeta:Meta",
+    "@E label valueBase64Binary valueBoolean:boolean valueCanonical valueCode valueDate valueDateTime valueDecimal:number valueId valueInstant valueInteger:number valueMarkdown valueOid valuePositiveInt:number valueString valueTime valueUnsignedInt:number valueUri valueUrl valueUuid valueAddress:Address valueAge:Age valueAnnotation:Annotation valueAttachment:Attachment valueCodeableConcept:CodeableConcept valueCoding:Coding valueContactPoint:ContactPoint valueCount:Count valueDistance:Distance valueDuration:Duration valueHumanName:HumanName valueIdentifier:Identifier valueMoney:Money valuePeriod:Period valueQuantity:Quantity valueRange:Range valueRatio:Ratio valueReference:Reference valueSampledData:SampledData valueSignature:Signature valueTiming:Timing valueContactDetail:ContactDetail valueContributor:Contributor valueDataRequirement:DataRequirement valueExpression:Expression valueParameterDefinition:ParameterDefinition valueRelatedArtifact:RelatedArtifact valueTriggerDefinition:TriggerDefinition valueUsageContext:UsageContext valueDosage:Dosage valueMeta:Meta",
   "ElementDefinition.mapping": "@E identity language map comment",
-  "ElementDefinition.slicing": "@E discriminator:.* description ordered rules",
+  "ElementDefinition.slicing": "@E discriminator:.* description ordered:boolean rules",
   "ElementDefinition.slicing.discriminator": "@E type path",
   "ElementDefinition.type": "@E code profile* targetProfile* aggregation* versioning",
   Encounter:
     "@D identifier:Identifier* status statusHistory:.* class:Coding classHistory:.* type:CodeableConcept* serviceType:CodeableConcept priority:CodeableConcept subject:Reference episodeOfCare:Reference* basedOn:Reference* participant:.* appointment:Reference* period:Period length:Duration reasonCode:CodeableConcept* reasonReference:Reference* diagnosis:.* account:Reference* hospitalization:. location:.* serviceProvider:Reference partOf:Reference",
   "Encounter.classHistory": "@B class:Coding period:Period",
-  "Encounter.diagnosis": "@B condition:Reference use:CodeableConcept rank",
+  "Encounter.diagnosis": "@B condition:Reference use:CodeableConcept rank:number",
   "Encounter.hospitalization":
     "@B preAdmissionIdentifier:Identifier origin:Reference admitSource:CodeableConcept reAdmission:CodeableConcept dietPreference:CodeableConcept* specialCourtesy:CodeableConcept* specialArrangement:CodeableConcept* destination:Reference dischargeDisposition:CodeableConcept",
   "Encounter.location": "@B location:Reference status physicalType:CodeableConcept period:Period",
@@ -359,18 +367,18 @@ export const FHIR_ELEMENT_NAMES: Readonly<Record<string, string>> = {
     "@D identifier:Identifier* status request:Reference outcome disposition created organization:Reference requestProvider:Reference",
   EpisodeOfCare:
     "@D identifier:Identifier* status statusHistory:.* type:CodeableConcept* diagnosis:.* patient:Reference managingOrganization:Reference period:Period referralRequest:Reference* careManager:Reference team:Reference* account:Reference*",
-  "EpisodeOfCare.diagnosis": "@B condition:Reference role:CodeableConcept rank",
+  "EpisodeOfCare.diagnosis": "@B condition:Reference role:CodeableConcept rank:number",
   "EpisodeOfCare.statusHistory": "@B status period:Period",
   EventDefinition:
-    "@D url identifier:Identifier* version name title subtitle status experimental subjectCodeableConcept:CodeableConcept subjectReference:Reference date publisher contact:ContactDetail* description useContext:UsageContext* jurisdiction:CodeableConcept* purpose usage copyright approvalDate lastReviewDate effectivePeriod:Period topic:CodeableConcept* author:ContactDetail* editor:ContactDetail* reviewer:ContactDetail* endorser:ContactDetail* relatedArtifact:RelatedArtifact* trigger:TriggerDefinition*",
+    "@D url identifier:Identifier* version name title subtitle status experimental:boolean subjectCodeableConcept:CodeableConcept subjectReference:Reference date publisher contact:ContactDetail* description useContext:UsageContext* jurisdiction:CodeableConcept* purpose usage copyright approvalDate lastReviewDate effectivePeriod:Period topic:CodeableConcept* author:ContactDetail* editor:ContactDetail* reviewer:ContactDetail* endorser:ContactDetail* relatedArtifact:RelatedArtifact* trigger:TriggerDefinition*",
   Evidence:
     "@D url identifier:Identifier* version name title shortTitle subtitle status date publisher contact:ContactDetail* description note:Annotation* useContext:UsageContext* jurisdiction:CodeableConcept* copyright approvalDate lastReviewDate effectivePeriod:Period topic:CodeableConcept* author:ContactDetail* editor:ContactDetail* reviewer:ContactDetail* endorser:ContactDetail* relatedArtifact:RelatedArtifact* exposureBackground:Reference exposureVariant:Reference* outcome:Reference*",
   EvidenceVariable:
     "@D url identifier:Identifier* version name title shortTitle subtitle status date publisher contact:ContactDetail* description note:Annotation* useContext:UsageContext* jurisdiction:CodeableConcept* copyright approvalDate lastReviewDate effectivePeriod:Period topic:CodeableConcept* author:ContactDetail* editor:ContactDetail* reviewer:ContactDetail* endorser:ContactDetail* relatedArtifact:RelatedArtifact* type characteristic:.*",
   "EvidenceVariable.characteristic":
-    "@B description definitionReference:Reference definitionCanonical definitionCodeableConcept:CodeableConcept definitionExpression:Expression definitionDataRequirement:DataRequirement definitionTriggerDefinition:TriggerDefinition usageContext:UsageContext* exclude participantEffectiveDateTime participantEffectivePeriod:Period participantEffectiveDuration:Duration participantEffectiveTiming:Timing timeFromStart:Duration groupMeasure",
+    "@B description definitionReference:Reference definitionCanonical definitionCodeableConcept:CodeableConcept definitionExpression:Expression definitionDataRequirement:DataRequirement definitionTriggerDefinition:TriggerDefinition usageContext:UsageContext* exclude:boolean participantEffectiveDateTime participantEffectivePeriod:Period participantEffectiveDuration:Duration participantEffectiveTiming:Timing timeFromStart:Duration groupMeasure",
   ExampleScenario:
-    "@D url identifier:Identifier* version name status experimental date publisher contact:ContactDetail* useContext:UsageContext* jurisdiction:CodeableConcept* copyright purpose actor:.* instance:.* process:.* workflow*",
+    "@D url identifier:Identifier* version name status experimental:boolean date publisher contact:ContactDetail* useContext:UsageContext* jurisdiction:CodeableConcept* copyright purpose actor:.* instance:.* process:.* workflow*",
   "ExampleScenario.actor": "@B actorId type name description",
   "ExampleScenario.instance":
     "@B resourceId resourceType name description version:.* containedInstance:.*",
@@ -378,115 +386,116 @@ export const FHIR_ELEMENT_NAMES: Readonly<Record<string, string>> = {
   "ExampleScenario.instance.version": "@B versionId description",
   "ExampleScenario.process": "@B title description preConditions postConditions step:.*",
   "ExampleScenario.process.step":
-    "@B process:ExampleScenario.process* pause operation:. alternative:.*",
+    "@B process:ExampleScenario.process* pause:boolean operation:. alternative:.*",
   "ExampleScenario.process.step.alternative":
     "@B title description step:ExampleScenario.process.step*",
   "ExampleScenario.process.step.operation":
-    "@B number type name initiator receiver description initiatorActive receiverActive request:ExampleScenario.instance.containedInstance response:ExampleScenario.instance.containedInstance",
+    "@B number type name initiator receiver description initiatorActive:boolean receiverActive:boolean request:ExampleScenario.instance.containedInstance response:ExampleScenario.instance.containedInstance",
   ExplanationOfBenefit:
-    "@D identifier:Identifier* status type:CodeableConcept subType:CodeableConcept use patient:Reference billablePeriod:Period created enterer:Reference insurer:Reference provider:Reference priority:CodeableConcept fundsReserveRequested:CodeableConcept fundsReserve:CodeableConcept related:.* prescription:Reference originalPrescription:Reference payee:. referral:Reference facility:Reference claim:Reference claimResponse:Reference outcome disposition preAuthRef* preAuthRefPeriod:Period* careTeam:.* supportingInfo:.* diagnosis:.* procedure:.* precedence insurance:.* accident:. item:.* addItem:.* adjudication:ExplanationOfBenefit.item.adjudication* total:.* payment:. formCode:CodeableConcept form:Attachment processNote:.* benefitPeriod:Period benefitBalance:.*",
+    "@D identifier:Identifier* status type:CodeableConcept subType:CodeableConcept use patient:Reference billablePeriod:Period created enterer:Reference insurer:Reference provider:Reference priority:CodeableConcept fundsReserveRequested:CodeableConcept fundsReserve:CodeableConcept related:.* prescription:Reference originalPrescription:Reference payee:. referral:Reference facility:Reference claim:Reference claimResponse:Reference outcome disposition preAuthRef* preAuthRefPeriod:Period* careTeam:.* supportingInfo:.* diagnosis:.* procedure:.* precedence:number insurance:.* accident:. item:.* addItem:.* adjudication:ExplanationOfBenefit.item.adjudication* total:.* payment:. formCode:CodeableConcept form:Attachment processNote:.* benefitPeriod:Period benefitBalance:.*",
   "ExplanationOfBenefit.accident":
     "@B date type:CodeableConcept locationAddress:Address locationReference:Reference",
   "ExplanationOfBenefit.addItem":
-    "@B itemSequence* detailSequence* subDetailSequence* provider:Reference* productOrService:CodeableConcept modifier:CodeableConcept* programCode:CodeableConcept* servicedDate servicedPeriod:Period locationCodeableConcept:CodeableConcept locationAddress:Address locationReference:Reference quantity:Quantity unitPrice:Money factor net:Money bodySite:CodeableConcept subSite:CodeableConcept* noteNumber* adjudication:ExplanationOfBenefit.item.adjudication* detail:.*",
+    "@B itemSequence:number* detailSequence:number* subDetailSequence:number* provider:Reference* productOrService:CodeableConcept modifier:CodeableConcept* programCode:CodeableConcept* servicedDate servicedPeriod:Period locationCodeableConcept:CodeableConcept locationAddress:Address locationReference:Reference quantity:Quantity unitPrice:Money factor:number net:Money bodySite:CodeableConcept subSite:CodeableConcept* noteNumber:number* adjudication:ExplanationOfBenefit.item.adjudication* detail:.*",
   "ExplanationOfBenefit.addItem.detail":
-    "@B productOrService:CodeableConcept modifier:CodeableConcept* quantity:Quantity unitPrice:Money factor net:Money noteNumber* adjudication:ExplanationOfBenefit.item.adjudication* subDetail:.*",
+    "@B productOrService:CodeableConcept modifier:CodeableConcept* quantity:Quantity unitPrice:Money factor:number net:Money noteNumber:number* adjudication:ExplanationOfBenefit.item.adjudication* subDetail:.*",
   "ExplanationOfBenefit.addItem.detail.subDetail":
-    "@B productOrService:CodeableConcept modifier:CodeableConcept* quantity:Quantity unitPrice:Money factor net:Money noteNumber* adjudication:ExplanationOfBenefit.item.adjudication*",
+    "@B productOrService:CodeableConcept modifier:CodeableConcept* quantity:Quantity unitPrice:Money factor:number net:Money noteNumber:number* adjudication:ExplanationOfBenefit.item.adjudication*",
   "ExplanationOfBenefit.benefitBalance":
-    "@B category:CodeableConcept excluded name description network:CodeableConcept unit:CodeableConcept term:CodeableConcept financial:.*",
+    "@B category:CodeableConcept excluded:boolean name description network:CodeableConcept unit:CodeableConcept term:CodeableConcept financial:.*",
   "ExplanationOfBenefit.benefitBalance.financial":
-    "@B type:CodeableConcept allowedUnsignedInt allowedString allowedMoney:Money usedUnsignedInt usedMoney:Money",
+    "@B type:CodeableConcept allowedUnsignedInt:number allowedString allowedMoney:Money usedUnsignedInt:number usedMoney:Money",
   "ExplanationOfBenefit.careTeam":
-    "@B sequence provider:Reference responsible role:CodeableConcept qualification:CodeableConcept",
+    "@B sequence:number provider:Reference responsible:boolean role:CodeableConcept qualification:CodeableConcept",
   "ExplanationOfBenefit.diagnosis":
-    "@B sequence diagnosisCodeableConcept:CodeableConcept diagnosisReference:Reference type:CodeableConcept* onAdmission:CodeableConcept packageCode:CodeableConcept",
-  "ExplanationOfBenefit.insurance": "@B focal coverage:Reference preAuthRef*",
+    "@B sequence:number diagnosisCodeableConcept:CodeableConcept diagnosisReference:Reference type:CodeableConcept* onAdmission:CodeableConcept packageCode:CodeableConcept",
+  "ExplanationOfBenefit.insurance": "@B focal:boolean coverage:Reference preAuthRef*",
   "ExplanationOfBenefit.item":
-    "@B sequence careTeamSequence* diagnosisSequence* procedureSequence* informationSequence* revenue:CodeableConcept category:CodeableConcept productOrService:CodeableConcept modifier:CodeableConcept* programCode:CodeableConcept* servicedDate servicedPeriod:Period locationCodeableConcept:CodeableConcept locationAddress:Address locationReference:Reference quantity:Quantity unitPrice:Money factor net:Money udi:Reference* bodySite:CodeableConcept subSite:CodeableConcept* encounter:Reference* noteNumber* adjudication:.* detail:.*",
+    "@B sequence:number careTeamSequence:number* diagnosisSequence:number* procedureSequence:number* informationSequence:number* revenue:CodeableConcept category:CodeableConcept productOrService:CodeableConcept modifier:CodeableConcept* programCode:CodeableConcept* servicedDate servicedPeriod:Period locationCodeableConcept:CodeableConcept locationAddress:Address locationReference:Reference quantity:Quantity unitPrice:Money factor:number net:Money udi:Reference* bodySite:CodeableConcept subSite:CodeableConcept* encounter:Reference* noteNumber:number* adjudication:.* detail:.*",
   "ExplanationOfBenefit.item.adjudication":
-    "@B category:CodeableConcept reason:CodeableConcept amount:Money value",
+    "@B category:CodeableConcept reason:CodeableConcept amount:Money value:number",
   "ExplanationOfBenefit.item.detail":
-    "@B sequence revenue:CodeableConcept category:CodeableConcept productOrService:CodeableConcept modifier:CodeableConcept* programCode:CodeableConcept* quantity:Quantity unitPrice:Money factor net:Money udi:Reference* noteNumber* adjudication:ExplanationOfBenefit.item.adjudication* subDetail:.*",
+    "@B sequence:number revenue:CodeableConcept category:CodeableConcept productOrService:CodeableConcept modifier:CodeableConcept* programCode:CodeableConcept* quantity:Quantity unitPrice:Money factor:number net:Money udi:Reference* noteNumber:number* adjudication:ExplanationOfBenefit.item.adjudication* subDetail:.*",
   "ExplanationOfBenefit.item.detail.subDetail":
-    "@B sequence revenue:CodeableConcept category:CodeableConcept productOrService:CodeableConcept modifier:CodeableConcept* programCode:CodeableConcept* quantity:Quantity unitPrice:Money factor net:Money udi:Reference* noteNumber* adjudication:ExplanationOfBenefit.item.adjudication*",
+    "@B sequence:number revenue:CodeableConcept category:CodeableConcept productOrService:CodeableConcept modifier:CodeableConcept* programCode:CodeableConcept* quantity:Quantity unitPrice:Money factor:number net:Money udi:Reference* noteNumber:number* adjudication:ExplanationOfBenefit.item.adjudication*",
   "ExplanationOfBenefit.payee": "@B type:CodeableConcept party:Reference",
   "ExplanationOfBenefit.payment":
     "@B type:CodeableConcept adjustment:Money adjustmentReason:CodeableConcept date amount:Money identifier:Identifier",
   "ExplanationOfBenefit.procedure":
-    "@B sequence type:CodeableConcept* date procedureCodeableConcept:CodeableConcept procedureReference:Reference udi:Reference*",
-  "ExplanationOfBenefit.processNote": "@B number type text language:CodeableConcept",
+    "@B sequence:number type:CodeableConcept* date procedureCodeableConcept:CodeableConcept procedureReference:Reference udi:Reference*",
+  "ExplanationOfBenefit.processNote": "@B number:number type text language:CodeableConcept",
   "ExplanationOfBenefit.related":
     "@B claim:Reference relationship:CodeableConcept reference:Identifier",
   "ExplanationOfBenefit.supportingInfo":
-    "@B sequence category:CodeableConcept code:CodeableConcept timingDate timingPeriod:Period valueBoolean valueString valueQuantity:Quantity valueAttachment:Attachment valueReference:Reference reason:Coding",
+    "@B sequence:number category:CodeableConcept code:CodeableConcept timingDate timingPeriod:Period valueBoolean:boolean valueString valueQuantity:Quantity valueAttachment:Attachment valueReference:Reference reason:Coding",
   "ExplanationOfBenefit.total": "@B category:CodeableConcept amount:Money",
   Expression: "@E description name language expression reference",
   Extension:
-    "@E url valueBase64Binary valueBoolean valueCanonical valueCode valueDate valueDateTime valueDecimal valueId valueInstant valueInteger valueMarkdown valueOid valuePositiveInt valueString valueTime valueUnsignedInt valueUri valueUrl valueUuid valueAddress:Address valueAge:Age valueAnnotation:Annotation valueAttachment:Attachment valueCodeableConcept:CodeableConcept valueCoding:Coding valueContactPoint:ContactPoint valueCount:Count valueDistance:Distance valueDuration:Duration valueHumanName:HumanName valueIdentifier:Identifier valueMoney:Money valuePeriod:Period valueQuantity:Quantity valueRange:Range valueRatio:Ratio valueReference:Reference valueSampledData:SampledData valueSignature:Signature valueTiming:Timing valueContactDetail:ContactDetail valueContributor:Contributor valueDataRequirement:DataRequirement valueExpression:Expression valueParameterDefinition:ParameterDefinition valueRelatedArtifact:RelatedArtifact valueTriggerDefinition:TriggerDefinition valueUsageContext:UsageContext valueDosage:Dosage valueMeta:Meta",
+    "@E url valueBase64Binary valueBoolean:boolean valueCanonical valueCode valueDate valueDateTime valueDecimal:number valueId valueInstant valueInteger:number valueMarkdown valueOid valuePositiveInt:number valueString valueTime valueUnsignedInt:number valueUri valueUrl valueUuid valueAddress:Address valueAge:Age valueAnnotation:Annotation valueAttachment:Attachment valueCodeableConcept:CodeableConcept valueCoding:Coding valueContactPoint:ContactPoint valueCount:Count valueDistance:Distance valueDuration:Duration valueHumanName:HumanName valueIdentifier:Identifier valueMoney:Money valuePeriod:Period valueQuantity:Quantity valueRange:Range valueRatio:Ratio valueReference:Reference valueSampledData:SampledData valueSignature:Signature valueTiming:Timing valueContactDetail:ContactDetail valueContributor:Contributor valueDataRequirement:DataRequirement valueExpression:Expression valueParameterDefinition:ParameterDefinition valueRelatedArtifact:RelatedArtifact valueTriggerDefinition:TriggerDefinition valueUsageContext:UsageContext valueDosage:Dosage valueMeta:Meta",
   FamilyMemberHistory:
-    "@D identifier:Identifier* instantiatesCanonical* instantiatesUri* status dataAbsentReason:CodeableConcept patient:Reference date name relationship:CodeableConcept sex:CodeableConcept bornPeriod:Period bornDate bornString ageAge:Age ageRange:Range ageString estimatedAge deceasedBoolean deceasedAge:Age deceasedRange:Range deceasedDate deceasedString reasonCode:CodeableConcept* reasonReference:Reference* note:Annotation* condition:.*",
+    "@D identifier:Identifier* instantiatesCanonical* instantiatesUri* status dataAbsentReason:CodeableConcept patient:Reference date name relationship:CodeableConcept sex:CodeableConcept bornPeriod:Period bornDate bornString ageAge:Age ageRange:Range ageString estimatedAge:boolean deceasedBoolean:boolean deceasedAge:Age deceasedRange:Range deceasedDate deceasedString reasonCode:CodeableConcept* reasonReference:Reference* note:Annotation* condition:.*",
   "FamilyMemberHistory.condition":
-    "@B code:CodeableConcept outcome:CodeableConcept contributedToDeath onsetAge:Age onsetRange:Range onsetPeriod:Period onsetString note:Annotation*",
+    "@B code:CodeableConcept outcome:CodeableConcept contributedToDeath:boolean onsetAge:Age onsetRange:Range onsetPeriod:Period onsetString note:Annotation*",
   Flag: "@D identifier:Identifier* status category:CodeableConcept* code:CodeableConcept subject:Reference period:Period encounter:Reference author:Reference",
   Goal: "@D identifier:Identifier* lifecycleStatus achievementStatus:CodeableConcept category:CodeableConcept* priority:CodeableConcept description:CodeableConcept subject:Reference startDate startCodeableConcept:CodeableConcept target:.* statusDate statusReason expressedBy:Reference addresses:Reference* note:Annotation* outcomeCode:CodeableConcept* outcomeReference:Reference*",
   "Goal.target":
-    "@B measure:CodeableConcept detailQuantity:Quantity detailRange:Range detailCodeableConcept:CodeableConcept detailString detailBoolean detailInteger detailRatio:Ratio dueDate dueDuration:Duration",
+    "@B measure:CodeableConcept detailQuantity:Quantity detailRange:Range detailCodeableConcept:CodeableConcept detailString detailBoolean:boolean detailInteger:number detailRatio:Ratio dueDate dueDuration:Duration",
   GraphDefinition:
-    "@D url version name status experimental date publisher contact:ContactDetail* description useContext:UsageContext* jurisdiction:CodeableConcept* purpose start profile link:.*",
-  "GraphDefinition.link": "@B path sliceName min max description target:.*",
+    "@D url version name status experimental:boolean date publisher contact:ContactDetail* description useContext:UsageContext* jurisdiction:CodeableConcept* purpose start profile link:.*",
+  "GraphDefinition.link": "@B path sliceName min:number max description target:.*",
   "GraphDefinition.link.target": "@B type params profile compartment:.* link:GraphDefinition.link*",
   "GraphDefinition.link.target.compartment": "@B use code rule expression description",
   Group:
-    "@D identifier:Identifier* active type actual code:CodeableConcept name quantity managingEntity:Reference characteristic:.* member:.*",
+    "@D identifier:Identifier* active:boolean type actual:boolean code:CodeableConcept name quantity:number managingEntity:Reference characteristic:.* member:.*",
   "Group.characteristic":
-    "@B code:CodeableConcept valueCodeableConcept:CodeableConcept valueBoolean valueQuantity:Quantity valueRange:Range valueReference:Reference exclude period:Period",
-  "Group.member": "@B entity:Reference period:Period inactive",
+    "@B code:CodeableConcept valueCodeableConcept:CodeableConcept valueBoolean:boolean valueQuantity:Quantity valueRange:Range valueReference:Reference exclude:boolean period:Period",
+  "Group.member": "@B entity:Reference period:Period inactive:boolean",
   GuidanceResponse:
     "@D requestIdentifier:Identifier identifier:Identifier* moduleUri moduleCanonical moduleCodeableConcept:CodeableConcept status subject:Reference encounter:Reference occurrenceDateTime performer:Reference reasonCode:CodeableConcept* reasonReference:Reference* note:Annotation* evaluationMessage:Reference* outputParameters:Reference result:Reference dataRequirement:DataRequirement*",
   HealthcareService:
-    "@D identifier:Identifier* active providedBy:Reference category:CodeableConcept* type:CodeableConcept* specialty:CodeableConcept* location:Reference* name comment extraDetails photo:Attachment telecom:ContactPoint* coverageArea:Reference* serviceProvisionCode:CodeableConcept* eligibility:.* program:CodeableConcept* characteristic:CodeableConcept* communication:CodeableConcept* referralMethod:CodeableConcept* appointmentRequired availableTime:.* notAvailable:.* availabilityExceptions endpoint:Reference*",
-  "HealthcareService.availableTime": "@B daysOfWeek* allDay availableStartTime availableEndTime",
+    "@D identifier:Identifier* active:boolean providedBy:Reference category:CodeableConcept* type:CodeableConcept* specialty:CodeableConcept* location:Reference* name comment extraDetails photo:Attachment telecom:ContactPoint* coverageArea:Reference* serviceProvisionCode:CodeableConcept* eligibility:.* program:CodeableConcept* characteristic:CodeableConcept* communication:CodeableConcept* referralMethod:CodeableConcept* appointmentRequired:boolean availableTime:.* notAvailable:.* availabilityExceptions endpoint:Reference*",
+  "HealthcareService.availableTime":
+    "@B daysOfWeek* allDay:boolean availableStartTime availableEndTime",
   "HealthcareService.eligibility": "@B code:CodeableConcept comment",
   "HealthcareService.notAvailable": "@B description during:Period",
   HumanName: "@E use text family given* prefix* suffix* period:Period",
   Identifier: "@E use type:CodeableConcept system value period:Period assigner:Reference",
   ImagingStudy:
-    "@D identifier:Identifier* status modality:Coding* subject:Reference encounter:Reference started basedOn:Reference* referrer:Reference interpreter:Reference* endpoint:Reference* numberOfSeries numberOfInstances procedureReference:Reference procedureCode:CodeableConcept* location:Reference reasonCode:CodeableConcept* reasonReference:Reference* note:Annotation* description series:.*",
+    "@D identifier:Identifier* status modality:Coding* subject:Reference encounter:Reference started basedOn:Reference* referrer:Reference interpreter:Reference* endpoint:Reference* numberOfSeries:number numberOfInstances:number procedureReference:Reference procedureCode:CodeableConcept* location:Reference reasonCode:CodeableConcept* reasonReference:Reference* note:Annotation* description series:.*",
   "ImagingStudy.series":
-    "@B uid number modality:Coding description numberOfInstances endpoint:Reference* bodySite:Coding laterality:Coding specimen:Reference* started performer:.* instance:.*",
-  "ImagingStudy.series.instance": "@B uid sopClass:Coding number title",
+    "@B uid number:number modality:Coding description numberOfInstances:number endpoint:Reference* bodySite:Coding laterality:Coding specimen:Reference* started performer:.* instance:.*",
+  "ImagingStudy.series.instance": "@B uid sopClass:Coding number:number title",
   "ImagingStudy.series.performer": "@B function:CodeableConcept actor:Reference",
   Immunization:
-    "@D identifier:Identifier* status statusReason:CodeableConcept vaccineCode:CodeableConcept patient:Reference encounter:Reference occurrenceDateTime occurrenceString recorded primarySource reportOrigin:CodeableConcept location:Reference manufacturer:Reference lotNumber expirationDate site:CodeableConcept route:CodeableConcept doseQuantity:Quantity performer:.* note:Annotation* reasonCode:CodeableConcept* reasonReference:Reference* isSubpotent subpotentReason:CodeableConcept* education:.* programEligibility:CodeableConcept* fundingSource:CodeableConcept reaction:.* protocolApplied:.*",
+    "@D identifier:Identifier* status statusReason:CodeableConcept vaccineCode:CodeableConcept patient:Reference encounter:Reference occurrenceDateTime occurrenceString recorded primarySource:boolean reportOrigin:CodeableConcept location:Reference manufacturer:Reference lotNumber expirationDate site:CodeableConcept route:CodeableConcept doseQuantity:Quantity performer:.* note:Annotation* reasonCode:CodeableConcept* reasonReference:Reference* isSubpotent:boolean subpotentReason:CodeableConcept* education:.* programEligibility:CodeableConcept* fundingSource:CodeableConcept reaction:.* protocolApplied:.*",
   "Immunization.education": "@B documentType reference publicationDate presentationDate",
   "Immunization.performer": "@B function:CodeableConcept actor:Reference",
   "Immunization.protocolApplied":
-    "@B series authority:Reference targetDisease:CodeableConcept* doseNumberPositiveInt doseNumberString seriesDosesPositiveInt seriesDosesString",
-  "Immunization.reaction": "@B date detail:Reference reported",
+    "@B series authority:Reference targetDisease:CodeableConcept* doseNumberPositiveInt:number doseNumberString seriesDosesPositiveInt:number seriesDosesString",
+  "Immunization.reaction": "@B date detail:Reference reported:boolean",
   ImmunizationEvaluation:
-    "@D identifier:Identifier* status patient:Reference date authority:Reference targetDisease:CodeableConcept immunizationEvent:Reference doseStatus:CodeableConcept doseStatusReason:CodeableConcept* description series doseNumberPositiveInt doseNumberString seriesDosesPositiveInt seriesDosesString",
+    "@D identifier:Identifier* status patient:Reference date authority:Reference targetDisease:CodeableConcept immunizationEvent:Reference doseStatus:CodeableConcept doseStatusReason:CodeableConcept* description series doseNumberPositiveInt:number doseNumberString seriesDosesPositiveInt:number seriesDosesString",
   ImmunizationRecommendation:
     "@D identifier:Identifier* patient:Reference date authority:Reference recommendation:.*",
   "ImmunizationRecommendation.recommendation":
-    "@B vaccineCode:CodeableConcept* targetDisease:CodeableConcept contraindicatedVaccineCode:CodeableConcept* forecastStatus:CodeableConcept forecastReason:CodeableConcept* dateCriterion:.* description series doseNumberPositiveInt doseNumberString seriesDosesPositiveInt seriesDosesString supportingImmunization:Reference* supportingPatientInformation:Reference*",
+    "@B vaccineCode:CodeableConcept* targetDisease:CodeableConcept contraindicatedVaccineCode:CodeableConcept* forecastStatus:CodeableConcept forecastReason:CodeableConcept* dateCriterion:.* description series doseNumberPositiveInt:number doseNumberString seriesDosesPositiveInt:number seriesDosesString supportingImmunization:Reference* supportingPatientInformation:Reference*",
   "ImmunizationRecommendation.recommendation.dateCriterion": "@B code:CodeableConcept value",
   ImplementationGuide:
-    "@D url version name title status experimental date publisher contact:ContactDetail* description useContext:UsageContext* jurisdiction:CodeableConcept* copyright packageId license fhirVersion* dependsOn:.* global:.* definition:. manifest:.",
+    "@D url version name title status experimental:boolean date publisher contact:ContactDetail* description useContext:UsageContext* jurisdiction:CodeableConcept* copyright packageId license fhirVersion* dependsOn:.* global:.* definition:. manifest:.",
   "ImplementationGuide.definition": "@B grouping:.* resource:.* page:. parameter:.* template:.*",
   "ImplementationGuide.definition.grouping": "@B name description",
   "ImplementationGuide.definition.page":
     "@B nameUrl nameReference:Reference title generation page:ImplementationGuide.definition.page*",
   "ImplementationGuide.definition.parameter": "@B code value",
   "ImplementationGuide.definition.resource":
-    "@B reference:Reference fhirVersion* name description exampleBoolean exampleCanonical groupingId",
+    "@B reference:Reference fhirVersion* name description exampleBoolean:boolean exampleCanonical groupingId",
   "ImplementationGuide.definition.template": "@B code source scope",
   "ImplementationGuide.dependsOn": "@B uri packageId version",
   "ImplementationGuide.global": "@B type profile",
   "ImplementationGuide.manifest": "@B rendering resource:.* page:.* image* other*",
   "ImplementationGuide.manifest.page": "@B name title anchor*",
   "ImplementationGuide.manifest.resource":
-    "@B reference:Reference exampleBoolean exampleCanonical relativePath",
+    "@B reference:Reference exampleBoolean:boolean exampleCanonical relativePath",
   InsurancePlan:
     "@D identifier:Identifier* status type:CodeableConcept* name alias* period:Period ownedBy:Reference administeredBy:Reference coverageArea:Reference* contact:.* endpoint:Reference* network:Reference* coverage:.* plan:.*",
   "InsurancePlan.contact":
@@ -496,7 +505,7 @@ export const FHIR_ELEMENT_NAMES: Readonly<Record<string, string>> = {
   "InsurancePlan.coverage.benefit.limit": "@B value:Quantity code:CodeableConcept",
   "InsurancePlan.plan":
     "@B identifier:Identifier* type:CodeableConcept coverageArea:Reference* network:Reference* generalCost:.* specificCost:.*",
-  "InsurancePlan.plan.generalCost": "@B type:CodeableConcept groupSize cost:Money comment",
+  "InsurancePlan.plan.generalCost": "@B type:CodeableConcept groupSize:number cost:Money comment",
   "InsurancePlan.plan.specificCost": "@B category:CodeableConcept benefit:.*",
   "InsurancePlan.plan.specificCost.benefit": "@B type:CodeableConcept cost:.*",
   "InsurancePlan.plan.specificCost.benefit.cost":
@@ -504,23 +513,23 @@ export const FHIR_ELEMENT_NAMES: Readonly<Record<string, string>> = {
   Invoice:
     "@D identifier:Identifier* status cancelledReason type:CodeableConcept subject:Reference recipient:Reference date participant:.* issuer:Reference account:Reference lineItem:.* totalPriceComponent:Invoice.lineItem.priceComponent* totalNet:Money totalGross:Money paymentTerms note:Annotation*",
   "Invoice.lineItem":
-    "@B sequence chargeItemReference:Reference chargeItemCodeableConcept:CodeableConcept priceComponent:.*",
-  "Invoice.lineItem.priceComponent": "@B type code:CodeableConcept factor amount:Money",
+    "@B sequence:number chargeItemReference:Reference chargeItemCodeableConcept:CodeableConcept priceComponent:.*",
+  "Invoice.lineItem.priceComponent": "@B type code:CodeableConcept factor:number amount:Money",
   "Invoice.participant": "@B role:CodeableConcept actor:Reference",
   Library:
-    "@D url identifier:Identifier* version name title subtitle status experimental type:CodeableConcept subjectCodeableConcept:CodeableConcept subjectReference:Reference date publisher contact:ContactDetail* description useContext:UsageContext* jurisdiction:CodeableConcept* purpose usage copyright approvalDate lastReviewDate effectivePeriod:Period topic:CodeableConcept* author:ContactDetail* editor:ContactDetail* reviewer:ContactDetail* endorser:ContactDetail* relatedArtifact:RelatedArtifact* parameter:ParameterDefinition* dataRequirement:DataRequirement* content:Attachment*",
-  Linkage: "@D active author:Reference item:.*",
+    "@D url identifier:Identifier* version name title subtitle status experimental:boolean type:CodeableConcept subjectCodeableConcept:CodeableConcept subjectReference:Reference date publisher contact:ContactDetail* description useContext:UsageContext* jurisdiction:CodeableConcept* purpose usage copyright approvalDate lastReviewDate effectivePeriod:Period topic:CodeableConcept* author:ContactDetail* editor:ContactDetail* reviewer:ContactDetail* endorser:ContactDetail* relatedArtifact:RelatedArtifact* parameter:ParameterDefinition* dataRequirement:DataRequirement* content:Attachment*",
+  Linkage: "@D active:boolean author:Reference item:.*",
   "Linkage.item": "@B type resource:Reference",
   List: "@D identifier:Identifier* status mode title code:CodeableConcept subject:Reference encounter:Reference date source:Reference orderedBy:CodeableConcept note:Annotation* entry:.* emptyReason:CodeableConcept",
-  "List.entry": "@B flag:CodeableConcept deleted date item:Reference",
+  "List.entry": "@B flag:CodeableConcept deleted:boolean date item:Reference",
   Location:
     "@D identifier:Identifier* status operationalStatus:Coding name alias* description mode type:CodeableConcept* telecom:ContactPoint* address:Address physicalType:CodeableConcept position:. managingOrganization:Reference partOf:Reference hoursOfOperation:.* availabilityExceptions endpoint:Reference*",
-  "Location.hoursOfOperation": "@B daysOfWeek* allDay openingTime closingTime",
-  "Location.position": "@B longitude latitude altitude",
+  "Location.hoursOfOperation": "@B daysOfWeek* allDay:boolean openingTime closingTime",
+  "Location.position": "@B longitude:number latitude:number altitude:number",
   MarketingStatus:
     "@B country:CodeableConcept jurisdiction:CodeableConcept status:CodeableConcept dateRange:Period restoreDate",
   Measure:
-    "@D url identifier:Identifier* version name title subtitle status experimental subjectCodeableConcept:CodeableConcept subjectReference:Reference date publisher contact:ContactDetail* description useContext:UsageContext* jurisdiction:CodeableConcept* purpose usage copyright approvalDate lastReviewDate effectivePeriod:Period topic:CodeableConcept* author:ContactDetail* editor:ContactDetail* reviewer:ContactDetail* endorser:ContactDetail* relatedArtifact:RelatedArtifact* library* disclaimer scoring:CodeableConcept compositeScoring:CodeableConcept type:CodeableConcept* riskAdjustment rateAggregation rationale clinicalRecommendationStatement improvementNotation:CodeableConcept definition* guidance group:.* supplementalData:.*",
+    "@D url identifier:Identifier* version name title subtitle status experimental:boolean subjectCodeableConcept:CodeableConcept subjectReference:Reference date publisher contact:ContactDetail* description useContext:UsageContext* jurisdiction:CodeableConcept* purpose usage copyright approvalDate lastReviewDate effectivePeriod:Period topic:CodeableConcept* author:ContactDetail* editor:ContactDetail* reviewer:ContactDetail* endorser:ContactDetail* relatedArtifact:RelatedArtifact* library* disclaimer scoring:CodeableConcept compositeScoring:CodeableConcept type:CodeableConcept* riskAdjustment rateAggregation rationale clinicalRecommendationStatement improvementNotation:CodeableConcept definition* guidance group:.* supplementalData:.*",
   "Measure.group": "@B code:CodeableConcept description population:.* stratifier:.*",
   "Measure.group.population": "@B code:CodeableConcept description criteria:Expression",
   "Measure.group.stratifier":
@@ -532,21 +541,21 @@ export const FHIR_ELEMENT_NAMES: Readonly<Record<string, string>> = {
     "@D identifier:Identifier* status type measure subject:Reference date reporter:Reference period:Period improvementNotation:CodeableConcept group:.* evaluatedResource:Reference*",
   "MeasureReport.group":
     "@B code:CodeableConcept population:.* measureScore:Quantity stratifier:.*",
-  "MeasureReport.group.population": "@B code:CodeableConcept count subjectResults:Reference",
+  "MeasureReport.group.population": "@B code:CodeableConcept count:number subjectResults:Reference",
   "MeasureReport.group.stratifier": "@B code:CodeableConcept* stratum:.*",
   "MeasureReport.group.stratifier.stratum":
     "@B value:CodeableConcept component:.* population:.* measureScore:Quantity",
   "MeasureReport.group.stratifier.stratum.component":
     "@B code:CodeableConcept value:CodeableConcept",
   "MeasureReport.group.stratifier.stratum.population":
-    "@B code:CodeableConcept count subjectResults:Reference",
+    "@B code:CodeableConcept count:number subjectResults:Reference",
   Media:
-    "@D identifier:Identifier* basedOn:Reference* partOf:Reference* status type:CodeableConcept modality:CodeableConcept view:CodeableConcept subject:Reference encounter:Reference createdDateTime createdPeriod:Period issued operator:Reference reasonCode:CodeableConcept* bodySite:CodeableConcept deviceName device:Reference height width frames duration content:Attachment note:Annotation*",
+    "@D identifier:Identifier* basedOn:Reference* partOf:Reference* status type:CodeableConcept modality:CodeableConcept view:CodeableConcept subject:Reference encounter:Reference createdDateTime createdPeriod:Period issued operator:Reference reasonCode:CodeableConcept* bodySite:CodeableConcept deviceName device:Reference height:number width:number frames:number duration:number content:Attachment note:Annotation*",
   Medication:
     "@D identifier:Identifier* code:CodeableConcept status manufacturer:Reference form:CodeableConcept amount:Ratio ingredient:.* batch:.",
   "Medication.batch": "@B lotNumber expirationDate",
   "Medication.ingredient":
-    "@B itemCodeableConcept:CodeableConcept itemReference:Reference isActive strength:Ratio",
+    "@B itemCodeableConcept:CodeableConcept itemReference:Reference isActive:boolean strength:Ratio",
   MedicationAdministration:
     "@D identifier:Identifier* instantiates* partOf:Reference* status statusReason:CodeableConcept* category:CodeableConcept medicationCodeableConcept:CodeableConcept medicationReference:Reference subject:Reference context:Reference supportingInformation:Reference* effectiveDateTime effectivePeriod:Period performer:.* reasonCode:CodeableConcept* reasonReference:Reference* request:Reference device:Reference* note:Annotation* dosage:. eventHistory:Reference*",
   "MedicationAdministration.dosage":
@@ -556,7 +565,7 @@ export const FHIR_ELEMENT_NAMES: Readonly<Record<string, string>> = {
     "@D identifier:Identifier* partOf:Reference* status statusReasonCodeableConcept:CodeableConcept statusReasonReference:Reference category:CodeableConcept medicationCodeableConcept:CodeableConcept medicationReference:Reference subject:Reference context:Reference supportingInformation:Reference* performer:.* location:Reference authorizingPrescription:Reference* type:CodeableConcept quantity:Quantity daysSupply:Quantity whenPrepared whenHandedOver destination:Reference receiver:Reference* note:Annotation* dosageInstruction:Dosage* substitution:. detectedIssue:Reference* eventHistory:Reference*",
   "MedicationDispense.performer": "@B function:CodeableConcept actor:Reference",
   "MedicationDispense.substitution":
-    "@B wasSubstituted type:CodeableConcept reason:CodeableConcept* responsibleParty:Reference*",
+    "@B wasSubstituted:boolean type:CodeableConcept reason:CodeableConcept* responsibleParty:Reference*",
   MedicationKnowledge:
     "@D code:CodeableConcept status manufacturer:Reference doseForm:CodeableConcept amount:Quantity synonym* relatedMedicationKnowledge:.* associatedMedication:Reference* productType:CodeableConcept* monograph:.* ingredient:.* preparationInstruction intendedRoute:CodeableConcept* cost:.* monitoringProgram:.* administrationGuidelines:.* medicineClassification:.* packaging:. drugCharacteristic:.* contraindication:Reference* regulatory:.* kinetics:.*",
   "MedicationKnowledge.administrationGuidelines":
@@ -568,7 +577,7 @@ export const FHIR_ELEMENT_NAMES: Readonly<Record<string, string>> = {
   "MedicationKnowledge.drugCharacteristic":
     "@B type:CodeableConcept valueCodeableConcept:CodeableConcept valueString valueQuantity:Quantity valueBase64Binary",
   "MedicationKnowledge.ingredient":
-    "@B itemCodeableConcept:CodeableConcept itemReference:Reference isActive strength:Ratio",
+    "@B itemCodeableConcept:CodeableConcept itemReference:Reference isActive:boolean strength:Ratio",
   "MedicationKnowledge.kinetics":
     "@B areaUnderCurve:Quantity* lethalDose50:Quantity* halfLifePeriod:Duration",
   "MedicationKnowledge.medicineClassification":
@@ -580,15 +589,15 @@ export const FHIR_ELEMENT_NAMES: Readonly<Record<string, string>> = {
     "@B regulatoryAuthority:Reference substitution:.* schedule:.* maxDispense:.",
   "MedicationKnowledge.regulatory.maxDispense": "@B quantity:Quantity period:Duration",
   "MedicationKnowledge.regulatory.schedule": "@B schedule:CodeableConcept",
-  "MedicationKnowledge.regulatory.substitution": "@B type:CodeableConcept allowed",
+  "MedicationKnowledge.regulatory.substitution": "@B type:CodeableConcept allowed:boolean",
   "MedicationKnowledge.relatedMedicationKnowledge": "@B type:CodeableConcept reference:Reference*",
   MedicationRequest:
-    "@D identifier:Identifier* status statusReason:CodeableConcept intent category:CodeableConcept* priority doNotPerform reportedBoolean reportedReference:Reference medicationCodeableConcept:CodeableConcept medicationReference:Reference subject:Reference encounter:Reference supportingInformation:Reference* authoredOn requester:Reference performer:Reference performerType:CodeableConcept recorder:Reference reasonCode:CodeableConcept* reasonReference:Reference* instantiatesCanonical* instantiatesUri* basedOn:Reference* groupIdentifier:Identifier courseOfTherapyType:CodeableConcept insurance:Reference* note:Annotation* dosageInstruction:Dosage* dispenseRequest:. substitution:. priorPrescription:Reference detectedIssue:Reference* eventHistory:Reference*",
+    "@D identifier:Identifier* status statusReason:CodeableConcept intent category:CodeableConcept* priority doNotPerform:boolean reportedBoolean:boolean reportedReference:Reference medicationCodeableConcept:CodeableConcept medicationReference:Reference subject:Reference encounter:Reference supportingInformation:Reference* authoredOn requester:Reference performer:Reference performerType:CodeableConcept recorder:Reference reasonCode:CodeableConcept* reasonReference:Reference* instantiatesCanonical* instantiatesUri* basedOn:Reference* groupIdentifier:Identifier courseOfTherapyType:CodeableConcept insurance:Reference* note:Annotation* dosageInstruction:Dosage* dispenseRequest:. substitution:. priorPrescription:Reference detectedIssue:Reference* eventHistory:Reference*",
   "MedicationRequest.dispenseRequest":
-    "@B initialFill:. dispenseInterval:Duration validityPeriod:Period numberOfRepeatsAllowed quantity:Quantity expectedSupplyDuration:Duration performer:Reference",
+    "@B initialFill:. dispenseInterval:Duration validityPeriod:Period numberOfRepeatsAllowed:number quantity:Quantity expectedSupplyDuration:Duration performer:Reference",
   "MedicationRequest.dispenseRequest.initialFill": "@B quantity:Quantity duration:Duration",
   "MedicationRequest.substitution":
-    "@B allowedBoolean allowedCodeableConcept:CodeableConcept reason:CodeableConcept",
+    "@B allowedBoolean:boolean allowedCodeableConcept:CodeableConcept reason:CodeableConcept",
   MedicationStatement:
     "@D identifier:Identifier* basedOn:Reference* partOf:Reference* status statusReason:CodeableConcept* category:CodeableConcept medicationCodeableConcept:CodeableConcept medicationReference:Reference subject:Reference context:Reference effectiveDateTime effectivePeriod:Period dateAsserted informationSource:Reference derivedFrom:Reference* reasonCode:CodeableConcept* reasonReference:Reference* note:Annotation* dosage:Dosage*",
   MedicinalProduct:
@@ -616,7 +625,7 @@ export const FHIR_ELEMENT_NAMES: Readonly<Record<string, string>> = {
   "MedicinalProductIndication.otherTherapy":
     "@B therapyRelationshipType:CodeableConcept medicationCodeableConcept:CodeableConcept medicationReference:Reference",
   MedicinalProductIngredient:
-    "@D identifier:Identifier role:CodeableConcept allergenicIndicator manufacturer:Reference* specifiedSubstance:.* substance:.",
+    "@D identifier:Identifier role:CodeableConcept allergenicIndicator:boolean manufacturer:Reference* specifiedSubstance:.* substance:.",
   "MedicinalProductIngredient.specifiedSubstance":
     "@B code:CodeableConcept group:CodeableConcept confidentiality:CodeableConcept strength:.*",
   "MedicinalProductIngredient.specifiedSubstance.strength":
@@ -650,9 +659,9 @@ export const FHIR_ELEMENT_NAMES: Readonly<Record<string, string>> = {
   MedicinalProductUndesirableEffect:
     "@D subject:Reference* symptomConditionEffect:CodeableConcept classification:CodeableConcept frequencyOfOccurrence:CodeableConcept population:Population*",
   MessageDefinition:
-    "@D url identifier:Identifier* version name title replaces* status experimental date publisher contact:ContactDetail* description useContext:UsageContext* jurisdiction:CodeableConcept* purpose copyright base parent* eventCoding:Coding eventUri category focus:.* responseRequired allowedResponse:.* graph*",
+    "@D url identifier:Identifier* version name title replaces* status experimental:boolean date publisher contact:ContactDetail* description useContext:UsageContext* jurisdiction:CodeableConcept* purpose copyright base parent* eventCoding:Coding eventUri category focus:.* responseRequired allowedResponse:.* graph*",
   "MessageDefinition.allowedResponse": "@B message situation",
-  "MessageDefinition.focus": "@B code profile min max",
+  "MessageDefinition.focus": "@B code profile min:number max",
   MessageHeader:
     "@D eventCoding:Coding eventUri destination:.* sender:Reference enterer:Reference author:Reference source:. responsible:Reference reason:CodeableConcept response:. focus:Reference* definition",
   "MessageHeader.destination": "@B name target:Reference endpoint receiver:Reference",
@@ -660,24 +669,24 @@ export const FHIR_ELEMENT_NAMES: Readonly<Record<string, string>> = {
   "MessageHeader.source": "@B name software version contact:ContactPoint endpoint",
   Meta: "@E versionId lastUpdated source profile* security:Coding* tag:Coding*",
   MolecularSequence:
-    "@D identifier:Identifier* type coordinateSystem patient:Reference specimen:Reference device:Reference performer:Reference quantity:Quantity referenceSeq:. variant:.* observedSeq quality:.* readCoverage repository:.* pointer:Reference* structureVariant:.*",
+    "@D identifier:Identifier* type coordinateSystem:number patient:Reference specimen:Reference device:Reference performer:Reference quantity:Quantity referenceSeq:. variant:.* observedSeq quality:.* readCoverage:number repository:.* pointer:Reference* structureVariant:.*",
   "MolecularSequence.quality":
-    "@B type standardSequence:CodeableConcept start end score:Quantity method:CodeableConcept truthTP queryTP truthFN queryFP gtFP precision recall fScore roc:.",
+    "@B type standardSequence:CodeableConcept start:number end:number score:Quantity method:CodeableConcept truthTP:number queryTP:number truthFN:number queryFP:number gtFP:number precision:number recall:number fScore:number roc:.",
   "MolecularSequence.quality.roc":
-    "@B score* numTP* numFP* numFN* precision* sensitivity* fMeasure*",
+    "@B score:number* numTP:number* numFP:number* numFN:number* precision:number* sensitivity:number* fMeasure:number*",
   "MolecularSequence.referenceSeq":
-    "@B chromosome:CodeableConcept genomeBuild orientation referenceSeqId:CodeableConcept referenceSeqPointer:Reference referenceSeqString strand windowStart windowEnd",
+    "@B chromosome:CodeableConcept genomeBuild orientation referenceSeqId:CodeableConcept referenceSeqPointer:Reference referenceSeqString strand windowStart:number windowEnd:number",
   "MolecularSequence.repository": "@B type url name datasetId variantsetId readsetId",
   "MolecularSequence.structureVariant":
-    "@B variantType:CodeableConcept exact length outer:. inner:.",
-  "MolecularSequence.structureVariant.inner": "@B start end",
-  "MolecularSequence.structureVariant.outer": "@B start end",
+    "@B variantType:CodeableConcept exact:boolean length:number outer:. inner:.",
+  "MolecularSequence.structureVariant.inner": "@B start:number end:number",
+  "MolecularSequence.structureVariant.outer": "@B start:number end:number",
   "MolecularSequence.variant":
-    "@B start end observedAllele referenceAllele cigar variantPointer:Reference",
-  Money: "@E value currency",
+    "@B start:number end:number observedAllele referenceAllele cigar variantPointer:Reference",
+  Money: "@E value:number currency",
   NamingSystem:
     "@D name status kind date publisher contact:ContactDetail* responsible type:CodeableConcept description useContext:UsageContext* jurisdiction:CodeableConcept* usage uniqueId:.*",
-  "NamingSystem.uniqueId": "@B type value preferred comment period:Period",
+  "NamingSystem.uniqueId": "@B type value preferred:boolean comment period:Period",
   Narrative: "@E status div",
   NutritionOrder:
     "@D identifier:Identifier* instantiatesCanonical* instantiatesUri* instantiates* status intent patient:Reference encounter:Reference dateTime orderer:Reference allergyIntolerance:Reference* foodPreferenceModifier:CodeableConcept* excludeFoodModifier:CodeableConcept* oralDiet:. supplement:.* enteralFormula:. note:Annotation*",
@@ -692,40 +701,40 @@ export const FHIR_ELEMENT_NAMES: Readonly<Record<string, string>> = {
   "NutritionOrder.supplement":
     "@B type:CodeableConcept productName schedule:Timing* quantity:Quantity instruction",
   Observation:
-    "@D identifier:Identifier* basedOn:Reference* partOf:Reference* status category:CodeableConcept* code:CodeableConcept subject:Reference focus:Reference* encounter:Reference effectiveDateTime effectivePeriod:Period effectiveTiming:Timing effectiveInstant issued performer:Reference* valueQuantity:Quantity valueCodeableConcept:CodeableConcept valueString valueBoolean valueInteger valueRange:Range valueRatio:Ratio valueSampledData:SampledData valueTime valueDateTime valuePeriod:Period dataAbsentReason:CodeableConcept interpretation:CodeableConcept* note:Annotation* bodySite:CodeableConcept method:CodeableConcept specimen:Reference device:Reference referenceRange:.* hasMember:Reference* derivedFrom:Reference* component:.*",
+    "@D identifier:Identifier* basedOn:Reference* partOf:Reference* status category:CodeableConcept* code:CodeableConcept subject:Reference focus:Reference* encounter:Reference effectiveDateTime effectivePeriod:Period effectiveTiming:Timing effectiveInstant issued performer:Reference* valueQuantity:Quantity valueCodeableConcept:CodeableConcept valueString valueBoolean:boolean valueInteger:number valueRange:Range valueRatio:Ratio valueSampledData:SampledData valueTime valueDateTime valuePeriod:Period dataAbsentReason:CodeableConcept interpretation:CodeableConcept* note:Annotation* bodySite:CodeableConcept method:CodeableConcept specimen:Reference device:Reference referenceRange:.* hasMember:Reference* derivedFrom:Reference* component:.*",
   "Observation.component":
-    "@B code:CodeableConcept valueQuantity:Quantity valueCodeableConcept:CodeableConcept valueString valueBoolean valueInteger valueRange:Range valueRatio:Ratio valueSampledData:SampledData valueTime valueDateTime valuePeriod:Period dataAbsentReason:CodeableConcept interpretation:CodeableConcept* referenceRange:Observation.referenceRange*",
+    "@B code:CodeableConcept valueQuantity:Quantity valueCodeableConcept:CodeableConcept valueString valueBoolean:boolean valueInteger:number valueRange:Range valueRatio:Ratio valueSampledData:SampledData valueTime valueDateTime valuePeriod:Period dataAbsentReason:CodeableConcept interpretation:CodeableConcept* referenceRange:Observation.referenceRange*",
   "Observation.referenceRange":
     "@B low:Quantity high:Quantity type:CodeableConcept appliesTo:CodeableConcept* age:Range text",
   ObservationDefinition:
-    "@D category:CodeableConcept* code:CodeableConcept identifier:Identifier* permittedDataType* multipleResultsAllowed method:CodeableConcept preferredReportName quantitativeDetails:. qualifiedInterval:.* validCodedValueSet:Reference normalCodedValueSet:Reference abnormalCodedValueSet:Reference criticalCodedValueSet:Reference",
+    "@D category:CodeableConcept* code:CodeableConcept identifier:Identifier* permittedDataType* multipleResultsAllowed:boolean method:CodeableConcept preferredReportName quantitativeDetails:. qualifiedInterval:.* validCodedValueSet:Reference normalCodedValueSet:Reference abnormalCodedValueSet:Reference criticalCodedValueSet:Reference",
   "ObservationDefinition.qualifiedInterval":
     "@B category range:Range context:CodeableConcept appliesTo:CodeableConcept* gender age:Range gestationalAge:Range condition",
   "ObservationDefinition.quantitativeDetails":
-    "@B customaryUnit:CodeableConcept unit:CodeableConcept conversionFactor decimalPrecision",
+    "@B customaryUnit:CodeableConcept unit:CodeableConcept conversionFactor:number decimalPrecision:number",
   OperationDefinition:
-    "@D url version name title status kind experimental date publisher contact:ContactDetail* description useContext:UsageContext* jurisdiction:CodeableConcept* purpose affectsState code comment base resource* system type instance inputProfile outputProfile parameter:.* overload:.*",
+    "@D url version name title status kind experimental:boolean date publisher contact:ContactDetail* description useContext:UsageContext* jurisdiction:CodeableConcept* purpose affectsState:boolean code comment base resource* system:boolean type:boolean instance:boolean inputProfile outputProfile parameter:.* overload:.*",
   "OperationDefinition.overload": "@B parameterName* comment",
   "OperationDefinition.parameter":
-    "@B name use min max documentation type targetProfile* searchType binding:. referencedFrom:.* part:OperationDefinition.parameter*",
+    "@B name use min:number max documentation type targetProfile* searchType binding:. referencedFrom:.* part:OperationDefinition.parameter*",
   "OperationDefinition.parameter.binding": "@B strength valueSet",
   "OperationDefinition.parameter.referencedFrom": "@B source sourceId",
   OperationOutcome: "@D issue:.*",
   "OperationOutcome.issue":
     "@B severity code details:CodeableConcept diagnostics location* expression*",
   Organization:
-    "@D identifier:Identifier* active type:CodeableConcept* name alias* telecom:ContactPoint* address:Address* partOf:Reference contact:.* endpoint:Reference*",
+    "@D identifier:Identifier* active:boolean type:CodeableConcept* name alias* telecom:ContactPoint* address:Address* partOf:Reference contact:.* endpoint:Reference*",
   "Organization.contact":
     "@B purpose:CodeableConcept name:HumanName telecom:ContactPoint* address:Address",
   OrganizationAffiliation:
-    "@D identifier:Identifier* active period:Period organization:Reference participatingOrganization:Reference network:Reference* code:CodeableConcept* specialty:CodeableConcept* location:Reference* healthcareService:Reference* telecom:ContactPoint* endpoint:Reference*",
-  ParameterDefinition: "@E name use min max documentation type profile",
+    "@D identifier:Identifier* active:boolean period:Period organization:Reference participatingOrganization:Reference network:Reference* code:CodeableConcept* specialty:CodeableConcept* location:Reference* healthcareService:Reference* telecom:ContactPoint* endpoint:Reference*",
+  ParameterDefinition: "@E name use min:number max documentation type profile",
   Parameters: "@R parameter:.*",
   "Parameters.parameter":
-    "@B name valueBase64Binary valueBoolean valueCanonical valueCode valueDate valueDateTime valueDecimal valueId valueInstant valueInteger valueMarkdown valueOid valuePositiveInt valueString valueTime valueUnsignedInt valueUri valueUrl valueUuid valueAddress:Address valueAge:Age valueAnnotation:Annotation valueAttachment:Attachment valueCodeableConcept:CodeableConcept valueCoding:Coding valueContactPoint:ContactPoint valueCount:Count valueDistance:Distance valueDuration:Duration valueHumanName:HumanName valueIdentifier:Identifier valueMoney:Money valuePeriod:Period valueQuantity:Quantity valueRange:Range valueRatio:Ratio valueReference:Reference valueSampledData:SampledData valueSignature:Signature valueTiming:Timing valueContactDetail:ContactDetail valueContributor:Contributor valueDataRequirement:DataRequirement valueExpression:Expression valueParameterDefinition:ParameterDefinition valueRelatedArtifact:RelatedArtifact valueTriggerDefinition:TriggerDefinition valueUsageContext:UsageContext valueDosage:Dosage valueMeta:Meta resource:Resource part:Parameters.parameter*",
+    "@B name valueBase64Binary valueBoolean:boolean valueCanonical valueCode valueDate valueDateTime valueDecimal:number valueId valueInstant valueInteger:number valueMarkdown valueOid valuePositiveInt:number valueString valueTime valueUnsignedInt:number valueUri valueUrl valueUuid valueAddress:Address valueAge:Age valueAnnotation:Annotation valueAttachment:Attachment valueCodeableConcept:CodeableConcept valueCoding:Coding valueContactPoint:ContactPoint valueCount:Count valueDistance:Distance valueDuration:Duration valueHumanName:HumanName valueIdentifier:Identifier valueMoney:Money valuePeriod:Period valueQuantity:Quantity valueRange:Range valueRatio:Ratio valueReference:Reference valueSampledData:SampledData valueSignature:Signature valueTiming:Timing valueContactDetail:ContactDetail valueContributor:Contributor valueDataRequirement:DataRequirement valueExpression:Expression valueParameterDefinition:ParameterDefinition valueRelatedArtifact:RelatedArtifact valueTriggerDefinition:TriggerDefinition valueUsageContext:UsageContext valueDosage:Dosage valueMeta:Meta resource:Resource part:Parameters.parameter*",
   Patient:
-    "@D identifier:Identifier* active name:HumanName* telecom:ContactPoint* gender birthDate deceasedBoolean deceasedDateTime address:Address* maritalStatus:CodeableConcept multipleBirthBoolean multipleBirthInteger photo:Attachment* contact:.* communication:.* generalPractitioner:Reference* managingOrganization:Reference link:.*",
-  "Patient.communication": "@B language:CodeableConcept preferred",
+    "@D identifier:Identifier* active:boolean name:HumanName* telecom:ContactPoint* gender birthDate deceasedBoolean:boolean deceasedDateTime address:Address* maritalStatus:CodeableConcept multipleBirthBoolean:boolean multipleBirthInteger:number photo:Attachment* contact:.* communication:.* generalPractitioner:Reference* managingOrganization:Reference link:.*",
+  "Patient.communication": "@B language:CodeableConcept preferred:boolean",
   "Patient.contact":
     "@B relationship:CodeableConcept* name:HumanName telecom:ContactPoint* address:Address gender organization:Reference period:Period",
   "Patient.link": "@B other:Reference type",
@@ -738,10 +747,10 @@ export const FHIR_ELEMENT_NAMES: Readonly<Record<string, string>> = {
   "PaymentReconciliation.processNote": "@B type text",
   Period: "@E start end",
   Person:
-    "@D identifier:Identifier* name:HumanName* telecom:ContactPoint* gender birthDate address:Address* photo:Attachment managingOrganization:Reference active link:.*",
+    "@D identifier:Identifier* name:HumanName* telecom:ContactPoint* gender birthDate address:Address* photo:Attachment managingOrganization:Reference active:boolean link:.*",
   "Person.link": "@B target:Reference assurance",
   PlanDefinition:
-    "@D url identifier:Identifier* version name title subtitle type:CodeableConcept status experimental subjectCodeableConcept:CodeableConcept subjectReference:Reference date publisher contact:ContactDetail* description useContext:UsageContext* jurisdiction:CodeableConcept* purpose usage copyright approvalDate lastReviewDate effectivePeriod:Period topic:CodeableConcept* author:ContactDetail* editor:ContactDetail* reviewer:ContactDetail* endorser:ContactDetail* relatedArtifact:RelatedArtifact* library* goal:.* action:.*",
+    "@D url identifier:Identifier* version name title subtitle type:CodeableConcept status experimental:boolean subjectCodeableConcept:CodeableConcept subjectReference:Reference date publisher contact:ContactDetail* description useContext:UsageContext* jurisdiction:CodeableConcept* purpose usage copyright approvalDate lastReviewDate effectivePeriod:Period topic:CodeableConcept* author:ContactDetail* editor:ContactDetail* reviewer:ContactDetail* endorser:ContactDetail* relatedArtifact:RelatedArtifact* library* goal:.* action:.*",
   "PlanDefinition.action":
     "@B prefix title description textEquivalent priority code:CodeableConcept* reason:CodeableConcept* documentation:RelatedArtifact* goalId* subjectCodeableConcept:CodeableConcept subjectReference:Reference trigger:TriggerDefinition* condition:.* input:DataRequirement* output:DataRequirement* relatedAction:.* timingDateTime timingAge:Age timingPeriod:Period timingDuration:Duration timingRange:Range timingTiming:Timing participant:.* type:CodeableConcept groupingBehavior selectionBehavior requiredBehavior precheckBehavior cardinalityBehavior definitionCanonical definitionUri transform dynamicValue:.* action:PlanDefinition.action*",
   "PlanDefinition.action.condition": "@B kind expression:Expression",
@@ -756,12 +765,13 @@ export const FHIR_ELEMENT_NAMES: Readonly<Record<string, string>> = {
   Population:
     "@B ageRange:Range ageCodeableConcept:CodeableConcept gender:CodeableConcept race:CodeableConcept physiologicalCondition:CodeableConcept",
   Practitioner:
-    "@D identifier:Identifier* active name:HumanName* telecom:ContactPoint* address:Address* gender birthDate photo:Attachment* qualification:.* communication:CodeableConcept*",
+    "@D identifier:Identifier* active:boolean name:HumanName* telecom:ContactPoint* address:Address* gender birthDate photo:Attachment* qualification:.* communication:CodeableConcept*",
   "Practitioner.qualification":
     "@B identifier:Identifier* code:CodeableConcept period:Period issuer:Reference",
   PractitionerRole:
-    "@D identifier:Identifier* active period:Period practitioner:Reference organization:Reference code:CodeableConcept* specialty:CodeableConcept* location:Reference* healthcareService:Reference* telecom:ContactPoint* availableTime:.* notAvailable:.* availabilityExceptions endpoint:Reference*",
-  "PractitionerRole.availableTime": "@B daysOfWeek* allDay availableStartTime availableEndTime",
+    "@D identifier:Identifier* active:boolean period:Period practitioner:Reference organization:Reference code:CodeableConcept* specialty:CodeableConcept* location:Reference* healthcareService:Reference* telecom:ContactPoint* availableTime:.* notAvailable:.* availabilityExceptions endpoint:Reference*",
+  "PractitionerRole.availableTime":
+    "@B daysOfWeek* allDay:boolean availableStartTime availableEndTime",
   "PractitionerRole.notAvailable": "@B description during:Period",
   Procedure:
     "@D identifier:Identifier* instantiatesCanonical* instantiatesUri* basedOn:Reference* partOf:Reference* status statusReason:CodeableConcept category:CodeableConcept code:CodeableConcept subject:Reference encounter:Reference performedDateTime performedPeriod:Period performedString performedAge:Age performedRange:Range recorder:Reference asserter:Reference performer:.* location:Reference reasonCode:CodeableConcept* reasonReference:Reference* bodySite:CodeableConcept* outcome:CodeableConcept report:Reference* complication:CodeableConcept* complicationDetail:Reference* followUp:CodeableConcept* note:Annotation* focalDevice:.* usedReference:Reference* usedCode:CodeableConcept*",
@@ -776,30 +786,30 @@ export const FHIR_ELEMENT_NAMES: Readonly<Record<string, string>> = {
   "Provenance.agent":
     "@B type:CodeableConcept role:CodeableConcept* who:Reference onBehalfOf:Reference",
   "Provenance.entity": "@B role what:Reference agent:Provenance.agent*",
-  Quantity: "@E value comparator unit system code",
+  Quantity: "@E value:number comparator unit system code",
   Questionnaire:
-    "@D url identifier:Identifier* version name title derivedFrom* status experimental subjectType* date publisher contact:ContactDetail* description useContext:UsageContext* jurisdiction:CodeableConcept* purpose copyright approvalDate lastReviewDate effectivePeriod:Period code:Coding* item:.*",
+    "@D url identifier:Identifier* version name title derivedFrom* status experimental:boolean subjectType* date publisher contact:ContactDetail* description useContext:UsageContext* jurisdiction:CodeableConcept* purpose copyright approvalDate lastReviewDate effectivePeriod:Period code:Coding* item:.*",
   "Questionnaire.item":
-    "@B linkId definition code:Coding* prefix text type enableWhen:.* enableBehavior required repeats readOnly maxLength answerValueSet answerOption:.* initial:.* item:Questionnaire.item*",
+    "@B linkId definition code:Coding* prefix text type enableWhen:.* enableBehavior required:boolean repeats:boolean readOnly:boolean maxLength:number answerValueSet answerOption:.* initial:.* item:Questionnaire.item*",
   "Questionnaire.item.answerOption":
-    "@B valueInteger valueDate valueTime valueString valueCoding:Coding valueReference:Reference initialSelected",
+    "@B valueInteger:number valueDate valueTime valueString valueCoding:Coding valueReference:Reference initialSelected:boolean",
   "Questionnaire.item.enableWhen":
-    "@B question operator answerBoolean answerDecimal answerInteger answerDate answerDateTime answerTime answerString answerCoding:Coding answerQuantity:Quantity answerReference:Reference",
+    "@B question operator answerBoolean:boolean answerDecimal:number answerInteger:number answerDate answerDateTime answerTime answerString answerCoding:Coding answerQuantity:Quantity answerReference:Reference",
   "Questionnaire.item.initial":
-    "@B valueBoolean valueDecimal valueInteger valueDate valueDateTime valueTime valueString valueUri valueAttachment:Attachment valueCoding:Coding valueQuantity:Quantity valueReference:Reference",
+    "@B valueBoolean:boolean valueDecimal:number valueInteger:number valueDate valueDateTime valueTime valueString valueUri valueAttachment:Attachment valueCoding:Coding valueQuantity:Quantity valueReference:Reference",
   QuestionnaireResponse:
     "@D identifier:Identifier basedOn:Reference* partOf:Reference* questionnaire status subject:Reference encounter:Reference authored author:Reference source:Reference item:.*",
   "QuestionnaireResponse.item":
     "@B linkId definition text answer:.* item:QuestionnaireResponse.item*",
   "QuestionnaireResponse.item.answer":
-    "@B valueBoolean valueDecimal valueInteger valueDate valueDateTime valueTime valueString valueUri valueAttachment:Attachment valueCoding:Coding valueQuantity:Quantity valueReference:Reference item:QuestionnaireResponse.item*",
+    "@B valueBoolean:boolean valueDecimal:number valueInteger:number valueDate valueDateTime valueTime valueString valueUri valueAttachment:Attachment valueCoding:Coding valueQuantity:Quantity valueReference:Reference item:QuestionnaireResponse.item*",
   Range: "@E low:Quantity high:Quantity",
   Ratio: "@E numerator:Quantity denominator:Quantity",
   Reference: "@E reference type identifier:Identifier display",
   RelatedArtifact: "@E type label display citation url document:Attachment resource",
   RelatedPerson:
-    "@D identifier:Identifier* active patient:Reference relationship:CodeableConcept* name:HumanName* telecom:ContactPoint* gender birthDate address:Address* photo:Attachment* period:Period communication:.*",
-  "RelatedPerson.communication": "@B language:CodeableConcept preferred",
+    "@D identifier:Identifier* active:boolean patient:Reference relationship:CodeableConcept* name:HumanName* telecom:ContactPoint* gender birthDate address:Address* photo:Attachment* period:Period communication:.*",
+  "RelatedPerson.communication": "@B language:CodeableConcept preferred:boolean",
   RequestGroup:
     "@D identifier:Identifier* instantiatesCanonical* instantiatesUri* basedOn:Reference* replaces:Reference* groupIdentifier:Identifier status intent priority code:CodeableConcept subject:Reference encounter:Reference authoredOn author:Reference reasonCode:CodeableConcept* reasonReference:Reference* note:Annotation* action:.*",
   "RequestGroup.action":
@@ -808,11 +818,11 @@ export const FHIR_ELEMENT_NAMES: Readonly<Record<string, string>> = {
   "RequestGroup.action.relatedAction":
     "@B actionId relationship offsetDuration:Duration offsetRange:Range",
   ResearchDefinition:
-    "@D url identifier:Identifier* version name title shortTitle subtitle status experimental subjectCodeableConcept:CodeableConcept subjectReference:Reference date publisher contact:ContactDetail* description comment* useContext:UsageContext* jurisdiction:CodeableConcept* purpose usage copyright approvalDate lastReviewDate effectivePeriod:Period topic:CodeableConcept* author:ContactDetail* editor:ContactDetail* reviewer:ContactDetail* endorser:ContactDetail* relatedArtifact:RelatedArtifact* library* population:Reference exposure:Reference exposureAlternative:Reference outcome:Reference",
+    "@D url identifier:Identifier* version name title shortTitle subtitle status experimental:boolean subjectCodeableConcept:CodeableConcept subjectReference:Reference date publisher contact:ContactDetail* description comment* useContext:UsageContext* jurisdiction:CodeableConcept* purpose usage copyright approvalDate lastReviewDate effectivePeriod:Period topic:CodeableConcept* author:ContactDetail* editor:ContactDetail* reviewer:ContactDetail* endorser:ContactDetail* relatedArtifact:RelatedArtifact* library* population:Reference exposure:Reference exposureAlternative:Reference outcome:Reference",
   ResearchElementDefinition:
-    "@D url identifier:Identifier* version name title shortTitle subtitle status experimental subjectCodeableConcept:CodeableConcept subjectReference:Reference date publisher contact:ContactDetail* description comment* useContext:UsageContext* jurisdiction:CodeableConcept* purpose usage copyright approvalDate lastReviewDate effectivePeriod:Period topic:CodeableConcept* author:ContactDetail* editor:ContactDetail* reviewer:ContactDetail* endorser:ContactDetail* relatedArtifact:RelatedArtifact* library* type variableType characteristic:.*",
+    "@D url identifier:Identifier* version name title shortTitle subtitle status experimental:boolean subjectCodeableConcept:CodeableConcept subjectReference:Reference date publisher contact:ContactDetail* description comment* useContext:UsageContext* jurisdiction:CodeableConcept* purpose usage copyright approvalDate lastReviewDate effectivePeriod:Period topic:CodeableConcept* author:ContactDetail* editor:ContactDetail* reviewer:ContactDetail* endorser:ContactDetail* relatedArtifact:RelatedArtifact* library* type variableType characteristic:.*",
   "ResearchElementDefinition.characteristic":
-    "@B definitionCodeableConcept:CodeableConcept definitionCanonical definitionExpression:Expression definitionDataRequirement:DataRequirement usageContext:UsageContext* exclude unitOfMeasure:CodeableConcept studyEffectiveDescription studyEffectiveDateTime studyEffectivePeriod:Period studyEffectiveDuration:Duration studyEffectiveTiming:Timing studyEffectiveTimeFromStart:Duration studyEffectiveGroupMeasure participantEffectiveDescription participantEffectiveDateTime participantEffectivePeriod:Period participantEffectiveDuration:Duration participantEffectiveTiming:Timing participantEffectiveTimeFromStart:Duration participantEffectiveGroupMeasure",
+    "@B definitionCodeableConcept:CodeableConcept definitionCanonical definitionExpression:Expression definitionDataRequirement:DataRequirement usageContext:UsageContext* exclude:boolean unitOfMeasure:CodeableConcept studyEffectiveDescription studyEffectiveDateTime studyEffectivePeriod:Period studyEffectiveDuration:Duration studyEffectiveTiming:Timing studyEffectiveTimeFromStart:Duration studyEffectiveGroupMeasure participantEffectiveDescription participantEffectiveDateTime participantEffectivePeriod:Period participantEffectiveDuration:Duration participantEffectiveTiming:Timing participantEffectiveTimeFromStart:Duration participantEffectiveGroupMeasure",
   ResearchStudy:
     "@D identifier:Identifier* title protocol:Reference* partOf:Reference* status primaryPurposeType:CodeableConcept phase:CodeableConcept category:CodeableConcept* focus:CodeableConcept* condition:CodeableConcept* contact:ContactDetail* relatedArtifact:RelatedArtifact* keyword:CodeableConcept* location:CodeableConcept* description enrollment:Reference* period:Period sponsor:Reference principalInvestigator:Reference site:Reference* reasonStopped:CodeableConcept note:Annotation* arm:.* objective:.*",
   "ResearchStudy.arm": "@B name type:CodeableConcept description",
@@ -823,7 +833,7 @@ export const FHIR_ELEMENT_NAMES: Readonly<Record<string, string>> = {
   RiskAssessment:
     "@D identifier:Identifier* basedOn:Reference parent:Reference status method:CodeableConcept code:CodeableConcept subject:Reference encounter:Reference occurrenceDateTime occurrencePeriod:Period condition:Reference performer:Reference reasonCode:CodeableConcept* reasonReference:Reference* basis:Reference* prediction:.* mitigation note:Annotation*",
   "RiskAssessment.prediction":
-    "@B outcome:CodeableConcept probabilityDecimal probabilityRange:Range qualitativeRisk:CodeableConcept relativeRisk whenPeriod:Period whenRange:Range rationale",
+    "@B outcome:CodeableConcept probabilityDecimal:number probabilityRange:Range qualitativeRisk:CodeableConcept relativeRisk:number whenPeriod:Period whenRange:Range rationale",
   RiskEvidenceSynthesis:
     "@D url identifier:Identifier* version name title status date publisher contact:ContactDetail* description note:Annotation* useContext:UsageContext* jurisdiction:CodeableConcept* copyright approvalDate lastReviewDate effectivePeriod:Period topic:CodeableConcept* author:ContactDetail* editor:ContactDetail* reviewer:ContactDetail* endorser:ContactDetail* relatedArtifact:RelatedArtifact* synthesisType:CodeableConcept studyType:CodeableConcept population:Reference exposure:Reference outcome:Reference sampleSize:. riskEstimate:. certainty:.*",
   "RiskEvidenceSynthesis.certainty":
@@ -831,19 +841,22 @@ export const FHIR_ELEMENT_NAMES: Readonly<Record<string, string>> = {
   "RiskEvidenceSynthesis.certainty.certaintySubcomponent":
     "@B type:CodeableConcept rating:CodeableConcept* note:Annotation*",
   "RiskEvidenceSynthesis.riskEstimate":
-    "@B description type:CodeableConcept value unitOfMeasure:CodeableConcept denominatorCount numeratorCount precisionEstimate:.*",
-  "RiskEvidenceSynthesis.riskEstimate.precisionEstimate": "@B type:CodeableConcept level from to",
-  "RiskEvidenceSynthesis.sampleSize": "@B description numberOfStudies numberOfParticipants",
-  SampledData: "@E origin:Quantity period factor lowerLimit upperLimit dimensions data",
+    "@B description type:CodeableConcept value:number unitOfMeasure:CodeableConcept denominatorCount:number numeratorCount:number precisionEstimate:.*",
+  "RiskEvidenceSynthesis.riskEstimate.precisionEstimate":
+    "@B type:CodeableConcept level:number from:number to:number",
+  "RiskEvidenceSynthesis.sampleSize":
+    "@B description numberOfStudies:number numberOfParticipants:number",
+  SampledData:
+    "@E origin:Quantity period:number factor:number lowerLimit:number upperLimit:number dimensions:number data",
   Schedule:
-    "@D identifier:Identifier* active serviceCategory:CodeableConcept* serviceType:CodeableConcept* specialty:CodeableConcept* actor:Reference* planningHorizon:Period comment",
+    "@D identifier:Identifier* active:boolean serviceCategory:CodeableConcept* serviceType:CodeableConcept* specialty:CodeableConcept* actor:Reference* planningHorizon:Period comment",
   SearchParameter:
-    "@D url version name derivedFrom status experimental date publisher contact:ContactDetail* description useContext:UsageContext* jurisdiction:CodeableConcept* purpose code base* type expression xpath xpathUsage target* multipleOr multipleAnd comparator* modifier* chain* component:.*",
+    "@D url version name derivedFrom status experimental:boolean date publisher contact:ContactDetail* description useContext:UsageContext* jurisdiction:CodeableConcept* purpose code base* type expression xpath xpathUsage target* multipleOr:boolean multipleAnd:boolean comparator* modifier* chain* component:.*",
   "SearchParameter.component": "@B definition expression",
   ServiceRequest:
-    "@D identifier:Identifier* instantiatesCanonical* instantiatesUri* basedOn:Reference* replaces:Reference* requisition:Identifier status intent category:CodeableConcept* priority doNotPerform code:CodeableConcept orderDetail:CodeableConcept* quantityQuantity:Quantity quantityRatio:Ratio quantityRange:Range subject:Reference encounter:Reference occurrenceDateTime occurrencePeriod:Period occurrenceTiming:Timing asNeededBoolean asNeededCodeableConcept:CodeableConcept authoredOn requester:Reference performerType:CodeableConcept performer:Reference* locationCode:CodeableConcept* locationReference:Reference* reasonCode:CodeableConcept* reasonReference:Reference* insurance:Reference* supportingInfo:Reference* specimen:Reference* bodySite:CodeableConcept* note:Annotation* patientInstruction relevantHistory:Reference*",
+    "@D identifier:Identifier* instantiatesCanonical* instantiatesUri* basedOn:Reference* replaces:Reference* requisition:Identifier status intent category:CodeableConcept* priority doNotPerform:boolean code:CodeableConcept orderDetail:CodeableConcept* quantityQuantity:Quantity quantityRatio:Ratio quantityRange:Range subject:Reference encounter:Reference occurrenceDateTime occurrencePeriod:Period occurrenceTiming:Timing asNeededBoolean:boolean asNeededCodeableConcept:CodeableConcept authoredOn requester:Reference performerType:CodeableConcept performer:Reference* locationCode:CodeableConcept* locationReference:Reference* reasonCode:CodeableConcept* reasonReference:Reference* insurance:Reference* supportingInfo:Reference* specimen:Reference* bodySite:CodeableConcept* note:Annotation* patientInstruction relevantHistory:Reference*",
   Signature: "@E type:Coding* when who:Reference onBehalfOf:Reference targetFormat sigFormat data",
-  Slot: "@D identifier:Identifier* serviceCategory:CodeableConcept* serviceType:CodeableConcept* specialty:CodeableConcept* appointmentType:CodeableConcept schedule:Reference status start end overbooked comment",
+  Slot: "@D identifier:Identifier* serviceCategory:CodeableConcept* serviceType:CodeableConcept* specialty:CodeableConcept* appointmentType:CodeableConcept schedule:Reference status start end overbooked:boolean comment",
   Specimen:
     "@D identifier:Identifier* accessionIdentifier:Identifier status type:CodeableConcept subject:Reference receivedTime parent:Reference* request:Reference* collection:. processing:.* container:.* condition:CodeableConcept* note:Annotation*",
   "Specimen.collection":
@@ -855,7 +868,7 @@ export const FHIR_ELEMENT_NAMES: Readonly<Record<string, string>> = {
   SpecimenDefinition:
     "@D identifier:Identifier typeCollected:CodeableConcept patientPreparation:CodeableConcept* timeAspect collection:CodeableConcept* typeTested:.*",
   "SpecimenDefinition.typeTested":
-    "@B isDerived type:CodeableConcept preference container:. requirement retentionTime:Duration rejectionCriterion:CodeableConcept* handling:.*",
+    "@B isDerived:boolean type:CodeableConcept preference container:. requirement retentionTime:Duration rejectionCriterion:CodeableConcept* handling:.*",
   "SpecimenDefinition.typeTested.container":
     "@B material:CodeableConcept type:CodeableConcept cap:CodeableConcept description capacity:Quantity minimumVolumeQuantity:Quantity minimumVolumeString additive:.* preparation",
   "SpecimenDefinition.typeTested.container.additive":
@@ -863,24 +876,24 @@ export const FHIR_ELEMENT_NAMES: Readonly<Record<string, string>> = {
   "SpecimenDefinition.typeTested.handling":
     "@B temperatureQualifier:CodeableConcept temperatureRange:Range maxDuration:Duration instruction",
   StructureDefinition:
-    "@D url identifier:Identifier* version name title status experimental date publisher contact:ContactDetail* description useContext:UsageContext* jurisdiction:CodeableConcept* purpose copyright keyword:Coding* fhirVersion mapping:.* kind abstract context:.* contextInvariant* type baseDefinition derivation snapshot:. differential:.",
+    "@D url identifier:Identifier* version name title status experimental:boolean date publisher contact:ContactDetail* description useContext:UsageContext* jurisdiction:CodeableConcept* purpose copyright keyword:Coding* fhirVersion mapping:.* kind abstract:boolean context:.* contextInvariant* type baseDefinition derivation snapshot:. differential:.",
   "StructureDefinition.context": "@B type expression",
   "StructureDefinition.differential": "@B element:ElementDefinition*",
   "StructureDefinition.mapping": "@B identity uri name comment",
   "StructureDefinition.snapshot": "@B element:ElementDefinition*",
   StructureMap:
-    "@D url identifier:Identifier* version name title status experimental date publisher contact:ContactDetail* description useContext:UsageContext* jurisdiction:CodeableConcept* purpose copyright structure:.* import* group:.*",
+    "@D url identifier:Identifier* version name title status experimental:boolean date publisher contact:ContactDetail* description useContext:UsageContext* jurisdiction:CodeableConcept* purpose copyright structure:.* import* group:.*",
   "StructureMap.group": "@B name extends typeMode documentation input:.* rule:.*",
   "StructureMap.group.input": "@B name type mode documentation",
   "StructureMap.group.rule":
     "@B name source:.* target:.* rule:StructureMap.group.rule* dependent:.* documentation",
   "StructureMap.group.rule.dependent": "@B name variable*",
   "StructureMap.group.rule.source":
-    "@B context min max type defaultValueBase64Binary defaultValueBoolean defaultValueCanonical defaultValueCode defaultValueDate defaultValueDateTime defaultValueDecimal defaultValueId defaultValueInstant defaultValueInteger defaultValueMarkdown defaultValueOid defaultValuePositiveInt defaultValueString defaultValueTime defaultValueUnsignedInt defaultValueUri defaultValueUrl defaultValueUuid defaultValueAddress:Address defaultValueAge:Age defaultValueAnnotation:Annotation defaultValueAttachment:Attachment defaultValueCodeableConcept:CodeableConcept defaultValueCoding:Coding defaultValueContactPoint:ContactPoint defaultValueCount:Count defaultValueDistance:Distance defaultValueDuration:Duration defaultValueHumanName:HumanName defaultValueIdentifier:Identifier defaultValueMoney:Money defaultValuePeriod:Period defaultValueQuantity:Quantity defaultValueRange:Range defaultValueRatio:Ratio defaultValueReference:Reference defaultValueSampledData:SampledData defaultValueSignature:Signature defaultValueTiming:Timing defaultValueContactDetail:ContactDetail defaultValueContributor:Contributor defaultValueDataRequirement:DataRequirement defaultValueExpression:Expression defaultValueParameterDefinition:ParameterDefinition defaultValueRelatedArtifact:RelatedArtifact defaultValueTriggerDefinition:TriggerDefinition defaultValueUsageContext:UsageContext defaultValueDosage:Dosage defaultValueMeta:Meta element listMode variable condition check logMessage",
+    "@B context min:number max type defaultValueBase64Binary defaultValueBoolean:boolean defaultValueCanonical defaultValueCode defaultValueDate defaultValueDateTime defaultValueDecimal:number defaultValueId defaultValueInstant defaultValueInteger:number defaultValueMarkdown defaultValueOid defaultValuePositiveInt:number defaultValueString defaultValueTime defaultValueUnsignedInt:number defaultValueUri defaultValueUrl defaultValueUuid defaultValueAddress:Address defaultValueAge:Age defaultValueAnnotation:Annotation defaultValueAttachment:Attachment defaultValueCodeableConcept:CodeableConcept defaultValueCoding:Coding defaultValueContactPoint:ContactPoint defaultValueCount:Count defaultValueDistance:Distance defaultValueDuration:Duration defaultValueHumanName:HumanName defaultValueIdentifier:Identifier defaultValueMoney:Money defaultValuePeriod:Period defaultValueQuantity:Quantity defaultValueRange:Range defaultValueRatio:Ratio defaultValueReference:Reference defaultValueSampledData:SampledData defaultValueSignature:Signature defaultValueTiming:Timing defaultValueContactDetail:ContactDetail defaultValueContributor:Contributor defaultValueDataRequirement:DataRequirement defaultValueExpression:Expression defaultValueParameterDefinition:ParameterDefinition defaultValueRelatedArtifact:RelatedArtifact defaultValueTriggerDefinition:TriggerDefinition defaultValueUsageContext:UsageContext defaultValueDosage:Dosage defaultValueMeta:Meta element listMode variable condition check logMessage",
   "StructureMap.group.rule.target":
     "@B context contextType element variable listMode* listRuleId transform parameter:.*",
   "StructureMap.group.rule.target.parameter":
-    "@B valueId valueString valueBoolean valueInteger valueDecimal",
+    "@B valueId valueString valueBoolean:boolean valueInteger:number valueDecimal:number",
   "StructureMap.structure": "@B url mode alias documentation",
   Subscription: "@D status contact:ContactPoint* end reason criteria error channel:.",
   "Subscription.channel": "@B type endpoint payload header*",
@@ -893,27 +906,28 @@ export const FHIR_ELEMENT_NAMES: Readonly<Record<string, string>> = {
     "@B amountQuantity:Quantity amountRange:Range amountString amountType:CodeableConcept amountText referenceRange:.",
   "SubstanceAmount.referenceRange": "@E lowLimit:Quantity highLimit:Quantity",
   SubstanceNucleicAcid:
-    "@D sequenceType:CodeableConcept numberOfSubunits areaOfHybridisation oligoNucleotideType:CodeableConcept subunit:.*",
+    "@D sequenceType:CodeableConcept numberOfSubunits:number areaOfHybridisation oligoNucleotideType:CodeableConcept subunit:.*",
   "SubstanceNucleicAcid.subunit":
-    "@B subunit sequence length sequenceAttachment:Attachment fivePrime:CodeableConcept threePrime:CodeableConcept linkage:.* sugar:.*",
+    "@B subunit:number sequence length:number sequenceAttachment:Attachment fivePrime:CodeableConcept threePrime:CodeableConcept linkage:.* sugar:.*",
   "SubstanceNucleicAcid.subunit.linkage": "@B connectivity identifier:Identifier name residueSite",
   "SubstanceNucleicAcid.subunit.sugar": "@B identifier:Identifier name residueSite",
   SubstancePolymer:
     "@D class:CodeableConcept geometry:CodeableConcept copolymerConnectivity:CodeableConcept* modification* monomerSet:.* repeat:.*",
   "SubstancePolymer.monomerSet": "@B ratioType:CodeableConcept startingMaterial:.*",
   "SubstancePolymer.monomerSet.startingMaterial":
-    "@B material:CodeableConcept type:CodeableConcept isDefining amount:SubstanceAmount",
+    "@B material:CodeableConcept type:CodeableConcept isDefining:boolean amount:SubstanceAmount",
   "SubstancePolymer.repeat":
-    "@B numberOfUnits averageMolecularFormula repeatUnitAmountType:CodeableConcept repeatUnit:.*",
+    "@B numberOfUnits:number averageMolecularFormula repeatUnitAmountType:CodeableConcept repeatUnit:.*",
   "SubstancePolymer.repeat.repeatUnit":
     "@B orientationOfPolymerisation:CodeableConcept repeatUnit amount:SubstanceAmount degreeOfPolymerisation:.* structuralRepresentation:.*",
   "SubstancePolymer.repeat.repeatUnit.degreeOfPolymerisation":
     "@B degree:CodeableConcept amount:SubstanceAmount",
   "SubstancePolymer.repeat.repeatUnit.structuralRepresentation":
     "@B type:CodeableConcept representation attachment:Attachment",
-  SubstanceProtein: "@D sequenceType:CodeableConcept numberOfSubunits disulfideLinkage* subunit:.*",
+  SubstanceProtein:
+    "@D sequenceType:CodeableConcept numberOfSubunits:number disulfideLinkage* subunit:.*",
   "SubstanceProtein.subunit":
-    "@B subunit sequence length sequenceAttachment:Attachment nTerminalModificationId:Identifier nTerminalModification cTerminalModificationId:Identifier cTerminalModification",
+    "@B subunit:number sequence length:number sequenceAttachment:Attachment nTerminalModificationId:Identifier nTerminalModification cTerminalModificationId:Identifier cTerminalModification",
   SubstanceReferenceInformation: "@D comment gene:.* geneElement:.* classification:.* target:.*",
   "SubstanceReferenceInformation.classification":
     "@B domain:CodeableConcept classification:CodeableConcept subtype:CodeableConcept* source:Reference*",
@@ -941,13 +955,13 @@ export const FHIR_ELEMENT_NAMES: Readonly<Record<string, string>> = {
   "SubstanceSpecification.moiety":
     "@B role:CodeableConcept identifier:Identifier name stereochemistry:CodeableConcept opticalActivity:CodeableConcept molecularFormula amountQuantity:Quantity amountString",
   "SubstanceSpecification.name":
-    "@B name type:CodeableConcept status:CodeableConcept preferred language:CodeableConcept* domain:CodeableConcept* jurisdiction:CodeableConcept* synonym:SubstanceSpecification.name* translation:SubstanceSpecification.name* official:.* source:Reference*",
+    "@B name type:CodeableConcept status:CodeableConcept preferred:boolean language:CodeableConcept* domain:CodeableConcept* jurisdiction:CodeableConcept* synonym:SubstanceSpecification.name* translation:SubstanceSpecification.name* official:.* source:Reference*",
   "SubstanceSpecification.name.official":
     "@B authority:CodeableConcept status:CodeableConcept date",
   "SubstanceSpecification.property":
     "@B category:CodeableConcept code:CodeableConcept parameters definingSubstanceReference:Reference definingSubstanceCodeableConcept:CodeableConcept amountQuantity:Quantity amountString",
   "SubstanceSpecification.relationship":
-    "@B substanceReference:Reference substanceCodeableConcept:CodeableConcept relationship:CodeableConcept isDefining amountQuantity:Quantity amountRange:Range amountRatio:Ratio amountString amountRatioLowLimit:Ratio amountType:CodeableConcept source:Reference*",
+    "@B substanceReference:Reference substanceCodeableConcept:CodeableConcept relationship:CodeableConcept isDefining:boolean amountQuantity:Quantity amountRange:Range amountRatio:Ratio amountString amountRatioLowLimit:Ratio amountType:CodeableConcept source:Reference*",
   "SubstanceSpecification.structure":
     "@B stereochemistry:CodeableConcept opticalActivity:CodeableConcept molecularFormula molecularFormulaByMoiety isotope:.* molecularWeight:SubstanceSpecification.structure.isotope.molecularWeight source:Reference* representation:.*",
   "SubstanceSpecification.structure.isotope":
@@ -963,28 +977,29 @@ export const FHIR_ELEMENT_NAMES: Readonly<Record<string, string>> = {
   SupplyRequest:
     "@D identifier:Identifier* status category:CodeableConcept priority itemCodeableConcept:CodeableConcept itemReference:Reference quantity:Quantity parameter:.* occurrenceDateTime occurrencePeriod:Period occurrenceTiming:Timing authoredOn requester:Reference supplier:Reference* reasonCode:CodeableConcept* reasonReference:Reference* deliverFrom:Reference deliverTo:Reference",
   "SupplyRequest.parameter":
-    "@B code:CodeableConcept valueCodeableConcept:CodeableConcept valueQuantity:Quantity valueRange:Range valueBoolean",
+    "@B code:CodeableConcept valueCodeableConcept:CodeableConcept valueQuantity:Quantity valueRange:Range valueBoolean:boolean",
   Task: "@D identifier:Identifier* instantiatesCanonical instantiatesUri basedOn:Reference* groupIdentifier:Identifier partOf:Reference* status statusReason:CodeableConcept businessStatus:CodeableConcept intent priority code:CodeableConcept description focus:Reference for:Reference encounter:Reference executionPeriod:Period authoredOn lastModified requester:Reference performerType:CodeableConcept* owner:Reference location:Reference reasonCode:CodeableConcept reasonReference:Reference insurance:Reference* note:Annotation* relevantHistory:Reference* restriction:. input:.* output:.*",
   "Task.input":
-    "@B type:CodeableConcept valueBase64Binary valueBoolean valueCanonical valueCode valueDate valueDateTime valueDecimal valueId valueInstant valueInteger valueMarkdown valueOid valuePositiveInt valueString valueTime valueUnsignedInt valueUri valueUrl valueUuid valueAddress:Address valueAge:Age valueAnnotation:Annotation valueAttachment:Attachment valueCodeableConcept:CodeableConcept valueCoding:Coding valueContactPoint:ContactPoint valueCount:Count valueDistance:Distance valueDuration:Duration valueHumanName:HumanName valueIdentifier:Identifier valueMoney:Money valuePeriod:Period valueQuantity:Quantity valueRange:Range valueRatio:Ratio valueReference:Reference valueSampledData:SampledData valueSignature:Signature valueTiming:Timing valueContactDetail:ContactDetail valueContributor:Contributor valueDataRequirement:DataRequirement valueExpression:Expression valueParameterDefinition:ParameterDefinition valueRelatedArtifact:RelatedArtifact valueTriggerDefinition:TriggerDefinition valueUsageContext:UsageContext valueDosage:Dosage valueMeta:Meta",
+    "@B type:CodeableConcept valueBase64Binary valueBoolean:boolean valueCanonical valueCode valueDate valueDateTime valueDecimal:number valueId valueInstant valueInteger:number valueMarkdown valueOid valuePositiveInt:number valueString valueTime valueUnsignedInt:number valueUri valueUrl valueUuid valueAddress:Address valueAge:Age valueAnnotation:Annotation valueAttachment:Attachment valueCodeableConcept:CodeableConcept valueCoding:Coding valueContactPoint:ContactPoint valueCount:Count valueDistance:Distance valueDuration:Duration valueHumanName:HumanName valueIdentifier:Identifier valueMoney:Money valuePeriod:Period valueQuantity:Quantity valueRange:Range valueRatio:Ratio valueReference:Reference valueSampledData:SampledData valueSignature:Signature valueTiming:Timing valueContactDetail:ContactDetail valueContributor:Contributor valueDataRequirement:DataRequirement valueExpression:Expression valueParameterDefinition:ParameterDefinition valueRelatedArtifact:RelatedArtifact valueTriggerDefinition:TriggerDefinition valueUsageContext:UsageContext valueDosage:Dosage valueMeta:Meta",
   "Task.output":
-    "@B type:CodeableConcept valueBase64Binary valueBoolean valueCanonical valueCode valueDate valueDateTime valueDecimal valueId valueInstant valueInteger valueMarkdown valueOid valuePositiveInt valueString valueTime valueUnsignedInt valueUri valueUrl valueUuid valueAddress:Address valueAge:Age valueAnnotation:Annotation valueAttachment:Attachment valueCodeableConcept:CodeableConcept valueCoding:Coding valueContactPoint:ContactPoint valueCount:Count valueDistance:Distance valueDuration:Duration valueHumanName:HumanName valueIdentifier:Identifier valueMoney:Money valuePeriod:Period valueQuantity:Quantity valueRange:Range valueRatio:Ratio valueReference:Reference valueSampledData:SampledData valueSignature:Signature valueTiming:Timing valueContactDetail:ContactDetail valueContributor:Contributor valueDataRequirement:DataRequirement valueExpression:Expression valueParameterDefinition:ParameterDefinition valueRelatedArtifact:RelatedArtifact valueTriggerDefinition:TriggerDefinition valueUsageContext:UsageContext valueDosage:Dosage valueMeta:Meta",
-  "Task.restriction": "@B repetitions period:Period recipient:Reference*",
+    "@B type:CodeableConcept valueBase64Binary valueBoolean:boolean valueCanonical valueCode valueDate valueDateTime valueDecimal:number valueId valueInstant valueInteger:number valueMarkdown valueOid valuePositiveInt:number valueString valueTime valueUnsignedInt:number valueUri valueUrl valueUuid valueAddress:Address valueAge:Age valueAnnotation:Annotation valueAttachment:Attachment valueCodeableConcept:CodeableConcept valueCoding:Coding valueContactPoint:ContactPoint valueCount:Count valueDistance:Distance valueDuration:Duration valueHumanName:HumanName valueIdentifier:Identifier valueMoney:Money valuePeriod:Period valueQuantity:Quantity valueRange:Range valueRatio:Ratio valueReference:Reference valueSampledData:SampledData valueSignature:Signature valueTiming:Timing valueContactDetail:ContactDetail valueContributor:Contributor valueDataRequirement:DataRequirement valueExpression:Expression valueParameterDefinition:ParameterDefinition valueRelatedArtifact:RelatedArtifact valueTriggerDefinition:TriggerDefinition valueUsageContext:UsageContext valueDosage:Dosage valueMeta:Meta",
+  "Task.restriction": "@B repetitions:number period:Period recipient:Reference*",
   TerminologyCapabilities:
-    "@D url version name title status experimental date publisher contact:ContactDetail* description useContext:UsageContext* jurisdiction:CodeableConcept* purpose copyright kind software:. implementation:. lockedDate codeSystem:.* expansion:. codeSearch validateCode:. translation:. closure:.",
-  "TerminologyCapabilities.closure": "@B translation",
-  "TerminologyCapabilities.codeSystem": "@B uri version:.* subsumption",
+    "@D url version name title status experimental:boolean date publisher contact:ContactDetail* description useContext:UsageContext* jurisdiction:CodeableConcept* purpose copyright kind software:. implementation:. lockedDate:boolean codeSystem:.* expansion:. codeSearch validateCode:. translation:. closure:.",
+  "TerminologyCapabilities.closure": "@B translation:boolean",
+  "TerminologyCapabilities.codeSystem": "@B uri version:.* subsumption:boolean",
   "TerminologyCapabilities.codeSystem.version":
-    "@B code isDefault compositional language* filter:.* property*",
+    "@B code isDefault:boolean compositional:boolean language* filter:.* property*",
   "TerminologyCapabilities.codeSystem.version.filter": "@B code op*",
-  "TerminologyCapabilities.expansion": "@B hierarchical paging incomplete parameter:.* textFilter",
+  "TerminologyCapabilities.expansion":
+    "@B hierarchical:boolean paging:boolean incomplete:boolean parameter:.* textFilter",
   "TerminologyCapabilities.expansion.parameter": "@B name documentation",
   "TerminologyCapabilities.implementation": "@B description url",
   "TerminologyCapabilities.software": "@B name version",
-  "TerminologyCapabilities.translation": "@B needsMap",
-  "TerminologyCapabilities.validateCode": "@B translations",
+  "TerminologyCapabilities.translation": "@B needsMap:boolean",
+  "TerminologyCapabilities.validateCode": "@B translations:boolean",
   TestReport:
-    "@D identifier:Identifier name status testScript:Reference result score tester issued participant:.* setup:. test:.* teardown:.",
+    "@D identifier:Identifier name status testScript:Reference result score:number tester issued participant:.* setup:. test:.* teardown:.",
   "TestReport.participant": "@B type uri display",
   "TestReport.setup": "@B action:.*",
   "TestReport.setup.action": "@B operation:. assert:.",
@@ -996,20 +1011,20 @@ export const FHIR_ELEMENT_NAMES: Readonly<Record<string, string>> = {
   "TestReport.test.action":
     "@B operation:TestReport.setup.action.operation assert:TestReport.setup.action.assert",
   TestScript:
-    "@D url identifier:Identifier version name title status experimental date publisher contact:ContactDetail* description useContext:UsageContext* jurisdiction:CodeableConcept* purpose copyright origin:.* destination:.* metadata:. fixture:.* profile:Reference* variable:.* setup:. test:.* teardown:.",
-  "TestScript.destination": "@B index profile:Coding",
-  "TestScript.fixture": "@B autocreate autodelete resource:Reference",
+    "@D url identifier:Identifier version name title status experimental:boolean date publisher contact:ContactDetail* description useContext:UsageContext* jurisdiction:CodeableConcept* purpose copyright origin:.* destination:.* metadata:. fixture:.* profile:Reference* variable:.* setup:. test:.* teardown:.",
+  "TestScript.destination": "@B index:number profile:Coding",
+  "TestScript.fixture": "@B autocreate:boolean autodelete:boolean resource:Reference",
   "TestScript.metadata": "@B link:.* capability:.*",
   "TestScript.metadata.capability":
-    "@B required validated description origin* destination link* capabilities",
+    "@B required:boolean validated:boolean description origin:number* destination:number link* capabilities",
   "TestScript.metadata.link": "@B url description",
-  "TestScript.origin": "@B index profile:Coding",
+  "TestScript.origin": "@B index:number profile:Coding",
   "TestScript.setup": "@B action:.*",
   "TestScript.setup.action": "@B operation:. assert:.",
   "TestScript.setup.action.assert":
-    "@B label description direction compareToSourceId compareToSourceExpression compareToSourcePath contentType expression headerField minimumId navigationLinks operator path requestMethod requestURL resource response responseCode sourceId validateProfileId value warningOnly",
+    "@B label description direction compareToSourceId compareToSourceExpression compareToSourcePath contentType expression headerField minimumId navigationLinks:boolean operator path requestMethod requestURL resource response responseCode sourceId validateProfileId value warningOnly:boolean",
   "TestScript.setup.action.operation":
-    "@B type:Coding resource label description accept contentType destination encodeRequestUrl method origin params requestHeader:.* requestId responseId sourceId targetId url",
+    "@B type:Coding resource label description accept contentType destination:number encodeRequestUrl:boolean method origin:number params requestHeader:.* requestId responseId sourceId targetId url",
   "TestScript.setup.action.operation.requestHeader": "@B field value",
   "TestScript.teardown": "@B action:.*",
   "TestScript.teardown.action": "@B operation:TestScript.setup.action.operation",
@@ -1020,23 +1035,24 @@ export const FHIR_ELEMENT_NAMES: Readonly<Record<string, string>> = {
     "@B name defaultValue description expression headerField hint path sourceId",
   Timing: "@B event* repeat:. code:CodeableConcept",
   "Timing.repeat":
-    "@E boundsDuration:Duration boundsRange:Range boundsPeriod:Period count countMax duration durationMax durationUnit frequency frequencyMax period periodMax periodUnit dayOfWeek* timeOfDay* when* offset",
+    "@E boundsDuration:Duration boundsRange:Range boundsPeriod:Period count:number countMax:number duration:number durationMax:number durationUnit frequency:number frequencyMax:number period:number periodMax:number periodUnit dayOfWeek* timeOfDay* when* offset:number",
   TriggerDefinition:
     "@E type name timingTiming:Timing timingReference:Reference timingDate timingDateTime data:DataRequirement* condition:Expression",
   UsageContext:
     "@E code:Coding valueCodeableConcept:CodeableConcept valueQuantity:Quantity valueRange:Range valueReference:Reference",
   ValueSet:
-    "@D url identifier:Identifier* version name title status experimental date publisher contact:ContactDetail* description useContext:UsageContext* jurisdiction:CodeableConcept* immutable purpose copyright compose:. expansion:.",
-  "ValueSet.compose": "@B lockedDate inactive include:.* exclude:ValueSet.compose.include*",
+    "@D url identifier:Identifier* version name title status experimental:boolean date publisher contact:ContactDetail* description useContext:UsageContext* jurisdiction:CodeableConcept* immutable:boolean purpose copyright compose:. expansion:.",
+  "ValueSet.compose": "@B lockedDate inactive:boolean include:.* exclude:ValueSet.compose.include*",
   "ValueSet.compose.include": "@B system version concept:.* filter:.* valueSet*",
   "ValueSet.compose.include.concept": "@B code display designation:.*",
   "ValueSet.compose.include.concept.designation": "@B language use:Coding value",
   "ValueSet.compose.include.filter": "@B property op value",
-  "ValueSet.expansion": "@B identifier timestamp total offset parameter:.* contains:.*",
+  "ValueSet.expansion":
+    "@B identifier timestamp total:number offset:number parameter:.* contains:.*",
   "ValueSet.expansion.contains":
-    "@B system abstract inactive version code display designation:ValueSet.compose.include.concept.designation* contains:ValueSet.expansion.contains*",
+    "@B system abstract:boolean inactive:boolean version code display designation:ValueSet.compose.include.concept.designation* contains:ValueSet.expansion.contains*",
   "ValueSet.expansion.parameter":
-    "@B name valueString valueBoolean valueInteger valueDecimal valueUri valueCode valueDateTime",
+    "@B name valueString valueBoolean:boolean valueInteger:number valueDecimal:number valueUri valueCode valueDateTime",
   VerificationResult:
     "@D target:Reference* targetLocation* need:CodeableConcept status statusDate validationType:CodeableConcept validationProcess:CodeableConcept* frequency:Timing lastPerformed nextScheduled failureAction:CodeableConcept primarySource:.* attestation:. validator:.*",
   "VerificationResult.attestation":
@@ -1048,8 +1064,8 @@ export const FHIR_ELEMENT_NAMES: Readonly<Record<string, string>> = {
   VisionPrescription:
     "@D identifier:Identifier* status created patient:Reference encounter:Reference dateWritten prescriber:Reference lensSpecification:.*",
   "VisionPrescription.lensSpecification":
-    "@B product:CodeableConcept eye sphere cylinder axis prism:.* add power backCurve diameter duration:Quantity color brand note:Annotation*",
-  "VisionPrescription.lensSpecification.prism": "@B amount base",
+    "@B product:CodeableConcept eye sphere:number cylinder:number axis:number prism:.* add:number power:number backCurve:number diameter:number duration:Quantity color brand note:Annotation*",
+  "VisionPrescription.lensSpecification.prism": "@B amount:number base",
 };
 
 /**

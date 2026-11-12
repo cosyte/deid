@@ -49,11 +49,13 @@ describe("a key R4 does not define is blocked at any depth", () => {
     expect(json).not.toContain("ZZCODINGNOTE");
     expect(json).not.toContain("zzNote");
     expect(json).toContain('"code":"2951-2"');
-    const row = rowAt(manifest, "Observation.code.coding[0].zzNote");
+    const row = rowAt(manifest, "Observation.code.coding[0].<withheld>[2]");
     expect(row).toMatchObject({ disposition: "blocked" });
     expect(JSON.stringify(manifest)).not.toContain("ZZCODINGNOTE");
+    // the row names the key's position, never the key the sender chose
+    expect(JSON.stringify(manifest)).not.toContain("zzNote");
     expect(unexaminedResiduals.map((r) => r.locus)).not.toContain(
-      "Observation.code.coding[0].zzNote",
+      "Observation.code.coding[0].<withheld>[2]",
     );
   });
 
@@ -72,12 +74,12 @@ describe("a key R4 does not define is blocked at any depth", () => {
       expect(json).not.toContain(s);
     }
     for (const locus of [
-      "Observation.zzTop",
-      "Observation.zzObject",
-      "Observation.component[0].zzPart",
-      "Observation.valueQuantity.zzUnitNote",
-      "Observation.subject.zzName",
-      "Observation.meta.zzOwner",
+      "Observation.<withheld>[2]",
+      "Observation.<withheld>[3]",
+      "Observation.component[0].<withheld>[1]",
+      "Observation.valueQuantity.<withheld>[2]",
+      "Observation.subject.<withheld>[1]",
+      "Observation.meta.<withheld>[1]",
     ]) {
       expect(rowAt(manifest, locus)).toMatchObject({ disposition: "blocked" });
     }
@@ -86,7 +88,8 @@ describe("a key R4 does not define is blocked at any depth", () => {
     expect(json).toContain('"unit":"mg"');
     expect(json).toContain('"versionId":"1"');
     // one row for a key holding a structure, none below it
-    expect(manifest.filter((m) => m.locus.startsWith("Observation.zzObject"))).toHaveLength(1);
+    expect(manifest.filter((m) => m.locus.startsWith("Observation.<withheld>[3]"))).toHaveLength(1);
+    expect(JSON.stringify(manifest)).not.toMatch(/zz[A-Z]/);
   });
 
   it("on a person resource, below its top level, and in an infrastructure resource", () => {
@@ -133,13 +136,14 @@ describe("a key R4 does not define is blocked at any depth", () => {
       expect(json).not.toContain(s);
     }
     const loci = manifest.map((m) => m.locus);
-    expect(loci).toContain("Bundle.zzBundleNote");
-    expect(loci).toContain("Bundle.entry[0].zzEntryNote");
-    expect(loci).toContain("Bundle.entry[0].request.zzRequestNote");
-    expect(loci).toContain("Bundle.entry[0].resource.communication[0].zzNote");
-    expect(loci).toContain("Bundle.entry[0].resource.maritalStatus.coding[0].zzNote");
-    expect(loci).toContain("Bundle.entry[1].resource.deviceName[0].zzNote");
-    expect(loci).toContain("Bundle.entry[2].resource.agent[0].zzNote");
+    expect(loci).toContain("Bundle.<withheld>[2]");
+    expect(loci).toContain("Bundle.entry[0].<withheld>[0]");
+    expect(loci).toContain("Bundle.entry[0].request.<withheld>[2]");
+    expect(loci).toContain("Bundle.entry[0].resource.communication[0].<withheld>[1]");
+    expect(loci).toContain("Bundle.entry[0].resource.maritalStatus.coding[0].<withheld>[1]");
+    expect(loci).toContain("Bundle.entry[1].resource.deviceName[0].<withheld>[2]");
+    expect(loci).toContain("Bundle.entry[2].resource.agent[0].<withheld>[1]");
+    expect(JSON.stringify(manifest)).not.toMatch(/zz[A-Z]/);
     expect(json).toContain('"name":"zz pump"');
   });
 
@@ -151,7 +155,7 @@ describe("a key R4 does not define is blocked at any depth", () => {
     });
     expect(json).not.toContain("ZZCONT");
     expect(json).toContain('"name":"zz org"');
-    expect(rowAt(manifest, "Observation.contained[0].zzNote")).toMatchObject({
+    expect(rowAt(manifest, "Observation.contained[0].<withheld>[3]")).toMatchObject({
       disposition: "blocked",
     });
   });
@@ -198,14 +202,17 @@ describe("a key R4 does not define is blocked at any depth", () => {
     expect(kept.manifest).toEqual([]);
   });
 
-  it("an unknown key in an address is named, and gone", () => {
+  it("an unknown key in an address is located by its position, and gone", () => {
     const { json, manifest } = run({
       resourceType: "Patient",
       address: [{ state: "MA", postalCode: "02139", zzNote: "ZZADDRNOTE" }],
     });
     expect(json).not.toContain("ZZADDRNOTE");
     expect(json).toContain('"state":"MA"');
-    expect(manifest.map((m) => m.locus)).toEqual(["Patient.address", "Patient.address.zzNote"]);
+    expect(manifest.map((m) => m.locus)).toEqual([
+      "Patient.address",
+      "Patient.address.<withheld>[2]",
+    ]);
 
     // Two addresses are located by their index; what an Address defines is not named.
     const two = run({
@@ -219,7 +226,7 @@ describe("a key R4 does not define is blocked at any depth", () => {
     expect(two.manifest.map((m) => m.locus)).toEqual([
       "Patient.address[0]",
       "Patient.address[1]",
-      "Patient.address[1].zzNote",
+      "Patient.address[1].<withheld>[1]",
     ]);
   });
 
@@ -245,9 +252,9 @@ describe("a key R4 does not define is blocked at any depth", () => {
       birthDate: "1980-04-02",
     });
     expect(manifest.map((m) => m.locus)).toEqual([
-      "Patient.zzFirst",
+      "Patient.<withheld>[1]",
       "Patient.name",
-      "Patient.zzSecond",
+      "Patient.<withheld>[3]",
       "Patient.birthDate",
     ]);
   });
@@ -268,7 +275,7 @@ describe("a key R4 does not define is blocked at any depth", () => {
       code: { coding: [{ resourceType: "Basic", code: "x" }] },
     });
     expect(json).not.toContain("Basic");
-    expect(manifest.map((m) => m.locus)).toEqual(["Observation.code.coding[0].resourceType"]);
+    expect(manifest.map((m) => m.locus)).toEqual(["Observation.code.coding[0].<withheld>[0]"]);
   });
 
   it("an extension and a modifier extension keep their own rule: the url stays, no extra row", () => {

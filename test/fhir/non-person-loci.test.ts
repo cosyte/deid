@@ -572,7 +572,7 @@ describe("fail closed: a newly reached element the pass cannot handle faithfully
     });
     expect(vendor.json).not.toContain("ZZLOC");
     expect(vendor.manifest.map((m) => `${m.locus} ${m.disposition}`)).toEqual([
-      "Claim.accident.vendorLocation blocked",
+      "Claim.accident.<withheld>[0] blocked",
     ]);
   });
 

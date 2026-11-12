@@ -345,13 +345,18 @@ describe("derived-identifier loci: a conforming identifier is byte-identical", (
     expect(manifest.map((e) => e.locus)).toContain("ZPI-1");
   });
 
-  it("fhir: a spec-shaped element name keeps its own spelling in the locus", () => {
+  // An element name R4 defines keeps its spelling. A key R4 does not define is the sender's text, so
+  // its row names its position (`<withheld>[2]`) whatever its shape.
+  it("fhir: an element name R4 defines keeps its own spelling in the locus", () => {
     const json = JSON.stringify({
       resourceType: "Patient",
       id: "zz-pat-3",
+      name: [{ family: "Zzvendorvalue" }],
       unrecognizedElement: "ZZVENDORVALUE",
     });
     const { manifest } = deidentifyFhir(parseResource(json).resource, { context: ctx() });
-    expect(manifest.map((e) => e.locus)).toContain("Patient.unrecognizedElement");
+    expect(manifest.map((e) => e.locus)).toContain("Patient.name");
+    expect(manifest.map((e) => e.locus)).toContain(`Patient.${WITHHELD_LOCUS_TOKEN}[3]`);
+    expect(manifest.map((e) => e.locus)).not.toContain("Patient.unrecognizedElement");
   });
 });

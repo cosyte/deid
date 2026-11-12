@@ -530,10 +530,21 @@ const elementIdArb: fc.Arbitrary<number> = fc.nat({ max: ELEMENT_ID_SPOTS.length
  * resource (contained, in a Bundle entry) belongs; a structure where a primitive belongs; a list
  * where one value belongs and one value where a list belongs; and a resource whose type is missing,
  * is the sentinel itself, or is one R4 does not define, contained or in a Bundle entry.
+ *
+ * Then each kind of position a primitive of a JSON type R4 does not give it can sit at: the sentinel
+ * as a string where R4 puts a boolean, an integer or a decimal, and as a number
+ * ({@link numericSentinel}) where R4 puts a string, at the top level, in a datatype, in a datatype
+ * inside one, in a backbone, in a choice element and in a nested backbone, on a person, a clinical
+ * and an infrastructure resource. And the sentinel as a key R4 does not define, which no row may
+ * repeat: at the top level, in a datatype, in an extension and in a contained resource.
+ *
+ * A spot with a `text` places that text in place of the sentinel, and it is that text which must not
+ * come back.
  */
 const UNKNOWN_KEY_SPOTS: readonly {
   readonly where: string;
   readonly put: (resource: JsonObject, sentinel: string) => void;
+  readonly text?: (sentinel: string) => string;
 }[] = [
   { where: "zzTop", put: (r, s) => (r["zzTop"] = s) },
   { where: "zzDetail", put: (r, s) => (r["zzDetail"] = { who: s, list: [s] }) },
@@ -750,6 +761,160 @@ const UNKNOWN_KEY_SPOTS: readonly {
     put: (r, s) => {
       pushTo(r, "contained", { id: "zzn", implicitRules: s, meta: { source: s } });
     },
+  }, // A string where R4 puts a boolean, an integer or a decimal.
+  {
+    where: "meta.tag[0].userSelected as a string",
+    put: (r, s) => (r["meta"] = { tag: [{ code: "t", userSelected: s }] }),
+  },
+  ...(
+    [
+      ["valueBoolean", (s: string): JsonObject => ({ valueBoolean: s })],
+      ["valueInteger", (s: string): JsonObject => ({ valueInteger: s })],
+      ["valueQuantity.value", (s: string): JsonObject => ({ valueQuantity: { value: s } })],
+      ["valueRange.low.value", (s: string): JsonObject => ({ valueRange: { low: { value: s } } })],
+      [
+        "component[0].valueBoolean",
+        (s: string): JsonObject => ({ component: [{ code: { text: "zz" }, valueBoolean: s }] }),
+      ],
+      [
+        "component[0].valueInteger",
+        (s: string): JsonObject => ({ component: [{ code: { text: "zz" }, valueInteger: s }] }),
+      ],
+    ] as const
+  ).map(([where, fields]) => ({
+    where: `contained Observation ${where} as a string`,
+    put: (r: JsonObject, s: string) => {
+      pushTo(r, "contained", { resourceType: "Observation", status: "final", ...fields(s) });
+    },
+  })),
+  ...(["valueBoolean", "valueInteger", "valueDecimal"] as const).map((key) => ({
+    where: `contained QuestionnaireResponse item[0].answer[0].${key} as a string`,
+    put: (r: JsonObject, s: string) => {
+      pushTo(r, "contained", {
+        resourceType: "QuestionnaireResponse",
+        status: "completed",
+        item: [{ linkId: "1", answer: [{ [key]: s }] }],
+      });
+    },
+  })),
+  {
+    where: "contained Parameters parameter[0].valueBoolean as a string",
+    put: (r, s) => {
+      pushTo(r, "contained", {
+        resourceType: "Parameters",
+        parameter: [{ name: "a", valueBoolean: s }],
+      });
+    },
+  },
+  {
+    where: "contained Bundle total as a string",
+    put: (r, s) => {
+      pushTo(r, "contained", { resourceType: "Bundle", type: "searchset", total: s });
+    },
+  },
+  {
+    where: "contained Patient active as a string",
+    put: (r, s) => {
+      pushTo(r, "contained", { resourceType: "Patient", active: s });
+    },
+  },
+  {
+    where: "contained AuditEvent agent[0].requestor as a string",
+    put: (r, s) => {
+      pushTo(r, "contained", {
+        resourceType: "AuditEvent",
+        recorded: "2024-01-15T08:00:00Z",
+        agent: [{ requestor: s }],
+      });
+    },
+  },
+  // A number where R4 puts a string.
+  {
+    where: "meta.versionId as a number",
+    put: (r, s) => (r["meta"] = { versionId: numericSentinel(s) }),
+    text: numericText,
+  },
+  {
+    where: "meta.tag[0].display as a number",
+    put: (r, s) => (r["meta"] = { tag: [{ code: "t", display: numericSentinel(s) }] }),
+    text: numericText,
+  },
+  ...(
+    [
+      ["valueString", (n: number): JsonObject => ({ valueString: n })],
+      ["code.text", (n: number): JsonObject => ({ code: { text: n } })],
+      [
+        "component[0].valueString",
+        (n: number): JsonObject => ({ component: [{ code: { text: "zz" }, valueString: n }] }),
+      ],
+    ] as const
+  ).map(([where, fields]) => ({
+    where: `contained Observation ${where} as a number`,
+    put: (r: JsonObject, s: string) => {
+      pushTo(r, "contained", {
+        resourceType: "Observation",
+        status: "final",
+        ...fields(numericSentinel(s)),
+      });
+    },
+    text: numericText,
+  })),
+  {
+    where: "contained QuestionnaireResponse item[0].answer[0].valueString as a number",
+    put: (r, s) => {
+      pushTo(r, "contained", {
+        resourceType: "QuestionnaireResponse",
+        status: "completed",
+        item: [{ linkId: "1", answer: [{ valueString: numericSentinel(s) }] }],
+      });
+    },
+    text: numericText,
+  },
+  {
+    where: "contained Encounter reasonCode[0].text as a number",
+    put: (r, s) => {
+      pushTo(r, "contained", {
+        resourceType: "Encounter",
+        status: "finished",
+        reasonCode: [{ text: numericSentinel(s) }],
+      });
+    },
+    text: numericText,
+  },
+  {
+    where: "contained Patient name[0].family as a number",
+    put: (r, s) => {
+      pushTo(r, "contained", { resourceType: "Patient", name: [{ family: numericSentinel(s) }] });
+    },
+    text: numericText,
+  },
+  {
+    where: "contained Device deviceName[0].name as a number",
+    put: (r, s) => {
+      pushTo(r, "contained", {
+        resourceType: "Device",
+        deviceName: [{ name: numericSentinel(s), type: "user-friendly-name" }],
+      });
+    },
+    text: numericText,
+  },
+  // The sentinel as a key R4 does not define, which no row may repeat.
+  { where: "the sentinel as a top-level key", put: (r, s) => (r[s] = "zz") },
+  {
+    where: "the sentinel as a key in meta.tag[0]",
+    put: (r, s) => (r["meta"] = { tag: [{ code: "t", [s]: true }] }),
+  },
+  {
+    where: "the sentinel as a key in an extension",
+    put: (r, s) => {
+      pushTo(r, "extension", { url: "http://example.org/zz", [s]: "zz" });
+    },
+  },
+  {
+    where: "the sentinel as a key in a contained resource",
+    put: (r, s) => {
+      pushTo(r, "contained", { resourceType: "Basic", code: { text: "zz" }, [s]: { zz: "zz" } });
+    },
   },
 ];
 
@@ -831,6 +996,21 @@ const REFERENCES: Readonly<Record<string, ReferenceSpot>> = {
   },
 };
 
+/**
+ * A number standing for a sentinel, for a position where the sentinel is placed as a JSON number: twelve
+ * digits read from the sentinel's own characters, so two sentinels of a case give two numbers.
+ */
+export function numericSentinel(sentinel: string): number {
+  let hash = 2166136261;
+  for (const ch of sentinel) hash = Math.imul(hash ^ (ch.codePointAt(0) ?? 0), 16777619) >>> 0;
+  return 800_000_000_000 + (hash % 100_000_000_000);
+}
+
+/** {@link numericSentinel} as the text it is written as. */
+function numericText(sentinel: string): string {
+  return String(numericSentinel(sentinel));
+}
+
 const unknownKeyArb: fc.Arbitrary<number> = fc.nat({ max: UNKNOWN_KEY_SPOTS.length - 1 });
 
 /** A sentinel under an unknown key as placed: where, and the sentinel that must not come back. */
@@ -844,7 +1024,7 @@ function placeUnknownKey(resource: JsonObject, spot: number, sentinel: string): 
   const at = UNKNOWN_KEY_SPOTS[spot % UNKNOWN_KEY_SPOTS.length];
   if (at === undefined) throw new Error("no unknown key spot");
   at.put(resource, sentinel);
-  return { where: at.where, sentinel };
+  return { where: at.where, sentinel: at.text?.(sentinel) ?? sentinel };
 }
 
 /**

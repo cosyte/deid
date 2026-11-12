@@ -245,8 +245,8 @@ describe("a `_`-sibling that is not an object, anywhere else", () => {
     expectGone(result);
     expect(result.json).not.toContain("ZZTOPNOTE");
     const loci = result.manifest.map((m) => m.locus);
-    expect(loci).toContain("Patient.zzNote");
-    expect(loci).not.toContain("Patient._zzNote");
+    expect(loci).toContain("Patient.<withheld>[1]");
+    expect(loci.filter((l) => l.includes("zzNote"))).toEqual([]);
   });
 
   it("records nothing inside an element the pass removes whole", () => {

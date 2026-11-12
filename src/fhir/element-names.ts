@@ -4,8 +4,9 @@
  * extractor reads it to find a key R4 does not define, which it blocks at any depth.
  *
  * A structure is named by its type (`Observation`, `Coding`) or, for a backbone element, by its path
- * (`Observation.component`). What an element holds is a structure name, or `null` for a primitive or
- * an extension (an extension is decided by its own rule, which reads no table), and an element either
+ * (`Observation.component`). What an element holds is a structure name; `"boolean"` or `"number"` for
+ * a primitive JSON writes as a boolean or a number; or `null` for a primitive JSON writes as a string,
+ * or an extension (an extension is decided by its own rule, which reads no table). An element either
  * repeats (JSON writes it as an array) or does not (a single value).
  *
  * @packageDocumentation
@@ -16,6 +17,21 @@ import { FHIR_ELEMENT_BASES, FHIR_ELEMENT_NAMES } from "./generated/element-name
 
 /** The structure name that stands for any resource, read by its own `resourceType`. @internal */
 export const ANY_RESOURCE = "Resource";
+
+/** The JSON type R4 gives a primitive: a string, a number or a boolean. @internal */
+export type FhirJsonKind = "string" | "number" | "boolean";
+
+/**
+ * The JSON type of the primitive an element holds, from what {@link fhirElementsOf} maps it to: a
+ * string for `null`, a boolean for `"boolean"` and a number for `"number"`. `undefined` for a
+ * structure, which is no primitive.
+ *
+ * @internal
+ */
+export function fhirPrimitiveKind(type: string | null): FhirJsonKind | undefined {
+  if (type === null) return "string";
+  return type === "boolean" || type === "number" ? type : undefined;
+}
 
 /** One structure of the table: what each element holds, and which elements repeat. */
 interface Structure {
@@ -73,8 +89,8 @@ const NO_ELEMENTS: ReadonlyMap<string, string | null> = new Map();
 const NONE_REPEATING: ReadonlySet<string> = new Set();
 
 /**
- * The elements of one structure, by name, each mapped to the structure it holds (`null` for a
- * primitive or an extension). A structure R4 does not define, and `null` (a primitive, which holds
+ * The elements of one structure, by name, each mapped to the structure it holds, or to the JSON type
+ * of the primitive it holds (`"boolean"`, `"number"`, and `null` for a string or an extension). A structure R4 does not define, and `null` (a primitive, which holds
  * no key), has none.
  *
  * @internal

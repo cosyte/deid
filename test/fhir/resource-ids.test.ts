@@ -594,7 +594,7 @@ describe("FHIR resource ids: the other transforms and shapes", () => {
   it("a `reference` string at a person resource's own top level is not a Reference: it is blocked", () => {
     const run = pass({ resourceType: "Patient", gender: "male", reference: "Patient/ZZTOPREF" });
     expect(run.wire).not.toContain("ZZTOPREF");
-    expect(row(run.manifest, "Patient.reference")?.code).toBe(D.DEID_LOCUS_BLOCKED);
+    expect(row(run.manifest, "Patient.<withheld>[2]")?.code).toBe(D.DEID_LOCUS_BLOCKED);
   });
 
   it("a `reference` list holding a Reference object, where R4 puts one, is removed whole", () => {

@@ -258,10 +258,12 @@ describe("keepPatientAnimal: true still blocks", () => {
     expect(json).not.toContain("ZZANIMALNOTE");
     expect(manifest.map((row) => row.locus)).toEqual(
       expect.arrayContaining([
-        "Patient.extension[0].comment",
-        "Patient.extension[0].extension[0].note",
+        "Patient.extension[0].<withheld>[1]",
+        "Patient.extension[0].extension[0].<withheld>[2]",
       ]),
     );
+    // each row names the key's position, never the key the sender chose
+    expect(JSON.stringify(manifest)).not.toMatch(/comment|note/);
   });
 
   it("a display with no code or system beside it, keeping the coding's other parts", () => {
@@ -306,9 +308,9 @@ describe("keepPatientAnimal: true still blocks", () => {
     expect(manifest.map((row) => row.locus)).toEqual(
       expect.arrayContaining([
         "Patient.extension[0].modifierExtension[0].valueCode",
-        `${concept}.coding[0].owner`,
+        `${concept}.coding[0].<withheld>[2]`,
         `${concept}.text`,
-        `${concept}.extra`,
+        `${concept}.<withheld>[2]`,
         "Patient.extension[0].extension[1].valueString",
       ]),
     );

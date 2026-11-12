@@ -514,10 +514,11 @@ describe("a marker property is evidence only at the value shape R4 gives that ma
   it.each(MARKER_SHAPES)(
     "`$marker` at the other shape is not evidence, at a name R4 types as neither datatype",
     ({ marker, otherShape }) => {
-      // Not claimed as a datatype: only the unknown key goes, with a row of its own.
+      // Not claimed as a datatype: only the unknown key goes, with a row of its own that names its
+      // position, not the key.
       const run = atUntypedName(marker, otherShape);
       expect(run.manifest.map((m) => `${m.locus} ${m.category}`)).toEqual([
-        `Encounter.location[0].${marker} ${SAFE_HARBOR_CATEGORIES.OTHER_UNIQUE_ID}`,
+        `Encounter.location[0].<withheld>[0] ${SAFE_HARBOR_CATEGORIES.OTHER_UNIQUE_ID}`,
       ]);
     },
   );

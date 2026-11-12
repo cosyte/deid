@@ -857,6 +857,82 @@ function fhirMissedCase(): CorpusCase {
 }
 
 /**
+ * A FHIR primitive of another JSON type than R4 gives it, and a key R4 does not define spelled as
+ * text, on a clinical, a person and an infrastructure resource: a number where R4 puts a string
+ * (`valueString`, `CodeableConcept.text`, a nested answer, a device name), a string where it puts a
+ * boolean, an integer or a decimal (`userSelected`, a component's `valueBoolean`, a `Quantity.value`,
+ * an answer's `valueDecimal`), and a key whose name is the sentinel. Each value is gone from the
+ * output, and no key reaches the manifest. The codes, units and statuses R4 defines there survive.
+ */
+const FHIR_WRONG_TYPE_SENTINELS: readonly string[] = [
+  "900000201",
+  "900000202",
+  "900000203",
+  "900000204",
+  "ZZWTUSERSEL",
+  "ZZWTCOMPBOOL",
+  "ZZWTQTYVALUE",
+  "ZZWTDECIMAL",
+  "ZZWTKEYOBS",
+  "ZZWTKEYDEVICE",
+  "ZZWTKEYPATIENT",
+];
+
+function fhirWrongTypeCase(): CorpusCase {
+  const ctx = createDeidContext({ key: "fhir-wrong-type-corpus-synthetic-key", patientId: "p-wt" });
+  const resource = (r: object): object => ({ resource: r });
+  const raw = JSON.stringify({
+    resourceType: "Bundle",
+    type: "collection",
+    entry: [
+      resource({
+        resourceType: "Observation",
+        status: "final",
+        code: {
+          text: 900000201,
+          coding: [{ system: "http://loinc.org", code: "2951-2", userSelected: "ZZWTUSERSEL" }],
+        },
+        valueString: 900000202,
+        component: [
+          { code: { text: "zz" }, valueBoolean: "ZZWTCOMPBOOL" },
+          { code: { text: "zz" }, valueQuantity: { value: "ZZWTQTYVALUE", unit: "mg" } },
+        ],
+        ZZWTKEYOBS: "zz",
+      }),
+      resource({
+        resourceType: "QuestionnaireResponse",
+        status: "completed",
+        item: [
+          { linkId: "1", answer: [{ valueString: 900000203 }, { valueDecimal: "ZZWTDECIMAL" }] },
+        ],
+      }),
+      resource({
+        resourceType: "Device",
+        deviceName: [{ name: 900000204, type: "user-friendly-name" }],
+        ZZWTKEYDEVICE: { zz: 1 },
+      }),
+      resource({
+        resourceType: "Patient",
+        gender: "female",
+        communication: [{ language: { text: "en" }, ZZWTKEYPATIENT: true }],
+      }),
+    ],
+  });
+  const { document, manifest, unexaminedResiduals } = deidentifyFhir(parseResource(raw).resource, {
+    context: ctx,
+  });
+  return {
+    name: "fhir-wrong-json-types-and-key-names",
+    deidWire: serializeResource(document),
+    manifest,
+    unexaminedResiduals,
+    originalWire: raw,
+    sentinels: FHIR_WRONG_TYPE_SENTINELS,
+    survivors: ["2951-2", "http://loinc.org", "mg", "user-friendly-name", "completed", "female"],
+  };
+}
+
+/**
  * The FHIR **logical ids**: a Patient's `id`, the `fullUrl` of its Bundle entry and every reference to
  * it, each carrying a sentinel, under the Safe Harbor default (a per-call stand-in) and under the
  * limited data set preset (a keyed surrogate). A server id is very often the medical record number
@@ -984,6 +1060,7 @@ const CASES: readonly CorpusCase[] = [
   dicomCase(),
   hl7MissedCase(),
   fhirMissedCase(),
+  fhirWrongTypeCase(),
   ccdaMissedCase(),
   fhirResourceIdCase(false),
   fhirResourceIdCase(true),
