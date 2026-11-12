@@ -215,7 +215,8 @@ describe("the name on every ContactDetail element R4 defines", () => {
   for (const { label, value } of ODD_SHAPES.filter((s) => typeof s.value !== "string")) {
     it(`removes and records ${label} at a ContactDetail's name`, () => {
       const out = run({ resourceType: "ValueSet", status: "draft", contact: [{ name: value }] });
-      expect(out.json).toBe('{"resourceType":"ValueSet","status":"draft","contact":[{}]}');
+      // The contact it emptied is removed with it, as every emptied element is.
+      expect(out.json).toBe('{"resourceType":"ValueSet","status":"draft"}');
       expect(out.manifest.length).toBeGreaterThan(0);
       for (const row of out.manifest)
         expect(row.locus.startsWith("ValueSet.contact[0].name")).toBe(true);
@@ -267,7 +268,7 @@ describe("the name on every ContactDetail element R4 defines", () => {
 
     // An empty object is a structure where R4 puts a string too, so it goes the same way.
     const empty = run({ resourceType: "ValueSet", contact: [{ name: {} }] });
-    expect(empty.json).toBe('{"resourceType":"ValueSet","contact":[{}]}');
+    expect(empty.json).toBe('{"resourceType":"ValueSet"}');
     expect(rows(empty)).toEqual(["ValueSet.contact[0].name blocked"]);
   });
 
@@ -330,9 +331,7 @@ describe("the open value[x] arms R4 types as a HumanName, a ContactDetail or a C
       resourceType: "Parameters",
       parameter: [{ name: "who", valueContactDetail: { name: "ZZCONTACTNAME" } }],
     });
-    expect(params.json).toBe(
-      '{"resourceType":"Parameters","parameter":[{"name":"who","valueContactDetail":{}}]}',
-    );
+    expect(params.json).toBe('{"resourceType":"Parameters","parameter":[{"name":"who"}]}');
     expect(categories(params)).toEqual(["Parameters.parameter[0].valueContactDetail.name NAMES"]);
   });
 

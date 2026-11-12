@@ -487,11 +487,11 @@ describe("fail closed: a newly reached element the pass cannot handle faithfully
     ]);
   });
 
-  it("leaves an EMPTY object at a typed position alone: there is nothing there to leak", () => {
+  it("adds no row for an EMPTY object at a typed position: there is nothing there to leak", () => {
     const { json, manifest } = run({ resourceType: "Location", id: "loc1", address: {} });
     // The logical id is replaced by its stand-in under its own rule (`resource-ids.test.ts`); the
-    // empty address is left exactly as it was and adds no row.
-    expect(JSON.parse(json)).toEqual({ resourceType: "Location", id: "1", address: {} });
+    // empty address is not written (the output holds no empty element) and adds no row.
+    expect(JSON.parse(json)).toEqual({ resourceType: "Location", id: "1" });
     expect(manifest.map((m) => `${m.locus} ${m.code}`)).toEqual([
       `Location.id ${DEID_DISPOSITION_CODES.DEID_IDENTIFIER_SUBSTITUTED}`,
     ]);

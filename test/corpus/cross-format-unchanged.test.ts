@@ -123,6 +123,13 @@ describe("every adapter emits the same transformed document, byte for byte", () 
   // by a per-call stand-in, so the FHIR document changes at exactly those positions. The other five
   // adapters' digests are unmoved.
   //
+  // THE FHIR DIGEST MOVED A SECOND TIME, DELIBERATELY. An element the pass empties is removed rather
+  // than written as `{}`, because R4 does not allow an element with neither a value nor children: the
+  // Observation's second `performer` (a reference whose only field, its `display`, is removed) and the
+  // Communication's `payload` (whose only field, its free text, is removed) leave the output. The
+  // control below puts the two empty objects back and requires the pin from before, so nothing else
+  // moved.
+  //
   // THE C-CDA AND NCPDP DIGESTS MOVED ONCE, DELIBERATELY. The fixture's custodian organization `<id>`
   // has no extension, so its root is the identifier: it was removed and is now replaced by a stand-in
   // (`2.25.1`). The fixture's other payer id (`05/7C`, `PAYERID99`) is letters and digits, which the
@@ -142,13 +149,27 @@ describe("every adapter emits the same transformed document, byte for byte", () 
       {
         "ccda": "a8d7dc049b345cb1d5e1a410ffa3f45b",
         "dicom": "2b394aad0215ba5dff5c19cf18c49802",
-        "fhir": "9fc5255a8e8ac924da7090e2c56bcf0f",
+        "fhir": "1687eb80fb668d34e819a2c12ebf784d",
         "hl7": "b0e71b72dd6f4078c43d1d7b767ef843",
         "hl7-encounter": "7aef4fa7fa7ed2ffd1ce4c05158e4773",
         "ncpdp": "3c100052f0d6238deb590d606dec553c",
         "x12": "7afec841b7487faa5774697142fb8514",
       }
     `);
+  });
+
+  it("the FHIR document moved only by the two emptied elements it no longer writes", () => {
+    const { resource } = parseResource(FIX("fhir", "bundle.json"));
+    const wire = serializeResource(deidentifyFhir(resource, options()).document);
+    const performer = '"performer":[{"reference":"Practitioner/4"}]';
+    const subject = '"subject":{"type":"Patient"}';
+    expect(wire.split(performer)).toHaveLength(2);
+    expect(wire.split(subject)).toHaveLength(2);
+    expect(wire).not.toContain("{}");
+    const before = wire
+      .replace(performer, '"performer":[{"reference":"Practitioner/4"},{}]')
+      .replace(subject, `${subject},"payload":[{}]`);
+    expect(digest(before)).toBe("9fc5255a8e8ac924da7090e2c56bcf0f");
   });
 
   it("the C-CDA document moved only by the author's ZIP prefix the 2020 Census restricts", () => {
@@ -210,7 +231,7 @@ describe("every adapter emits the same transformed document, byte for byte", () 
     expect(wire).not.toContain("ZZLOCSTREET");
     expect(manifest.map((m) => m.locus)).toContain("Bundle.entry[6].resource.contact[0].name");
     expect(manifest.map((m) => m.locus)).toContain("Bundle.entry[7].resource.address");
-    expect(digest(wire)).not.toBe("9fc5255a8e8ac924da7090e2c56bcf0f");
+    expect(digest(wire)).not.toBe("1687eb80fb668d34e819a2c12ebf784d");
   });
 
   it("and the FHIR document, manifest and residual inventory are unchanged with them taken back out", () => {
@@ -220,7 +241,7 @@ describe("every adapter emits the same transformed document, byte for byte", () 
     const { document, manifest, unexaminedResiduals } = deidentifyFhir(resource, options());
 
     // The pinned digest above, reached from a graph the widened walk has just been through.
-    expect(digest(serializeResource(document))).toBe("9fc5255a8e8ac924da7090e2c56bcf0f");
+    expect(digest(serializeResource(document))).toBe("1687eb80fb668d34e819a2c12ebf784d");
     // The manifest, contents and order both: the same list the `FHIR` case below pins.
     expect(order(manifest)).toEqual(
       order(deidentifyFhir(parseResource(FIX("fhir", "bundle.json")).resource, options()).manifest),

@@ -416,43 +416,73 @@ function dateEmit(
   return true;
 }
 
+/** The one child of an `Identifier` {@link handleIdentifier} decides itself, before the walk. */
+const IDENTIFIER_VALUE_DECIDED: ReadonlySet<string> = new Set(["value"]);
+
+/** Where one `Identifier` sits: the path its `value` row takes, and the path its other children take. */
+interface IdentifierPaths {
+  /** The path of the `value` row: a list of one item writes it without the index. */
+  readonly valuePath: string;
+  /** The path the walk of every other child starts from: indexed in a list, as every list item is. */
+  readonly walkPath: string;
+}
+
 /**
- * Extract one `Identifier` complex: the `value` primitive, routed to SSN (redact) or, by default, to
- * `fallback`: MRN (pseudonymize), or (M) on a `Device`'s own identifier.
+ * Extract one `Identifier` complex. Its `value` primitive is routed to SSN (redact) or, by default, to
+ * `fallback`: MRN (pseudonymize), or (M) on a `Device`'s own identifier. Every other child is then
+ * walked by the rule for its datatype, as it would be anywhere else: the `period` dates are reduced to
+ * the year, the `assigner` is a `Reference` (its `display` removed, its `reference` id replaced, its own
+ * `identifier` decided in turn), and the `use`, `type` and `system` are kept and counted as unexamined.
+ * A `value` of any shape but a primitive is left to that walk too, which blocks it.
  */
 function handleIdentifier(
   out: FhirLocusAccumulator,
   id: FhirComplex,
-  path: string,
+  paths: IdentifierPaths,
   fallback: SafeHarborCategory,
+  personCtx: boolean,
+  elementPath: string,
 ): void {
   const valueNode = getProperty(id, "value");
-  if (valueNode === undefined || !isPrimitive(valueNode)) return; // no value → nothing to transform
-  const systemNode = getProperty(id, "system");
-  const system =
-    systemNode !== undefined && isPrimitive(systemNode) ? primitiveString(systemNode) : undefined;
-  push(
+  const decided = valueNode !== undefined && isPrimitive(valueNode);
+  if (decided) {
+    const systemNode = getProperty(id, "system");
+    const system =
+      systemNode !== undefined && isPrimitive(systemNode) ? primitiveString(systemNode) : undefined;
+    push(
+      out,
+      {
+        path: join(paths.valuePath, "value"),
+        kind: "identifier",
+        category: categoryForIdentifierSystem(system, fallback),
+        value: primitiveString(valueNode),
+      },
+      { node: valueNode, edit: "set-primitive" },
+    );
+  }
+  walkComplex(
     out,
-    {
-      path: join(path, "value"),
-      kind: "identifier",
-      category: categoryForIdentifierSystem(system, fallback),
-      value: primitiveString(valueNode),
-    },
-    { node: valueNode, edit: "set-primitive" },
+    id,
+    paths.walkPath,
+    personCtx,
+    elementPath,
+    decided ? IDENTIFIER_VALUE_DECIDED : NONE_DECIDED,
   );
 }
 
 /**
- * Handle an `identifier` property: one locus per `Identifier` in the list (or a single complex). An
- * item that is not an object (a bare string where an `Identifier` belongs) is a shape the pass cannot
- * locate a value in, so it is blocked whole rather than handed through.
+ * Handle an `identifier` property: one locus per `Identifier` in the list (or a single complex), and
+ * the rest of each walked ({@link handleIdentifier}). An item that is not an object (a bare string
+ * where an `Identifier` belongs) is a shape the pass cannot locate a value in, so it is blocked whole
+ * rather than handed through.
  */
 function handleIdentifiers(
   out: FhirLocusAccumulator,
   value: FhirNode,
   path: string,
   fallback: SafeHarborCategory,
+  personCtx: boolean,
+  elementPath: string,
 ): void {
   const items = isList(value) ? value.items : [value];
   items.forEach((item, i) => {
@@ -461,7 +491,15 @@ function handleIdentifiers(
       blockNode(out, item, itemPath);
       return;
     }
-    handleIdentifier(out, item, itemPath, fallback);
+    const walkPath = isList(value) ? idx(path, i) : path;
+    handleIdentifier(
+      out,
+      item,
+      { valuePath: itemPath, walkPath },
+      fallback,
+      personCtx,
+      elementPath,
+    );
   });
 }
 
@@ -1462,7 +1500,7 @@ function handleProperty(
       elementPath === FHIR_DEVICE_IDENTIFIER_PATH
         ? FHIR_DEVICE_CATEGORY
         : SAFE_HARBOR_CATEGORIES.MRN;
-    handleIdentifiers(out, value, path, fallback);
+    handleIdentifiers(out, value, path, fallback, personCtx, elementPath);
     return;
   }
   if (name === "display" && !parentIsCoding && isPrimitive(value)) {

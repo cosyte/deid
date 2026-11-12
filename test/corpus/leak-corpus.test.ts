@@ -1070,6 +1070,119 @@ function fhirDeviceCase(keyed: boolean): CorpusCase {
   };
 }
 
+/**
+ * A FHIR **identifier's assigner**, under the Safe Harbor default and the limited data set preset:
+ * the assigner's `display` (a small clinic's name, which narrows who the patient is), the logical id
+ * in its `reference`, and the assigner of the assigner's own identifier, on a `Patient`'s identifier,
+ * on an `Observation`'s subject identifier and on a `Device` contained in it, and on a
+ * `DocumentReference`'s `masterIdentifier`. Each is removed by the rule for a `Reference`, and the
+ * identifier's `period` is reduced to the year. What describes the identifier survives: its `system`,
+ * its `use` and its `type` code.
+ */
+const FHIR_ASSIGNER_SENTINELS: readonly string[] = [
+  "ZZ Smalltown Assigner Clinic",
+  "ZZASSIGNORG1",
+  "ZZ Nested Assigner Office",
+  "ZZ Subject Assigner Clinic",
+  "ZZ Device Assigner Clinic",
+  "ZZ Master Assigner Clinic",
+  "2020-03-04",
+];
+
+function fhirAssignerCase(keyed: boolean): CorpusCase {
+  const raw = JSON.stringify({
+    resourceType: "Bundle",
+    type: "collection",
+    entry: [
+      {
+        resource: {
+          resourceType: "Patient",
+          identifier: [
+            {
+              use: "official",
+              type: {
+                coding: [{ system: "http://terminology.hl7.org/CodeSystem/v2-0203", code: "MR" }],
+              },
+              system: "http://example.org/zz-assigner-mrn",
+              value: "ZZASGNMRN01",
+              period: { start: "2020-03-04" },
+              assigner: {
+                reference: "Organization/ZZASSIGNORG1",
+                display: "ZZ Smalltown Assigner Clinic",
+                identifier: {
+                  value: "zz-org-1",
+                  assigner: { display: "ZZ Nested Assigner Office" },
+                },
+              },
+            },
+          ],
+          gender: "female",
+        },
+      },
+      {
+        resource: {
+          resourceType: "Observation",
+          status: "final",
+          code: { coding: [{ system: "http://loinc.org", code: "2951-2" }] },
+          contained: [
+            {
+              resourceType: "Device",
+              id: "dev1",
+              identifier: [
+                { value: "ZZASGNDEV01", assigner: { display: "ZZ Device Assigner Clinic" } },
+              ],
+            },
+          ],
+          subject: {
+            identifier: {
+              value: "ZZASGNSUB01",
+              assigner: { display: "ZZ Subject Assigner Clinic" },
+            },
+          },
+          device: { reference: "#dev1" },
+          valueQuantity: { value: 140, unit: "mmol/L", system: "http://unitsofmeasure.org" },
+        },
+      },
+      {
+        resource: {
+          resourceType: "DocumentReference",
+          status: "current",
+          masterIdentifier: {
+            system: "http://example.org/zz-docs",
+            value: "zz-doc-1",
+            assigner: { display: "ZZ Master Assigner Clinic" },
+          },
+          content: [{ attachment: { contentType: "text/plain" } }],
+        },
+      },
+    ],
+  });
+  const ctx = createDeidContext({ key: "fhir-assigner-corpus-synthetic-key", patientId: "p-asg" });
+  const options = keyed
+    ? profileOptions(LIMITED_DATA_SET_PROFILE, ctx)
+    : profileOptions(SAFE_HARBOR_PROFILE, ctx);
+  const { document, manifest, unexaminedResiduals } = deidentifyFhir(
+    parseResource(raw).resource,
+    options,
+  );
+  return {
+    name: keyed ? "fhir-identifier-assigner-keyed" : "fhir-identifier-assigner",
+    deidWire: serializeResource(document),
+    manifest,
+    unexaminedResiduals,
+    originalWire: raw,
+    sentinels: [
+      ...FHIR_ASSIGNER_SENTINELS,
+      // The identifier values themselves: removed under Safe Harbor, a keyed surrogate under the
+      // limited data set; either way the value as it arrived is gone.
+      "ZZASGNMRN01",
+      "ZZASGNDEV01",
+      "ZZASGNSUB01",
+    ],
+    survivors: ["http://example.org/zz-assigner-mrn", "official", "2951-2", "mmol/L", "female"],
+  };
+}
+
 function ccdaMissedCase(): CorpusCase {
   const ctx = createDeidContext({ key: "ccda-missed-corpus-synthetic-key", patientId: "p-ccda-m" });
   const sct = "2.16.840.1.113883.6.96";
@@ -1143,6 +1256,8 @@ const CASES: readonly CorpusCase[] = [
   fhirResourceIdCase(true),
   fhirDeviceCase(false),
   fhirDeviceCase(true),
+  fhirAssignerCase(false),
+  fhirAssignerCase(true),
 ];
 
 /** The one leak sweep every gate uses: deliberately the SAME function the tamper test attacks. */

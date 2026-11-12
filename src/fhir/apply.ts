@@ -11,7 +11,8 @@
  * - `drop`, with a `null` value the node is omitted (a redacted `name`/`telecom`/`photo`, a blocked
  *   extension value, a blocked `Reference.display`, a blocked narrative `div`, a blocked unknown person
  *   string, a redacted SSN `Identifier.value`). A dropped property vanishes from its complex; a dropped
- *   list item from its list; a list that empties is dropped in turn. With a **non-null** value the locus
+ *   list item from its list; a list or a structure that empties is dropped in turn, so the output
+ *   never holds an empty `{}` or `[]` (R4 `ele-1`). With a **non-null** value the locus
  *   is a **BYO-redacted free-text** locus: the redacted prose is written back in place
  *   (a `contentString`/`valueString` primitive stays a primitive; a `note` Annotation/array becomes a
  *   `text`-only Annotation, dropping author/time).
@@ -161,11 +162,14 @@ function rebuildKeptPart(node: FhirNode, edits: ReadonlyMap<FhirNode, Edit>): Re
   /* v8 ignore if -- every part that is not a string is blocked above; this guard narrows the type */
   if (!isPrimitive(node)) return REMOVE;
   // The extractor never names an extension object itself, only what is inside one, so each is
-  // rebuilt property by property.
+  // rebuilt property by property, and one left with nothing in it is not written.
   return rebuildPrimitive(
     node,
     edit?.value,
-    node.extension?.map((ext) => rebuildComplex(ext, edits)),
+    node.extension?.flatMap((ext) => {
+      const rebuilt = rebuildComplex(ext, edits);
+      return rebuilt === REMOVE ? [] : [rebuilt];
+    }),
   );
 }
 
@@ -290,14 +294,21 @@ function rebuildNode(node: FhirNode, edits: ReadonlyMap<FhirNode, Edit>): Rebuil
   return rebuildComplex(node, edits);
 }
 
-/** Rebuild a complex the map did not name: each property rebuilt, a removed one omitted. */
-function rebuildComplex(node: FhirComplex, edits: ReadonlyMap<FhirNode, Edit>): FhirComplex {
+/**
+ * Rebuild a complex the map did not name: each property rebuilt, a removed one omitted. A complex
+ * left with no property is removed, as an emptied list is: R4 does not allow an element with neither
+ * a value nor children (`ele-1`), so `udiCarrier: [{}]` is never written.
+ */
+function rebuildComplex(
+  node: FhirComplex,
+  edits: ReadonlyMap<FhirNode, Edit>,
+): FhirComplex | typeof REMOVE {
   const props: FhirProperty[] = [];
   for (const prop of node.properties) {
     const rebuilt = rebuildNode(prop.value, edits);
     if (rebuilt !== REMOVE) props.push({ name: prop.name, value: rebuilt });
   }
-  return complex(props);
+  return props.length === 0 ? REMOVE : complex(props);
 }
 
 /**
@@ -356,9 +367,11 @@ function rebuildLabeled(
       props.push({ name: prop.name, value: rebuilt });
     }
   }
-  return resourceMark !== undefined && resourceMark.length > 0
-    ? complex(withSecurityLabel(props))
-    : complex(props);
+  if (resourceMark !== undefined && resourceMark.length > 0) {
+    return complex(withSecurityLabel(props));
+  }
+  // Emptied, as in the rebuild without the labels: removed rather than written as `{}`.
+  return props.length === 0 ? REMOVE : complex(props);
 }
 
 /**

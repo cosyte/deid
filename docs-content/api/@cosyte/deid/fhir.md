@@ -19,7 +19,9 @@ JSON substrate, so `@cosyte/deid` declares no third-party runtime dependency of 
 - **Every resource (the universal vectors that leak from any type):** `identifier` pseudonymized by
   `system` (a US-SSN system removed); PHI-bearing **dates** → year; the narrative **`text.div`** blocked
   at any depth; **extension** values blocked (the fail-closed frontier, an unknown extension can carry
-  any PHI, incl. an MRN in a local extension); a `Reference.display` (a person label) blocked;
+  any PHI, incl. an MRN in a local extension); a `Reference.display` (a person label) blocked,
+  an identifier's `assigner.display` included, every other child of an identifier decided by its
+  datatype's rule; an element the pass empties removed rather than written as `{}`;
   **embedded content** the pass does not read (an `Attachment.data` or `Attachment.url`, a
   `Binary.data`, a `Signature.data`, every other `base64Binary`) removed, unless the caller keeps
   its kind (below).

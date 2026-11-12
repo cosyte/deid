@@ -97,11 +97,10 @@ describe("off by default", () => {
       code: { coding: [{ system: "http://snomed.info/sct", code: "38341003" }] },
       subject: { display: "ZZPATIENTNAME" },
     });
-    // The emptied Reference is written as an empty object, with nothing to say why.
+    // The emptied Reference is removed, with nothing to say why.
     expect(out).toEqual({
       resourceType: "Condition",
       code: { coding: [{ system: "http://snomed.info/sct", code: "38341003" }] },
-      subject: {},
     });
   });
 });
@@ -304,7 +303,7 @@ describe("the meta.security label", () => {
   it("reads past a security entry it cannot read, and appends the label", () => {
     const odd = list([
       primitive("zz"),
-      complex([{ name: "system", value: complex([]) }]),
+      complex([{ name: "system", value: complex([{ name: "zz", value: primitive("zz") }]) }]),
       complex([{ name: "code", value: primitive("REDACTED") }]),
     ]);
     const gender = primitive("male");
@@ -446,8 +445,8 @@ describe("the Data Absent Reason", () => {
       resourceType: "Provenance",
       target: [{ display: "ZZTARGET" }, { reference: "#zz" }],
     });
-    // The emptied item is written as an empty object, as it is without the labels.
-    expect(out.target).toEqual([{}, { reference: "#1" }]);
+    // The emptied item is removed, as it is without the labels, and the rest of the list is kept.
+    expect(out.target).toEqual([{ reference: "#1" }]);
   });
 
   it("writes nothing in place of a required element the sender sent empty", () => {
