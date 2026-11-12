@@ -522,7 +522,7 @@ function blockKeptPartExtensions(
   address.properties.forEach((prop, i) => {
     if (!FHIR_KEPT_ADDRESS_PARTS.has(prop.name) || !isPrimitive(prop.value)) return;
     const meta = join(underscoreSibling(join(path, elementSegment(prop.name, i))), "extension");
-    (prop.value.extension ?? []).forEach((ext, j) => {
+    prop.value.extension?.forEach((ext, j) => {
       blockExtension(out, ext, idx(meta, j));
     });
   });

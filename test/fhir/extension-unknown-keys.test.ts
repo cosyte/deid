@@ -140,6 +140,23 @@ describe("an unknown key inside an extension is blocked", () => {
     expect(JSON.stringify(manifest)).not.toMatch(/ZZ(STATE|C)(NOTE|VALUE)/);
   });
 
+  it("records nothing for an extension on a part the address drops: the part goes whole", () => {
+    const { json, manifest } = run({
+      resourceType: "Patient",
+      address: [
+        {
+          city: "Springfield",
+          _city: { extension: [{ url: "http://example.org/c", note: "ZZCITYNOTE" }] },
+          state: "IL",
+          postalCode: "62704",
+        },
+      ],
+    });
+    expect(json).not.toContain("ZZCITYNOTE");
+    expect(json).not.toContain("Springfield");
+    expect(manifest.map((m) => m.locus).filter((l) => l.includes("_"))).toEqual([]);
+  });
+
   it("writes no empty extension list on a kept address part", () => {
     const { json } = run({
       resourceType: "Patient",

@@ -123,19 +123,10 @@ function stripPrimitive(node: FhirPrimitive): FhirNode {
  */
 function rebuildKeptPart(node: FhirNode, edits: ReadonlyMap<FhirNode, Edit>): FhirNode {
   if (!isPrimitive(node) || node.extension === undefined) return node;
-  const extension: FhirComplex[] = [];
-  for (const ext of node.extension) {
-    const rebuilt = rebuildNode(ext, edits);
-    // The extractor never names an extension object itself (it blocks what is inside one), so a
-    // complex always rebuilds to a complex; the guard keeps anything else out rather than writing it.
-    /* v8 ignore next -- an extension object rebuilds to a complex, never to a removal */
-    if (rebuilt === REMOVE || !isComplex(rebuilt)) continue;
-    extension.push(rebuilt);
-  }
-  return primitive(node.value, {
-    ...(node.id === undefined ? {} : { id: node.id }),
-    ...(extension.length === 0 ? {} : { extension }),
-  });
+  // The extractor never names an extension object itself, only what is inside one, so each is
+  // rebuilt property by property. `primitive` writes the `id` only when the part has one.
+  const extension = node.extension.map((ext) => rebuildComplex(ext, edits));
+  return primitive(node.value, { ...node, extension });
 }
 
 /** Rebuild an `Address` complex to the Safe Harbor residual: state / country + generalized 3-digit ZIP. */
@@ -246,7 +237,11 @@ function rebuildNode(node: FhirNode, edits: ReadonlyMap<FhirNode, Edit>): Rebuil
     return items.length === 0 ? REMOVE : list(items); // an emptied list is dropped (FHIR forbids `[]`)
   }
 
-  // complex
+  return rebuildComplex(node, edits);
+}
+
+/** Rebuild a complex the map did not name: each property rebuilt, a removed one omitted. */
+function rebuildComplex(node: FhirComplex, edits: ReadonlyMap<FhirNode, Edit>): FhirComplex {
   const props: FhirProperty[] = [];
   for (const prop of node.properties) {
     const rebuilt = rebuildNode(prop.value, edits);
