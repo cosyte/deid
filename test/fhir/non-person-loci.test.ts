@@ -144,7 +144,7 @@ describe("a person name on a resource whose type is not a person type", () => {
     );
   });
 
-  it("removes a repeating name element per occurrence, each at its own locus", () => {
+  it("removes a name element per contact, a list where R4 puts one name whole", () => {
     const { json, manifest } = run({
       resourceType: "Organization",
       contact: [
@@ -155,12 +155,11 @@ describe("a person name on a resource whose type is not a person type", () => {
     expect(json).not.toContain("ZZORGCONTACTFAM");
     expect(json).not.toContain("ZZORGCONTACTGIV");
     expect(json).not.toContain("ZZLOCNAME");
-    expect(manifest.map((m) => m.locus)).toEqual([
-      "Organization.contact[0].name",
-      "Organization.contact[1].name[0]",
-      "Organization.contact[1].name[1]",
+    expect(manifest.map((m) => `${m.locus} ${m.disposition}`)).toEqual([
+      "Organization.contact[0].name removed",
+      "Organization.contact[1].name blocked",
     ]);
-    for (const entry of manifest) expect(entry.category).toBe(C.NAMES);
+    expect(manifest[0]?.category).toBe(C.NAMES);
   });
 });
 

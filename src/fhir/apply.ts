@@ -203,7 +203,9 @@ function textAnnotation(value: string): FhirComplex {
  */
 function writeFreeText(node: FhirNode, value: string): Rebuilt {
   if (isPrimitive(node)) return primitive(value);
+  /* v8 ignore else -- R4 puts a list of notes there, and one note alone is blocked before the walk */
   if (isList(node)) return list([textAnnotation(value)]);
+  /* v8 ignore next -- the same: a note alone never reaches here */
   return textAnnotation(value);
 }
 

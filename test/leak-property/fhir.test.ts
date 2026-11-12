@@ -42,6 +42,7 @@ import { parseResource, serializeResource } from "@cosyte/fhir";
 
 import { createDeidContext, DeidError, FATAL_CODES } from "../../src/index.js";
 import { deidentifyFhir, type FhirDeidOptions } from "../../src/fhir/index.js";
+import { fhirElementsOf } from "../../src/fhir/element-names.js";
 import {
   newTally,
   runLeakProperty,
@@ -522,6 +523,13 @@ const elementIdArb: fc.Arbitrary<number> = fc.nat({ max: ELEMENT_ID_SPOTS.length
  * `period` and `assigner`), a structure where R4 puts a primitive (`meta.versionId`), a backbone of
  * the resource's own type, a contained resource's top level and a datatype in it, and a Bundle
  * entry and its request (in a Bundle the resource contains).
+ *
+ * Then each kind of position a value of a shape R4 does not define can sit at, with the sentinel as
+ * that value: a scalar where a datatype (`meta`, the narrative), a `Reference` (on the resource's own
+ * type, and on a person, a clinical and an infrastructure resource it contains), a backbone or a
+ * resource (contained, in a Bundle entry) belongs; a structure where a primitive belongs; a list
+ * where one value belongs and one value where a list belongs; and a resource whose type is missing,
+ * is the sentinel itself, or is one R4 does not define, contained or in a Bundle entry.
  */
 const UNKNOWN_KEY_SPOTS: readonly {
   readonly where: string;
@@ -620,6 +628,129 @@ const UNKNOWN_KEY_SPOTS: readonly {
       });
     },
   },
+  // A value of a shape R4 does not define where it sits: a scalar where a structure belongs, a
+  // structure where a primitive belongs, a list where one value belongs and the reverse.
+  { where: "meta as a scalar", put: (r, s) => (r["meta"] = s) },
+  { where: "text as a scalar", put: (r, s) => (r["text"] = s) },
+  {
+    where: "a Reference as a scalar",
+    put: (r, s) => {
+      const type = typeof r["resourceType"] === "string" ? r["resourceType"] : "";
+      (REFERENCES[type] ?? REFERENCES["Observation"])?.put(r, s);
+    },
+  },
+  { where: "meta.versionId as a structure", put: (r, s) => (r["meta"] = { versionId: { zz: s } }) },
+  { where: "meta.versionId as a list", put: (r, s) => (r["meta"] = { versionId: ["1", s] }) },
+  { where: "meta.tag as one coding", put: (r, s) => (r["meta"] = { tag: { code: s } }) },
+  {
+    where: "meta.security[0].code as a list",
+    put: (r, s) => (r["meta"] = { security: [{ system: "http://example.org/s", code: [s] }] }),
+  },
+  {
+    where: "contained[] as a scalar",
+    put: (r, s) => {
+      pushTo(r, "contained", s);
+    },
+  },
+  ...(
+    [
+      ["subject", (s: string): JsonObject => ({ subject: s })],
+      ["performer[]", (s: string): JsonObject => ({ performer: [s] })],
+      ["code", (s: string): JsonObject => ({ code: s })],
+      ["valueQuantity", (s: string): JsonObject => ({ valueQuantity: s })],
+      ["effectivePeriod", (s: string): JsonObject => ({ effectivePeriod: s })],
+      ["component", (s: string): JsonObject => ({ component: s })],
+      ["category as one concept", (s: string): JsonObject => ({ category: { text: s } })],
+      ["status as a list", (s: string): JsonObject => ({ status: [s] })],
+    ] as const
+  ).map(([where, fields]) => ({
+    where: `contained Observation ${where}`,
+    put: (r: JsonObject, s: string) => {
+      pushTo(r, "contained", { resourceType: "Observation", status: "final", ...fields(s) });
+    },
+  })),
+  {
+    where: "contained Patient generalPractitioner[] as a scalar",
+    put: (r, s) => {
+      pushTo(r, "contained", { resourceType: "Patient", generalPractitioner: [s] });
+    },
+  },
+  {
+    where: "contained Encounter participant[0].individual as a scalar",
+    put: (r, s) => {
+      pushTo(r, "contained", {
+        resourceType: "Encounter",
+        status: "finished",
+        participant: [{ individual: s }],
+      });
+    },
+  },
+  {
+    where: "contained Provenance agent as a scalar",
+    put: (r, s) => {
+      pushTo(r, "contained", { resourceType: "Provenance", recorded: "2024", agent: s });
+    },
+  },
+  {
+    where: "contained Provenance agent[0].who as a scalar",
+    put: (r, s) => {
+      pushTo(r, "contained", { resourceType: "Provenance", recorded: "2024", agent: [{ who: s }] });
+    },
+  },
+  {
+    where: "contained AuditEvent agent[0].who as a scalar",
+    put: (r, s) => {
+      pushTo(r, "contained", {
+        resourceType: "AuditEvent",
+        recorded: "2024-01-15T08:00:00Z",
+        agent: [{ requestor: true, who: s }],
+      });
+    },
+  },
+  {
+    where: "contained Device owner as a scalar",
+    put: (r, s) => {
+      pushTo(r, "contained", { resourceType: "Device", owner: s });
+    },
+  },
+  {
+    where: "contained Bundle entry[0].resource as a scalar",
+    put: (r, s) => {
+      pushTo(r, "contained", {
+        resourceType: "Bundle",
+        type: "collection",
+        entry: [{ resource: s }],
+      });
+    },
+  },
+  {
+    where: "contained Bundle entry[0].resource of a type R4 does not define",
+    put: (r, s) => {
+      pushTo(r, "contained", {
+        resourceType: "Bundle",
+        type: "collection",
+        entry: [{ resource: { resourceType: s, language: "en" } }],
+      });
+    },
+  },
+  {
+    where: "contained[] whose type is the sentinel",
+    put: (r, s) => {
+      pushTo(r, "contained", { resourceType: s, id: "zzt" });
+    },
+  },
+  {
+    where: "contained[] of a type R4 does not define, its base fields",
+    put: (r, s) => {
+      pushTo(r, "contained", { resourceType: "ZzThing", implicitRules: s, language: s });
+    },
+  },
+  {
+    where: "contained[] with no type",
+    put: (r, s) => {
+      pushTo(r, "contained", { id: "zzn", implicitRules: s, meta: { source: s } });
+    },
+  },
 ];
 
 /** A backbone element R4 defines on each generated resource type: its key and an ordinary item. */
@@ -640,6 +771,64 @@ const BACKBONES: Readonly<Record<string, readonly [string, JsonObject]>> = {
   Provenance: ["agent", { who: { reference: "Device/zz1" } }],
   AuditEvent: ["entity", { what: { reference: "Device/zz1" } }],
   Endpoint: ["contact", { system: "url" }],
+};
+
+/** A `Reference` R4 defines: its key, the structure it sits in, and how a string is put there. */
+interface ReferenceSpot {
+  readonly key: string;
+  readonly in: string;
+  readonly put: (r: JsonObject, s: string) => void;
+}
+
+/**
+ * An element R4 types as a `Reference` on each generated resource type, each putting the sentinel
+ * there as a bare string: a repeating element as a list of one string, one in a backbone as an item.
+ */
+const REFERENCES: Readonly<Record<string, ReferenceSpot>> = {
+  Patient: {
+    key: "generalPractitioner",
+    in: "Patient",
+    put: (r, s) => (r["generalPractitioner"] = [s]),
+  },
+  RelatedPerson: { key: "patient", in: "RelatedPerson", put: (r, s) => (r["patient"] = s) },
+  Practitioner: {
+    key: "issuer",
+    in: "Practitioner.qualification",
+    put: (r, s) => {
+      pushTo(r, "qualification", { code: { text: "zz" }, issuer: s });
+    },
+  },
+  Person: {
+    key: "managingOrganization",
+    in: "Person",
+    put: (r, s) => (r["managingOrganization"] = s),
+  },
+  Observation: { key: "subject", in: "Observation", put: (r, s) => (r["subject"] = s) },
+  Encounter: { key: "subject", in: "Encounter", put: (r, s) => (r["subject"] = s) },
+  Condition: { key: "subject", in: "Condition", put: (r, s) => (r["subject"] = s) },
+  Organization: { key: "partOf", in: "Organization", put: (r, s) => (r["partOf"] = s) },
+  Location: {
+    key: "managingOrganization",
+    in: "Location",
+    put: (r, s) => (r["managingOrganization"] = s),
+  },
+  Coverage: { key: "beneficiary", in: "Coverage", put: (r, s) => (r["beneficiary"] = s) },
+  Claim: { key: "patient", in: "Claim", put: (r, s) => (r["patient"] = s) },
+  DiagnosticReport: { key: "subject", in: "DiagnosticReport", put: (r, s) => (r["subject"] = s) },
+  Device: { key: "owner", in: "Device", put: (r, s) => (r["owner"] = s) },
+  Provenance: { key: "target", in: "Provenance", put: (r, s) => (r["target"] = [s]) },
+  AuditEvent: {
+    key: "who",
+    in: "AuditEvent.agent",
+    put: (r, s) => {
+      pushTo(r, "agent", { requestor: true, who: s });
+    },
+  },
+  Endpoint: {
+    key: "managingOrganization",
+    in: "Endpoint",
+    put: (r, s) => (r["managingOrganization"] = s),
+  },
 };
 
 const unknownKeyArb: fc.Arbitrary<number> = fc.nat({ max: UNKNOWN_KEY_SPOTS.length - 1 });
@@ -1580,6 +1769,13 @@ describe("the FHIR sweep removes a sentinel under a key R4 does not define", () 
         expect(raw).toContain(unknownKeys[0]?.sentinel);
       }
     }
+  });
+
+  it("each Reference spot names an element R4 types as a Reference, on every generated type", () => {
+    for (const [type, ref] of Object.entries(REFERENCES)) {
+      expect(fhirElementsOf(ref.in).get(ref.key), type).toBe("Reference");
+    }
+    for (const type of RESOURCE_TYPES) expect(REFERENCES[type], type).toBeDefined();
   });
 
   it("the stricter rule has teeth: a sentinel under an unknown key in the output or the manifest is caught", () => {

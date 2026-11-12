@@ -44,9 +44,11 @@
  *
  * A **key R4 does not define** where it sits (`Observation.code.coding[0].zzNote`), at any depth of any
  * resource or datatype, is blocked whole with a row at its own locus, read from the element names of
- * the R4 definitions (`./element-names.js`). So is every key of a structure where R4 puts a primitive,
- * and every key but the base ones of a resource of a type R4 does not define. An extension on a
- * primitive's `_`-sibling that the output does not carry gets a row of its own.
+ * the R4 definitions (`./element-names.js`). So is a value of a shape R4 does not define where it
+ * sits (a string where a `Reference` belongs, a structure where a primitive belongs, a list where one
+ * value belongs and the reverse), and a resource whose `resourceType` is missing or not one R4
+ * defines, whole. An extension on a primitive's `_`-sibling that the output does not carry gets a row
+ * of its own.
  *
  * The `@cosyte/fhir` model is **immutable**, so the extractor never edits the tree; the applier rebuilds
  * a fresh tree from these coordinates (see `./apply.js`).
@@ -77,7 +79,12 @@ import {
 } from "../residual.js";
 import { isRetainableZipCode } from "../retention.js";
 import { carriesFhirPersonalEvidence, classifyFhirPersonalDatatype } from "./datatype.js";
-import { ANY_RESOURCE, fhirElementsOf, fhirResourceStructure } from "./element-names.js";
+import {
+  ANY_RESOURCE,
+  fhirElementsOf,
+  fhirRepeatingElementsOf,
+  fhirResourceStructure,
+} from "./element-names.js";
 import {
   FHIR_AGE_ELEMENTS,
   FHIR_AGE_RANGE_ELEMENTS,
@@ -721,6 +728,11 @@ function walkValue(
   personCtx: boolean,
   elementPath: string,
 ): void {
+  // A value of a shape R4 does not define here is blocked whole, so no rule reads what it holds.
+  if (out.unknownKeys.has(node)) {
+    blockNode(out, node, path);
+    return;
+  }
   if (isComplex(node)) {
     walkComplex(out, node, path, personCtx, elementPath);
     return;
@@ -791,6 +803,7 @@ interface SweepPosition {
  */
 function contactNameAction(node: FhirNode): PersonalAction | undefined {
   if (isStringPrimitive(node)) return "human-name";
+  /* v8 ignore if -- R4 puts a string there, and a structure there is blocked before the walk */
   if (isComplex(node)) return node.properties.length > 0 ? "block" : undefined;
   return "block";
 }
@@ -1092,6 +1105,7 @@ const ACTION_ID_PATH =
  * list) is blocked whole. An empty id carries nothing and is left as it is.
  */
 function replaceElementId(out: FhirLocusAccumulator, value: FhirNode, path: string): void {
+  /* v8 ignore if -- R4 puts a string there, and anything else there is blocked before the walk */
   if (!isPrimitive(value)) {
     blockNode(out, value, path);
     return;
@@ -1136,6 +1150,7 @@ function emitLiteral(
   path: string,
   position: LiteralPosition,
 ): void {
+  /* v8 ignore if -- R4 puts a string there, and anything else there is blocked before the walk */
   if (!isPrimitive(node)) {
     blockNode(out, node, path);
     return;
@@ -1189,6 +1204,7 @@ function handleLogicalIds(
   elementPath: string,
 ): boolean {
   if (name === "id" && parent.resource) {
+    /* v8 ignore if -- R4 puts a string there, and anything else there is blocked before the walk */
     if (!isPrimitive(value)) {
       blockNode(out, value, path);
     } else if (primitiveString(value).length > 0) {
@@ -1221,12 +1237,15 @@ function handleLogicalIds(
   }
   const position = BUNDLE_LITERAL_ELEMENTS.get(elementPath);
   if (position === undefined) return false;
+  /* v8 ignore if -- R4 puts one string there, and anything else there is blocked before the walk */
   if (isComplex(value)) {
     blockNode(out, value, path);
     return true;
   }
+  /* v8 ignore next -- R4 puts one string there, and a list there is blocked before the walk */
   const items = isList(value) ? value.items : [value];
   items.forEach((item, i) => {
+    /* v8 ignore next -- the same: only one string reaches here */
     emitLiteral(out, item, isList(value) ? idx(path, i) : path, position);
   });
   return true;
@@ -1370,6 +1389,8 @@ function isLanguageTag(value: string): boolean {
  * this, by the date rule.
  */
 function keepsPersonString(name: string, value: string): boolean {
+  /* v8 ignore if -- every primitive R4 defines on a person resource is recognized, and any other key
+     is blocked before the walk */
   if (!RECOGNIZED_PERSON_ELEMENTS.has(name)) return false;
   if (name === "gender") return ADMINISTRATIVE_GENDER.has(value);
   if (name === "language") return isLanguageTag(value);
@@ -1487,12 +1508,19 @@ export function extractFhirLoci(
     unknownKeys,
   };
   // `resourceType` is a JSON string VALUE, not a checked identifier, and it is the ROOT of every path
-  // in the manifest, so an unbounded one prefixes the whole audit with document content.
-  const rt = safeLocusToken(resourceType(resource) ?? "", "fhirElementName");
+  // in the manifest, so an unbounded one prefixes the whole audit with document content. Only a type
+  // R4 defines is written there; any other is the sender's text, and is withheld.
+  const rt = safeLocusToken(fhirResourceStructure(resourceType(resource)) ?? "", "fhirElementName");
   // The same reach as the enumeration below, so a tree it cannot walk fails the same way.
   enumerateOrFail(rt, () => {
     findUnknownKeys(resource, unknownKeys);
   });
+  // A resource of a type R4 does not define is removed whole: its type and every field it carries
+  // are the sender's text, and no rule here reads them.
+  if (unknownKeys.has(resource)) {
+    blockNode(out, resource, rt);
+    return { loci: out.loci, coords: out.coords, unexaminedResiduals: Object.freeze([]) };
+  }
   walkComplex(out, resource, rt, false, "");
   const ruled = new Map<FhirNode, FhirEditKind>();
   for (const coord of out.coords) ruled.set(coord.node, coord.edit);
@@ -1521,44 +1549,74 @@ export function extractFhirLoci(
 }
 
 /**
- * Add to `unknown` every value held under a key R4 does not define where it sits, at any depth of
- * any resource or datatype, by the element names of the R4 definitions (`./element-names.js`): a
- * key a resource, a datatype or a backbone element does not carry (`Observation.zzNote`,
- * `Observation.code.coding[0].zzNote`, `Observation.component[0].zzNote`), and every key of a
- * structure where R4 puts a primitive (`"status": { "zz": ... }`), which defines none. A resource is
- * read by its own `resourceType`; one R4 does not define is read as carrying only what every resource
- * carries.
+ * Add to `unknown` every value whose place or shape R4 does not define, at any depth of any resource
+ * or datatype, by the element names of the R4 definitions (`./element-names.js`):
+ *
+ * - a key a resource, a datatype or a backbone element does not carry (`Observation.zzNote`,
+ *   `Observation.code.coding[0].zzNote`, `Observation.component[0].zzNote`);
+ * - a value whose JSON kind is not the one R4 defines at its position: a scalar (a string, a number,
+ *   a boolean, a `null`) where a structure belongs (`"subject": "..."`, `"contained": ["..."]`), a
+ *   structure where a primitive belongs (`"status": { ... }`), an array where a single value belongs
+ *   and a single value where an array belongs, and a `null` that pads no repeating primitive;
+ * - a resource whose `resourceType` is missing or not one R4 defines (an abstract resource, a
+ *   datatype's name), wherever a resource sits.
  *
  * An extension is left to its own rule ({@link blockExtension}), which already keeps only its `url`,
- * its `id` and its nested extensions. Every key named here is text a sender chose, so it is blocked
- * whatever it holds ({@link blockUnknownKeysBelow}).
+ * its `id` and its nested extensions. Every value named here is text a sender chose, so it is blocked
+ * whole whatever it holds ({@link blockUnknownKeysBelow}).
  */
 function findUnknownKeys(resource: FhirComplex, unknown: Set<FhirNode>): void {
-  const visit = (node: FhirNode, structure: string | null): void => {
+  /** One element's value, which R4 writes as an array when it repeats and as one value otherwise. */
+  const visitElement = (node: FhirNode, structure: string | null, repeats: boolean): void => {
+    if (isList(node) !== repeats) {
+      unknown.add(node);
+      return;
+    }
     if (isList(node)) {
       node.items.forEach((item) => {
-        visit(item, structure);
+        visitItem(item, structure);
       });
       return;
     }
-    if (!isComplex(node)) return;
-    // A structure where R4 puts a primitive defines no key at all, so every key in it is unknown. Its
-    // keys are named one by one rather than the structure whole, so a rule that reads the structure
-    // itself (a `HumanName` where R4 puts a string) still decides it first.
+    visitItem(node, structure);
+  };
+  /** One value: a primitive where R4 puts one (`structure` null), a structure otherwise. */
+  const visitItem = (node: FhirNode, structure: string | null): void => {
+    if (structure === null) {
+      // A `null` the reader marks pads no repeating primitive, and an array in the value's own place
+      // is no primitive (one in its `_`-sibling is decided with the sibling's other text).
+      if (
+        !isPrimitive(node) ||
+        node.undefinedNull === true ||
+        node.nestedArraySource !== undefined
+      ) {
+        unknown.add(node);
+      }
+      return;
+    }
+    // A scalar or a nested array the reader kept as an empty structure holds the sender's text too.
+    if (!isComplex(node) || node.nonObjectSource !== undefined || node.nestedArray === true) {
+      unknown.add(node);
+      return;
+    }
     const resource = structure === ANY_RESOURCE;
-    const elements = fhirElementsOf(
-      resource ? fhirResourceStructure(resourceType(node)) : structure,
-    );
+    const own = resource ? fhirResourceStructure(resourceType(node)) : structure;
+    if (own === undefined) {
+      unknown.add(node);
+      return;
+    }
+    const elements = fhirElementsOf(own);
+    const repeating = fhirRepeatingElementsOf(own);
     for (const prop of node.properties) {
       if (resource && prop.name === "resourceType") continue;
       const type = elements.get(prop.name);
       if (type === undefined) unknown.add(prop.value);
       else if (prop.name !== "extension" && prop.name !== "modifierExtension") {
-        visit(prop.value, type);
+        visitElement(prop.value, type, repeating.has(prop.name));
       }
     }
   };
-  visit(resource, ANY_RESOURCE);
+  visitItem(resource, ANY_RESOURCE);
 }
 
 /**
@@ -1701,11 +1759,13 @@ function decideWrittenMetadataBelow(
       (!isPrimitive(prop.value) || primitiveString(prop.value).length > 0)
     ) {
       replaceElementId(out, prop.value, propPath);
-      // Stryker disable next-line ConditionalExpression: a complex or a list carries no sibling text, so blocking it writes nothing and the test only narrows the type
+      // Stryker disable ConditionalExpression: a complex or a list carries no sibling text, so blocking it writes nothing and the test only narrows the type
+      /* v8 ignore else -- R4 puts a string there, and anything else there is blocked before the walk */
       if (isPrimitive(prop.value)) {
         blockSiblingText(out, prop.value, propPath);
         blockPrimitiveExtensions(out, prop.value, propPath);
       }
+      // Stryker restore ConditionalExpression
       return;
     }
     decideWrittenMetadataBelow(out, prop.value, propPath, edits);
@@ -1786,6 +1846,7 @@ interface FhirEnumerationState {
  */
 function underscoreSibling(path: string): string {
   const cut = path.lastIndexOf(".");
+  /* v8 ignore next -- a primitive sits below a resource, never at the root, so its path has a dot */
   return cut === -1 ? `_${path}` : `${path.slice(0, cut + 1)}_${path.slice(cut + 1)}`;
 }
 
