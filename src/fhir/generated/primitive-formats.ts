@@ -9,13 +9,36 @@
  * @internal
  */
 
+/** Every primitive type R4 constrains further than a JSON string. @internal */
+export type FhirFormattedPrimitive =
+  | "base64Binary"
+  | "boolean"
+  | "canonical"
+  | "code"
+  | "date"
+  | "dateTime"
+  | "decimal"
+  | "id"
+  | "instant"
+  | "integer"
+  | "oid"
+  | "positiveInt"
+  | "time"
+  | "unsignedInt"
+  | "uri"
+  | "url"
+  | "uuid";
+
 /**
  * The format of each primitive type: the pattern its definition carries on its `value` (matched
  * against the whole value), and for an integer kind the range its definition, or the `integer` it
  * derives from, gives. @internal
  */
 export const FHIR_PRIMITIVE_FORMATS: Readonly<
-  Record<string, { readonly pattern: string; readonly min?: number; readonly max?: number }>
+  Record<
+    FhirFormattedPrimitive,
+    { readonly pattern: string; readonly min?: number; readonly max?: number }
+  >
 > = {
   base64Binary: { pattern: "(\\s*([0-9a-zA-Z\\+/=]){4}\\s*)+" },
   boolean: { pattern: "true|false" },

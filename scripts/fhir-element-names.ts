@@ -415,13 +415,20 @@ function writePrimitiveFormats(
  * @internal
  */
 
+/** Every primitive type R4 constrains further than a JSON string. @internal */
+export type FhirFormattedPrimitive =
+${[...formats.keys()].map((id) => `  | ${JSON.stringify(id)}`).join("\n")};
+
 /**
  * The format of each primitive type: the pattern its definition carries on its \`value\` (matched
  * against the whole value), and for an integer kind the range its definition, or the \`integer\` it
  * derives from, gives. @internal
  */
 export const FHIR_PRIMITIVE_FORMATS: Readonly<
-  Record<string, { readonly pattern: string; readonly min?: number; readonly max?: number }>
+  Record<
+    FhirFormattedPrimitive,
+    { readonly pattern: string; readonly min?: number; readonly max?: number }
+  >
 > = {
 ${formatLines.join("\n")}
 };

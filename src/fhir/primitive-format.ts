@@ -50,13 +50,8 @@ const FORMATS: ReadonlyMap<string | null, Format> = new Map(
   ]),
 );
 
-/** R4's `decimal` pattern. */
-/* v8 ignore next -- the generated table always holds the decimal pattern */
-// Stryker disable next-line OptionalChaining,StringLiteral,LogicalOperator: the generated table always holds the decimal pattern, so neither the chain nor the fallback is ever used
-const DECIMAL = FHIR_PRIMITIVE_FORMATS["decimal"]?.pattern ?? "";
-
 /** R4's `decimal` pattern, or one of the three special values, as one data point of `SampledData.data`. */
-const SAMPLED_POINT = `(?:${DECIMAL}|E|L|U)`;
+const SAMPLED_POINT = `(?:${FHIR_PRIMITIVE_FORMATS.decimal.pattern}|E|L|U)`;
 
 /**
  * The elements held to a format beyond their type's, by path: `SampledData.data`, decimal values or

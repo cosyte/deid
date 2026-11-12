@@ -417,12 +417,12 @@ describe("the R4 format table", () => {
       "url",
       "uuid",
     ]);
-    expect(FHIR_PRIMITIVE_FORMATS["id"]?.pattern).toBe("[A-Za-z0-9\\-\\.]{1,64}");
-    expect(FHIR_PRIMITIVE_FORMATS["integer"]).toMatchObject({
+    expect(FHIR_PRIMITIVE_FORMATS.id.pattern).toBe("[A-Za-z0-9\\-\\.]{1,64}");
+    expect(FHIR_PRIMITIVE_FORMATS.integer).toMatchObject({
       min: -2147483648,
       max: 2147483647,
     });
-    expect(FHIR_PRIMITIVE_FORMATS["positiveInt"]?.max).toBe(2147483647);
+    expect(FHIR_PRIMITIVE_FORMATS.positiveInt.max).toBe(2147483647);
   });
 
   it("binds the required codes R4 defines, and names the ones it cannot carry", () => {
