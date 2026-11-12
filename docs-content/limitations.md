@@ -506,6 +506,32 @@ Two things follow, and the second is the one that surprises people:
   device from another resource (a `Reference.identifier` at `Observation.device`) is read as any other
   identifier, so the Limited Data Set gives it a keyed surrogate as a medical record number.
 
+<a id="fhir-identifier-children"></a>
+
+- **A FHIR identifier's assigner and its other children: each decided by its datatype's rule.** At
+  every `identifier` on every resource, alone, contained or in a `Bundle` entry, the pass decides the
+  `value` by the identifier rule and walks every other child by the rule for its datatype: the
+  `assigner`'s `display` is blocked as every `Reference.display` is, with a row that carries no value;
+  the logical id in its `reference` is replaced; its own `identifier` goes through the identifier rule
+  in turn; the `period` dates are generalized to the year; the `use`, the `type`, the `system` and the
+  assigner's `type` are kept and counted in `unexaminedResiduals`. Before, under both presets, every
+  child but the `value` passed unchanged, counted only in `unexaminedResiduals`: an assigner's name
+  (often a small facility's, which narrows who the patient is, and free text that can hold a person's
+  name), the assigner's reference id and its own identifier's value, and the full `period` dates.
+
+  One residual stays. An `Identifier` R4 names other than `identifier` (`masterIdentifier`,
+  `accessionIdentifier`, `preAdmissionIdentifier`, `groupIdentifier`, `requisition`,
+  `Claim.related.reference`, a `valueIdentifier` on a `Task` or a `Parameters`) is walked as any other
+  structure, so its `assigner.display` is blocked and its dates generalized, but its `value` is kept as
+  it arrived and counted in `unexaminedResiduals`.
+
+- **A FHIR element the pass empties is removed.** R4 does not allow an element with neither a value
+  nor children, so a structure or a list left with nothing in it is not written: a `udiCarrier` whose
+  only field was its device identifier, a `Reference` whose only field was its `display`, an extension
+  whose `url` was blocked, a `payload` whose only field was its free text. An element that arrived
+  empty (`"address": {}`) is removed the same way. Before, an emptied structure was written as `{}`.
+  With `transformLabels`, a Data Absent Reason stands in its place where R4 requires the element.
+
 <a id="fhir-sibling-text"></a>
 
 - **A FHIR `_`-sibling that is not an object: blocked everywhere.** FHIR JSON gives a primitive's

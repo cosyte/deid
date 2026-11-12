@@ -286,8 +286,10 @@ describe("an unknown key inside an extension is blocked", () => {
       extension: [ext],
     });
     expect(json).not.toContain("90000000");
-    const out = JSON.parse(json) as { extension: Record<string, unknown>[] };
-    expect(out.extension[0]).not.toHaveProperty(key);
+    // An extension left with nothing in it is removed whole, as every emptied element is.
+    const out = JSON.parse(json) as { extension?: Record<string, unknown>[] };
+    expect(out.extension?.[0] ?? {}).not.toHaveProperty(key);
+    if (key === "url") expect(out).not.toHaveProperty("extension");
     const row = manifest.find((m) => m.locus === `Observation.extension[0].${key}`);
     expect(row?.disposition).toBe("blocked");
     expect(JSON.stringify(manifest)).not.toContain("90000000");
@@ -309,6 +311,8 @@ describe("an unknown key inside an extension is blocked", () => {
     expect(json).not.toContain("90000000");
     expect(json).not.toContain("true");
     expect(json).toContain('"url":"http://example.org/c"');
+    // The `_state` extension left with nothing in it is not written as `{}`.
+    expect(json).not.toContain("{}");
     const loci = manifest.map((m) => m.locus);
     expect(loci).toContain("Patient.address._state.extension[0].url");
     expect(loci).toContain("Patient.address._state.extension[0].id");

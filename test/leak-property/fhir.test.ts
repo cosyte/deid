@@ -53,6 +53,12 @@
  * under the default, so the sentinel must be gone from the output and from the manifest, and keeping
  * every kind of embedded content does not keep a `carrierAIDC`.
  *
+ * So is a sentinel in an **identifier's assigner**: its `display` (free text a sender fills), the
+ * logical id in its `reference`, and the `display` of the assigner of the assigner's own identifier, on
+ * the resource's own `identifier`, on a `Reference`'s identifier, on a contained `Device` and on a
+ * `DocumentReference`'s `masterIdentifier`. Each is removed by the rule for a `Reference` wherever it
+ * sits, so the sentinel must be gone from the output and from the manifest.
+ *
  * Where a sentinel sits is read back from the input JSON, as the adapter writes a locus
  * (`Patient.name[0].family`), so the residual it must be named by is exact.
  */
@@ -1343,6 +1349,98 @@ export function deviceKept(placed: readonly FormatPlaced[], outcome: PassOutcome
   return violations;
 }
 
+/**
+ * Each place an identifier's assigner holds text a sender wrote, with a sentinel in it: its `display`,
+ * the logical id in its `reference`, and the `display` one assigner further down, at the identifier
+ * positions of the resource itself, of a `Reference`, of a contained `Device` and of a
+ * `masterIdentifier`. Each is removed by the rule for a `Reference`, so the sentinel is held to the
+ * stricter rule.
+ */
+const ASSIGNER_SPOTS: readonly {
+  readonly where: string;
+  readonly put: (resource: JsonObject, sentinel: string) => void;
+}[] = [
+  {
+    where: "identifier[].assigner.display",
+    put: (r, s) => {
+      pushTo(r, "identifier", { system: "urn:oid:2.25.7", value: "zz1", assigner: { display: s } });
+    },
+  },
+  {
+    where: "identifier[].assigner.reference",
+    put: (r, s) => {
+      pushTo(r, "identifier", {
+        system: "urn:oid:2.25.7",
+        value: "zz1",
+        assigner: { reference: `Organization/${s}` },
+      });
+    },
+  },
+  {
+    where: "identifier[].assigner.identifier.assigner.display",
+    put: (r, s) => {
+      pushTo(r, "identifier", {
+        value: "zz1",
+        assigner: { identifier: { value: "zz2", assigner: { display: s } } },
+      });
+    },
+  },
+  {
+    where: "contained Observation subject.identifier.assigner.display",
+    put: (r, s) => {
+      containedOf(r, "Observation", {
+        status: "final",
+        code: { text: "zz" },
+        subject: { identifier: { value: "zz1", assigner: { display: s } } },
+      });
+    },
+  },
+  {
+    where: "contained Device identifier[0].assigner.display",
+    put: (r, s) => {
+      containedOf(r, "Device", { identifier: [{ value: "zz1", assigner: { display: s } }] });
+    },
+  },
+  {
+    where: "contained DocumentReference masterIdentifier.assigner.identifier.assigner.display",
+    put: (r, s) => {
+      containedOf(r, "DocumentReference", {
+        status: "current",
+        masterIdentifier: {
+          value: "zz1",
+          assigner: { display: "zz", identifier: { value: "zz2", assigner: { display: s } } },
+        },
+        content: [{ attachment: { contentType: "text/plain" } }],
+      });
+    },
+  },
+];
+
+const assignerArb: fc.Arbitrary<number> = fc.nat({ max: ASSIGNER_SPOTS.length - 1 });
+
+/** Write one sentinel, in an identifier's assigner, into the resource. */
+function placeAssigner(resource: JsonObject, spot: number, sentinel: string): FormatPlaced {
+  const at = ASSIGNER_SPOTS[spot % ASSIGNER_SPOTS.length];
+  if (at === undefined) throw new Error("no assigner spot");
+  at.put(resource, sentinel);
+  return { where: at.where, sentinel };
+}
+
+/**
+ * The stricter rule for an identifier's assigner: what a sender wrote there is gone from the output
+ * and from the manifest. Being named as a residual is not enough, because it is removed by default.
+ */
+export function assignerKept(placed: readonly FormatPlaced[], outcome: PassOutcome): string[] {
+  const violations: string[] = [];
+  const manifest = JSON.stringify(outcome.manifest);
+  for (const p of placed) {
+    const label = `${p.sentinel} (an identifier's assigner at ${p.where})`;
+    if (outcome.output.includes(p.sentinel)) violations.push(`${label} survives in the output`);
+    if (manifest.includes(p.sentinel)) violations.push(`${label} is in the manifest`);
+  }
+  return violations;
+}
+
 /** Write one sentinel, inside embedded content, into the resource. */
 function placeEmbedded(resource: JsonObject, spot: number, sentinel: string): FormatPlaced {
   const at = EMBEDDED_SPOTS[spot % EMBEDDED_SPOTS.length];
@@ -1660,6 +1758,7 @@ export const caseArb = fc.record({
   formats: fc.array(formatArb, { maxLength: 2 }),
   embedded: fc.array(embeddedArb, { maxLength: 2 }),
   devices: fc.array(deviceArb, { maxLength: 2 }),
+  assigners: fc.array(assignerArb, { maxLength: 2 }),
 });
 
 /** Set a value at a path of keys and indexes, creating objects and lists on the way. */
@@ -1970,6 +2069,7 @@ export function build(value: {
   formats?: readonly number[];
   embedded?: readonly number[];
   devices?: readonly number[];
+  assigners?: readonly number[];
 }): {
   raw: string;
   placed: Placement[];
@@ -1979,6 +2079,7 @@ export function build(value: {
   formats: FormatPlaced[];
   embedded: FormatPlaced[];
   devices: FormatPlaced[];
+  assigners: FormatPlaced[];
 } {
   const resource: JsonObject = {
     resourceType: value.type,
@@ -2032,6 +2133,15 @@ export function build(value: {
     const placedDevice = placeDevice(resource, spot, sentinelAt(value.stem, deviceOffset + i));
     return { ...placedDevice, where: `${value.type}.${placedDevice.where}` };
   });
+  const assignerOffset = deviceOffset + devices.length;
+  const assigners = (value.assigners ?? []).map((spot, i) => {
+    const placedAssigner = placeAssigner(
+      resource,
+      spot,
+      sentinelAt(value.stem, assignerOffset + i),
+    );
+    return { ...placedAssigner, where: `${value.type}.${placedAssigner.where}` };
+  });
   const doc: JsonObject = value.inBundle
     ? { resourceType: "Bundle", type: "collection", entry: [{ resource }] }
     : resource;
@@ -2044,6 +2154,7 @@ export function build(value: {
     formats,
     embedded,
     devices,
+    assigners,
   };
 }
 
@@ -2114,11 +2225,12 @@ export function checkCase(
     formats?: readonly number[];
     embedded?: readonly number[];
     devices?: readonly number[];
+    assigners?: readonly number[];
   },
   tally: LeakTally,
   options: FhirDeidOptions = {},
 ): string[] {
-  const { raw, placed, siblings, elementIds, unknownKeys, formats, embedded, devices } =
+  const { raw, placed, siblings, elementIds, unknownKeys, formats, embedded, devices, assigners } =
     build(value);
   // A `_`-sibling the input does not hold (a later write replaced it) is not swept.
   const held = siblings.filter((s) => s.text === undefined || raw.includes(s.text));
@@ -2132,6 +2244,8 @@ export function checkCase(
   const contents = embedded.filter((p) => raw.includes(p.sentinel));
   // Likewise a sentinel at a device identifier.
   const deviceIds = devices.filter((p) => raw.includes(p.sentinel));
+  // Likewise a sentinel in an identifier's assigner.
+  const assignerTexts = assigners.filter((p) => raw.includes(p.sentinel));
   // Non-vacuity: only a sentinel the input holds is swept, and a case must hold one. A later
   // placement can overwrite an earlier one at the same position.
   const present = placed.filter((p) => raw.includes(p.sentinel));
@@ -2142,7 +2256,8 @@ export function checkCase(
     keys.length === 0 &&
     misfits.length === 0 &&
     contents.length === 0 &&
-    deviceIds.length === 0
+    deviceIds.length === 0 &&
+    assignerTexts.length === 0
   ) {
     return ["no sentinel reached the input"];
   }
@@ -2156,6 +2271,7 @@ export function checkCase(
     ...formatKept(misfits, outcome),
     ...embeddedKept(contents, outcome),
     ...deviceKept(deviceIds, outcome),
+    ...assignerKept(assignerTexts, outcome),
   ];
 }
 
@@ -2198,6 +2314,7 @@ export const animalCaseArb = fc.record({
   formats: fc.array(formatArb, { maxLength: 2 }),
   embedded: fc.array(embeddedArb, { maxLength: 2 }),
   devices: fc.array(deviceArb, { maxLength: 2 }),
+  assigners: fc.array(assignerArb, { maxLength: 2 }),
 });
 
 describe("the generated leak property: FHIR R4", () => {
@@ -2710,6 +2827,73 @@ describe("the FHIR sweep removes a sentinel at a Device's identifier or serial n
     ]);
     expect(deviceKept(placed, { ...clean, manifest: [{ locus: "ZQLKTEETH07X" }] })).toEqual([
       "ZQLKTEETH07X (a device identifier at Device.serialNumber) is in the manifest",
+    ]);
+  });
+});
+
+/**
+ * Each place an identifier's assigner holds text a sender wrote, on a person, a clinical, a `Device`
+ * and an infrastructure resource, alone and in a Bundle entry, with `keepPatientAnimal` off and on,
+ * through the same check as a generated case, so every one is run on every pull request whatever the
+ * seed draws.
+ */
+describe("the FHIR sweep removes a sentinel in an identifier's assigner", () => {
+  const types = ["Patient", "Observation", "Device", "Provenance"];
+  const spots = ASSIGNER_SPOTS.map((spot, i) => [spot.where, i] as const);
+  const optionSets: readonly FhirDeidOptions[] = [{}, { keepPatientAnimal: true }];
+
+  it.each(spots)("%s", (_where, spot) => {
+    for (const type of types) {
+      for (const inBundle of [false, true]) {
+        for (const options of optionSets) {
+          const value = {
+            type,
+            inBundle,
+            filler: "abc",
+            stem: "ZQLKASGN",
+            placements: [],
+            assigners: [spot],
+          };
+          expect(checkCase(value, newTally(), options)).toEqual([]);
+        }
+      }
+    }
+  });
+
+  it("the case holds what it placed: the assigner text is in the input", () => {
+    for (const type of ["Patient", "Observation"]) {
+      for (const [, spot] of spots) {
+        const { raw, assigners } = build({
+          type,
+          inBundle: false,
+          filler: "abc",
+          stem: "ZQLKASGN",
+          placements: [],
+          assigners: [spot],
+        });
+        expect(assigners).toHaveLength(1);
+        expect(raw).toContain(assigners[0]?.sentinel);
+        expect(raw).toContain('"assigner"');
+      }
+    }
+  });
+
+  it("the stricter rule has teeth: assigner text in the output or the manifest is caught", () => {
+    const where = "Patient.identifier[].assigner.display";
+    const placed: FormatPlaced[] = [{ where, sentinel: "ZQLKTEETH08X" }];
+    const clean: PassOutcome = {
+      output: '{"resourceType":"Patient"}',
+      manifest: [],
+      unexaminedResiduals: [],
+      residualAt: () => true,
+      refused: false,
+    };
+    expect(assignerKept(placed, clean)).toEqual([]);
+    expect(assignerKept(placed, { ...clean, output: '{"display":"ZQLKTEETH08X"}' })).toEqual([
+      `ZQLKTEETH08X (an identifier's assigner at ${where}) survives in the output`,
+    ]);
+    expect(assignerKept(placed, { ...clean, manifest: [{ locus: "ZQLKTEETH08X" }] })).toEqual([
+      `ZQLKTEETH08X (an identifier's assigner at ${where}) is in the manifest`,
     ]);
   });
 });

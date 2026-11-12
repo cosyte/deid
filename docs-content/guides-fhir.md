@@ -116,6 +116,48 @@ category, and the configured policy's transform for that category is what runs, 
 blocked, while a `Coding.display` (a coded term such as `Sodium`) is retained: the two are distinguished
 structurally, not by the property name.
 
+### An identifier's other children
+
+An `Identifier` carries more than its `value`, and the pass decides each other child by the rule it
+applies to the same datatype anywhere else in the resource, at every `identifier` on every resource, in
+a contained resource and in a `Bundle` entry:
+
+| Child                                    | What happens                                                                                          |
+| ---------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `assigner.display`                       | **blocked**, as every `Reference.display` is: free text a sender fills, often a small facility's name |
+| `assigner.reference`                     | the logical id **replaced**, as in every reference                                                    |
+| `assigner.identifier`                    | the identifier rule again, its own `assigner` included                                                |
+| `period.start`, `period.end`             | generalized to the **year**, as every date is                                                         |
+| `use`, `type`, `system`, `assigner.type` | kept, and counted in `unexaminedResiduals`, as a code or a uri is; a `Coding.display` is kept         |
+
+```ts runnable
+import { deidentifyFhirJson } from "@cosyte/deid/fhir";
+
+const input = JSON.stringify({
+  resourceType: "Patient",
+  identifier: [
+    {
+      system: "http://example.org/zz-mrn",
+      value: "ZZMRN0001",
+      period: { start: "2020-03-04" },
+      assigner: { display: "ZZ Smalltown Clinic" },
+    },
+  ],
+});
+
+const { json, manifest } = deidentifyFhirJson(input);
+json; // => '{"resourceType":"Patient","identifier":[{"system":"http://example.org/zz-mrn","period":{"start":"2020"}}]}'
+manifest.map((e) => `${e.locus} ${e.disposition}`); // => ["Patient.identifier.value removed", "Patient.identifier[0].period.start transformed", "Patient.identifier[0].assigner.display blocked"]
+```
+
+The `value` row of a one-item `identifier` list names it without the index, as it always has; every
+other child's row and residual carries the index, as every list item's does. An `Identifier` that R4
+names otherwise (`masterIdentifier`, `accessionIdentifier`, `preAdmissionIdentifier`,
+`groupIdentifier`, `requisition`, a `valueIdentifier` outside an extension) is walked as any other
+structure: its `assigner.display` is blocked and its dates are generalized the same way, but its
+`value` is kept and counted in `unexaminedResiduals` (see
+[the limitations page](./limitations.md#fhir-identifier-children)).
+
 Dates are detected by **value shape**: any primitive whose whole value is a real calendar date
 (`YYYY-MM`, `YYYY-MM-DD`, or a full instant) with a valid month/day is generalized to its year, wherever
 it sits, so a date in an unexpected element is caught too. A bare four-digit year is left as-is,
@@ -396,7 +438,7 @@ manifest.map((entry) => entry.locus); // => ["Observation._status.id", "Observat
 
 By default the output carries no sign, inside the FHIR, that anything was done to it, and an element
 R4 requires can simply be missing: a `Condition.subject` whose only content was a blocked `display`
-comes out as an empty object. Pass `transformLabels: true` and the adapter writes two things the R4
+is removed, and the `Condition` leaves without the `subject` R4 requires. Pass `transformLabels: true` and the adapter writes two things the R4
 security-labels value set and the IHE De-Identification Handbook describe:
 
 - every resource the pass changed (a value transformed, removed or blocked, or a primitive extension
@@ -435,10 +477,11 @@ changed inside it counts for the resource that contains it.
 
 **What it leaves as it was.** Three things in the output do not change with the option:
 
-- A Reference or a list item the pass emptied is written as an empty object (`{}`). Without the
-  option that is so everywhere; with it, the Data Absent Reason replaces it only where R4 requires
+- An element the pass emptied (a Reference whose only field was its `display`, a list item, a
+  backbone such as a `udiCarrier`) is removed, never written as an empty object (`{}`), which R4
+  does not allow. With the option, the Data Absent Reason stands in its place only where R4 requires
   the element and nothing else is left there, so an optional Reference, or one item of a list that
-  keeps other items, is still `{}`.
+  keeps other items, is simply gone. An element that arrived empty is removed the same way.
 - An extension whose value the pass blocked keeps its `url` and its replaced element `id`, and
   nothing else.
 - Security labels already on the input, such as Data Segmentation for Privacy labels, pass through
