@@ -445,14 +445,35 @@ Two things follow, and the second is the one that surprises people:
   covers (every `Coding.code`, and a code bound by an extensible, preferred or example binding) a
   name (`Smith`, `John Smith`) or a dashed number fits and is kept. So does any text with no white
   space in a `uri`, a `url` or a `canonical` (`urn:Smith`), up to 64 letters, digits, hyphens and
-  dots in an `id` (`Smith`, a dashed number), a word whose length is a multiple of four in a
-  `base64Binary`, a number in range in an `integer` or a `decimal` (a record number held as one), and
-  any text in a `string` or a `markdown`, which R4 constrains no further than JSON does (the
-  free-text rules decide those, as before). What passes is not read, and each such position the pass
-  hands through is counted in `unexaminedResiduals`, so a caller can find it. A caller who needs more
-  checks the codes against the code systems its recipient expects (a terminology server, or the
-  value sets of the profile it sends), before or after the pass, or removes the elements it does not
-  need.
+  dots in an `id` (`Smith`, a dashed number), a number in range in an `integer`, a `positiveInt`,
+  an `unsignedInt` or a `decimal` (a record number held as one), a `SampledData.data` made of
+  numbers (`123 45 6789`, a dashed number written with spaces, fits, since R4's own words for the
+  element admit any decimal values separated by single spaces, and each part is one), and any text
+  in a `string` or a `markdown`, which R4 constrains no further than JSON does (the free-text rules
+  decide those, as before). What passes is not read, and each such position the pass hands through
+  is counted in `unexaminedResiduals`, so a caller can find it. A caller who needs more checks the
+  codes against the code systems its recipient expects (a terminology server, or the value sets of
+  the profile it sends), before or after the pass, or removes the elements it does not need.
+
+  **A `base64Binary` is not read, and it can carry a whole document.** R4's format for a
+  `base64Binary` admits any valid base64, and valid base64 decodes to any bytes at all. So a valid
+  value at an `Attachment.data` (in `DocumentReference.content`, `Media.content`,
+  `Communication.payload`, a `QuestionnaireResponse` answer, and the other places an `Attachment`
+  is kept), at `Binary.data`, at `Signature.data`, or in a `Parameters` value is kept verbatim and
+  unread, under Safe Harbor and the Limited Data Set alike, and it can hold a whole clinical note, a
+  scanned form or an image with every identifier in it. Such a value gets no manifest row: it shows
+  only in `unexaminedResiduals`, as a position the pass handed through unexamined. The output is
+  still labelled transformed per the configured policy, and nothing in such a value was transformed.
+  Two places differ: a `Patient.photo` is removed whole, and a `base64Binary` in an extension's value
+  is blocked, as every extension value is. Removing embedded content by default is planned as its own
+  change. Until then, a caller must remove those elements, or decode and review what they hold, before
+  releasing the output.
+
+  The check itself reads each value once, in time linear in its length. R4 writes each format as a
+  regular expression, and a backtracking engine runs some of them (the `base64Binary` one among
+  them) in time exponential in a value built to fail at its end, so the pass never compiles R4's
+  patterns: it checks each type by a scan written from its pattern and tested to accept exactly what
+  the pattern accepts.
 
 <a id="fhir-sibling-text"></a>
 

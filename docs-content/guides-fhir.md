@@ -488,7 +488,11 @@ The option is off by default, so a call without it returns exactly what it retur
   calls gets two unrelated ids, and a reference from one call's output does not resolve in another's.
   Linkage across documents needs a keyed policy, which does not claim Safe Harbor.
 - Free-text **prose** loci (`note`, `contentString`, uncoded `valueString`) fail closed by default; a
-  semantic (NLP) narrative scrub and `contentAttachment` binary content remain out of scope.
+  semantic (NLP) narrative scrub and `contentAttachment` binary content remain out of scope. A valid
+  `base64Binary` (an `Attachment.data`, `Binary.data`, `Signature.data`) is kept verbatim and unread,
+  counted only in `unexaminedResiduals`, and it can hold a whole document: remove or review those
+  elements before you release the output. See
+  [primitive formats](./limitations.md#fhir-primitive-formats).
 - Three surfaces are still not reached because FHIR types no person at the position: a
   **`ContactPoint` outside a person resource** (a phone or an email on an `Organization`, a `Location`,
   or an `Endpoint`), an **organization's own `name`** (a plain string, never a `HumanName`), and the
