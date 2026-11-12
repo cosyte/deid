@@ -258,9 +258,9 @@ this table, so the two cannot drift apart. The reasons are the over-scrub guard:
 the drug, quantity, pricing, clinical or adjudication values a released claim exists to keep, and
 removing them would destroy what the output is for.
 
-Kept is not unexamined: a free-text field in any of them fails closed, a dated field
-[TELECOM\_RETAINED\_SEGMENT\_RULES](#telecom_retained_segment_rules) names is transformed, and every other populated field is counted
-as an unexamined residual.
+Kept is not unexamined: a free-text field in any of them fails closed, a field
+[TELECOM\_RETAINED\_SEGMENT\_RULES](#telecom_retained_segment_rules) names is transformed or removed, and every other populated field
+is counted as an unexamined residual.
 
 #### Example
 
@@ -286,8 +286,10 @@ A segment id that is neither mapped ([TELECOM\_LOCUS\_MAP](#telecom_locus_map)) 
 field-by-field. Prior Authorization (`12`) is mapped, not kept.
 
 A retained segment keeps every field but the ones [TELECOM\_RETAINED\_SEGMENT\_RULES](#telecom_retained_segment_rules) names: the
-Claim segment's dates of the individual's care (`414-DE`, `457-EP`) and the response DUR segment's
-Previous Date Of Fill (`530-FU`) are generalized like any other date.
+Claim segment's dates of the individual's care (`414-DE`, `457-EP`), the Clinical segment's
+Measurement Date (`494-ZE`) and the response DUR segment's Previous Date Of Fill (`530-FU`) are
+generalized like any other date, and the Claim segment's Scheduled Prescription ID Number
+(`454-EK`) and Alternate ID (`330-CW`) are removed.
 
 **Documented limitation (mirrors the HL7 / X12 adapters).** A retained segment may carry a field the
 field tables we hold do not place, or a per-prescription reference (`402-D2` Rx reference number).
@@ -309,10 +311,10 @@ TELECOM_RETAIN_SEGMENTS.has("12"); // => false (Prior Authorization, mapped)
 
 > `const` **TELECOM\_RETAINED\_SEGMENT\_RULES**: `Readonly`\<`Record`\<`string`, `Readonly`\<`Record`\<`string`, [`TelecomFieldRule`](#telecomfieldrule)\>\>\>\>
 
-The **dated fields of a retained segment**: the fields of a recognized clinical / financial segment
+The **ruled fields of a retained segment**: the fields of a recognized clinical / financial segment
 ([TELECOM\_RETAIN\_SEGMENTS](#telecom_retain_segments)) that a rule reaches although the segment itself is retained. Every
 other field of such a segment is kept untouched and counted as an unexamined residual; a field named
-here is located and transformed by its rule, the same way a date in a mapped segment is.
+here is located and transformed by its rule, the same way a field in a mapped segment is.
 
 The Claim segment (`07`) carries two dates of the individual's care, and Safe Harbor removes every
 element of a date but the year from a date directly related to an individual:
@@ -321,12 +323,21 @@ element of a date but the year from a date directly related to an individual:
 - `457-EP` Associated Prescription/Service Date, the date of the patient's earlier fill or service
   this claim is tied to (a partial fill's completion, say).
 
+The Clinical segment (`13`) carries `494-ZE` Measurement Date, the day a measurement of the patient
+was taken, once per measurement. Public payer sheets place it there, in `CCYYMMDD` form.
+
 The response DUR / PPS segment (`24`) carries one: `530-FU` Previous Date Of Fill, the day the
 patient's earlier prescription that the alert is about was filled. `@cosyte/ncpdp` names it in its
 field table and lifts it as the alert's previous date of fill.
 
 Each is treated as the header Date of Service (`401-D1`) and the other payer date (`443-E8`) are:
-generalized to the year under Safe Harbor, shifted under a profile that shifts dates. The Pricing
+generalized to the year under Safe Harbor, shifted under a profile that shifts dates.
+
+The Claim segment also carries two identifiers that public payer sheets place there: `454-EK`
+Scheduled Prescription ID Number, which names one scheduled (controlled) drug prescription, and
+`330-CW` Alternate ID, an alternate claim or member reference. Each is removed and recorded under
+every profile: no public sheet gives its length or picture, so no surrogate can be shaped to it. The
+Pricing
 segment (`11`) carries amounts and codes and no date, so it has no entry here; the Prescriber segment
 (`03`) is a mapped segment, where every field but its id qualifier is removed.
 
@@ -337,6 +348,8 @@ import { TELECOM_RETAINED_SEGMENT_RULES } from "@cosyte/deid/ncpdp";
 
 TELECOM_RETAINED_SEGMENT_RULES["07"]?.DE?.mode; // => "date"  (Date Prescription Written)
 TELECOM_RETAINED_SEGMENT_RULES["07"]?.D7; // => undefined (the NDC, retained)
+TELECOM_RETAINED_SEGMENT_RULES["07"]?.EK?.mode; // => "block" (Scheduled Prescription ID Number)
+TELECOM_RETAINED_SEGMENT_RULES["13"]?.ZE?.mode; // => "date"  (Measurement Date)
 TELECOM_RETAINED_SEGMENT_RULES["24"]?.FU?.mode; // => "date"  (Previous Date Of Fill)
 ```
 

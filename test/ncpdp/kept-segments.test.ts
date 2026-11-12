@@ -14,9 +14,9 @@
  *   removed.
  *
  * Where a field sits comes from the field tables we hold: `FIELD_NAMES` and the response reader of
- * `@cosyte/ncpdp`, and this package's own tests. A field id those tables do not place is marked as
- * such below and is walked as an unestablished candidate: the walk shows it counted, not that it is
- * what the id is said to be.
+ * `@cosyte/ncpdp`, this package's own tests, and public payer sheets for the three fields marked so
+ * below. A placeholder id stands for a field no source we read places: the walk shows it counted,
+ * not that it is any particular field.
  *
  * Every value is synthetic: made-up names, codes, numbers and dates chosen for the test.
  */
@@ -77,8 +77,8 @@ function request(segments: readonly (readonly [string, readonly Field[]])[]): Te
 /**
  * Each kept segment, with the fields our tables place in it. `FIELD_NAMES` groups its ids by
  * segment; the Pricing fields come from this package's Claim date test; the three ids marked
- * `candidate` are named by no table we hold for that segment, and two placeholder ids (`ZY`, `ZX`)
- * stand for the fields of a segment no table names at all.
+ * `payer sheet` are placed by public payer sheets and reached by a rule, and two placeholder ids
+ * (`ZY`, `ZX`) stand for the fields of a segment no table names at all.
  */
 const WALK: Readonly<Record<string, readonly Field[]>> = {
   "02": [
@@ -95,8 +95,8 @@ const WALK: Readonly<Record<string, readonly Field[]>> = {
     ["D8", "0"],
     ["DE", "20250602"],
     ["EP", "20250415"],
-    ["EK", "ZZSCHEDRXID01"], // candidate: Scheduled Prescription ID Number, not in our tables
-    ["CW", "ZZCLAIMALTID01"], // candidate: Alternate ID, not in our tables
+    ["EK", "ZZSCHEDRXID01"], // payer sheet: Scheduled Prescription ID Number, removed
+    ["CW", "ZZCLAIMALTID01"], // payer sheet: Alternate ID, removed
   ],
   "08": [
     ["E4", "TD"],
@@ -123,7 +123,7 @@ const WALK: Readonly<Record<string, readonly Field[]>> = {
     ["DU", "1750{"],
   ],
   "13": [
-    ["ZE", "20250301"], // candidate: Measurement Date, not in our tables
+    ["ZE", "20250301"], // payer sheet: Measurement Date, cut to the year
     ["ZX", "ZXCLINVALUE"], // placeholder: no table we hold names another Clinical field
   ],
   "20": [["F4", "ZZRESPMESSAGE"]],
