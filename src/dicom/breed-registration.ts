@@ -90,7 +90,8 @@ function refuseNestedIn(dataset: Dataset, topLevel: boolean): void {
 
 /** Whether a row's context path starts inside the removed Breed Registration Sequence. */
 function insideSequence(row: DeidentifiedAttribute): boolean {
-  return row.contextPath?.[0]?.startsWith(`${TAG_BREED_REGISTRATION_SEQUENCE}[`) === true;
+  // An absent path reads as the text "undefined", which no context segment starts like.
+  return String(row.contextPath?.[0]).startsWith(`${TAG_BREED_REGISTRATION_SEQUENCE}[`);
 }
 
 /** Whether a row names one of the removed attributes at the top level. */
@@ -142,7 +143,7 @@ export function removeBreedRegistration(
       .filter(isBreedRegistration),
   );
   const added = [...removed].map(removedRow);
-  dataset.get(TAG_BREED_REGISTRATION_SEQUENCE)?.items?.forEach((item, index) => {
+  (dataset.get(TAG_BREED_REGISTRATION_SEQUENCE)?.items ?? []).forEach((item, index) => {
     if (item.has(TAG_BREED_REGISTRATION_NUMBER)) {
       added.push({
         ...removedRow(TAG_BREED_REGISTRATION_NUMBER),
