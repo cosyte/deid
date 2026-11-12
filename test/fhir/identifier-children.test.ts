@@ -34,7 +34,9 @@ import {
   profileOptions,
   SAFE_HARBOR_PROFILE,
 } from "../../src/index.js";
-import { deidentifyFhirJson } from "../../src/fhir/index.js";
+import { parseResource } from "@cosyte/fhir";
+
+import { deidentifyFhirJson, extractFhirLoci } from "../../src/fhir/index.js";
 import {
   fhirElementsOf,
   fhirRepeatingElementsOf,
@@ -328,6 +330,20 @@ describe("the probe the review ran: an identifier's assigner display", () => {
       expect(json).not.toContain("2020-03-04");
       expect(manifest.map((m) => m.locus)).toEqual(["Patient.identifier.value"]);
     }
+  });
+
+  it("the extractor hands the engine one identifier locus for the value, and a block for the display", () => {
+    const doc = {
+      resourceType: "Patient",
+      identifier: [
+        { system: "http://example.org/zz-mrn", value: "ZZMRN0001", assigner: { display: "zz" } },
+      ],
+    };
+    const { loci } = extractFhirLoci(parseResource(JSON.stringify(doc)).resource);
+    expect(loci.map((l) => `${l.path} ${l.kind}`)).toEqual([
+      "Patient.identifier.value identifier",
+      "Patient.identifier[0].assigner.display unknown",
+    ]);
   });
 
   it("an extension holding an Identifier is removed whole, its assigner with it", () => {
