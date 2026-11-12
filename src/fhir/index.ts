@@ -62,7 +62,9 @@
  * never "de-identified".
  *
  * **Known limitations.** Extension values are block-only (no profile-aware retention, a
- * `us-core-*` demographic extension is dropped, not kept).
+ * `us-core-*` demographic extension is dropped, not kept), with one opt-in exception: under
+ * `keepPatientAnimal` the coded species, breed and gender status of the `patient-animal` extension
+ * are kept.
  * Resource ids are replaced and the reference wiring is kept, with what that does not reach stated:
  * the server base of a `fullUrl`, and of an absolute reference to it, is kept verbatim; and an id
  * written anywhere else (`meta.versionId`, `meta.source`, `Bundle.link.url`, an `Attachment.url`, any
@@ -97,6 +99,11 @@
  * Reason `masked` in its place, so the resource keeps its required elements. A contained resource is
  * never labeled (R4 `dom-5`); its container is. The label says that some content was filtered out,
  * never that the resource is de-identified. Off by default.
+ *
+ * **Animal patients, opt-in.** With `keepPatientAnimal: true` a `Patient`'s `patient-animal`
+ * extension keeps the coded `valueCodeableConcept` of its `species`, `breed` and `genderStatus`
+ * sub-extensions. Only that exact URL and those three parts: a look-alike URL, another sub-extension,
+ * a `valueString` and the concept's free `text` are blocked as every extension value is. Off by default.
  *
  * @packageDocumentation
  * @module @cosyte/deid/fhir
@@ -144,7 +151,7 @@ export interface FhirDeidResult {
 
 /**
  * Options for {@link deidentifyFhir} and {@link deidentifyFhirJson}: the core's
- * {@link "@cosyte/deid".DeidOptions} plus the FHIR-only `transformLabels`.
+ * {@link "@cosyte/deid".DeidOptions} plus the FHIR-only `transformLabels` and `keepPatientAnimal`.
  *
  * @example
  * ```ts
@@ -164,6 +171,15 @@ export interface FhirDeidOptions extends DeidOptions {
    * default, so the output is unchanged unless a caller asks.
    */
   readonly transformLabels?: boolean;
+  /**
+   * Keep the species, breed and gender status of an animal patient, from the R4 `patient-animal`
+   * extension ({@link FHIR_PATIENT_ANIMAL_URL}, matched exactly) on a `Patient`. Only the
+   * `valueCodeableConcept` of the `species`, `breed` and `genderStatus` sub-extensions is kept, as
+   * codes; the concept's `text`, any other `value[x]`, any other sub-extension and every other
+   * extension stay blocked. The kept codes are counted as unexamined residuals. Off by default, so the
+   * output is unchanged unless a caller asks. See {@link FhirExtractOptions}.
+   */
+  readonly keepPatientAnimal?: boolean;
 }
 
 /**
@@ -181,7 +197,8 @@ export interface FhirDeidOptions extends DeidOptions {
  * @param resource - The parsed FHIR resource to de-identify (`parseResource(json).resource`).
  * @param options - The policy and (for keyed transforms, identifier pseudonymization) the key context.
  *   A keyed transform with no context is a fatal `DEID_NO_KEY`, never an unkeyed fallback.
- *   `transformLabels` writes the transform labels (see {@link FhirDeidOptions}).
+ *   `transformLabels` writes the transform labels and `keepPatientAnimal` keeps an animal patient's
+ *   species, breed and gender status (see {@link FhirDeidOptions}).
  * @returns The de-identified resource and the value-free manifest.
  * @throws {@link "@cosyte/deid".DeidError} `DEID_NO_KEY` when a keyed transform is required for a
  *   category present in the resource but no key context was supplied.
@@ -201,7 +218,9 @@ export function deidentifyFhir(
   resource: FhirComplex,
   options: FhirDeidOptions = {},
 ): FhirDeidResult {
-  const { loci, coords, unexaminedResiduals } = extractFhirLoci(resource);
+  const { loci, coords, unexaminedResiduals } = extractFhirLoci(resource, {
+    keepPatientAnimal: options.keepPatientAnimal === true,
+  });
   const { document, manifest } = deidentify({ loci }, options);
   const deidentified = applyFhir(resource, document.loci, coords, {
     transformLabels: options.transformLabels === true,
@@ -247,6 +266,8 @@ export {
 export { classifyFhirPersonalDatatype, type FhirPersonalDatatype } from "./datatype.js";
 export {
   extractFhirLoci,
+  FHIR_PATIENT_ANIMAL_URL,
+  type FhirExtractOptions,
   type FhirCoord,
   type FhirExtraction,
   type FhirEditKind,

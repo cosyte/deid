@@ -221,7 +221,9 @@ the identifier rule), and an empty one as `{}`.
   retained; every other `display` fails closed.
 - Every **extension value** is dropped: a complex `valueAddress` / `valueHumanName` / `valueIdentifier`,
   a `modifierExtension`, a deeply nested extension, and a primitive-level `_`-sibling extension alike.
-  Extensions are the FHIR leak frontier; the `url` skeleton is kept, the payload is not.
+  Extensions are the FHIR leak frontier; the `url` skeleton is kept, the payload is not. The one
+  exception is opt-in: [`keepPatientAnimal`](#keep-an-animal-patients-species-opt-in) keeps the coded
+  species, breed and gender status of the `patient-animal` extension.
 - A **swept `Address` the pass cannot read faithfully** is removed **whole**, never partly retained: a
   `postalCode` that is not a whole zip code (a four-digit `0110` still has three leading digits, and
   keeping them would retain a fragment of something that was never a ZIP), or an unexpected JSON shape
@@ -326,6 +328,67 @@ The option is off by default, so a call without it returns exactly what it retur
 `FHIR_TRANSFORMED_SECURITY_LABEL` and `FHIR_DATA_ABSENT_REASON` export the two codes for a caller
 that reads them back.
 
+## Keep an animal patient's species (opt-in)
+
+R4 records what kind of animal a `Patient` is in the `patient-animal` extension
+(`http://hl7.org/fhir/StructureDefinition/patient-animal`): three sub-extensions, `species`, `breed`
+and `genderStatus`, each with a `valueCodeableConcept`. By default those values are blocked like every
+other extension value, so a transformed veterinary record no longer says it is about a dog. Pass
+`keepPatientAnimal: true` and the adapter keeps them:
+
+```ts runnable
+import { deidentifyFhirJson } from "@cosyte/deid/fhir";
+
+const input = JSON.stringify({
+  resourceType: "Patient",
+  name: [{ given: ["ZZPETNAME"] }],
+  extension: [
+    {
+      url: "http://hl7.org/fhir/StructureDefinition/patient-animal",
+      extension: [
+        {
+          url: "species",
+          valueCodeableConcept: {
+            coding: [{ system: "http://example.org/zz-animal", code: "ZZDOG" }],
+            text: "ZZPETNAME the dog",
+          },
+        },
+        { url: "breed", valueString: "ZZPETNAME" },
+      ],
+    },
+  ],
+});
+
+const { json } = deidentifyFhirJson(input, { keepPatientAnimal: true });
+const out = JSON.parse(json) as { extension: unknown };
+out.extension; // => [{ url: "http://hl7.org/fhir/StructureDefinition/patient-animal", extension: [{ url: "species", valueCodeableConcept: { coding: [{ system: "http://example.org/zz-animal", code: "ZZDOG" }] } }, { url: "breed" }] }]
+```
+
+**What it keeps, exactly.** On a `Patient` (alone, in a `Bundle` entry, or contained), the first
+extension in its own `extension` list whose `url` is exactly the `patient-animal` URL: the
+`valueCodeableConcept` of the first `species`, `breed` and `genderStatus` sub-extension in it, as
+codes. Each `Coding` keeps its `system`, `version`, `code`, `userSelected` and, beside a `code` or
+`system`, its `display`. `FHIR_PATIENT_ANIMAL_URL` exports the URL.
+
+**What stays blocked.** Everything else, as without the option:
+
+- a look-alike URL: a `|4.0.1` version suffix, `https`, a trailing slash, another case, another host;
+- any other sub-extension (a registration number, a name), and a second `species`, `breed` or
+  `genderStatus`;
+- any other `value[x]` on a sub-extension, so a `valueString` holding the animal's name is blocked;
+- the concept's free `text`, an `id`, an extension and any property R4 does not define on the
+  concept or a `Coding`, and a `display` with no `code` or `system` beside it;
+- a value or a `modifierExtension` on the `patient-animal` extension itself, a second
+  `patient-animal` extension, and the extension anywhere but a `Patient`'s own `extension` list;
+- every other extension.
+
+**How it is recorded.** A kept code gets no manifest row. Like a clinical code, it is counted in
+`unexaminedResiduals`, because the pass keeps it by its position and does not read it. A code system
+is the sender's choice, so a code that is really a name passes through: keep the option off unless
+the codes come from a terminology you trust, such as SNOMED CT.
+
+The option is off by default, so a call without it returns exactly what it returned before.
+
 ## What the leak and over-scrub tests check
 
 - **No leak.** Every seeded PHI sentinel across the person resources, the universal vectors, the nested
@@ -339,7 +402,8 @@ that reads them back.
 ## Known limitations (this release)
 
 - Extension values are **block-only**: there is no profile-aware retention, so a `us-core-*`
-  demographic extension is dropped rather than kept.
+  demographic extension is dropped rather than kept. The one exception is the opt-in
+  `keepPatientAnimal`, which keeps the coded species, breed and gender status of an animal patient.
 - Resource ids are replaced, but **not every place an id can be written is read**. The server base of a
   `fullUrl`, and of an absolute reference to that server, is kept verbatim: it names the server, and
   a base that carries anything else carries it out. An id written anywhere else is passed through and

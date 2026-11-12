@@ -18,7 +18,7 @@ import fc from "fast-check";
 import { parseResource, serializeResource } from "@cosyte/fhir";
 
 import { createDeidContext, DeidError, FATAL_CODES } from "../../src/index.js";
-import { deidentifyFhir } from "../../src/fhir/index.js";
+import { deidentifyFhir, type FhirDeidOptions } from "../../src/fhir/index.js";
 import {
   runLeakProperty,
   sentinelAt,
@@ -225,6 +225,144 @@ function place(resource: JsonObject, p: FhirPlacement, sentinel: string, filler:
   }
 }
 
+/** The R4 `patient-animal` extension, the one the `keepPatientAnimal` option reads. */
+const ANIMAL_URL = "http://hl7.org/fhir/StructureDefinition/patient-animal";
+
+/** How many places {@link animalExtension} can put a sentinel. */
+const ANIMAL_SPOTS = 12;
+
+/** A coded animal part, with an ordinary generated code. */
+function animalPart(url: string, filler: string): JsonObject {
+  return {
+    url,
+    valueCodeableConcept: { coding: [{ system: "http://example.org/zz-animal", code: filler }] },
+  };
+}
+
+/**
+ * A `patient-animal` extension with a sentinel at one of {@link ANIMAL_SPOTS} places: three a kept
+ * code holds (which the pass must name as a residual), and the rest where the option still blocks (a
+ * `valueString`, a fourth sub-extension, a look-alike URL, the concept's `text`, an extension on a
+ * coding, a repeated part, a value on the extension itself, a display with no code, a nested
+ * extension).
+ */
+function animalExtension(
+  spot: number,
+  sentinel: string,
+  filler: string,
+): {
+  readonly ext: JsonObject;
+  readonly shape: LeakShape;
+  readonly where: string;
+} {
+  const species = animalPart("species", filler);
+  const breed = animalPart("breed", filler);
+  const gender = animalPart("genderStatus", filler);
+  const coded = (system: string, code: string, display?: string): JsonObject => ({
+    url: "species",
+    valueCodeableConcept: {
+      coding: [{ system, code, ...(display === undefined ? {} : { display }) }],
+    },
+  });
+  const ext = (parts: Json[], extra: JsonObject = {}, url = ANIMAL_URL): JsonObject => ({
+    url,
+    extension: parts,
+    ...extra,
+  });
+  switch (spot) {
+    case 0:
+      return {
+        ext: ext([coded("http://example.org/zz-animal", sentinel), breed]),
+        shape: "qualifier-or-code",
+        where: "animal species code",
+      };
+    case 1:
+      return {
+        ext: ext([coded("http://example.org/zz-animal", filler, sentinel), breed]),
+        shape: "qualifier-or-code",
+        where: "animal species display",
+      };
+    case 2:
+      return {
+        ext: ext([coded(sentinel, filler), gender]),
+        shape: "qualifier-or-code",
+        where: "animal species system",
+      };
+    case 3:
+      return {
+        ext: ext([{ url: "species", valueString: sentinel }, breed]),
+        shape: "nested",
+        where: "animal species valueString",
+      };
+    case 4:
+      return {
+        ext: ext([species, { url: "registration", valueString: sentinel }]),
+        shape: "nested",
+        where: "animal extra sub-extension",
+      };
+    case 5:
+      return {
+        ext: ext([coded("http://example.org/zz-animal", sentinel)], {}, `${ANIMAL_URL}|4.0.1`),
+        shape: "nested",
+        where: "look-alike animal url",
+      };
+    case 6:
+      return {
+        ext: ext([
+          {
+            url: "species",
+            valueCodeableConcept: { coding: [{ code: filler }], text: sentinel },
+          },
+        ]),
+        shape: "nested",
+        where: "animal species text",
+      };
+    case 7:
+      return {
+        ext: ext([
+          species,
+          {
+            url: "genderStatus",
+            valueCodeableConcept: {
+              coding: [{ code: filler, extension: [{ url: "x", valueString: sentinel }] }],
+            },
+          },
+        ]),
+        shape: "nested",
+        where: "animal coding extension",
+      };
+    case 8:
+      return {
+        ext: ext([species, coded("http://example.org/zz-animal", sentinel)]),
+        shape: "nested",
+        where: "repeated animal species",
+      };
+    case 9:
+      return {
+        ext: ext([species], { valueString: sentinel }),
+        shape: "nested",
+        where: "animal extension value",
+      };
+    case 10:
+      return {
+        ext: ext([
+          {
+            url: "breed",
+            valueCodeableConcept: { coding: [{ display: sentinel }] },
+          },
+        ]),
+        shape: "nested",
+        where: "animal display with no code",
+      };
+    default:
+      return {
+        ext: ext([{ ...species, extension: [{ url: "note", valueString: sentinel }] }]),
+        shape: "nested",
+        where: "animal nested extension",
+      };
+  }
+}
+
 /** Build the document text with each placement written into it. */
 export function build(value: {
   type: string;
@@ -232,6 +370,7 @@ export function build(value: {
   filler: string;
   stem: string;
   placements: readonly FhirPlacement[];
+  animalSpot?: number;
 }): { raw: string; placed: Placement[] } {
   const resource: JsonObject = {
     resourceType: value.type,
@@ -244,6 +383,13 @@ export function build(value: {
     const where = place(resource, p, sentinel, value.filler);
     placed.push({ sentinel, shape: p.shape, where: `${value.type}.${where}` });
   });
+  if (value.animalSpot !== undefined) {
+    const sentinel = sentinelAt(value.stem, value.placements.length);
+    const animal = animalExtension(value.animalSpot, sentinel, value.filler);
+    const existing = resource["extension"];
+    resource["extension"] = [...(Array.isArray(existing) ? existing : []), animal.ext];
+    placed.push({ sentinel, shape: animal.shape, where: `${value.type}.${animal.where}` });
+  }
   const doc: JsonObject = value.inBundle
     ? { resourceType: "Bundle", type: "collection", entry: [{ resource }] }
     : resource;
@@ -268,12 +414,12 @@ function lociOf(node: Json, path: string, sentinel: string, out: string[]): void
 }
 
 /** Run the adapter on the text and read back the outcome. */
-export function pass(raw: string): PassOutcome {
+export function pass(raw: string, options: FhirDeidOptions = {}): PassOutcome {
   const parsed = JSON.parse(raw) as JsonObject;
   const rootType = typeof parsed["resourceType"] === "string" ? parsed["resourceType"] : "";
   try {
     const { resource } = parseResource(raw);
-    const result = deidentifyFhir(resource, { context: ctx });
+    const result = deidentifyFhir(resource, { ...options, context: ctx });
     const residualLoci = new Set(result.unexaminedResiduals.map((r) => r.locus));
     return {
       output: serializeResource(result.document),
@@ -310,20 +456,41 @@ export function checkCase(
     filler: string;
     stem: string;
     placements: readonly FhirPlacement[];
+    animalSpot?: number;
   },
   tally: LeakTally,
+  options: FhirDeidOptions = {},
 ): string[] {
   const { raw, placed } = build(value);
   // Non-vacuity: only a sentinel the input holds is swept, and a case must hold one. A later
   // placement can overwrite an earlier one at the same position.
   const present = placed.filter((p) => raw.includes(p.sentinel));
   if (present.length === 0) return ["no sentinel reached the input"];
-  return sweep(present, pass(raw), tally);
+  return sweep(present, pass(raw, options), tally);
 }
+
+/**
+ * One generated case for the property with `keepPatientAnimal` on: a `patient-animal` extension with a
+ * sentinel in it, on a `Patient` half the time, beside up to three ordinary placements.
+ */
+export const animalCaseArb = fc.record({
+  type: fc.oneof(fc.constant("Patient"), fc.constantFrom(...RESOURCE_TYPES)),
+  inBundle: fc.boolean(),
+  filler: fc.stringMatching(/^[a-z]{3,8}$/),
+  stem: sentinelStem,
+  placements: fc.array(placementArb, { maxLength: 3 }),
+  animalSpot: fc.nat({ max: ANIMAL_SPOTS - 1 }),
+});
 
 describe("the generated leak property: FHIR R4", () => {
   it("every sentinel is removed, or named as an unexamined residual at its locus", () => {
     runLeakProperty("fhir", caseArb, checkCase);
+  });
+
+  it("with keepPatientAnimal on, the same holds, the patient-animal extension included", () => {
+    runLeakProperty("fhir-animal", animalCaseArb, (value, tally) =>
+      checkCase(value, tally, { keepPatientAnimal: true }),
+    );
   });
 
   it("the sweep has teeth: a sentinel put back into a real output, or the manifest, is caught", () => {
