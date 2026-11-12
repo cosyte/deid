@@ -6,14 +6,15 @@
  * Read from the published R4 (4.0.1) resource definitions at
  * `https://hl7.org/fhir/R4/profiles-resources.json`: every element of every resource
  * `StructureDefinition` whose `min` is 1 or more and whose type is one the pass can remove or empty
- * (a `Reference`, a string or uri kind, a person datatype, an `Attachment`, an `Annotation`, an
- * `Identifier`, a date kind or a backbone element), plus every element that reuses another's
+ * (a `Reference`, any primitive, which the pass removes when it does not fit the format R4 defines
+ * for its type, a person datatype, an `Attachment`, an `Annotation`, an `Identifier` or a backbone
+ * element), plus every element that reuses another's
  * definition through `contentReference`, so a nested `Questionnaire.item.item` reads as
  * `Questionnaire.item`. Only element paths are kept, never a description. Nothing reads the network
  * at build, test or run time: this script is run by hand when the table is refreshed, and its
  * output is reviewed and committed.
  *
- *     pnpm exec tsx scripts/fhir-required-elements.ts
+ *     node scripts/fhir-required-elements.ts && pnpm format
  */
 
 import { writeFileSync } from "node:fs";
@@ -22,13 +23,28 @@ import { join } from "node:path";
 const ROOT = join(import.meta.dirname, "..");
 const SOURCE = "https://hl7.org/fhir/R4/profiles-resources.json";
 
-/** The element types the pass can remove, or empty by removing every part of. */
+/**
+ * The element types the pass can remove, or empty by removing every part of. Every primitive type is
+ * one: a primitive that does not fit the format R4 defines for its type is removed.
+ */
 const REMOVABLE_TYPES: ReadonlySet<string> = new Set([
   "Reference",
   "string",
   "markdown",
   "uri",
   "url",
+  "canonical",
+  "oid",
+  "uuid",
+  "id",
+  "code",
+  "boolean",
+  "integer",
+  "decimal",
+  "positiveInt",
+  "unsignedInt",
+  "base64Binary",
+  "time",
   "Annotation",
   "HumanName",
   "Address",

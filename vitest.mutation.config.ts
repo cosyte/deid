@@ -18,10 +18,13 @@ const config = shared as ViteUserConfig;
  * - `test/examples-typecheck.test.ts` type-checks `examples/` with the TypeScript compiler against
  *   the built package, which runs no code;
  * - `test/scripts/` tests this repository's own tooling in `scripts/` (the PHI scan and the
- *   changelog), each in a child process.
+ *   changelog), each in a child process;
+ * - `test/fhir/pattern-guard.test.ts` reads the FHIR sources under `src/` as text to find every
+ *   pattern they write, and StrykerJS's rewrite of them (each regular expression mutated in place)
+ *   is not the source it guards.
  *
- * What they prove is proved by `pnpm test` on every pull request. No test in this suite reads a
- * file under `src/` as text, so none fails on StrykerJS's rewrite of it.
+ * What they prove is proved by `pnpm test` on every pull request. No other test in this suite reads
+ * a file under `src/` as text, so none fails on StrykerJS's rewrite of it.
  *
  * Every property runs from one fixed seed here (`COSYTE_PROPERTY_SEED`, read by
  * `test/helpers/property.ts`), at the pull request depth of 100 cases: a property draws a fresh seed
@@ -42,6 +45,7 @@ const mutation: ViteUserConfig = {
       "test/docs-content.test.ts",
       "test/examples-typecheck.test.ts",
       "test/scripts/**",
+      "test/fhir/pattern-guard.test.ts",
     ],
     env: {
       ...config.test?.env,

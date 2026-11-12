@@ -61,6 +61,14 @@
  * honesty line is unchanged: the output is **"Safe-Harbor-transformed per the configured policy"**,
  * never "de-identified".
  *
+ * **Primitive formats.** Every primitive the pass keeps is checked against the format the R4
+ * definitions give its type (the pattern of a `code`, an `id`, a date kind, a `time`, a uri kind, an
+ * `oid`, a `uuid`, a `base64Binary`, a number kind and a `boolean`, and the range of an integer
+ * kind), and a `code` at an element R4 binds, required, to a value set it defines against that set's
+ * codes; a value that does not fit is blocked whole. A format stops only what it rules out: a name
+ * that fits a `code`, an `id` or a `uri` is kept and counted as unexamined. An extension's `url` is
+ * kept verbatim when it fits the `uri` format.
+ *
  * **Known limitations.** Extension values are block-only (no profile-aware retention, a
  * `us-core-*` demographic extension is dropped, not kept), with one opt-in exception: under
  * `keepPatientAnimal` the coded species, breed and gender status of the `patient-animal` extension
@@ -68,7 +76,7 @@
  * Resource ids are replaced and the reference wiring is kept, with what that does not reach stated:
  * the server base of a `fullUrl`, and of an absolute reference to it, is kept verbatim; and an id
  * written anywhere else (`meta.versionId`, `meta.source`, `Bundle.link.url`, an `Attachment.url`, any
- * other uri, and an element's own `id`) is passed through and counted as unexamined. Under the Safe
+ * other uri) that fits the format R4 gives its type is passed through and counted as unexamined. Under the Safe
  * Harbor default the stand-ins are per call, so the same resource transformed in two calls gets two
  * unrelated ids; linkage across calls needs a keyed policy, which does not claim Safe Harbor.
  * Free text is blocked, not retained. A `note` (`Annotation` text, author and time, as one unit), a
@@ -109,7 +117,7 @@
  * @module @cosyte/deid/fhir
  */
 
-import { parseResource, serializeResource, type FhirComplex } from "@cosyte/fhir";
+import { parseResource, serializeResource, type FhirComplex, type FhirIssue } from "@cosyte/fhir";
 
 import { deidentify, type DeidOptions } from "../deidentify.js";
 import { type DeidManifestEntry } from "../manifest.js";
@@ -180,6 +188,13 @@ export interface FhirDeidOptions extends DeidOptions {
    * output is unchanged unless a caller asks. See {@link FhirExtractOptions}.
    */
   readonly keepPatientAnimal?: boolean;
+  /**
+   * The issues `parseResource` returned beside the resource, so that each `_`-sibling the reader
+   * dropped for being written beside an element that is not a primitive gets a blocked row
+   * (`Observation._code`), with no value. {@link deidentifyFhirJson} passes them itself. See
+   * {@link FhirExtractOptions}.
+   */
+  readonly parseIssues?: readonly FhirIssue[];
 }
 
 /**
@@ -220,6 +235,8 @@ export function deidentifyFhir(
 ): FhirDeidResult {
   const { loci, coords, unexaminedResiduals } = extractFhirLoci(resource, {
     keepPatientAnimal: options.keepPatientAnimal === true,
+    // Stryker disable next-line ArrayDeclaration: an issue that is not a misplaced sibling is passed over, so a filled default records the same nothing
+    parseIssues: options.parseIssues ?? [],
   });
   const { document, manifest } = deidentify({ loci }, options);
   const deidentified = applyFhir(resource, document.loci, coords, {
@@ -230,8 +247,10 @@ export function deidentifyFhir(
 
 /**
  * Convenience: parse raw FHIR JSON, de-identify it, and return the transformed resource, the serialized
- * de-identified JSON, and the value-free manifest in one call. Parse warnings are not part of the de-id
- * contract and are discarded here; call `parseResource` directly if you need them.
+ * de-identified JSON, and the value-free manifest in one call. The parse warnings are read for one
+ * thing: each `_`-sibling the reader dropped for being written beside an element that is not a
+ * primitive gets a blocked row ({@link FhirDeidOptions.parseIssues}). They are not returned; call
+ * `parseResource` directly if you need them.
  *
  * @param json - Raw FHIR JSON text.
  * @param options - The policy and key context (see {@link deidentifyFhir}).
@@ -250,8 +269,8 @@ export function deidentifyFhirJson(
   json: string,
   options: FhirDeidOptions = {},
 ): FhirDeidResult & { readonly json: string } {
-  const { resource } = parseResource(json);
-  const result = deidentifyFhir(resource, options);
+  const { resource, issues } = parseResource(json);
+  const result = deidentifyFhir(resource, { ...options, parseIssues: issues });
   return { ...result, json: serializeResource(result.document) };
 }
 
