@@ -160,6 +160,16 @@ describe("an unknown key inside an extension is blocked", () => {
     expect(unexaminedResiduals.map((r) => r.locus)).not.toContain("Observation.extension[0].note");
   });
 
+  it("blocks a url or an id that is not a single string", () => {
+    const { json } = run({
+      resourceType: "Observation",
+      status: "final",
+      extension: [{ id: { who: "ZZODDID" }, url: ["ZZODDURL"] }],
+    });
+    expect(json).not.toContain("ZZODDID");
+    expect(json).not.toContain("ZZODDURL");
+  });
+
   it("keeps an extension's url and id, which are structural", () => {
     const { json } = run({
       resourceType: "Observation",
@@ -169,5 +179,52 @@ describe("an unknown key inside an extension is blocked", () => {
     expect(json).toContain('"id":"e1"');
     expect(json).toContain('"url":"http://example.org/x"');
     expect(json).not.toContain("valueBoolean");
+  });
+});
+
+/**
+ * Outside an extension the rule is the one the limitations page states: an unknown key on a person
+ * resource's own top level is removed by the fail-closed person sweep, and an unknown key anywhere
+ * else is handed through and named as an unexamined residual at its locus, never silently.
+ */
+describe("an unknown key elsewhere in a resource", () => {
+  function residuals(resource: unknown): string[] {
+    const { resource: parsed } = parseResource(JSON.stringify(resource));
+    return extractFhirLoci(parsed).unexaminedResiduals.map((r) => r.locus);
+  }
+
+  it("on a person resource's own top level: removed", () => {
+    const { json, manifest } = run({ resourceType: "Patient", gender: "male", zzNote: "ZZTOP" });
+    expect(json).not.toContain("ZZTOP");
+    expect(manifest.map((m) => m.locus)).toContain("Patient.zzNote");
+  });
+
+  it("on a clinical resource, in a backbone and in a coding: handed through and counted", () => {
+    const resource = {
+      resourceType: "Observation",
+      status: "final",
+      zzNote: "ZZCLIN1",
+      code: { coding: [{ system: "http://loinc.org", code: "2951-2", zzNote: "ZZCLIN2" }] },
+      component: [{ code: { text: "sodium" }, zzNote: "ZZCLIN3" }],
+    };
+    const { json } = run(resource);
+    for (const v of ["ZZCLIN1", "ZZCLIN2", "ZZCLIN3"]) expect(json).toContain(v);
+    expect(residuals(resource)).toEqual(
+      expect.arrayContaining([
+        "Observation.zzNote",
+        "Observation.code.coding[0].zzNote",
+        "Observation.component[0].zzNote",
+      ]),
+    );
+  });
+
+  it("below a person resource's top level: handed through and counted", () => {
+    const resource = {
+      resourceType: "Patient",
+      communication: [{ language: { text: "en" }, zzNote: "ZZPERSONDEEP" }],
+    };
+    const { json } = run(resource);
+    expect(json).toContain("ZZPERSONDEEP");
+    expect(residuals(resource)).toContain("Patient.communication[0].zzNote");
   });
 });

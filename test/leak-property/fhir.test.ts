@@ -9,6 +9,11 @@
  * qualifier position (a `use`, a `system`, a `type` code, a `gender`), and nested structures: a
  * contained resource, a nested extension, a Bundle inside a Bundle.
  *
+ * A sentinel under a key R4 does not define on an extension (in an `extension`, a `modifierExtension`,
+ * a nested extension, a primitive's `_`-sibling extension, a kept address part's) is held to more than
+ * the shared rule: it must be gone from the output, because an extension is blocked whatever it holds.
+ * A sentinel under an unknown key anywhere else is held to the shared rule.
+ *
  * Where a sentinel sits is read back from the input JSON, as the adapter writes a locus
  * (`Patient.name[0].family`), so the residual it must be named by is exact.
  */
@@ -20,6 +25,7 @@ import { parseResource, serializeResource } from "@cosyte/fhir";
 import { createDeidContext, DeidError, FATAL_CODES } from "../../src/index.js";
 import { deidentifyFhir, type FhirDeidOptions } from "../../src/fhir/index.js";
 import {
+  newTally,
   runLeakProperty,
   sentinelAt,
   sentinelStem,
@@ -103,6 +109,25 @@ const EXTRA_PATHS: readonly (readonly (string | number)[])[] = [
   ["code", "label"],
   ["subject", "name"],
   ["meta", "owner"],
+  ["zzNote"],
+  ["code", "coding", 0, "zzNote"],
+  ["component", 0, "zzNote"],
+  ["communication", 0, "zzNote"],
+];
+
+/**
+ * Where a sentinel sits under a key R4 does not define on an extension, as {@link place} and
+ * {@link animalExtension} describe it. A sentinel placed at one of these must be removed.
+ */
+const UNKNOWN_EXTENSION_KEY_SPOTS: readonly string[] = [
+  "extension[0].note",
+  "modifierExtension[0].comment",
+  "extension[0].extension[0].detail",
+  "_status.extension[0].note",
+  "address[]._state.extension[0].note",
+  "animal part note",
+  "animal extension note",
+  "animal userSelected",
 ];
 
 const SHAPES: readonly LeakShape[] = [
@@ -126,7 +151,7 @@ const placementArb: fc.Arbitrary<FhirPlacement> = fc.record({
   element: fc.constantFrom(...COMPOSITE_ELEMENTS),
   code: fc.constantFrom(...CODE_PATHS),
   extra: fc.constantFrom(...EXTRA_PATHS),
-  nest: fc.nat({ max: 4 }),
+  nest: fc.nat({ max: 9 }),
 });
 
 /** One generated case: the resource type, whether it rides in a Bundle, and the placements. */
@@ -187,8 +212,39 @@ function place(resource: JsonObject, p: FhirPlacement, sentinel: string, filler:
     case "plain":
     case "subcomponent": {
       // Nested: a contained resource, a nested extension, a modifier extension, a resource in a
-      // resource, or a Coding nested under an extension.
+      // resource, a Coding nested under an extension, or a key R4 does not define on an extension.
       switch (p.nest) {
+        case 5:
+          setPath(resource, ["extension", 0], { url: "http://example.org/n", note: sentinel });
+          return "extension[0].note";
+        case 6:
+          setPath(resource, ["modifierExtension", 0], {
+            url: "http://example.org/m",
+            comment: sentinel,
+          });
+          return "modifierExtension[0].comment";
+        case 7:
+          setPath(resource, ["extension", 0], {
+            url: "http://example.org/x",
+            extension: [{ url: "inner", detail: { text: sentinel } }],
+          });
+          return "extension[0].extension[0].detail";
+        case 8:
+          resource["_status"] = {
+            extension: [{ url: "http://example.org/s", note: sentinel }],
+          };
+          return "_status.extension[0].note";
+        case 9: {
+          const existing = resource["address"];
+          const list = Array.isArray(existing) ? existing : [];
+          list.push({
+            state: "MA",
+            _state: { extension: [{ url: "http://example.org/a", note: sentinel }] },
+            postalCode: "02139",
+          });
+          resource["address"] = list;
+          return "address[]._state.extension[0].note";
+        }
         case 0: {
           const contained = Array.isArray(resource["contained"]) ? resource["contained"] : [];
           contained.push({ resourceType: "Patient", id: "c1", name: [{ family: sentinel }] });
@@ -229,7 +285,7 @@ function place(resource: JsonObject, p: FhirPlacement, sentinel: string, filler:
 const ANIMAL_URL = "http://hl7.org/fhir/StructureDefinition/patient-animal";
 
 /** How many places {@link animalExtension} can put a sentinel. */
-const ANIMAL_SPOTS = 12;
+const ANIMAL_SPOTS = 15;
 
 /** A coded animal part, with an ordinary generated code. */
 function animalPart(url: string, filler: string): JsonObject {
@@ -244,7 +300,8 @@ function animalPart(url: string, filler: string): JsonObject {
  * code holds (which the pass must name as a residual), and the rest where the option still blocks (a
  * `valueString`, a fourth sub-extension, a look-alike URL, the concept's `text`, an extension on a
  * coding, a repeated part, a value on the extension itself, a display with no code, a nested
- * extension).
+ * extension, a key R4 does not define on a part or on the extension itself, a `userSelected` that is
+ * not a boolean).
  */
 function animalExtension(
   spot: number,
@@ -353,6 +410,31 @@ function animalExtension(
         ]),
         shape: "nested",
         where: "animal display with no code",
+      };
+    case 12:
+      return {
+        ext: ext([{ ...species, note: sentinel }, breed]),
+        shape: "nested",
+        where: "animal part note",
+      };
+    case 13:
+      return {
+        ext: ext([species, gender], { note: sentinel }),
+        shape: "nested",
+        where: "animal extension note",
+      };
+    case 14:
+      return {
+        ext: ext([
+          {
+            url: "species",
+            valueCodeableConcept: {
+              coding: [{ system: "http://example.org/zz-animal", code: filler, userSelected: sentinel }],
+            },
+          },
+        ]),
+        shape: "qualifier-or-code",
+        where: "animal userSelected",
       };
     default:
       return {
@@ -466,7 +548,23 @@ export function checkCase(
   // placement can overwrite an earlier one at the same position.
   const present = placed.filter((p) => raw.includes(p.sentinel));
   if (present.length === 0) return ["no sentinel reached the input"];
-  return sweep(present, pass(raw, options), tally);
+  const outcome = pass(raw, options);
+  return [...sweep(present, outcome, tally), ...unknownExtensionKeyKept(present, outcome)];
+}
+
+/**
+ * The stricter rule for a sentinel under a key R4 does not define on an extension: it is gone from the
+ * output. Being named as a residual is not enough there, because an extension is blocked whatever it
+ * holds.
+ */
+export function unknownExtensionKeyKept(
+  placed: readonly Placement[],
+  outcome: PassOutcome,
+): string[] {
+  return placed
+    .filter((p) => UNKNOWN_EXTENSION_KEY_SPOTS.some((spot) => p.where.endsWith(spot)))
+    .filter((p) => outcome.output.includes(p.sentinel))
+    .map((p) => `${p.sentinel} (${p.shape} at ${p.where}) is under an unknown extension key and survives`);
 }
 
 /**
@@ -501,6 +599,55 @@ describe("the generated leak property: FHIR R4", () => {
     const caught = tamper(placed, pass(raw));
     expect(caught.inOutput).toContain("survives in the output");
     expect(caught.inManifest).toContain("is in the manifest");
+  });
+});
+
+/**
+ * Each place an unknown extension key can sit, on a person and on a clinical resource, through the
+ * same check as a generated case, so every one is run on every pull request whatever the seed draws.
+ */
+describe("the FHIR sweep removes a sentinel under an unknown extension key", () => {
+  const base = { inBundle: false, filler: "abc", stem: "ZQLKUNKN" };
+  const nested = (nest: number): FhirPlacement => ({
+    shape: "nested",
+    element: "name",
+    code: ["status"],
+    extra: ["meta", "owner"],
+    nest,
+  });
+
+  it.each([
+    ["Patient", 5],
+    ["Patient", 6],
+    ["Patient", 7],
+    ["Patient", 9],
+    ["Observation", 5],
+    ["Observation", 6],
+    ["Observation", 7],
+    ["Observation", 8],
+    ["Organization", 9],
+  ])("%s, nest %i", (type, nest) => {
+    const violations = checkCase({ ...base, type, placements: [nested(nest)] }, newTally());
+    expect(violations).toEqual([]);
+  });
+
+  it.each([12, 13, 14])("the patient-animal extension, spot %i", (animalSpot) => {
+    const value = { ...base, type: "Patient", placements: [], animalSpot };
+    expect(checkCase(value, newTally(), { keepPatientAnimal: true })).toEqual([]);
+  });
+
+  it("the stricter rule has teeth: a residual is not enough under an unknown extension key", () => {
+    const placed: Placement[] = [
+      { sentinel: "ZQLKTEETH00X", shape: "nested", where: "Observation.extension[0].note" },
+    ];
+    const outcome: PassOutcome = {
+      output: '{"note":"ZQLKTEETH00X"}',
+      manifest: [],
+      unexaminedResiduals: [],
+      residualAt: () => true,
+      refused: false,
+    };
+    expect(unknownExtensionKeyKept(placed, outcome)).toHaveLength(1);
   });
 });
 

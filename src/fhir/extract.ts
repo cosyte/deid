@@ -633,10 +633,12 @@ function keepAnimalConcept(out: FhirLocusAccumulator, concept: FhirNode, path: s
       }
       const isCoding = isCodingComplex(coding);
       coding.properties.forEach((field, k) => {
+        // R4 types `userSelected` as a boolean: a string or a number there is content, not a flag.
         const keeps =
           ANIMAL_CODING_PROPERTIES.has(field.name) &&
           isPrimitive(field.value) &&
-          (field.name !== "display" || isCoding);
+          (field.name !== "display" || isCoding) &&
+          (field.name !== "userSelected" || typeof field.value.value === "boolean");
         if (!keeps) blockNode(out, field.value, join(codingPath, elementSegment(field.name, k)));
       });
     });
