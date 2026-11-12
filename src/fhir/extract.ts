@@ -1151,6 +1151,10 @@ function emitLiteral(
  *
  * - A resource's `id` (the `id` of a complex carrying a `resourceType`, a contained resource and a
  *   Bundle entry's resource included) is replaced. One that is not a primitive is removed whole.
+ * - An element's own `id` is taken here and left to {@link decideWrittenMetadataBelow}, which
+ *   replaces every element id the output keeps, so no other rule reads it.
+ * - The `actionId` of a `relatedAction` in a `RequestGroup` or a `PlanDefinition` names an action's
+ *   element id, and is replaced alike so the link resolves.
  * - A `Reference.reference` (a `reference` property holding a string, at any depth outside a person
  *   resource's own top level) is read by {@link emitLiteral}. A `reference` holding an object is a
  *   `Reference` datatype R4 names `reference` (`Consent.provision.data.reference`), so it is walked
@@ -1177,6 +1181,11 @@ function handleLogicalIds(
     } else if (primitiveString(value).length > 0) {
       pushLogicalId(out, value, path, primitiveString(value), "set-primitive");
     }
+    return true;
+  }
+  if (name === "id") {
+    // An element's own id is replaced after the walk, with every element id the output keeps, so no
+    // other rule reads it: a date-shaped id is an id, not a date.
     return true;
   }
   if (name === "reference" && !isPersonTop && !isComplex(value)) {
@@ -1742,9 +1751,10 @@ function recordKeptAddressParts(
   node.properties.forEach((prop, i) => {
     if (!FHIR_KEPT_ADDRESS_PARTS.has(prop.name)) return;
     const part = prop.value;
-    // A part the pass blocked (any shape but a string) is removed whole: nothing of it is handed through.
+    // A part the pass blocked (any shape but a string) is removed whole: nothing of it is handed
+    // through. The one other edit a kept part carries replaces its element id and keeps the rest.
     const edit = state.edits.get(part);
-    if (edit !== undefined && EDIT_REACH[edit] === "replaces-node") return;
+    if (edit !== undefined && edit !== "primitive-id") return;
     // Stryker disable ConditionalExpression: a part reached here is always a primitive, so the test only narrows the type
     /* v8 ignore if -- every part that is not a string is blocked above; this guard narrows the type */
     if (!isPrimitive(part)) return;

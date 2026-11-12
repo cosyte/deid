@@ -26,7 +26,7 @@ import {
   SAFE_HARBOR_PROFILE,
   type DeidManifestEntry,
 } from "../../src/index.js";
-import { deidentifyFhir } from "../../src/fhir/index.js";
+import { deidentifyFhir, extractFhirLoci } from "../../src/fhir/index.js";
 
 /** Run one JSON value through the pass and return the output, its manifest and its residuals. */
 function pass(
@@ -325,6 +325,36 @@ describe("element ids in a person resource, a Bundle and a kept address part", (
   });
 });
 
+describe("what a kept address part hands through once its id is replaced", () => {
+  /** The residual loci of one Patient address, read straight from the extractor. */
+  function residualsOf(address: unknown): string[] {
+    const { resource } = parseResource(
+      JSON.stringify({ resourceType: "Patient", address: [address] }),
+    );
+    return extractFhirLoci(resource).unexaminedResiduals.map((r) => r.locus);
+  }
+
+  it("a kept part with a replaced id still hands through its extension's url, and it is counted", () => {
+    expect(
+      residualsOf({
+        state: "IL",
+        _state: { id: "ZZEIDSTATE", extension: [{ url: "http://example.org/zz-s" }] },
+        postalCode: "62704",
+      }),
+    ).toEqual(["Patient.address[0]._state.extension[0].url"]);
+  });
+
+  it("a kept part the pass blocked hands nothing through, the extension beside it included", () => {
+    expect(
+      residualsOf({
+        state: 900000011,
+        _state: { extension: [{ url: "http://example.org/zz-s" }] },
+        postalCode: "62704",
+      }),
+    ).toEqual([]);
+  });
+});
+
 describe("an element id that is not a string, or is empty", () => {
   it("an id holding an object or a list is removed whole and recorded", () => {
     const run = pass({
@@ -398,6 +428,23 @@ describe("an element id beside a value the pass replaces, and in places the walk
     });
     expect(run.wire).not.toContain("ZZEIDINNER");
     expect(rows(run.manifest, "Observation.identifier[0].zzInner.id")).toHaveLength(1);
+  });
+
+  it("a date-shaped action id and the actionId naming it get the same replacement", () => {
+    const run = pass({
+      resourceType: "RequestGroup",
+      status: "active",
+      intent: "plan",
+      action: [
+        { id: "2020-01-02" },
+        { relatedAction: [{ actionId: "2020-01-02", relationship: "after" }] },
+      ],
+    });
+    expect(run.wire).not.toContain("2020-01-02");
+    expect(at(run.out, "action.1.relatedAction.0.actionId")).toBe(at(run.out, "action.0.id"));
+    expect(rows(run.manifest, "RequestGroup.action[1].relatedAction[0].actionId")).toEqual([
+      expect.objectContaining({ category: C.MRN, code: D.DEID_IDENTIFIER_SUBSTITUTED }),
+    ]);
   });
 
   it("an empty actionId names nothing: it is kept empty and gets no row", () => {
