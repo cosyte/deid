@@ -334,28 +334,36 @@ function hasAttr(el: Element, name: string): boolean {
  * across extractions could name children that are gone.
  */
 function childSegments(cache: SegmentCache, parent: Element): readonly ChildSegment[] {
-  let segments = cache.get(parent);
-  // Stryker disable next-line ConditionalExpression: with the test always true, every visit composes the segments again and prints the same ones, so the mutant changes what is allocated and nothing a test can read
-  if (segments === undefined) {
-    segments = segmentsOf(parent);
-    cache.set(parent, segments);
-  }
+  const cached = cache.get(parent);
+  // Stryker disable next-line ConditionalExpression: with the test always false, every visit composes the segments again and prints the same ones, so the mutant changes what is allocated and nothing a test can read
+  if (cached !== undefined) return cached;
+  const segments = segmentsOf(parent);
+  // Stryker disable next-line CallExpression: without the call, the next visit composes the segments again and prints the same ones, so the mutant changes what is allocated and nothing a test can read
+  cache.set(parent, segments);
   return segments;
 }
 
 /**
  * The segments of a parent's element children, composed afresh: the work {@link childSegments} does
  * once per parent and keeps.
+ *
+ * Most elements have no element child or one, and a lone child shares its name with no sibling, so it
+ * is indexed only when its name was refused. The two maps that count siblings are built only where
+ * there are two or more: building them for every element was most of what a walk allocated.
  */
 function segmentsOf(parent: Element): ChildSegment[] {
   const elements = childElements(parent);
-  // Most elements have no element child or one, and a lone child shares its name with no sibling, so
-  // it is indexed only when its name was refused. The two maps below are built only where there are
-  // siblings to count: building them for every element was most of what a walk allocated.
-  // Stryker disable next-line ConditionalExpression: with the test always false, a lone child takes the counting path below and prints the same segment, so the mutant changes what is allocated and nothing a test can read
-  if (elements.length < 2) {
-    return elements.map((el) => ({ el, path: segment(nameOf(el), 0, false) }));
-  }
+  // Stryker disable next-line ConditionalExpression: with the test always false, a lone child takes the counting path and prints the same segment, so the mutant changes what is allocated and nothing a test can read
+  return elements.length < 2 ? loneSegments(elements) : countedSegments(elements);
+}
+
+/** The segment of each of fewer than two children: no sibling shares its name. */
+function loneSegments(elements: readonly Element[]): ChildSegment[] {
+  return elements.map((el) => ({ el, path: segment(nameOf(el), 0, false) }));
+}
+
+/** The segments of two or more children, each indexed among the siblings that print its name. */
+function countedSegments(elements: readonly Element[]): ChildSegment[] {
   const counts = new Map<string, number>();
   for (const el of elements) {
     const name = nameOf(el);
