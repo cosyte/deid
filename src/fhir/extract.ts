@@ -498,8 +498,9 @@ function blockExtensionProperty(
     return;
   }
   // Structural, and retained: the definitional `url` and the element `id`, each as R4 types it, a
-  // single string. Either one in any other shape is a structure no rule reads, and it goes.
-  if (EXTENSION_STRUCTURAL_KEYS.has(name) && isPrimitive(value)) return;
+  // single string. Either one in any other shape (a number, a boolean, an object, a list) is a
+  // structure no rule reads, and it goes.
+  if (EXTENSION_STRUCTURAL_KEYS.has(name) && holdsString(value)) return;
   // Everything else is the payload or free content: a `value[x]`, or a key R4 does not define on an
   // extension. The key is any JSON string, so it is bounded before it becomes a path segment.
   blockNode(out, value, join(path, elementSegment(name, position)));
@@ -509,10 +510,19 @@ function blockExtensionProperty(
 const EXTENSION_STRUCTURAL_KEYS: ReadonlySet<string> = new Set(["url", "id"]);
 
 /**
- * Block the extensions riding on the `_`-sibling of each primitive part an `Address` keeps
- * (`_state.extension`, `_country.extension`): the applier re-emits a kept part with its metadata, so
- * those extensions reach the output, and they are decided as every other extension is. A kept part
- * that is not a primitive is left as it was.
+ * `true` when the node is a primitive holding a string, empty or not: the one shape R4 gives an
+ * extension's `url` and `id` and an address's `state` and `country`.
+ */
+function holdsString(node: FhirNode): node is FhirPrimitive {
+  return isPrimitive(node) && typeof node.value === "string";
+}
+
+/**
+ * Decide the parts an `Address` keeps (`state`, `country`). The applier re-emits a kept part with its
+ * metadata, so a part that is not a single string (an object, a list, a number, a boolean) is a shape
+ * no rule reads and is blocked whole. The extensions riding on a string part's `_`-sibling
+ * (`_state.extension`, `_country.extension`) reach the output, and they are decided as every other
+ * extension is.
  */
 function blockKeptPartExtensions(
   out: FhirLocusAccumulator,
@@ -520,8 +530,13 @@ function blockKeptPartExtensions(
   path: string,
 ): void {
   address.properties.forEach((prop, i) => {
-    if (!FHIR_KEPT_ADDRESS_PARTS.has(prop.name) || !isPrimitive(prop.value)) return;
-    const meta = join(underscoreSibling(join(path, elementSegment(prop.name, i))), "extension");
+    if (!FHIR_KEPT_ADDRESS_PARTS.has(prop.name)) return;
+    const partPath = join(path, elementSegment(prop.name, i));
+    if (!holdsString(prop.value)) {
+      blockNode(out, prop.value, partPath);
+      return;
+    }
+    const meta = join(underscoreSibling(partPath), "extension");
     prop.value.extension?.forEach((ext, j) => {
       blockExtension(out, ext, idx(meta, j));
     });
@@ -791,9 +806,9 @@ function personalAction(node: FhirNode, position: SweepPosition): PersonalAction
  *   fragment of something that was never a zip code. An **absent or empty** `postalCode` is not that
  *   case: there is no zip code to misread, and the element is reduced exactly as a person resource's
  *   address carrying none is.
- * - **A part Safe Harbor lets the applier keep is not a plain primitive.** `state` and `country` are
- *   re-emitted with their value and metadata, so an unexpected JSON shape at one of them would carry
- *   content out of the pass unread.
+ * - **A part Safe Harbor lets the applier keep is not a string.** `state` and `country` are
+ *   re-emitted with their value and metadata, so an unexpected JSON shape at one of them (an object,
+ *   a list, a number, a boolean) would carry content out of the pass unread.
  */
 function sweptAddressZip(node: FhirComplex): string | null {
   const postal = getProperty(node, "postalCode");
@@ -804,7 +819,7 @@ function sweptAddressZip(node: FhirComplex): string | null {
     if (zip.length > 0 && !isRetainableZipCode(zip)) return null;
   }
   for (const prop of node.properties) {
-    if (FHIR_KEPT_ADDRESS_PARTS.has(prop.name) && !isPrimitive(prop.value)) return null;
+    if (FHIR_KEPT_ADDRESS_PARTS.has(prop.name) && !holdsString(prop.value)) return null;
   }
   return zip;
 }
@@ -1552,8 +1567,8 @@ function recordUnexaminedFhirPositions(
  * generalize the ZIP - so no part's value is a residual. The pass blocked the value and every unknown
  * key of each extension on a kept part's `_`-sibling, and the applier honours those edits, so what is
  * left of that metadata (the element `id`, each extension's `url` and `id`) is exactly the positions
- * this measures. A dropped part and the replaced `postalCode` contribute nothing: they do not reach the
- * output at all.
+ * this measures. A kept part that is not a string (blocked whole), a dropped part and the replaced
+ * `postalCode` contribute nothing: they do not reach the output at all.
  */
 function recordKeptAddressParts(
   residuals: UnexaminedResidualBuilder,
@@ -1563,16 +1578,12 @@ function recordKeptAddressParts(
 ): void {
   node.properties.forEach((prop, i) => {
     if (!FHIR_KEPT_ADDRESS_PARTS.has(prop.name)) return;
-    const partPath = join(path, elementSegment(prop.name, i));
-    if (isPrimitive(prop.value)) {
-      recordPrimitiveMetadata(residuals, prop.value, partPath, state, true);
-      return;
-    }
-    // Not a primitive: the whole part is re-emitted verbatim, so every value inside it is handed
-    // through and none of it was decided.
-    recordUnexaminedFhirPositions(residuals, prop.value, partPath, {
-      ...state,
-      valueDecided: false,
-    });
+    const part = prop.value;
+    // A part the pass blocked (any shape but a string) is removed whole: nothing of it is handed through.
+    if (state.edits.has(part)) return;
+    /* v8 ignore next -- every part that is not a string is blocked above; this guard narrows the type */
+    // Stryker disable next-line ConditionalExpression: a part reached here is always a primitive, so the test only narrows the type
+    if (!isPrimitive(part)) return;
+    recordPrimitiveMetadata(residuals, part, join(path, elementSegment(prop.name, i)), state, true);
   });
 }

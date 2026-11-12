@@ -146,7 +146,8 @@ Two things follow, and the second is the one that surprises people:
   its own carrier's coordinate; a FHIR primitive's **`_`-sibling element id**, which travels beside the
   value it annotates; and whatever a **partly** rewritten structure keeps, such as the state and country
   of a generalized address, which are re-emitted with what rides beside them, bar what the pass
-  blocked there (in FHIR, every value and unknown key of an extension on their `_`-sibling).
+  blocked there (in FHIR, every value and unknown key of an extension on their `_`-sibling, and a
+  part that is not a string, which is blocked whole).
 
 - **What is removed is not counted, and that is the point of the number.** The inventory measures what
   the pass _hands through_, so a position it deletes (an address line, a blocked narrative and every
@@ -326,14 +327,23 @@ Two things follow, and the second is the one that surprises people:
   element `id` and the nested extensions are kept. Every other key is blocked and recorded at its own
   locus (`Observation.extension[0].note`), with no value: a `value[x]`, and equally a key R4 does not
   give an extension (`note`, `comment`, any name), whatever it holds. A `url` or an `id` that is not a
-  single string is blocked the same way. The same holds for an extension on a primitive's `_`-sibling:
-  one on the `state` or `country` an `Address` keeps is blocked like this, and every other one is
-  removed with the primitive's metadata. Outside an extension, an unknown key on a person resource's
+  string (a number, a boolean, an object, a list) is blocked the same way. The same holds for an
+  extension on a primitive's `_`-sibling: one on the `state` or `country` an `Address` keeps is
+  blocked like this, and every other one is removed with the primitive's metadata. A `state` or
+  `country` an `Address` keeps that is not a string (an object, a list, a number, a boolean) is
+  blocked whole and recorded at its locus (`Patient.address.state`) on a person resource, and a swept
+  `Address` carrying one is removed whole. Outside an extension, an unknown key on a person resource's
   own top level (`Patient.zzNote`) is removed by the fail-closed person sweep, and an unknown key
   anywhere else (on a clinical resource, in a backbone element, in a `Coding`, below a person
   resource's top level) is **passed through** and counted in `unexaminedResiduals` at its locus. A
   key on a `_`-sibling itself other than `id` and `extension` is not read by `@cosyte/fhir` and does
   not reach the output.
+
+- **A FHIR element `id` is passed through and counted, not read.** An element `id` that is a string
+  (`Observation.code.id`, a primitive's `_status.id`, the `id` of an extension, the `id` on the
+  `_state` of a kept address part) is kept as it arrived and counted in `unexaminedResiduals` at its
+  locus, so an element `id` holding free text reaches the output today. R4 gives an element `id` no
+  meaning beyond the document; review the residuals if a sender may put content there.
 
 Vendor-proprietary loci absent from public specs are deferred, **not invented**: a quirk is encoded
 only when a real document, its identifiers removed, grounds it.

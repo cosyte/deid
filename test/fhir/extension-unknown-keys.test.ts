@@ -157,6 +157,51 @@ describe("an unknown key inside an extension is blocked", () => {
     expect(manifest.map((m) => m.locus).filter((l) => l.includes("_"))).toEqual([]);
   });
 
+  it.each([
+    ["an object", { a: "ZZPARTOBJ" }],
+    ["an array", ["ZZPARTARR"]],
+    ["a number", 900000007],
+    ["a boolean", true],
+  ])("blocks a kept address part that arrives as %s, on a person resource", (_name, part) => {
+    const { json, manifest } = run({
+      resourceType: "Patient",
+      address: [{ state: part, country: part, postalCode: "62704" }],
+    });
+    expect(json).not.toMatch(/ZZPART|90000000|true/);
+    expect(JSON.parse(json)).toEqual({ resourceType: "Patient", address: [{ postalCode: "627" }] });
+    const loci = manifest.map((m) => m.locus);
+    expect(loci).toContain("Patient.address.state");
+    expect(loci).toContain("Patient.address.country");
+    expect(JSON.stringify(manifest)).not.toMatch(/ZZPART|90000000/);
+    const { resource } = parseResource(
+      JSON.stringify({ resourceType: "Patient", address: [{ state: part, postalCode: "62704" }] }),
+    );
+    expect(extractFhirLoci(resource).unexaminedResiduals).toEqual([]);
+  });
+
+  it("counts nothing of a blocked kept part, its element id included", () => {
+    const { resource } = parseResource(
+      JSON.stringify({
+        resourceType: "Patient",
+        address: [{ state: 900000009, _state: { id: "s9" }, postalCode: "62704" }],
+      }),
+    );
+    expect(extractFhirLoci(resource).unexaminedResiduals).toEqual([]);
+    const { json } = run({
+      resourceType: "Patient",
+      address: [{ state: 900000009, _state: { id: "s9" }, postalCode: "62704" }],
+    });
+    expect(json).not.toMatch(/900000009|s9/);
+  });
+
+  it("removes a swept address whose kept part is a number or a boolean", () => {
+    const { json } = run({
+      resourceType: "Organization",
+      address: [{ city: "ZZCITY", state: 900000008, country: false, postalCode: "62704" }],
+    });
+    expect(json).not.toMatch(/ZZCITY|90000000|false/);
+  });
+
   it("writes no empty extension list on a kept address part", () => {
     const { json } = run({
       resourceType: "Patient",
@@ -196,6 +241,71 @@ describe("an unknown key inside an extension is blocked", () => {
     });
     expect(json).not.toContain("ZZODDID");
     expect(json).not.toContain("ZZODDURL");
+  });
+
+  it.each([
+    ["a number at the id", { url: "http://example.org/x", id: 900000001 }, "id"],
+    ["a boolean at the id", { url: "http://example.org/x", id: true }, "id"],
+    ["a number at the url", { url: 900000002 }, "url"],
+    ["a boolean at the url", { url: false }, "url"],
+  ])("blocks %s, with a value-free row at its position", (_name, ext, key) => {
+    const { json, manifest } = run({
+      resourceType: "Observation",
+      status: "final",
+      extension: [ext],
+    });
+    expect(json).not.toContain("90000000");
+    const out = JSON.parse(json) as { extension: Record<string, unknown>[] };
+    expect(out.extension[0]).not.toHaveProperty(key);
+    const row = manifest.find((m) => m.locus === `Observation.extension[0].${key}`);
+    expect(row?.disposition).toBe("blocked");
+    expect(JSON.stringify(manifest)).not.toContain("90000000");
+  });
+
+  it("blocks a number or a boolean at the url or id of an extension on a kept address part", () => {
+    const { json, manifest } = run({
+      resourceType: "Patient",
+      address: [
+        {
+          state: "IL",
+          _state: { extension: [{ url: 900000003, id: true }] },
+          country: "US",
+          _country: { extension: [{ url: "http://example.org/c", id: 900000004 }] },
+          postalCode: "62704",
+        },
+      ],
+    });
+    expect(json).not.toContain("90000000");
+    expect(json).not.toContain("true");
+    expect(json).toContain('"url":"http://example.org/c"');
+    const loci = manifest.map((m) => m.locus);
+    expect(loci).toContain("Patient.address._state.extension[0].url");
+    expect(loci).toContain("Patient.address._state.extension[0].id");
+    expect(loci).toContain("Patient.address._country.extension[0].id");
+  });
+
+  it("blocks a url or an id that is not a string inside the patient-animal extension", () => {
+    const { json } = run(
+      {
+        resourceType: "Patient",
+        extension: [
+          {
+            url: "http://hl7.org/fhir/StructureDefinition/patient-animal",
+            id: 900000005,
+            extension: [
+              {
+                url: "species",
+                id: 900000006,
+                valueCodeableConcept: { coding: [{ system: "http://example.org/s", code: "z" }] },
+              },
+            ],
+          },
+        ],
+      },
+      { keepPatientAnimal: true },
+    );
+    expect(json).not.toContain("90000000");
+    expect(json).toContain('"code":"z"');
   });
 
   it("keeps an extension's url and id, which are structural", () => {

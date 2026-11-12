@@ -296,10 +296,10 @@ describe("closure: what a rebuilt FHIR address KEEPS is enumerated", () => {
     expect(loci.has("Patient.address[0].country")).toBe(false);
   });
 
-  it("a kept part that is NOT a primitive is enumerated whole, because it is re-emitted whole", () => {
+  it("a kept part that is NOT a string is blocked, so nothing inside it is handed through", () => {
     // FHIR types `Address.state` as a string, but a document is not obliged to send one and the model
-    // carries whatever arrived. The applier keeps the property verbatim either way, so if it is an
-    // object every value inside it rides through and none of it was decided.
+    // carries whatever arrived. A part in any other shape is blocked whole, so no value inside it
+    // reaches the output and none is left to count.
     const odd = deidentifyFhir(
       parseResource(
         JSON.stringify({
@@ -312,8 +312,10 @@ describe("closure: what a rebuilt FHIR address KEEPS is enumerated", () => {
       ).resource,
       { context: ctx() },
     );
-    expect(serializeResource(odd.document)).toContain("ZZINNERSTATE");
-    expect(odd.unexaminedResiduals.map((r) => r.locus)).toContain(
+    expect(serializeResource(odd.document)).not.toContain("ZZINNERSTATE");
+    // a single address is located without an index, as every single occurrence is
+    expect(odd.manifest.map((m) => m.locus)).toContain("Patient.address.state");
+    expect(odd.unexaminedResiduals.map((r) => r.locus)).not.toContain(
       "Patient.address[0].state.zzInner",
     );
   });

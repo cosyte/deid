@@ -12,7 +12,9 @@
  * A sentinel under a key R4 does not define on an extension (in an `extension`, a `modifierExtension`,
  * a nested extension, a primitive's `_`-sibling extension, a kept address part's) is held to more than
  * the shared rule: it must be gone from the output, because an extension is blocked whatever it holds.
- * A sentinel under an unknown key anywhere else is held to the shared rule.
+ * So is a sentinel inside a part a reduced `Address` keeps (`state`, `country`) that arrives as an
+ * object or a list rather than a string. A sentinel under an unknown key anywhere else is held to the
+ * shared rule.
  *
  * Where a sentinel sits is read back from the input JSON, as the adapter writes a locus
  * (`Patient.name[0].family`), so the residual it must be named by is exact.
@@ -130,6 +132,12 @@ const UNKNOWN_EXTENSION_KEY_SPOTS: readonly string[] = [
   "animal userSelected",
 ];
 
+/**
+ * Where a sentinel sits inside a kept address part that is not a string, as {@link place} describes
+ * it. A sentinel placed at one of these must be removed too: the part is blocked whole.
+ */
+const KEPT_ADDRESS_PART_SPOTS: readonly string[] = ["address[].state.zz", "address[].country[]"];
+
 const SHAPES: readonly LeakShape[] = [
   "plain-for-composite",
   "extra-repeat",
@@ -151,7 +159,7 @@ const placementArb: fc.Arbitrary<FhirPlacement> = fc.record({
   element: fc.constantFrom(...COMPOSITE_ELEMENTS),
   code: fc.constantFrom(...CODE_PATHS),
   extra: fc.constantFrom(...EXTRA_PATHS),
-  nest: fc.nat({ max: 9 }),
+  nest: fc.nat({ max: 11 }),
 });
 
 /** One generated case: the resource type, whether it rides in a Bundle, and the placements. */
@@ -212,7 +220,8 @@ function place(resource: JsonObject, p: FhirPlacement, sentinel: string, filler:
     case "plain":
     case "subcomponent": {
       // Nested: a contained resource, a nested extension, a modifier extension, a resource in a
-      // resource, a Coding nested under an extension, or a key R4 does not define on an extension.
+      // resource, a Coding nested under an extension, a key R4 does not define on an extension, or a
+      // kept address part that is an object or a list.
       switch (p.nest) {
         case 5:
           setPath(resource, ["extension", 0], { url: "http://example.org/n", note: sentinel });
@@ -244,6 +253,18 @@ function place(resource: JsonObject, p: FhirPlacement, sentinel: string, filler:
           });
           resource["address"] = list;
           return "address[]._state.extension[0].note";
+        }
+        case 10:
+        case 11: {
+          const existing = resource["address"];
+          const list = Array.isArray(existing) ? existing : [];
+          list.push(
+            p.nest === 10
+              ? { state: { zz: sentinel }, postalCode: "02139" }
+              : { country: [sentinel], postalCode: "02139" },
+          );
+          resource["address"] = list;
+          return p.nest === 10 ? "address[].state.zz" : "address[].country[]";
         }
         case 0: {
           const contained = Array.isArray(resource["contained"]) ? resource["contained"] : [];
@@ -555,18 +576,22 @@ export function checkCase(
 }
 
 /**
- * The stricter rule for a sentinel under a key R4 does not define on an extension: it is gone from the
- * output. Being named as a residual is not enough there, because an extension is blocked whatever it
- * holds.
+ * The stricter rule for a sentinel under a key R4 does not define on an extension, or inside a kept
+ * address part that is not a string: it is gone from the output. Being named as a residual is not
+ * enough there, because an extension is blocked whatever it holds and so is a part of that shape.
  */
 export function unknownExtensionKeyKept(
   placed: readonly Placement[],
   outcome: PassOutcome,
 ): string[] {
   return placed
-    .filter((p) => UNKNOWN_EXTENSION_KEY_SPOTS.some((spot) => p.where.endsWith(spot)))
+    .filter((p) =>
+      [...UNKNOWN_EXTENSION_KEY_SPOTS, ...KEPT_ADDRESS_PART_SPOTS].some((spot) =>
+        p.where.endsWith(spot),
+      ),
+    )
     .filter((p) => outcome.output.includes(p.sentinel))
-    .map((p) => `${p.sentinel} (${p.shape} at ${p.where}) survives under an unknown extension key`);
+    .map((p) => `${p.sentinel} (${p.shape} at ${p.where}) survives where it must be removed`);
 }
 
 /**
@@ -608,7 +633,7 @@ describe("the generated leak property: FHIR R4", () => {
  * Each place an unknown extension key can sit, on a person and on a clinical resource, through the
  * same check as a generated case, so every one is run on every pull request whatever the seed draws.
  */
-describe("the FHIR sweep removes a sentinel under an unknown extension key", () => {
+describe("the FHIR sweep removes a sentinel under an unknown extension key or in an odd kept part", () => {
   const base = { inBundle: false, filler: "abc", stem: "ZQLKUNKN" };
   const nested = (nest: number): FhirPlacement => ({
     shape: "nested",
@@ -628,6 +653,10 @@ describe("the FHIR sweep removes a sentinel under an unknown extension key", () 
     ["Observation", 7],
     ["Observation", 8],
     ["Organization", 9],
+    ["Patient", 10],
+    ["Patient", 11],
+    ["Organization", 10],
+    ["Organization", 11],
   ])("%s, nest %i", (type, nest) => {
     const violations = checkCase({ ...base, type, placements: [nested(nest)] }, newTally());
     expect(violations).toEqual([]);

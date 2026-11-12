@@ -119,9 +119,12 @@ function stripPrimitive(node: FhirPrimitive): FhirNode {
  * Re-emit a part an `Address` keeps. A primitive part keeps its value and its `id`, and each extension
  * on its `_`-sibling is rebuilt through the same edits as every other node, so what the extractor
  * blocked inside one (a `value[x]`, a key R4 does not define on an extension) is gone and the `url`
- * skeleton stays. Any other shape is re-emitted as it arrived.
+ * skeleton stays. A part the extractor blocked (any shape but a single string) is removed by its edit.
  */
-function rebuildKeptPart(node: FhirNode, edits: ReadonlyMap<FhirNode, Edit>): FhirNode {
+function rebuildKeptPart(node: FhirNode, edits: ReadonlyMap<FhirNode, Edit>): Rebuilt {
+  // The extractor blocks a kept part that is not a single string: its edit removes it.
+  const edit = edits.get(node);
+  if (edit !== undefined) return applyEdit(node, edit, edits);
   if (!isPrimitive(node) || node.extension === undefined) return node;
   // The extractor never names an extension object itself, only what is inside one, so each is
   // rebuilt property by property. `primitive` writes the `id` only when the part has one.
@@ -138,7 +141,8 @@ function rebuildAddress(
   const props: FhirProperty[] = [];
   for (const prop of node.properties) {
     if (FHIR_KEPT_ADDRESS_PARTS.has(prop.name)) {
-      props.push({ name: prop.name, value: rebuildKeptPart(prop.value, edits) });
+      const part = rebuildKeptPart(prop.value, edits);
+      if (part !== REMOVE) props.push({ name: prop.name, value: part });
     } else if (prop.name === "postalCode" && zip !== null) {
       props.push({ name: "postalCode", value: primitive(zip) });
     }

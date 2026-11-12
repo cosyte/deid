@@ -224,7 +224,7 @@ the identifier rule), and an empty one as `{}`.
   the one on a `state` or `country` an `Address` keeps included. So is every key R4 does not define on
   an extension: a `note` or `comment` beside the `url` is blocked and recorded at its own locus
   (`Observation.extension[0].note`), as a value is. Extensions are the FHIR leak frontier; the `url`
-  skeleton and the element `id` are kept, everything else is not. The one
+  skeleton and the element `id` are kept when each is a string, everything else is not. The one
   exception is opt-in: [`keepPatientAnimal`](#keep-an-animal-patients-species-opt-in) keeps the coded
   species, breed and gender status of the `patient-animal` extension.
 - A **swept `Address` the pass cannot read faithfully** is removed **whole**, never partly retained: a
