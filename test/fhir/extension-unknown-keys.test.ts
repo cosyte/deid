@@ -179,6 +179,30 @@ describe("an unknown key inside an extension is blocked", () => {
     expect(extractFhirLoci(resource).unexaminedResiduals).toEqual([]);
   });
 
+  it("counts what a kept string part hands through: its element id and its extension's url", () => {
+    const { resource } = parseResource(
+      JSON.stringify({
+        resourceType: "Patient",
+        address: [
+          {
+            state: "IL",
+            _state: {
+              id: "s1",
+              extension: [{ url: "http://example.org/s", valueString: "ZZSTATEVALUE" }],
+            },
+            postalCode: "62704",
+            _postalCode: { id: "z1" },
+          },
+        ],
+      }),
+    );
+    expect(
+      extractFhirLoci(resource)
+        .unexaminedResiduals.map((r) => r.locus)
+        .sort(),
+    ).toEqual(["Patient.address[0]._state.extension[0].url", "Patient.address[0]._state.id"]);
+  });
+
   it("counts nothing of a blocked kept part, its element id included", () => {
     const { resource } = parseResource(
       JSON.stringify({
