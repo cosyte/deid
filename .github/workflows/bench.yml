@@ -9,8 +9,9 @@ name: Bench
 # largest, and a CPU and a sampled heap profile of the hottest paths.
 #
 # On demand, and on a pull request that changes the bench or this file, so a change to what is
-# measured is measured where it will be read. And on a push to main that changes package.json, which
-# every release commit does: the release fills the "Current numbers" section of
+# measured is measured where it will be read, or that changes src/, so a change to the code measured
+# has a reading of its own to set beside the one on main. And on a push to main that changes
+# package.json, which every release commit does: the release fills the "Current numbers" section of
 # docs-content/performance.md from this run's artifacts on the release commit
 # (scripts/performance-numbers.ts, `pnpm pack:docs:release`), so its artifact names are read there.
 # ADVISORY: it fails only when it cannot measure (a suite that does not load, a process that dies, a
@@ -32,6 +33,7 @@ on:
   pull_request:
     branches: [main]
     paths:
+      - "src/**"
       - "bench/**"
       - ".github/workflows/bench.yml"
 
