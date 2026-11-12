@@ -21,6 +21,10 @@ export declare function fhirBundle(i: number, entries: number): string;
 export declare function ccdaDocument(i: number, results: number): string;
 /** One 837P interchange with a billing provider and `claims` claim loops. */
 export declare function x12Claims(i: number, claims: number): string;
+/** One synthetic NCPDP Telecom vD.0 B1 request: one transmission carrying one claim. */
+export declare function ncpdpClaim(i: number): string;
+/** `claims` synthetic B1 requests, one transmission a line. */
+export declare function ncpdpBatch(i: number, claims: number): string;
 /** One CT slice of `side` by `side` (512 by default, about 514 KiB) by 16-bit native Pixel Data. */
 export declare function ctImage(i: number, side?: number): Buffer;
 /** An Enhanced CT object of `frames` frames of `side` by `side` (512 by default) by 16 bits. */

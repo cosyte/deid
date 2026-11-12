@@ -15,6 +15,11 @@
 //   encounter) and a Results section of `results` observations, each with a narrative table row;
 // - `x12Claims`: one 837P interchange with a billing provider and `claims` subscriber, patient and
 //   claim loops, each claim with two service lines, the shape a clearinghouse batch has;
+// - `ncpdpClaim`: one NCPDP Telecom vD.0 B1 billing request, the Patient and Insurance segments at
+//   the transmission level, then one claim with its prescriber and pricing; `ncpdpBatch` is
+//   `claims` such transmissions, one a line, the shape a pharmacy's claims extract or a switch log
+//   keeps (`@cosyte/ncpdp` reads one transmission at a time, and the adapter refuses more than one
+//   transaction in a transmission, so a batch is many transmissions, not one long one);
 // - `ctImage` and `enhancedCt`: a DICOM CT slice of 512 by 512 by 16 bits under a header of about
 //   80 elements, and an Enhanced CT object of `frames` such frames with one Per-frame Functional
 //   Groups Item a frame (200 frames is 100 MiB of Pixel Data and over 1,000 nested elements); a
@@ -457,6 +462,94 @@ export function x12Claims(i, claims) {
     `GE*1*${control}`,
     `IEA*1*${control}`,
   ].join("~")}~`;
+}
+
+// ---------------------------------------------------------------------------------------------
+// NCPDP Telecom vD.0, in the canonical form `serializeTelecom` writes: the 56-byte request header,
+// the transmission-level segments, a Group Separator, then the transaction's segments, each segment
+// `AM<id>` and its fields behind a Field Separator.
+
+const NCPDP_FS = "\x1c";
+const NCPDP_RS = "\x1e";
+const NCPDP_GS = "\x1d";
+
+function telecomSegment(id, fields) {
+  return `AM${id}${fields.map(([field, value]) => `${NCPDP_FS}${field}${value}`).join("")}`;
+}
+
+/**
+ * One synthetic B1 billing request, the same length at every index: Patient (01) and Insurance (04)
+ * for the transmission, then Claim (07), Prescriber (03) and Pricing (11) for its one transaction.
+ */
+export function ncpdpClaim(i) {
+  const id = pad(i % 100_000_000, 8);
+  // The fixed header: BIN, version, transaction code, processor control number, transaction
+  // count, service provider id qualifier and id, date of service, software vendor.
+  const header = `999999D0B1PCN${pad(i % 10_000_000, 7)}101ZZPHARM${id}20240115SYNTHVEND1`;
+  // Every identifying value is a bare substitution site, as in `hl7Segments`.
+  const family = `ZZFAMILY${id}`;
+  const dob = birthDate(i);
+  const street = `ZZSTREET ${pad(i % 900, 3)}`;
+  const home = phone(i);
+  const patientId = `ZZPATID${id}`;
+  const cardholder = `ZZCARD${id}`;
+  const transmission = [
+    telecomSegment("01", [
+      ["CX", "99"],
+      ["CY", patientId],
+      ["C4", dob],
+      ["C5", String(1 + (i % 2))],
+      ["CA", "ZZGIVEN"],
+      ["CB", family],
+      ["CM", street],
+      ["CN", "ZZCITY"],
+      ["CO", "OH"],
+      ["CP", `441${pad(i % 100, 2)}0000`],
+      ["CQ", home],
+    ]),
+    telecomSegment("04", [
+      ["C2", cardholder],
+      ["CC", "ZZGIVEN"],
+      ["CD", family],
+      ["C1", "ZZGROUP001"],
+      ["C3", "001"],
+    ]),
+  ];
+  // A made-up product code in the eleven-digit NDC shape.
+  const ndc = `99999${pad(i % 1_000_000, 6)}`;
+  const transaction = [
+    telecomSegment("07", [
+      ["EM", "1"],
+      ["D2", `9${pad(i % 100_000_000, 8)}`],
+      ["E1", "03"],
+      ["D7", ndc],
+      ["E7", "30000"],
+      ["D3", "00"],
+      ["D5", "30"],
+      ["D6", "1"],
+      ["D8", "0"],
+      ["DE", "20240115"],
+      ["DJ", "1"],
+    ]),
+    telecomSegment("03", [
+      ["EZ", "01"],
+      ["DB", `ZZNPI${pad(i % 1_000_000, 6)}`],
+    ]),
+    telecomSegment("11", [
+      ["D9", "1500{"],
+      ["DC", "250{"],
+      ["DQ", "1750{"],
+      ["DU", "1750{"],
+    ]),
+  ];
+  return `${header}${transmission.join(NCPDP_RS)}${NCPDP_GS}${transaction.join(NCPDP_RS)}`;
+}
+
+/** `claims` synthetic B1 requests, one transmission a line. */
+export function ncpdpBatch(i, claims) {
+  const lines = [];
+  for (let k = 0; k < claims; k++) lines.push(ncpdpClaim(i * claims + k));
+  return `${lines.join("\n")}\n`;
 }
 
 // ---------------------------------------------------------------------------------------------

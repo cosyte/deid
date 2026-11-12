@@ -10,10 +10,12 @@ export * as deidHl7 from "../dist/hl7/index.mjs";
 export * as deidFhir from "../dist/fhir/index.mjs";
 export * as deidCcda from "../dist/ccda/index.mjs";
 export * as deidX12 from "../dist/x12/index.mjs";
+export * as deidNcpdp from "../dist/ncpdp/index.mjs";
 export * as deidDicom from "../dist/dicom/index.mjs";
 
 export * as hl7 from "@cosyte/hl7";
 export * as fhir from "@cosyte/fhir";
 export * as ccda from "@cosyte/ccda";
 export * as x12 from "@cosyte/x12";
+export * as ncpdp from "@cosyte/ncpdp/telecom";
 export * as dicom from "@cosyte/dicom";

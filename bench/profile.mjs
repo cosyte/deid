@@ -27,8 +27,17 @@ import { findSourceMap } from "node:module";
 import { resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-import { deidentifyHl7Batch, ENGINE_SIZES, FORMATS } from "./deid.bench.mjs";
-import { ccdaDocument, fhirBundle, hl7Batch, hl7Message, locusModel, x12Claims, enhancedCt } from "./shapes.mjs";
+import { deidentifyHl7Batch, deidentifyTelecomBatch, ENGINE_SIZES, FORMATS } from "./deid.bench.mjs";
+import {
+  ccdaDocument,
+  enhancedCt,
+  fhirBundle,
+  hl7Batch,
+  hl7Message,
+  locusModel,
+  ncpdpBatch,
+  x12Claims,
+} from "./shapes.mjs";
 
 const PROFILE_MS = 2_000;
 const WARMUP_MS = 500;
@@ -36,7 +45,7 @@ const TOP = 10;
 /** Sizes below this are left to the reading's peak heap: the resident set moves in pages and arenas. */
 const RESIDENT_MIN_BYTES = 256 * 1024;
 
-const OPERATIONS = ["text in, text out", "adapter on a parsed model"];
+const OPERATIONS = ["text in, text out", "adapter on a parsed model", "parser alone, text in, text out"];
 
 function args(argv) {
   const out = { target: argv[0], dir: undefined, memoryCase: undefined, only: undefined };
@@ -56,6 +65,10 @@ function byteLength(input) {
 function operation(pkg, format, op, raw) {
   if (op === OPERATIONS[0]) {
     const run = format.endToEnd(pkg);
+    return () => run(raw);
+  }
+  if (op === OPERATIONS[2]) {
+    const run = format.parserAlone(pkg);
     return () => run(raw);
   }
   const model = format.parse(pkg, raw);
@@ -363,6 +376,7 @@ async function profileSection(pkg, dir) {
   const bundle = fhirBundle(0, 1_000);
   const ccd = ccdaDocument(0, 100);
   const claims = x12Claims(0, 1_000);
+  const telecom = ncpdpBatch(0, 1_000);
   const series = enhancedCt(0, 20);
   const engineSmall = locusModel(0, 1_000);
   const engineLarge = locusModel(0, 100_000);
@@ -388,6 +402,10 @@ async function profileSection(pkg, dir) {
     {
       name: "X12 837P, text in, text out: 1,000 claims",
       pass: () => pkg.deidX12.deidentifyX12String(claims).x12.length,
+    },
+    {
+      name: "NCPDP Telecom, text in, text out: a batch of 1,000",
+      pass: () => deidentifyTelecomBatch(pkg, telecom).length,
     },
     {
       name: "DICOM, file in, file out: Enhanced CT, 20 frames",

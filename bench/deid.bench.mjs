@@ -35,6 +35,8 @@ import {
   hl7Batch,
   hl7Message,
   locusModel,
+  ncpdpBatch,
+  ncpdpClaim,
   x12Claims,
 } from "./shapes.mjs";
 
@@ -76,13 +78,32 @@ export function deidentifyHl7Batch(pkg, text) {
   return out.join("");
 }
 
+/** The transmissions of an NCPDP Telecom batch, one a line; a blank line is not a transmission. */
+export function telecomLines(text) {
+  return text.split("\n").filter((line) => line.length > 0);
+}
+
+/** De-identify every transmission of an NCPDP Telecom batch and write each back, one a line. */
+export function deidentifyTelecomBatch(pkg, text) {
+  const out = [];
+  for (const line of telecomLines(text)) out.push(pkg.deidNcpdp.deidentifyTelecomString(line).telecom);
+  return `${out.join("\n")}\n`;
+}
+
 // Each format at the size a feed sends all day, then at sizes well past it. `inputs` keeps a pass
 // at the small sizes from being one input repeated. `bytes` is the size of the input as text or as
 // a file. The pull request comparison runs only the sizes marked `compare`: it runs every case 24
 // times in fresh processes inside a 600 second budget shared by the whole suite.
+//
+// `entry` is the published subpath the format's adapter ships in.
+//
+// `parserAlone` is the same text in and text out with no de-identification between: the parser
+// reads the input and writes it back. Read beside the other two, it says how much of a pass's time
+// and peak heap is the parser's and how much is the adapter's on top.
 export const FORMATS = [
   {
     name: "HL7 v2",
+    entry: "./hl7",
     sizes: [
       { label: "1 ORU^R01, 1.6 KiB", inputs: 64, build: (i) => hl7Message(i), compare: true },
       { label: "batch of 100, 160 KiB", inputs: 1, build: (i) => hl7Batch(i, 100) },
@@ -90,6 +111,13 @@ export const FORMATS = [
     ],
     // Text in, text out: split the batch, parse, de-identify and write each message.
     endToEnd: (pkg) => (text) => deidentifyHl7Batch(pkg, text),
+    parserAlone: (pkg) => (text) => {
+      let out = "";
+      for (const entry of pkg.hl7.splitBatch(text).messages) {
+        if (entry.ok) out += entry.message.toString();
+      }
+      return out;
+    },
     // The parsed messages, kept per input, so the adapter's own cost is timed alone.
     parse: (pkg, text) => pkg.hl7.splitBatch(text).messages.map((e) => e.message),
     adapter: (pkg) => (messages) => {
@@ -100,6 +128,7 @@ export const FORMATS = [
   },
   {
     name: "FHIR R4",
+    entry: "./fhir",
     sizes: [
       { label: "1 Patient, 1 KiB", inputs: 64, build: (i) => fhirPatient(i), compare: true },
       { label: "Bundle of 100, 60 KiB", inputs: 1, build: (i) => fhirBundle(i, 100) },
@@ -107,11 +136,13 @@ export const FORMATS = [
       { label: "Bundle of 10,000, 5.8 MiB", inputs: 1, build: (i) => fhirBundle(i, 10_000) },
     ],
     endToEnd: (pkg) => (text) => pkg.deidFhir.deidentifyFhirJson(text).json,
+    parserAlone: (pkg) => (text) => pkg.fhir.serializeResource(pkg.fhir.parseResource(text).resource),
     parse: (pkg, text) => pkg.fhir.parseResource(text).resource,
     adapter: (pkg) => (resource) => pkg.deidFhir.deidentifyFhir(resource).manifest.length,
   },
   {
     name: "C-CDA",
+    entry: "./ccda",
     sizes: [
       { label: "10 results, 11 KiB", inputs: 16, build: (i) => ccdaDocument(i, 10), compare: true },
       { label: "100 results, 68 KiB", inputs: 1, build: (i) => ccdaDocument(i, 100) },
@@ -119,11 +150,13 @@ export const FORMATS = [
     ],
     endToEnd: (pkg) => (text) =>
       pkg.deidCcda.deidentifyCcda(pkg.ccda.parseCcda(text)).document.toString(),
+    parserAlone: (pkg) => (text) => pkg.ccda.parseCcda(text).toString(),
     parse: (pkg, text) => pkg.ccda.parseCcda(text),
     adapter: (pkg) => (doc) => pkg.deidCcda.deidentifyCcda(doc).manifest.length,
   },
   {
     name: "X12 837P",
+    entry: "./x12",
     sizes: [
       { label: "1 claim, 1 KiB", inputs: 64, build: (i) => x12Claims(i, 1), compare: true },
       { label: "100 claims, 56 KiB", inputs: 1, build: (i) => x12Claims(i, 100) },
@@ -131,17 +164,41 @@ export const FORMATS = [
       { label: "5,000 claims, 2.7 MiB", inputs: 1, build: (i) => x12Claims(i, 5_000) },
     ],
     endToEnd: (pkg) => (text) => pkg.deidX12.deidentifyX12String(text).x12,
+    parserAlone: (pkg) => (text) => pkg.x12.serializeX12(pkg.x12.parseX12(text)),
     parse: (pkg, text) => pkg.x12.parseX12(text),
     adapter: (pkg) => (interchange) => pkg.deidX12.deidentifyX12(interchange).x12,
   },
   {
+    name: "NCPDP Telecom",
+    entry: "./ncpdp",
+    sizes: [
+      { label: "1 B1 claim, 0.4 KiB", inputs: 64, build: (i) => ncpdpClaim(i), compare: true },
+      { label: "batch of 1,000, 384 KiB", inputs: 1, build: (i) => ncpdpBatch(i, 1_000) },
+      { label: "batch of 10,000, 3.7 MiB", inputs: 1, build: (i) => ncpdpBatch(i, 10_000) },
+    ],
+    // Text in, text out: each transmission of the batch parsed, de-identified and written.
+    endToEnd: (pkg) => (text) => deidentifyTelecomBatch(pkg, text),
+    parserAlone: (pkg) => (text) =>
+      `${telecomLines(text)
+        .map((line) => pkg.ncpdp.serializeTelecom(pkg.ncpdp.parseTelecom(line)))
+        .join("\n")}\n`,
+    parse: (pkg, text) => telecomLines(text).map((line) => pkg.ncpdp.parseTelecom(line)),
+    adapter: (pkg) => (transactions) => {
+      let n = 0;
+      for (const tx of transactions) n += pkg.deidNcpdp.deidentifyTelecom(tx).manifest.length;
+      return n;
+    },
+  },
+  {
     name: "DICOM",
+    entry: "./dicom",
     sizes: [
       { label: "CT slice, 514 KiB", inputs: 4, build: (i) => ctImage(i), compare: true },
       { label: "Enhanced CT, 20 frames, 10 MiB", inputs: 1, build: (i) => enhancedCt(i, 20) },
       { label: "Enhanced CT, 200 frames, 100 MiB", inputs: 1, build: (i) => enhancedCt(i, 200) },
     ],
     endToEnd: (pkg) => (bytes) => pkg.deidDicom.deidentifyDicomBuffer(bytes).bytes,
+    parserAlone: (pkg) => (bytes) => pkg.dicom.serializeDicom(pkg.dicom.parseDicom(bytes)),
     parse: (pkg, bytes) => pkg.dicom.parseDicom(bytes),
     adapter: (pkg) => (dataset) => pkg.deidDicom.deidentifyDicom(dataset).manifest.length,
   },
@@ -227,6 +284,17 @@ for (const format of FORMATS) {
         return (x) => run(model(x));
       },
       weigh: (out) => (typeof out === "number" ? out : byteLength(out)),
+    }),
+    defineBenchmark({
+      // The parser with no de-identification: the same input read and written back, so a row of
+      // the other two can be split into the parser's share and the adapter's.
+      name: `${format.name}: parser alone, text in, text out`,
+      sizes: sizes(format).map((size) => ({ ...size, compare: false })),
+      bind: (pkg) => {
+        const run = format.parserAlone(pkg);
+        return (x) => run(x.raw);
+      },
+      weigh: (out) => byteLength(out),
     }),
   );
 }

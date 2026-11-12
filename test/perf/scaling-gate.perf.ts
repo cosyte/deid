@@ -6,9 +6,9 @@
  * Each asks one question: does the cost of a de-identification pass grow faster than its input? On
  * the count axis, 4 times the single messages a feed sends; on the size axis, the same number of
  * documents each 4 times longer (an HL7 v2 batch of 4 times the messages, a FHIR Bundle of 4 times
- * the entries, a C-CDA of 4 times the results, an X12 interchange of 4 times the claims, a DICOM
- * object of 4 times the frames, a locus model of 4 times the loci). Each ratio must stay inside the
- * band the shared contract fixes. A gate does not see a constant-factor slowdown: a pass 10% slower
+ * the entries, a C-CDA of 4 times the results, an X12 interchange of 4 times the claims, an NCPDP
+ * Telecom batch of 4 times the transmissions, a DICOM object of 4 times the frames, a locus model of
+ * 4 times the loci). Each ratio must stay inside the band the shared contract fixes. A gate does not see a constant-factor slowdown: a pass 10% slower
  * everywhere passes, and always will. The base against head comparison on a pull request
  * (`bench/deid.bench.mjs`) is the instrument for that.
  *
@@ -37,6 +37,8 @@ import {
   hl7Batch,
   hl7Message,
   locusModel,
+  ncpdpBatch,
+  ncpdpClaim,
   x12Claims,
 } from "../../bench/shapes.mjs";
 import * as target from "../../bench/target.mjs";
@@ -48,6 +50,7 @@ const { deidentifyCcda } = target.deidCcda;
 const { deidentifyDicomBuffer } = target.deidDicom;
 const { deidentifyFhirJson } = target.deidFhir;
 const { deidentifyHl7 } = target.deidHl7;
+const { deidentifyTelecomString } = target.deidNcpdp;
 const { deidentifyX12String } = target.deidX12;
 const { parseCcda } = target.ccda;
 const { parseDicom } = target.dicom;
@@ -172,6 +175,26 @@ const x12 = (): ScalingGateOptions<string, string> => ({
   size: { inputs: 2, size: 50, generate: (i, size) => x12Claims(i, size) },
 });
 gate("X12 837P", x12, (text) => x12Text(readTextQuadratically(text, TEXT_STEP)));
+
+/** De-identify and write back every transmission of an NCPDP Telecom batch, one a line. */
+function deidentifyTelecomText(text: string): string {
+  let out = "";
+  for (const line of text.split("\n")) {
+    if (line.length > 0) out += `${deidentifyTelecomString(line).telecom}\n`;
+  }
+  return out;
+}
+
+const ncpdp = (): ScalingGateOptions<string, string> => ({
+  name: "@cosyte/deid NCPDP Telecom, text in, text out",
+  parse: deidentifyTelecomText,
+  weigh: (text) => text.length,
+  count: { n: 64, generate: (i) => ncpdpClaim(i) },
+  size: { inputs: 2, size: 64, generate: (i, size) => ncpdpBatch(i, size) },
+});
+gate("NCPDP Telecom", ncpdp, (text) =>
+  deidentifyTelecomText(readTextQuadratically(text, TEXT_STEP)),
+);
 
 /**
  * The DICOM gate's frames are 32 by 32: the pass keeps Pixel Data as it is, so the header (one

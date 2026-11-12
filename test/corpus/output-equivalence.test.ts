@@ -52,6 +52,7 @@ import {
   hl7Batch,
   hl7Message,
   locusModel,
+  ncpdpClaim,
   x12Claims,
 } from "../../bench/shapes.mjs";
 import { buildPhiDataset } from "../dicom/helpers/fixtures.js";
@@ -159,6 +160,8 @@ const X12_INPUTS: readonly (readonly [string, string])[] = [
 const NCPDP_INPUTS: readonly (readonly [string, string])[] = [
   ["telecom-b1", FIX("ncpdp", "telecom-b1.ncpdp")],
   ["telecom-b1-response", FIX("ncpdp", "telecom-b1-response.ncpdp")],
+  ["claim shape 0", ncpdpClaim(0)],
+  ["claim shape 9", ncpdpClaim(9)],
 ];
 
 const DICOM_INPUTS: readonly (readonly [string, Buffer])[] = [

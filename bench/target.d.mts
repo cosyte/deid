@@ -6,6 +6,7 @@ import type { Buffer } from "node:buffer";
 
 import type { CcdaDocument } from "@cosyte/ccda";
 import type { Hl7Message } from "@cosyte/hl7";
+import type { TelecomTransaction } from "@cosyte/ncpdp/telecom";
 import type { X12Interchange } from "@cosyte/x12";
 
 import type { GenericLocus } from "../src/locus.js";
@@ -31,6 +32,10 @@ export declare const deidX12: {
   readonly deidentifyX12String: (raw: string) => Manifested & { readonly x12: string };
   readonly deidentifyX12: (interchange: X12Interchange) => Manifested & { readonly x12: string };
 };
+export declare const deidNcpdp: {
+  readonly deidentifyTelecomString: (raw: string) => Manifested & { readonly telecom: string };
+  readonly deidentifyTelecom: (tx: TelecomTransaction) => Manifested & { readonly telecom: string };
+};
 export declare const deidDicom: {
   readonly deidentifyDicomBuffer: (bytes: Buffer) => Manifested & { readonly bytes: Buffer };
 };
@@ -39,4 +44,5 @@ export * as hl7 from "@cosyte/hl7";
 export * as fhir from "@cosyte/fhir";
 export * as ccda from "@cosyte/ccda";
 export * as x12 from "@cosyte/x12";
+export * as ncpdp from "@cosyte/ncpdp/telecom";
 export * as dicom from "@cosyte/dicom";

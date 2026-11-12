@@ -18,8 +18,9 @@ name: Bench
 # in each job's summary.
 #
 # One reading job per format, side by side, so the reading finishes inside a pull request's wait:
-# each runs its format's two benchmarks (text in, text out, and the adapter on a parsed model) at
-# every size. Jobs on different runners are not compared with each other; each reading names the
+# each runs its format's three benchmarks (text in, text out; the adapter on a parsed model; and
+# the parser alone, text in, text out, so a row can be split into the parser's share and the
+# adapter's) at every size. Jobs on different runners are not compared with each other; each reading names the
 # machine it ran on.
 
 on:
@@ -55,18 +56,27 @@ jobs:
           - slug: hl7
             first: "HL7 v2: text in, text out"
             second: "HL7 v2: adapter on a parsed model"
+            third: "HL7 v2: parser alone, text in, text out"
           - slug: fhir
             first: "FHIR R4: text in, text out"
             second: "FHIR R4: adapter on a parsed model"
+            third: "FHIR R4: parser alone, text in, text out"
           - slug: ccda
             first: "C-CDA: text in, text out"
             second: "C-CDA: adapter on a parsed model"
+            third: "C-CDA: parser alone, text in, text out"
           - slug: x12
             first: "X12 837P: text in, text out"
             second: "X12 837P: adapter on a parsed model"
+            third: "X12 837P: parser alone, text in, text out"
+          - slug: ncpdp
+            first: "NCPDP Telecom: text in, text out"
+            second: "NCPDP Telecom: adapter on a parsed model"
+            third: "NCPDP Telecom: parser alone, text in, text out"
           - slug: dicom
             first: "DICOM: text in, text out"
             second: "DICOM: adapter on a parsed model"
+            third: "DICOM: parser alone, text in, text out"
           - slug: engine
             first: "policy engine: Safe Harbor"
             second: "policy engine: keyed"
@@ -86,6 +96,7 @@ jobs:
         env:
           FIRST: ${{ matrix.first }}
           SECOND: ${{ matrix.second }}
+          THIRD: ${{ matrix.third }}
           SLUG: ${{ matrix.slug }}
           COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
         shell: bash
@@ -93,7 +104,9 @@ jobs:
           set -euo pipefail
           mkdir -p bench-results
           status=0
-          pnpm bench:reading --commit "${COMMIT}" --only "${FIRST}" --only "${SECOND}" \
+          only=(--only "${FIRST}" --only "${SECOND}")
+          if [ -n "${THIRD}" ]; then only+=(--only "${THIRD}"); fi
+          pnpm bench:reading --commit "${COMMIT}" "${only[@]}" \
             --out "bench-results/reading-${SLUG}.json" \
             --summary "bench-results/reading-${SLUG}.md" || status=$?
           if [ -f "bench-results/reading-${SLUG}.md" ]; then
