@@ -13,7 +13,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { parseResource } from "@cosyte/fhir";
+import { getProperty, isPrimitive, parseResource } from "@cosyte/fhir";
 
 import {
   createDeidContext,
@@ -359,6 +359,14 @@ describe("keepEmbeddedContent keeps the kinds a caller names, and records each k
     expect(kept.loci).toEqual([
       { path: "Binary.data", kind: "unknown", embeddedContentKept: true, value: "" },
     ]);
+    // The record's coordinate names a stand-in with no value, never the kept node, so the applier
+    // writes nothing for it and the kept value is written as it arrived.
+    const data = getProperty(resource, "data");
+    expect(kept.coords).toHaveLength(1);
+    const [coord] = kept.coords;
+    expect(coord?.edit).toBe("drop");
+    expect(coord?.node).not.toBe(data);
+    expect(coord !== undefined && isPrimitive(coord.node) && coord.node.value).toBe(undefined);
     const removed = extractFhirLoci(resource);
     expect(removed.loci).toEqual([{ path: "Binary.data", kind: "unknown", value: B64 }]);
   });
