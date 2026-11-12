@@ -117,8 +117,18 @@ describe("NCPDP Telecom Claim segment dates", () => {
     }
   });
 
-  it("names exactly the two Claim dates in the retained-segment rules", () => {
-    expect(Object.keys(TELECOM_RETAINED_SEGMENT_RULES).sort()).toEqual(["07", "24"]);
-    expect(Object.keys(TELECOM_RETAINED_SEGMENT_RULES["07"] ?? {}).sort()).toEqual(["DE", "EP"]);
+  it("names exactly the two Claim dates and two Claim identifiers in the retained-segment rules", () => {
+    expect(Object.keys(TELECOM_RETAINED_SEGMENT_RULES).sort()).toEqual(["07", "13", "24"]);
+    expect(Object.keys(TELECOM_RETAINED_SEGMENT_RULES["07"] ?? {}).sort()).toEqual([
+      "CW",
+      "DE",
+      "EK",
+      "EP",
+    ]);
+    const dates = Object.entries(TELECOM_RETAINED_SEGMENT_RULES["07"] ?? {})
+      .filter(([, rule]) => rule.mode === "date")
+      .map(([id]) => id)
+      .sort();
+    expect(dates).toEqual(["DE", "EP"]);
   });
 });

@@ -7,7 +7,7 @@
  *
  * PHI is located **structurally**, per the cited {@link "./locus-map.js"}: the Patient (`01`),
  * Prescriber (`03`), Insurance (`04`), Coordination-of-Benefits (`05`) and Prior Authorization (`12`)
- * segment fields, the dated
+ * segment fields, the ruled
  * fields of a retained segment ({@link TELECOM_RETAINED_SEGMENT_RULES}), plus the header's Date of
  * Service. A free-text field ({@link TELECOM_FREE_TEXT_FIELDS}) **fails closed**
  * wherever it appears; a recognized clinical / financial segment is retained untouched (the over-scrub
@@ -272,8 +272,8 @@ export function extractTelecomLoci(tx: TelecomTransaction): TelecomExtraction {
           return;
         }
         if (isRetained) {
-          // A dated field of a retained segment (the Claim segment's Date Prescription Written, say)
-          // is a date of the individual's care: its rule reaches it, as a date in a mapped segment.
+          // A field a rule names in a retained segment (the Claim segment's Date Prescription Written,
+          // or its Scheduled Prescription ID Number, say): its rule reaches it, as in a mapped segment.
           const retainedRule = retainedRules?.[field.id];
           if (retainedRule !== undefined) {
             emitRule(out, segPath, fieldPath, field.value, retainedRule, coord);

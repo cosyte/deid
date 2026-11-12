@@ -68,12 +68,13 @@ standard, so the map keys off the field id directly.
 | **Insurance (`04`)**                                                             | cardholder id (`C2`) + group id (`C1`) **removed** under Safe Harbor; cardholder name (`CC`/`CD`) removed; person code retained                                                                                                             |
 | **Prescriber (`03`)**                                                            | prescriber id (`DB`) **removed**                                                                                                                                                                                                            |
 | **Coordination of Benefits (`05`)**                                              | other-payer cardholder (`NU`) + group (`MJ`) ids **removed** under Safe Harbor; other-payer date (`E8`) → year                                                                                                                              |
-| **Claim (`07`)**                                                                 | Date Prescription Written (`DE`) + Associated Prescription/Service Date (`EP`) → year; every other Claim field retained                                                                                                                     |
+| **Claim (`07`)**                                                                 | Date Prescription Written (`DE`) + Associated Prescription/Service Date (`EP`) → year; Scheduled Prescription ID Number (`EK`) + Alternate ID (`CW`) **removed**; every other Claim field retained |
+| **Clinical (`13`)**                                                              | Measurement Date (`ZE`) → year, every occurrence; the diagnosis codes and measurements retained |
 | **Prior Authorization (`12`)**                                                   | type code (`EU`) kept in the form of a code; the number submitted (`EV`) and every other field (a representative's name or address, a request date) **removed**                                                                             |
 | **Response DUR / PPS (`24`)**                                                    | Previous Date Of Fill (`FU`) → year; the alert codes and the quantity of the previous fill retained                                                                                                                                         |
 | **Header**                                                                       | Date of Service → year                                                                                                                                                                                                                      |
 | **Free text** (`544-FY`, `504-F4`, `526-FQ`)                                     | **fails closed**: blocked, never scrubbed by a naive pass                                                                                                                                                                                   |
-| **Clinical / financial / response** (`02`/`07`/`08`/`10`/`11`/`13`/`20` to `24`) | **retained untouched** but for the dates above, each segment for the reason `TELECOM_RETAIN_SEGMENT_REASONS` lists: NDC drug codes, quantities, days-supply, pricing, DUR reason codes; every other field counted as an unexamined residual |
+| **Clinical / financial / response** (`02`/`07`/`08`/`10`/`11`/`13`/`20` to `24`) | **retained untouched** but for the fields above, each segment for the reason `TELECOM_RETAIN_SEGMENT_REASONS` lists: NDC drug codes, quantities, days-supply, pricing, DUR reason codes; every other field counted as an unexamined residual |
 | Any **unmapped / unknown** segment                                               | **fails closed**: every field blocked                                                                                                                                                                                                       |
 
 The X12 adapter **retains** provider identity, while this adapter **removes** the prescriber id: a
@@ -97,6 +98,38 @@ its year, recorded in the manifest as `07/DE` or `07/EP`, and shifted instead un
 shifts dates. `TELECOM_RETAINED_SEGMENT_RULES` lists them. The Pricing segment (`11`) carries amounts
 and codes and no date. The Prescriber segment (`03`) carries no date either, and removes every field
 but its id qualifier.
+
+The Claim segment also carries two identifiers, and the Clinical segment a date, that the field
+tables we hold do not name. Public Medicaid payer sheets place and name them, so each is handled by
+what those sheets say it holds:
+
+- **`454-EK` Scheduled Prescription ID Number**, Claim segment. It names one scheduled (controlled)
+  drug prescription, so with the pharmacy and the date it points to one patient's fill. It is
+  **removed** and recorded as `07/EK`, under every profile.
+- **`330-CW` Alternate ID**, Claim segment. It is an alternate reference for the claim or member; one
+  sheet says it carries Medicare's reference number on a crossover claim. It is **removed** and
+  recorded as `07/CW`, under every profile.
+- **`494-ZE` Measurement Date**, Clinical segment, `CCYYMMDD`, once per measurement. It is the day a
+  measurement of the patient was taken, so each occurrence is handled like the other dates of care:
+  cut to its year under Safe Harbor, shifted under a profile that shifts dates, recorded as `13/ZE`.
+
+No public sheet we read gives the length or picture of `454-EK` or `330-CW`, so a surrogate in their
+form cannot be built: that is why both are removed rather than replaced, even under a profile that
+keeps other identifiers as keyed surrogates. The sheets we read for these three fields, each read on
+2026-11-12:
+
+- Washington State Health Care Authority, Apple Health pharmacy payer sheet, effective June 8, 2024
+  (`454-EK` and `330-CW` in the Claim segment):
+  <https://www.hca.wa.gov/assets/billers-and-providers/do_payer_sheet.pdf>
+- Nevada Medicaid NCPDP payer sheet, effective December 2, 2011 (`454-EK` and `330-CW` in the Claim
+  segment): <https://medicaid.nv.gov/Downloads/provider/SR-91_20111121.pdf>
+- Express Scripts NCPDP vD.0 Medicaid payer sheet, effective January 1, 2018 (`454-EK` in the Claim
+  segment): <https://www.express-scripts.com/art/prc/NCPDP_vD0_MEDICAID_Payer_Sheet.pdf>
+- Utah Medicaid NCPDP version 5 payer sheet, 2007 (`330-CW` carries Medicare's reference number on a
+  crossover claim): <https://medicaid-documents.dhhs.utah.gov/Documents/pdfs/NCPDPbilling.pdf>
+- Kansas Medical Assistance Program NCPDP vD.0 payer sheets, version 6.0, May 4, 2021 (`494-ZE` in
+  the Clinical segment, `9(8)`, `CCYYMMDD`):
+  <https://www.kmap-state-ks.us/Documents/EDI/NCPDP%20D%200%20Payer_Sheets%20v6.pdf>
 
 The response DUR / PPS segment (`24`) is kept for its alert codes, but its Previous Date Of Fill
 (`530-FU`) is the day the patient's earlier prescription was filled: it goes to the year as `24/FU`,
@@ -152,11 +185,12 @@ change: a parsed Telecom transaction is never a candidate for the refusal.
 A retained clinical or response segment may carry a field the field tables we hold do not place, or a
 per-prescription reference such as the Rx reference number (`402-D2`): a documented limitation
 mirroring the HL7 and X12 adapters. Each is kept and counted as an unexamined residual, never passed
-through unrecorded. Three fields a Claim or Clinical segment is said to carry are in that set because
-no field table we hold places them: a Scheduled Prescription ID Number (`454-EK`) and an Alternate ID
-(`330-CW`) in the Claim segment, and a Measurement Date (`494-ZE`) in the Clinical segment. If your
-transactions carry them, remove them after the pass: the residual list names each one it found as
-`07/EK`, `07/CW` or `13/ZE`.
+through unrecorded.
+
+The Scheduled Prescription ID Number (`454-EK`) and the Alternate ID (`330-CW`) are removed whole,
+because no public payer sheet we read gives their length or picture: a profile that keeps other
+identifiers as keyed surrogates cannot keep a surrogate of these. The Measurement Date (`494-ZE`)
+rests on a single public payer sheet; we found no second one that lists it.
 
 A Telecom message that carries more than one transaction is **refused** with a typed `DeidError`
 carrying `DEID_FORMAT_UNSUPPORTED`, with no partial output. Split it and de-identify each transaction on
