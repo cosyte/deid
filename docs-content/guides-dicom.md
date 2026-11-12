@@ -47,7 +47,11 @@ function part10(elements: El[]): Buffer {
     return Buffer.concat([head, value]);
   };
   const syntax: El = [0x0002, 0x0010, "UI", "1.2.840.10008.1.2.1"];
-  return Buffer.concat([Buffer.alloc(128), Buffer.from("DICM"), ...[syntax, ...elements].map(encode)]);
+  return Buffer.concat([
+    Buffer.alloc(128),
+    Buffer.from("DICM"),
+    ...[syntax, ...elements].map(encode),
+  ]);
 }
 
 const part10Bytes = part10([
@@ -90,15 +94,16 @@ although no key of yours derived it.
 The **Basic Application Level Confidentiality Profile** is authoritative for what happens to each tag. With
 no Annex E option named, the pass applies it in full, with no Retain/Clean deviations:
 
-| Locus                                                        | Handling                                                                                        |
-| ------------------------------------------------------------ | ----------------------------------------------------------------------------------------------- |
-| Patient Name/ID/Birth Date, Other Patient IDs                | removed / emptied per Annex E                                                                    |
-| Institution, Referring/Performing physician, operators       | removed                                                                                          |
-| Dates and times directly related to the individual           | removed / dummied per Annex E                                                                    |
-| Accession, device serial, and other identifiers              | removed                                                                                          |
-| **Study / Series / SOP Instance UIDs**                       | **consistently remapped** (`U`) so the study/series/image relationships survive                 |
-| **Private tags**                                             | **removed** (fail-closed, kept only when a known-safe retain list names them; empty by default) |
-| Modality, image geometry, coded technique, pixel bytes       | **retained untouched**: the clinical/technical payload survives                                |
+| Locus                                                     | Handling                                                                                        |
+| --------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| Patient Name/ID/Birth Date, Other Patient IDs             | removed / emptied per Annex E                                                                   |
+| Institution, Referring/Performing physician, operators    | removed                                                                                         |
+| Dates and times directly related to the individual        | removed / dummied per Annex E                                                                   |
+| Accession, device serial, and other identifiers           | removed                                                                                         |
+| **Study / Series / SOP Instance UIDs**                    | **consistently remapped** (`U`) so the study/series/image relationships survive                 |
+| **Private tags**                                          | **removed** (fail-closed, kept only when a known-safe retain list names them; empty by default) |
+| Modality, image geometry, coded technique, pixel bytes    | **retained untouched**: the clinical/technical payload survives                                 |
+| Breed Registration Sequence and Number `(0010,2294/2295)` | **removed** beyond Table E.1-1, recorded, and named by `BREED_REGISTRATION_REMOVED_CODE`        |
 
 The output carries the mandated `Patient Identity Removed = YES` marker and a De-identification Method
 naming the profile and the policy.
@@ -153,7 +158,11 @@ function part10(elements: El[]): Buffer {
     return Buffer.concat([head, value]);
   };
   const syntax: El = [0x0002, 0x0010, "UI", "1.2.840.10008.1.2.1"];
-  return Buffer.concat([Buffer.alloc(128), Buffer.from("DICM"), ...[syntax, ...elements].map(encode)]);
+  return Buffer.concat([
+    Buffer.alloc(128),
+    Buffer.from("DICM"),
+    ...[syntax, ...elements].map(encode),
+  ]);
 }
 
 const dataset = parseDicom(
@@ -199,7 +208,11 @@ function part10(elements: El[]): Buffer {
     return Buffer.concat([head, value]);
   };
   const syntax: El = [0x0002, 0x0010, "UI", "1.2.840.10008.1.2.1"];
-  return Buffer.concat([Buffer.alloc(128), Buffer.from("DICM"), ...[syntax, ...elements].map(encode)]);
+  return Buffer.concat([
+    Buffer.alloc(128),
+    Buffer.from("DICM"),
+    ...[syntax, ...elements].map(encode),
+  ]);
 }
 
 const dataset = parseDicom(part10([[0x0010, 0x1010, "AS", "093Y"]]));
@@ -239,7 +252,11 @@ function part10(elements: El[]): Buffer {
     return Buffer.concat([head, value]);
   };
   const syntax: El = [0x0002, 0x0010, "UI", "1.2.840.10008.1.2.1"];
-  return Buffer.concat([Buffer.alloc(128), Buffer.from("DICM"), ...[syntax, ...elements].map(encode)]);
+  return Buffer.concat([
+    Buffer.alloc(128),
+    Buffer.from("DICM"),
+    ...[syntax, ...elements].map(encode),
+  ]);
 }
 
 const part10Bytes = part10([[0x0010, 0x0010, "PN", "ZZFAMILY^ZZGIVEN"]]);
@@ -307,14 +324,24 @@ function part10(elements: El[]): Buffer {
     return Buffer.concat([head, value]);
   };
   const syntax: El = [0x0002, 0x0010, "UI", "1.2.840.10008.1.2.1"];
-  return Buffer.concat([Buffer.alloc(128), Buffer.from("DICM"), ...[syntax, ...elements].map(encode)]);
+  return Buffer.concat([
+    Buffer.alloc(128),
+    Buffer.from("DICM"),
+    ...[syntax, ...elements].map(encode),
+  ]);
 }
 
 // Two objects of one synthetic study, as you would read them from the study's files.
 const study = "1.2.826.0.1.3680043.10.999.1";
 const studyFiles = [
-  part10([[0x0020, 0x000d, "UI", study], [0x0020, 0x0013, "IS", "1"]]),
-  part10([[0x0020, 0x000d, "UI", study], [0x0020, 0x0013, "IS", "2"]]),
+  part10([
+    [0x0020, 0x000d, "UI", study],
+    [0x0020, 0x0013, "IS", "1"],
+  ]),
+  part10([
+    [0x0020, 0x000d, "UI", study],
+    [0x0020, 0x0013, "IS", "2"],
+  ]),
 ];
 
 const uidMap = new Map<string, string>();
@@ -357,7 +384,11 @@ function part10(elements: El[]): Buffer {
     return Buffer.concat([head, value]);
   };
   const syntax: El = [0x0002, 0x0010, "UI", "1.2.840.10008.1.2.1"];
-  return Buffer.concat([Buffer.alloc(128), Buffer.from("DICM"), ...[syntax, ...elements].map(encode)]);
+  return Buffer.concat([
+    Buffer.alloc(128),
+    Buffer.from("DICM"),
+    ...[syntax, ...elements].map(encode),
+  ]);
 }
 
 const dataset = parseDicom(part10([[0x0020, 0x000d, "UI", "1.2.826.0.1.3680043.10.999.1"]]));
@@ -397,7 +428,11 @@ function part10(elements: El[]): Buffer {
     return Buffer.concat([head, value]);
   };
   const syntax: El = [0x0002, 0x0010, "UI", "1.2.840.10008.1.2.1"];
-  return Buffer.concat([Buffer.alloc(128), Buffer.from("DICM"), ...[syntax, ...elements].map(encode)]);
+  return Buffer.concat([
+    Buffer.alloc(128),
+    Buffer.from("DICM"),
+    ...[syntax, ...elements].map(encode),
+  ]);
 }
 
 // A synthetic file with Pixel Data and no Burned In Annotation (0028,0301) element marking it free.
@@ -414,13 +449,16 @@ warns rather than giving a false sense of safety.
 
 ## Known limitations
 
-- **Metadata only**: pixels are never inspected; a burned-in-annotation hazard is *flagged*, never
+- **Metadata only**: pixels are never inspected; a burned-in-annotation hazard is _flagged_, never
   cleaned. The two pixel options of CID 7050 (`113101` Clean Pixel Data, `113102` Clean Recognizable
   Visual Features) are therefore always declared **withheld** and are never written to `(0012,0064)`.
 - **Three Annex E options, no more**: Clean Descriptors, Retain Patient Characteristics and Retain
   Device Identity can be named, none under a policy named `safe-harbor`; every other option is
   refused. Clean Descriptors refuses a file with a cleaned coded list nested inside a kept sequence. With none named, the full Basic Profile
   applies (maximal removal) and every option is declared withheld.
+- **Animal patients**: species and breed are kept, the owner (Responsible Person and Organization) is
+  removed, and the breed registration is removed beyond Table E.1-1. A breed registration inside a
+  kept sequence is refused. [Known limitations](./limitations.md#animal-patients) has the table.
 - **Replacement-UID referential integrity is guaranteed within one call** unless you supply a shared
   `uidMap`, in which case it reaches every call that shares it. The declared scope is on the result.
 

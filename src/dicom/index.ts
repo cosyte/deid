@@ -62,6 +62,10 @@ import {
   serializeVerified,
   TAG_DEIDENTIFICATION_METHOD_CODE_SEQUENCE,
 } from "./method-sequence.js";
+import {
+  BREED_REGISTRATION_REMOVED_WARNING,
+  removeBreedRegistration,
+} from "./breed-registration.js";
 import { removeCleanedSequences } from "./cleaned-sequences.js";
 import { resolveDicomOptions } from "./policy-map.js";
 import type {
@@ -124,7 +128,12 @@ function runDicomPass(
   });
   // A sequence the pass cleaned still holds its items, free-text Code Meaning included: it is dropped
   // when the root is rebuilt below, and recorded removed, before anything is serialized or folded.
-  const { removed, report } = removeCleanedSequences(delegated.dataset, delegated.report);
+  const cleaned = removeCleanedSequences(delegated.dataset, delegated.report);
+  // Table E.1-1 lists no breed registration, so the pass kept it: it names one animal and leads to
+  // its owner, so it is dropped in the same rebuild, recorded removed, and named in a warning.
+  const breed = removeBreedRegistration(delegated.dataset, cleaned.report);
+  const { report } = breed;
+  const removed = new Set([...cleaned.removed, ...breed.removed]);
 
   const result = attachMethodCodeSequence(delegated.dataset, declaration.appliedTerms, removed);
   const bytes = serializeVerified(result, declaration.appliedTerms, whole);
@@ -132,6 +141,7 @@ function runDicomPass(
   const warnings: readonly DicomDeidWarning[] = Object.freeze([
     ...foldWarnings(report.warnings),
     ...(inputCarriedMethodCodes ? [INPUT_METHOD_CODE_SEQUENCE_DROPPED_WARNING] : []),
+    ...(breed.removed.size > 0 ? [BREED_REGISTRATION_REMOVED_WARNING] : []),
   ]);
 
   return {
@@ -255,6 +265,7 @@ export function deidentifyDicomBuffer(
 }
 
 export { BURNED_IN_ANNOTATION_CODE } from "./fold.js";
+export { BREED_REGISTRATION_REMOVED_CODE } from "./breed-registration.js";
 export { DICOM_ANNEX_E_OPTIONS, type DicomAnnexEOption } from "./annex-e-options.js";
 export { INPUT_METHOD_CODE_SEQUENCE_DROPPED_CODE } from "./method-sequence.js";
 export {

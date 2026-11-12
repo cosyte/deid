@@ -494,6 +494,24 @@ scope; // => "single-call"
 
 ## Variables
 
+### BREED\_REGISTRATION\_REMOVED\_CODE
+
+> `const` **BREED\_REGISTRATION\_REMOVED\_CODE**: `"DICOM_BREED_REGISTRATION_REMOVED"` = `"DICOM_BREED_REGISTRATION_REMOVED"`
+
+The warning code returned when a run removed a breed registration, which PS3.15 Table E.1-1 does
+not list. Exported from `@cosyte/deid/dicom` so a caller can branch on it.
+
+#### Example
+
+```ts
+import { BREED_REGISTRATION_REMOVED_CODE, deidentifyDicom } from "@cosyte/deid/dicom";
+
+const { warnings } = deidentifyDicom(dataset);
+warnings.some((w) => w.code === BREED_REGISTRATION_REMOVED_CODE);
+```
+
+***
+
 ### BURNED\_IN\_ANNOTATION\_CODE
 
 > `const` **BURNED\_IN\_ANNOTATION\_CODE**: `"DICOM_BURNED_IN_ANNOTATION_NOT_REMOVED"` = `"DICOM_BURNED_IN_ANNOTATION_NOT_REMOVED"`
