@@ -167,6 +167,31 @@ describe("a key R4 does not define is blocked at any depth", () => {
     expect(loci).toContain("Observation.identifier[0].use[0].zz");
   });
 
+  it("a string at a person resource's top level is still read by the person sweep", () => {
+    // Each key here is one R4 defines, so the person sweep decides it as before: a string where R4
+    // puts a structure (`period`, `link`), a gender outside its value set and a language that is not
+    // a language tag are removed; a gender and a language tag in their sets are kept.
+    const related = run({ resourceType: "RelatedPerson", period: "ZZPERIODTEXT" });
+    expect(related.json).not.toContain("ZZPERIODTEXT");
+    expect(related.manifest.map((m) => `${m.locus} ${m.disposition}`)).toEqual([
+      "RelatedPerson.period blocked",
+    ]);
+    const patient = run({
+      resourceType: "Patient",
+      link: "ZZLINKTEXT",
+      gender: "zzgender",
+      language: "Zzsmith",
+    });
+    expect(patient.manifest.map((m) => m.locus)).toEqual([
+      "Patient.link",
+      "Patient.gender",
+      "Patient.language",
+    ]);
+    const kept = run({ resourceType: "Patient", gender: "female", language: "en-US" });
+    expect(kept.json).toBe('{"resourceType":"Patient","gender":"female","language":"en-US"}');
+    expect(kept.manifest).toEqual([]);
+  });
+
   it("a resource of a type R4 does not define keeps only what every resource carries", () => {
     const { json, manifest } = run({
       resourceType: "ZzThing",
