@@ -322,9 +322,12 @@ Two things follow, and the second is the one that surprises people:
   datatype: at a resource's top level (`Observation.zzNote`), in a datatype (`Coding`, `Identifier`,
   `Meta`, `Narrative`, a `Reference`), in a datatype inside one, in a backbone element, in a contained
   resource and in a `Bundle` entry and its request, on person, clinical and infrastructure resources
-  alike. It is recorded at its own locus (`Observation.code.coding[0].zzNote`) with no value, under
-  every profile and with every option at its default, and it is no longer counted as an unexamined
-  residual. The names come from the R4 (4.0.1) definitions of every resource and datatype, a choice
+  alike. It is recorded at its own position with no value, under every profile and with every option
+  at its default, and it is no longer counted as an unexamined residual. The row does not repeat the
+  key either, since a name or an identifier can be spelled as one: `<withheld>` and the key's place
+  among its parent's keys stand in for it, so `Observation.code.coding[0].zzNote`, the third key of
+  its `Coding`, is recorded at `Observation.code.coding[0].<withheld>[2]`. A row at a key R4 defines
+  keeps its name. The names come from the R4 (4.0.1) definitions of every resource and datatype, a choice
   element under each concrete name it is written as (`valueQuantity`), with what it holds and
   whether it repeats. A key inside a reduced `Address` that the `Address` datatype does not define is
   removed by the reduction and recorded as well. No option keeps such a key: a profile that adds
@@ -332,7 +335,14 @@ Two things follow, and the second is the one that surprises people:
   output for any input that carries such a key: the key is gone where it used to be passed through.
 
   The same holds for a value of a shape R4 does not define where it sits, read from the same
-  definitions: a string, a number, a boolean or a `null` where a structure belongs (a
+  definitions. That includes a primitive of another JSON type than the one R4 gives it, at every
+  depth and in every choice element: a number or a boolean where R4 puts a string
+  (`"valueString": 987654321`, a `CodeableConcept.text` of `42`, an element or resource `id` held as a
+  number), and a string where R4 puts a boolean, an integer or a decimal (`"valueBoolean": "yes"`,
+  `Bundle.total` as `"3"`, a `Quantity.value` as `"5"`), or another JSON type there. R4 writes a
+  `boolean` as a JSON boolean, an `integer`, a `decimal`, a `positiveInt` and an `unsignedInt` as a
+  JSON number, and every other primitive as a JSON string. Where no other rule read it, such a value
+  used to be passed through with no row at all. Then a string, a number, a boolean or a `null` where a structure belongs (a
   `"subject": "..."` where R4 puts a `Reference`, a `"contained": ["..."]`, a `Bundle` entry's
   `"resource": "..."`), a structure where a primitive belongs (`"status": { ... }`, a `HumanName`
   sent where R4 puts a string), a list where R4 puts one value (`"code": [ ... ]`), one value where
@@ -352,9 +362,10 @@ Two things follow, and the second is the one that surprises people:
 
   Inside an `extension` or a `modifierExtension`, at any depth and on every resource, only the `url`,
   the element `id` (replaced, as every element id is) and the nested extensions are kept. Every other
-  key is blocked and recorded at its own locus (`Observation.extension[0].note`), with no value: a
-  `value[x]`, and equally a key R4 does not give an extension (`note`, `comment`, any name), whatever
-  it holds. A `url` or an `id` that is not a string (a number, a boolean, an object, a list) is
+  key is blocked and recorded at its own locus, with no value: a `value[x]`
+  (`Observation.extension[0].valueString`), and equally a key R4 does not give an extension (`note`,
+  `comment`, any name), whatever it holds, whose row names its position and not the key
+  (`Observation.extension[0].<withheld>[1]`). A `url` or an `id` that is not a string (a number, a boolean, an object, a list) is
   blocked the same way. An extension on a primitive's `_`-sibling is blocked like this on the
   `state` or `country` an `Address` keeps; every other one is removed with the primitive's metadata,
   and each one removed that way is recorded as blocked at its own locus
@@ -402,7 +413,7 @@ Two things follow, and the second is the one that surprises people:
   re-identification code, under a policy that pseudonymizes or hashes the medical record number
   category. Each has a manifest row at its locus (`Observation.code.id`), with no value. A policy that
   neither withholds nor keys that category removes every element id instead. An element id that is
-  not a string (an object, a list) is removed and recorded.
+  not a string (an object, a list, a number, a boolean) is removed and recorded.
 
   We replace rather than remove so that a link to an element id still resolves: the `actionId` of a
   `relatedAction` in a `RequestGroup` or a `PlanDefinition`, at any depth of nested actions, is
