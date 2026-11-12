@@ -223,6 +223,21 @@ describe("the name on every ContactDetail element R4 defines", () => {
     });
   }
 
+  it("blocks a ContactDetail's name that carries only a `_`-sibling, its extension with it", () => {
+    // A name with no value of its own is no string the pass can remove as a name, so it goes whole.
+    const out = run({
+      resourceType: "ValueSet",
+      status: "draft",
+      contact: [
+        {
+          _name: { extension: [{ url: "http://example.org/zz", valueString: "ZZCONTACTEXT" }] },
+        },
+      ],
+    });
+    expect(out.json).not.toContain("ZZCONTACTEXT");
+    expect(rows(out)).toEqual(["ValueSet.contact[0].name blocked"]);
+  });
+
   it("removes a list of strings at a ContactDetail's name whole", () => {
     const out = run({
       resourceType: "Measure",
