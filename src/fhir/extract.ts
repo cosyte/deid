@@ -1448,18 +1448,13 @@ export function extractFhirLoci(
  * decided. So the text is recorded as a block at the `_`-sibling's own locus (`Observation._status`),
  * and the manifest row carries no value.
  *
- * The coordinate names a stand-in node rather than the primitive, so it never displaces the edit the
- * pass made to the primitive's value; the applier visits only the tree's own nodes, so the stand-in
- * writes nothing.
+ * The coordinate names a stand-in primitive holding that text rather than the primitive itself, so it
+ * never displaces the edit the pass made to the primitive's value; the applier visits only the tree's
+ * own nodes, so the stand-in writes nothing.
  */
 function blockSiblingText(out: FhirLocusAccumulator, node: FhirPrimitive, path: string): void {
   const text = node.nonObjectMetaSource ?? node.nestedArrayMetaSource;
-  if (text === undefined) return;
-  push(
-    out,
-    { path: underscoreSibling(path), kind: "unknown", value: text },
-    { node: primitive(undefined), edit: "drop" },
-  );
+  if (text !== undefined) blockNode(out, primitive(text), underscoreSibling(path));
 }
 
 /**

@@ -249,6 +249,17 @@ describe("a `_`-sibling that is not an object, anywhere else", () => {
     expect(loci).not.toContain("Patient._zzNote");
   });
 
+  it("records nothing inside an element the pass removes whole", () => {
+    const result = run({
+      resourceType: "Patient",
+      name: [{ family: "Zzfamily", _family: S, given: ["Zzgiven"], _given: [`${S}2`] }],
+    });
+    expectGone(result);
+    const loci = result.manifest.map((m) => m.locus);
+    expect(loci).toContain("Patient.name");
+    expect(loci.filter((l) => l.includes("_"))).toEqual([]);
+  });
+
   it("is removed where the primitive has no value of its own", () => {
     const result = run({ resourceType: "Observation", code: { text: "sodium" }, _status: S });
     expectGone(result);

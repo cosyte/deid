@@ -121,11 +121,10 @@ const ABOVE_RESOURCES = "";
  */
 function rebuildPrimitive(node: FhirPrimitive, extension?: readonly FhirComplex[]): FhirPrimitive {
   // Stryker disable ConditionalExpression: `primitive` writes no `id` or `extension` it is handed as undefined, so either branch builds the same node
-  return primitive(node.value, {
-    ...(node.id === undefined ? {} : { id: node.id }),
-    ...(extension === undefined ? {} : { extension }),
-  });
+  const id = node.id === undefined ? {} : { id: node.id };
+  const kept = extension === undefined ? {} : { extension };
   // Stryker restore ConditionalExpression
+  return primitive(node.value, { ...id, ...kept });
 }
 
 /**
