@@ -127,10 +127,11 @@ describe("an unknown key inside an extension is blocked", () => {
     expect(json).not.toContain("ZZSTATENOTE");
     expect(json).not.toContain("ZZSTATEVALUE");
     expect(json).not.toContain("ZZCNOTE");
-    // the kept parts keep their values, their element id and the extension's url
+    // the kept parts keep their values and the extension's url; their element id is replaced
     expect(json).toContain('"state":"IL"');
     expect(json).toContain('"country":"US"');
-    expect(json).toContain('"id":"s1"');
+    expect(json).not.toContain('"id":"s1"');
+    expect(json).toMatch(/"_state":\{"id":"\d+"/);
     expect(json).toContain('"url":"http://example.org/s"');
     // a single address is located without an index, as every single occurrence is
     const loci = manifest.map((m) => m.locus);
@@ -179,7 +180,7 @@ describe("an unknown key inside an extension is blocked", () => {
     expect(extractFhirLoci(resource).unexaminedResiduals).toEqual([]);
   });
 
-  it("counts what a kept string part hands through: its element id and its extension's url", () => {
+  it("counts what a kept string part hands through: its extension's url, not its replaced id", () => {
     const { resource } = parseResource(
       JSON.stringify({
         resourceType: "Patient",
@@ -200,7 +201,7 @@ describe("an unknown key inside an extension is blocked", () => {
       extractFhirLoci(resource)
         .unexaminedResiduals.map((r) => r.locus)
         .sort(),
-    ).toEqual(["Patient.address[0]._state.extension[0].url", "Patient.address[0]._state.id"]);
+    ).toEqual(["Patient.address[0]._state.extension[0].url"]);
   });
 
   it("counts nothing of a blocked kept part, its element id included", () => {
@@ -334,13 +335,14 @@ describe("an unknown key inside an extension is blocked", () => {
     expect(json).toContain('"code":"z"');
   });
 
-  it("keeps an extension's url and id, which are structural", () => {
+  it("keeps an extension's url, which is structural, and replaces its id", () => {
     const { json } = run({
       resourceType: "Observation",
       status: "final",
       extension: [{ id: "e1", url: "http://example.org/x", valueBoolean: true }],
     });
-    expect(json).toContain('"id":"e1"');
+    expect(json).not.toContain('"id":"e1"');
+    expect(json).toMatch(/"extension":\[\{"id":"\d+"/);
     expect(json).toContain('"url":"http://example.org/x"');
     expect(json).not.toContain("valueBoolean");
   });
@@ -389,7 +391,7 @@ describe("an unknown key elsewhere in a resource", () => {
       _status: { id: "s1", note: "ZZSIBLINGNOTE" },
     });
     expect(json).not.toContain("ZZSIBLINGNOTE");
-    expect(json).toContain('"_status":{"id":"s1"}');
+    expect(json).toMatch(/"_status":\{"id":"\d+"\}/);
   });
 
   it("below a person resource's top level: handed through and counted", () => {

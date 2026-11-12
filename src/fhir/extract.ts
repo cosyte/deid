@@ -34,6 +34,14 @@
  * A literal is read by `./reference.js`; one it cannot read, and an absolute reference to a server the
  * input's own `fullUrl`s do not name, is blocked.
  *
+ * Every **element id** is replaced the same way: the `id` of every element the output keeps (a
+ * datatype, a `Coding`, a backbone, an extension at any depth) and of every primitive through its
+ * `_`-sibling (`_status.id`). R4 gives an element id no meaning outside the document, so a sender can
+ * put anything there, and it is free text to this pass. It is replaced rather than removed so that
+ * the one R4 element that points at an element id, `relatedAction.actionId` in a `RequestGroup` or a
+ * `PlanDefinition`, can be replaced alike and still resolve. An element id that is not a string
+ * (an object, a list) is blocked. The applier writes an element id only from a replacement.
+ *
  * The `@cosyte/fhir` model is **immutable**, so the extractor never edits the tree; the applier rebuilds
  * a fresh tree from these coordinates (see `./apply.js`).
  *
@@ -101,8 +109,12 @@ import { readFhirLiteral } from "./reference.js";
  *   url or a response location). The id part is replaced by the transformed value and the structure
  *   around it is kept: the `#`, the resource type, the `urn:uuid:` or `urn:oid:` scheme, or the server
  *   base. A version suffix (`/_history/vid`) is dropped. A `null` transform result drops the literal.
+ * - `primitive-id`: the element id of a primitive the applier writes back (its `_`-sibling `id`). The
+ *   primitive keeps its value and takes the transformed value as its id; a `null` result writes it
+ *   with no id.
  */
-export type FhirEditKind = "drop" | "set-primitive" | "address" | "age" | "reference";
+export type FhirEditKind =
+  "drop" | "set-primitive" | "address" | "age" | "reference" | "primitive-id";
 
 /**
  * A write-back coordinate: a direct handle to the exact model node one extracted locus came from, plus
@@ -458,9 +470,9 @@ function handleDemographic(
 
 /**
  * Fail closed on an `extension` / `modifierExtension` subtree: block every `value[x]` it carries at any
- * nesting, and every other key, retaining only the `url`, the element `id` and the nested `extension`
- * skeleton. An extension can carry any of the 18 categories (an MRN in a local extension, a name in a
- * `valueHumanName`, an address in a birthplace extension), and the reader preserves unknown extensions
+ * nesting, and every other key, keeping only the `url`, the element `id` (which is replaced later, as
+ * every element id is) and the nested `extension` skeleton. An extension can carry any of the 18
+ * categories (an MRN in a local extension, a name in a `valueHumanName`, an address in a birthplace extension), and the reader preserves unknown extensions
  * verbatim, so the value is dropped unconditionally: fail closed on an unknown extension carrying a
  * value. An extension is defined by its producer, so a key R4 does not give an extension (a `note`
  * beside the `url`) is free content in the same place, and it is blocked the same way.
@@ -483,8 +495,8 @@ function blockExtension(out: FhirLocusAccumulator, value: FhirNode, path: string
 }
 
 /**
- * The fail-closed rule for one property of an extension object: the `url` and the element `id` are
- * retained, a nested extension is blocked in turn, and everything else is blocked: a `value[x]`, and a
+ * The fail-closed rule for one property of an extension object: the `url` is kept and the element `id`
+ * is left to be replaced with every element id, a nested extension is blocked in turn, and everything else is blocked: a `value[x]`, and a
  * key R4 does not define on an extension.
  */
 function blockExtensionProperty(
@@ -498,9 +510,9 @@ function blockExtensionProperty(
     blockExtension(out, value, join(path, name)); // nested extension: recurse
     return;
   }
-  // Structural, and retained: the definitional `url` and the element `id`, each as R4 types it, a
-  // single string. Either one in any other shape (a number, a boolean, an object, a list) is a
-  // structure no rule reads, and it goes.
+  // Structural: the definitional `url`, kept, and the element `id`, replaced with every other element
+  // id, each as R4 types it, a single string. Either one in any other shape (a number, a boolean, an
+  // object, a list) is a structure no rule reads, and it goes.
   if (EXTENSION_STRUCTURAL_KEYS.has(name) && holdsString(value)) return;
   // Everything else is the payload or free content: a `value[x]`, or a key R4 does not define on an
   // extension. The key is any JSON string, so it is bounded before it becomes a path segment.
@@ -1053,6 +1065,29 @@ const BUNDLE_CONDITIONAL_HEADERS: ReadonlySet<string> = new Set<string>([
   "Bundle.entry.request.ifNoneMatch",
 ]);
 
+/**
+ * The R4 elements that hold the element id of another element of the same resource: the `actionId`
+ * of a `relatedAction` in a `RequestGroup` or a `PlanDefinition`, under an action at any depth.
+ */
+const ACTION_ID_PATH =
+  /^(?:RequestGroup|PlanDefinition)\.action(?:\.action)*\.relatedAction\.actionId$/;
+
+/**
+ * Replace an element id held as a property (`Observation.code.id`, the `id` of an extension, an
+ * `actionId` that names one): a primitive carrying a value gets the same replacement as every other
+ * element id or logical id with that value, and anything else that carries something (an object, a
+ * list) is blocked whole. An empty id carries nothing and is left as it is.
+ */
+function replaceElementId(out: FhirLocusAccumulator, value: FhirNode, path: string): void {
+  if (!isPrimitive(value)) {
+    blockNode(out, value, path);
+    return;
+  }
+  if (primitiveString(value).length > 0) {
+    pushLogicalId(out, value, path, primitiveString(value), "set-primitive");
+  }
+}
+
 /** Emit the replacement locus for a logical id: a medical record number that others point at. */
 function pushLogicalId(
   out: FhirLocusAccumulator,
@@ -1151,6 +1186,11 @@ function handleLogicalIds(
       if (isComplex(item)) walkValue(out, item, itemPath, personCtx, elementPath);
       else emitLiteral(out, item, itemPath, "reference");
     });
+    return true;
+  }
+  if (ACTION_ID_PATH.test(elementPath)) {
+    // A link to an action's element id, which is replaced: replaced alike, so it still resolves.
+    replaceElementId(out, value, path);
     return true;
   }
   if (BUNDLE_CONDITIONAL_HEADERS.has(elementPath)) {
@@ -1421,12 +1461,15 @@ export function extractFhirLoci(
   // in the manifest, so an unbounded one prefixes the whole audit with document content.
   const rt = safeLocusToken(resourceType(resource) ?? "", "fhirElementName");
   walkComplex(out, resource, rt, false, "");
-  const edits = new Map<FhirNode, FhirEditKind>();
-  for (const coord of out.coords) edits.set(coord.node, coord.edit);
+  const walked = new Map<FhirNode, FhirEditKind>();
+  for (const coord of out.coords) walked.set(coord.node, coord.edit);
   // The same reach as the enumeration below, so a tree it cannot walk fails the same way.
   enumerateOrFail(rt, () => {
-    blockSiblingTextBelow(out, resource, rt, edits);
+    decideWrittenMetadataBelow(out, resource, rt, walked);
   });
+  // The element ids just decided are edits too, and the enumeration reads them.
+  const edits = new Map<FhirNode, FhirEditKind>();
+  for (const coord of out.coords) edits.set(coord.node, coord.edit);
 
   const residuals = new UnexaminedResidualBuilder();
   enumerateOrFail(rt, () => {
@@ -1444,8 +1487,8 @@ export function extractFhirLoci(
  * a string, a number, a boolean or a `null` (`_status: "…"`), or a list where none belongs. FHIR JSON
  * gives that channel an `Element` object and nothing else, so the reader models no metadata in it and
  * keeps the text only so that its writer can hand it back. No rule can read it, and the applier never
- * writes it: every primitive it writes is built from the value, the element `id` and the extensions it
- * decided. So the text is recorded as a block at the `_`-sibling's own locus (`Observation._status`),
+ * writes it: every primitive it writes is built from the value, the replaced element `id` and the
+ * extensions it decided. So the text is recorded as a block at the `_`-sibling's own locus (`Observation._status`),
  * and the manifest row carries no value.
  *
  * The coordinate names a stand-in primitive holding that text rather than the primitive itself, so it
@@ -1458,14 +1501,29 @@ function blockSiblingText(out: FhirLocusAccumulator, node: FhirPrimitive, path: 
 }
 
 /**
- * Find every primitive the applier writes back and block the `_`-sibling text it carried
- * ({@link blockSiblingText}). The walk follows the applier: it stops below a node an edit removes or
- * replaces whole (whose row already covers all of it), it reads a primitive whose value an edit
- * rewrites (the primitive is still written, with a new value), and in a reduced `Address` it reads
- * only the parts the applier keeps and the extensions on their `_`-siblings. A single reduced
- * `Address` is located without an index, as its other rows are.
+ * Replace the element id of a primitive the applier writes back as it arrived (its `_`-sibling `id`),
+ * located at the `_`-sibling (`Observation._status.id`). The coordinate names the primitive itself,
+ * which no other edit names, so its value is still written unchanged beside the new id.
  */
-function blockSiblingTextBelow(
+function replacePrimitiveId(out: FhirLocusAccumulator, node: FhirPrimitive, path: string): void {
+  const id = node.id ?? "";
+  if (id.length > 0) {
+    pushLogicalId(out, node, join(underscoreSibling(path), "id"), id, "primitive-id");
+  }
+}
+
+/**
+ * Find every primitive and every element the applier writes back, and decide the metadata it would
+ * otherwise carry through: block the `_`-sibling text a primitive carried ({@link blockSiblingText}),
+ * and replace every element id, a primitive's ({@link replacePrimitiveId}) and an element's own `id`
+ * property ({@link replaceElementId}), bar a resource's, which is its logical id. The walk follows the
+ * applier: it stops below a node an edit removes or replaces whole (whose row already covers all of
+ * it), it reads a primitive whose value an edit rewrites (the primitive is still written, with a new
+ * value and no id), and in a reduced `Address` it reads only the parts the applier keeps and the
+ * extensions on their `_`-siblings. A single reduced `Address` is located without an index, as its
+ * other rows are.
+ */
+function decideWrittenMetadataBelow(
   out: FhirLocusAccumulator,
   node: FhirNode,
   path: string,
@@ -1474,11 +1532,13 @@ function blockSiblingTextBelow(
   const edit = edits.get(node);
   if (isPrimitive(node)) {
     if (edit !== "drop") blockSiblingText(out, node, path);
+    // Only a primitive written as it arrived keeps its id; an edited one is written without it.
+    if (edit === undefined) replacePrimitiveId(out, node, path);
     return;
   }
   // Stryker disable next-line ConditionalExpression: only an `Address` complex carries the address edit, so the type test only narrows the type
   if (edit === "address" && isComplex(node)) {
-    blockKeptPartSiblingText(out, node, path, edits);
+    decideKeptPartMetadata(out, node, path, edits);
     return;
   }
   if (edit !== undefined) return;
@@ -1486,20 +1546,35 @@ function blockSiblingTextBelow(
     const single = node.items.length === 1;
     node.items.forEach((item, i) => {
       const itemPath = single && edits.get(item) === "address" ? path : idx(path, i);
-      blockSiblingTextBelow(out, item, itemPath, edits);
+      decideWrittenMetadataBelow(out, item, itemPath, edits);
     });
     return;
   }
   node.properties.forEach((prop, i) => {
-    blockSiblingTextBelow(out, prop.value, join(path, elementSegment(prop.name, i)), edits);
+    const propPath = join(path, elementSegment(prop.name, i));
+    // An `id` no rule decided: replaced, and the replacement takes its metadata with it. That is every
+    // element's own `id`, and also the `id` of anything carrying a `resourceType` that the walk did
+    // not reach as a resource (one inside an `Identifier`), so no `id` is written as it arrived. An
+    // empty one carries nothing, and the metadata beside it is read as any primitive's.
+    if (
+      prop.name === "id" &&
+      !edits.has(prop.value) &&
+      (!isPrimitive(prop.value) || primitiveString(prop.value).length > 0)
+    ) {
+      replaceElementId(out, prop.value, propPath);
+      // Stryker disable next-line ConditionalExpression: a complex or a list carries no sibling text, so blocking it writes nothing and the test only narrows the type
+      if (isPrimitive(prop.value)) blockSiblingText(out, prop.value, propPath);
+      return;
+    }
+    decideWrittenMetadataBelow(out, prop.value, propPath, edits);
   });
 }
 
 /**
- * {@link blockSiblingTextBelow} for a reduced `Address`: each part it keeps, and every extension on
- * that part's `_`-sibling, which the applier writes back as the pass decided it.
+ * {@link decideWrittenMetadataBelow} for a reduced `Address`: each part it keeps, and every extension
+ * on that part's `_`-sibling, which the applier writes back as the pass decided it.
  */
-function blockKeptPartSiblingText(
+function decideKeptPartMetadata(
   out: FhirLocusAccumulator,
   address: FhirComplex,
   path: string,
@@ -1513,9 +1588,10 @@ function blockKeptPartSiblingText(
     if (!isPrimitive(part)) return;
     const partPath = join(path, elementSegment(prop.name, i));
     blockSiblingText(out, part, partPath);
+    replacePrimitiveId(out, part, partPath);
     const meta = join(underscoreSibling(partPath), "extension");
     part.extension?.forEach((ext, j) => {
-      blockSiblingTextBelow(out, ext, idx(meta, j), edits);
+      decideWrittenMetadataBelow(out, ext, idx(meta, j), edits);
     });
   });
 }
@@ -1530,17 +1606,22 @@ function blockKeptPartSiblingText(
  *   dropped and `postalCode` is replaced, but every part in {@link FHIR_KEPT_ADDRESS_PARTS} is re-emitted
  *   with its value and its metadata, so what the pass did not block in that metadata rides through and
  *   is enumerated.
+ * - `replaces-id`: the primitive is written back with its value as it arrived and a new element id.
+ *   The value is handed through, and is enumerated as any other primitive's.
  *
  * A `Record` keyed by {@link FhirEditKind} makes this **exhaustive**: a new edit cannot be added without
  * deciding here what it hands through, which is what keeps the enumeration closed rather than merely
  * correct today.
  */
-const EDIT_REACH: Readonly<Record<FhirEditKind, "replaces-node" | "rebuilds-address">> = {
+const EDIT_REACH: Readonly<
+  Record<FhirEditKind, "replaces-node" | "rebuilds-address" | "replaces-id">
+> = {
   drop: "replaces-node",
   "set-primitive": "replaces-node",
   address: "rebuilds-address",
   age: "replaces-node",
   reference: "replaces-node",
+  "primitive-id": "replaces-id",
 };
 
 /** What the enumeration carries down the tree: the pass's decisions, and whether a value was decided. */
@@ -1571,27 +1652,23 @@ function underscoreSibling(path: string): string {
  *
  * `@cosyte/fhir` models the JSON `_`-sibling as first-class metadata on the primitive
  * (`FhirPrimitive.id`, `FhirPrimitive.extension`) rather than as a literal `_`-prefixed key, so a walk
- * that reads `value` and returns at the leaf never sees it. Both are document values that can reach the
- * output, and which of them does is decided by the applier, not by this module:
+ * that reads `value` and returns at the leaf never sees it. Both are document values that could reach
+ * the output, and which of them does is decided by the applier, not by this module:
  *
- * - **`id` always rides through.** Every primitive the applier re-emits is rebuilt keeping its value and
- *   its `id`, so a primitive that survives at all survives with its element id, whatever the pass decided
- *   about the value beside it.
+ * - **`id` never rides through as it arrived.** The applier writes a primitive's element id only from
+ *   the replacement {@link replacePrimitiveId} located, so no id is handed through unexamined.
  * - **`extension` rides through only where the applier re-emits the primitive with its metadata**,
  *   which is the kept part of a rebuilt `Address`, and there only what the pass did not block in it
- *   (the `url` and the element `id`). Everywhere else the applier's primitive-extension guard drops it,
- *   and a position the pass removes is not one it hands through.
+ *   (the `url`, and the element `id`, replaced). Everywhere else the applier's primitive-extension guard
+ *   drops it, and a position the pass removes is not one it hands through.
  */
-function recordPrimitiveMetadata(
+function recordKeptPartExtensions(
   residuals: UnexaminedResidualBuilder,
   node: FhirPrimitive,
   path: string,
   state: FhirEnumerationState,
-  verbatim: boolean,
 ): void {
   const meta = underscoreSibling(path);
-  if ((node.id ?? "").length > 0) residuals.record(join(meta, "id"));
-  if (!verbatim) return;
   (node.extension ?? []).forEach((ext, i) => {
     recordUnexaminedFhirPositions(residuals, ext, idx(join(meta, "extension"), i), {
       ...state,
@@ -1603,9 +1680,9 @@ function recordPrimitiveMetadata(
 /**
  * Enumerate every value-bearing position of the resource tree and record the ones no locus rule named.
  *
- * A **position** here is one **primitive carrying a non-empty value**, plus the two places FHIR JSON
- * lets a value sit beside one: the `_`-sibling element `id` and, where the applier re-emits a primitive
- * verbatim, its `_`-sibling extensions ({@link recordPrimitiveMetadata}).
+ * A **position** here is one **primitive carrying a non-empty value**, plus, where the applier re-emits a
+ * primitive with its metadata, its `_`-sibling extensions ({@link recordKeptPartExtensions}). The other
+ * place FHIR JSON lets a value sit beside one, the `_`-sibling element `id`, is always replaced.
  *
  * The descent stops **only where the applier replaces the node**, which is a fact about the edit
  * ({@link EDIT_REACH}) rather than about the rule that produced it. A rule that merely *reached* a
@@ -1625,7 +1702,6 @@ function recordUnexaminedFhirPositions(
 
   if (isPrimitive(node)) {
     if (!valueDecided && primitiveString(node).length > 0) residuals.record(path);
-    recordPrimitiveMetadata(residuals, node, path, state, false);
     return;
   }
   if (edit !== undefined && isComplex(node)) {
@@ -1653,8 +1729,8 @@ function recordUnexaminedFhirPositions(
  * The rule decided about each part's VALUE - keep the state and the country, drop the line and the city,
  * generalize the ZIP - so no part's value is a residual. The pass blocked the value and every unknown
  * key of each extension on a kept part's `_`-sibling, and the applier honours those edits, so what is
- * left of that metadata (the element `id`, each extension's `url` and `id`) is exactly the positions
- * this measures. A kept part that is not a string (blocked whole), a dropped part and the replaced
+ * left of that metadata (each extension's `url`; every element `id` is replaced) is exactly the
+ * positions this measures. A kept part that is not a string (blocked whole), a dropped part and the replaced
  * `postalCode` contribute nothing: they do not reach the output at all.
  */
 function recordKeptAddressParts(
@@ -1667,11 +1743,12 @@ function recordKeptAddressParts(
     if (!FHIR_KEPT_ADDRESS_PARTS.has(prop.name)) return;
     const part = prop.value;
     // A part the pass blocked (any shape but a string) is removed whole: nothing of it is handed through.
-    if (state.edits.has(part)) return;
+    const edit = state.edits.get(part);
+    if (edit !== undefined && EDIT_REACH[edit] === "replaces-node") return;
     // Stryker disable ConditionalExpression: a part reached here is always a primitive, so the test only narrows the type
     /* v8 ignore if -- every part that is not a string is blocked above; this guard narrows the type */
     if (!isPrimitive(part)) return;
     // Stryker restore ConditionalExpression
-    recordPrimitiveMetadata(residuals, part, join(path, elementSegment(prop.name, i)), state, true);
+    recordKeptPartExtensions(residuals, part, join(path, elementSegment(prop.name, i)), state);
   });
 }

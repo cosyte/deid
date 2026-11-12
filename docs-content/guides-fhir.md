@@ -197,6 +197,36 @@ What the pass cannot read is **removed** and recorded as blocked (the (R) catch-
 A removed reference leaves the rest of its `Reference` in place (its `type`, its `identifier` under
 the identifier rule), and an empty one as `{}`.
 
+### Element ids
+
+R4 lets every element carry an `id` of its own, and a sender can write anything there, so the pass
+reads an element id as free text and replaces it, under the same rule as a resource id and in the
+same table of replacements: the `id` of a datatype, a `Coding`, a backbone element, a `Bundle.entry`
+and an extension at any depth, and a primitive's `_`-sibling `id`. The same id gets the same
+replacement throughout the call, so the `actionId` of a `relatedAction` in a `RequestGroup` or a
+`PlanDefinition`, which names an action's element id, is replaced by the same value and still
+resolves. Each replacement is recorded at its own position (`Observation.code.id`,
+`Observation._status.id`). An element id held as an object or a list is removed. What this does not
+reach is in [Limitations](./limitations.md#fhir-element-ids).
+
+```ts runnable
+import { deidentifyFhirJson } from "@cosyte/deid/fhir";
+
+const input = JSON.stringify({
+  resourceType: "Observation",
+  status: "final",
+  _status: { id: "zz-free-text" },
+  code: { id: "zz-free-text", text: "ZZ test" },
+});
+
+const { json, manifest } = deidentifyFhirJson(input);
+const out = JSON.parse(json);
+
+out._status.id; // => "1"
+out.code.id; // => "1"
+manifest.map((entry) => entry.locus); // => ["Observation._status.id", "Observation.code.id"]
+```
+
 ## Fail closed
 
 - A bare **string** at a person resource's top level is **blocked** unless it is a code the pass can
@@ -224,13 +254,14 @@ the identifier rule), and an empty one as `{}`.
   the one on a `state` or `country` an `Address` keeps included. So is every key R4 does not define on
   an extension: a `note` or `comment` beside the `url` is blocked and recorded at its own locus
   (`Observation.extension[0].note`), as a value is. Extensions are the FHIR leak frontier; the `url`
-  skeleton and the element `id` are kept when each is a string, everything else is not. The one
+  skeleton is kept when it is a string, the element `id` is replaced as every element id is, and
+  everything else is not. The one
   exception is opt-in: [`keepPatientAnimal`](#keep-an-animal-patients-species-opt-in) keeps the coded
   species, breed and gender status of the `patient-animal` extension.
 - A **`_`-sibling that is not an object** (`"_status": "..."`, a number, a boolean, a `null`, or a
   list in a repeating primitive's slot) is never written back, beside any primitive in any resource.
-  Every primitive the pass writes is built from its value, its element `id` and the extensions it
-  kept. The sibling is recorded as a block at its own locus (`Observation._status`), with no value.
+  Every primitive the pass writes is built from its value, the replacement of its element `id` and
+  the extensions it kept. The sibling is recorded as a block at its own locus (`Observation._status`), with no value.
 - A **swept `Address` the pass cannot read faithfully** is removed **whole**, never partly retained: a
   `postalCode` that is not a whole zip code (a four-digit `0110` still has three leading digits, and
   keeping them would retain a fragment of something that was never a ZIP), or an unexpected JSON shape
@@ -327,7 +358,8 @@ changed inside it counts for the resource that contains it.
   option that is so everywhere; with it, the Data Absent Reason replaces it only where R4 requires
   the element and nothing else is left there, so an optional Reference, or one item of a list that
   keeps other items, is still `{}`.
-- An extension whose value the pass blocked keeps its `url` and its element `id`, and nothing else.
+- An extension whose value the pass blocked keeps its `url` and its replaced element `id`, and
+  nothing else.
 - Security labels already on the input, such as Data Segmentation for Privacy labels, pass through
   unchanged: the pass neither reads nor enforces them, and `REDACTED` is added after them.
 

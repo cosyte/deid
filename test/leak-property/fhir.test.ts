@@ -24,6 +24,12 @@
  * `patient-animal` extension). What it held must be gone from the output and from the manifest, and
  * no `_`-sibling in the output may hold anything but an `Element` object.
  *
+ * An element `id` is held to the stricter rule too: a sentinel written as the `id` of any element, at
+ * every kind of position (a datatype, a `Coding`, a backbone, an extension at any depth, a primitive's
+ * `_`-sibling, a kept address part and an extension on one, a contained resource, a Bundle entry, the
+ * slot of a repeating primitive, the `patient-animal` extension), must be gone from the output and
+ * from the manifest, since the pass replaces every element id.
+ *
  * Where a sentinel sits is read back from the input JSON, as the adapter writes a locus
  * (`Patient.name[0].family`), so the residual it must be named by is exact.
  */
@@ -338,6 +344,198 @@ const siblingArb: fc.Arbitrary<SiblingPlacement> = fc.record({
 });
 
 /**
+ * Each kind of position an element `id` can sit at, each putting the case's sentinel there as the id:
+ * a datatype, a `Coding`, a primitive's `_`-sibling (beside a top-level code, beside a coding's code,
+ * beside a quantity's number), a backbone, an `Identifier` and a `Period` inside one, a `Reference` and
+ * its `_reference`, `meta` and the narrative, an extension, a modifier extension and a nested one, an
+ * extension on a primitive, a kept address part and an extension on one, an address, a contained
+ * resource, an entry of a Bundle inside the resource, the slot of a repeating primitive, an element R4
+ * does not define, and the `patient-animal` extension (its own id, a part's and a coding's).
+ */
+const ELEMENT_ID_SPOTS: readonly {
+  readonly where: string;
+  readonly put: (resource: JsonObject, id: string) => void;
+}[] = [
+  { where: "code.id", put: (r, id) => (r["code"] = { id, text: "zz sodium" }) },
+  {
+    where: "code.coding[0].id",
+    put: (r, id) => (r["code"] = { coding: [{ id, system: "http://loinc.org", code: "2951-2" }] }),
+  },
+  { where: "_status.id", put: (r, id) => (r["_status"] = { id }) },
+  {
+    where: "code.coding[0]._code.id",
+    put: (r, id) =>
+      (r["code"] = { coding: [{ system: "http://loinc.org", code: "2951-2", _code: { id } }] }),
+  },
+  {
+    where: "valueQuantity._value.id",
+    put: (r, id) => (r["valueQuantity"] = { value: 140, _value: { id }, unit: "mmol/L" }),
+  },
+  { where: "valueQuantity.id", put: (r, id) => (r["valueQuantity"] = { id, value: 140 }) },
+  {
+    where: "component[].id",
+    put: (r, id) => {
+      pushTo(r, "component", { id, code: { text: "zz part" } });
+    },
+  },
+  {
+    where: "identifier[].id",
+    put: (r, id) => {
+      pushTo(r, "identifier", { id, system: "urn:oid:2.25.7", value: "zz1" });
+    },
+  },
+  {
+    where: "identifier[].period.id",
+    put: (r, id) => {
+      pushTo(r, "identifier", { system: "urn:oid:2.25.7", value: "zz1", period: { id } });
+    },
+  },
+  {
+    where: "subject.id",
+    put: (r, id) => (r["subject"] = { id, reference: "Patient/zz1" }),
+  },
+  {
+    where: "subject._reference.id",
+    put: (r, id) => (r["subject"] = { reference: "Patient/zz1", _reference: { id } }),
+  },
+  { where: "meta.id", put: (r, id) => (r["meta"] = { id, versionId: "1" }) },
+  {
+    where: "text.id",
+    put: (r, id) =>
+      (r["text"] = {
+        id,
+        status: "generated",
+        div: '<div xmlns="http://www.w3.org/1999/xhtml">zz</div>',
+      }),
+  },
+  {
+    where: "extension[].id",
+    put: (r, id) => {
+      pushTo(r, "extension", { id, url: "http://example.org/eid", valueBoolean: true });
+    },
+  },
+  {
+    where: "modifierExtension[].id",
+    put: (r, id) => {
+      pushTo(r, "modifierExtension", { id, url: "http://example.org/eid" });
+    },
+  },
+  {
+    where: "extension[].extension[0].id",
+    put: (r, id) => {
+      pushTo(r, "extension", { url: "http://example.org/eid", extension: [{ id, url: "in" }] });
+    },
+  },
+  {
+    where: "_status.extension[0].id",
+    put: (r, id) => (r["_status"] = { extension: [{ id, url: "http://example.org/eid" }] }),
+  },
+  {
+    where: "address[]._state.id",
+    put: (r, id) => {
+      pushTo(r, "address", { state: "MA", _state: { id }, postalCode: "02139" });
+    },
+  },
+  {
+    where: "address[]._state.extension[0].id",
+    put: (r, id) => {
+      pushTo(r, "address", {
+        state: "MA",
+        _state: { extension: [{ id, url: "http://example.org/eid" }] },
+        postalCode: "02139",
+      });
+    },
+  },
+  {
+    where: "address[].id",
+    put: (r, id) => {
+      pushTo(r, "address", { id, state: "MA", postalCode: "02139" });
+    },
+  },
+  {
+    where: "contained[].code.id",
+    put: (r, id) => {
+      pushTo(r, "contained", {
+        resourceType: "Observation",
+        id: "eid",
+        status: "final",
+        code: { id, text: "zz sodium" },
+      });
+    },
+  },
+  {
+    where: "contained[].entry[0].id",
+    put: (r, id) => {
+      pushTo(r, "contained", {
+        resourceType: "Bundle",
+        type: "collection",
+        entry: [{ id, resource: { resourceType: "Basic", code: { text: "zz" } } }],
+      });
+    },
+  },
+  {
+    where: "zzCodes[1] slot id",
+    put: (r, id) => {
+      r["zzCodes"] = ["zza", "zzb"];
+      r["_zzCodes"] = [null, { id }];
+    },
+  },
+  { where: "zzNote.id", put: (r, id) => (r["zzNote"] = { id, text: "zz" }) },
+  {
+    where: "animal extension id",
+    put: (r, id) => {
+      pushTo(r, "extension", { id, url: ANIMAL_URL, extension: [animalPart("species", "zzdog")] });
+    },
+  },
+  {
+    where: "animal species part id",
+    put: (r, id) => {
+      pushTo(r, "extension", {
+        url: ANIMAL_URL,
+        extension: [{ id, url: "species", valueCodeableConcept: { coding: [{ code: "zzdog" }] } }],
+      });
+    },
+  },
+  {
+    where: "animal coding id",
+    put: (r, id) => {
+      pushTo(r, "extension", {
+        url: ANIMAL_URL,
+        extension: [{ url: "species", valueCodeableConcept: { coding: [{ id, code: "zzdog" }] } }],
+      });
+    },
+  },
+];
+
+const elementIdArb: fc.Arbitrary<number> = fc.nat({ max: ELEMENT_ID_SPOTS.length - 1 });
+
+/** An element id as placed: where, and the sentinel that must not come back. */
+interface ElementIdPlaced {
+  readonly where: string;
+  readonly sentinel: string;
+}
+
+/** Write one sentinel element id into the resource. */
+function placeElementId(resource: JsonObject, spot: number, sentinel: string): ElementIdPlaced {
+  const at = ELEMENT_ID_SPOTS[spot % ELEMENT_ID_SPOTS.length];
+  if (at === undefined) throw new Error("no element id spot");
+  at.put(resource, sentinel);
+  return { where: at.where, sentinel };
+}
+
+/** The stricter rule for an element id: the sentinel is gone from the output and from the manifest. */
+export function elementIdKept(placed: readonly ElementIdPlaced[], outcome: PassOutcome): string[] {
+  const violations: string[] = [];
+  const manifest = JSON.stringify(outcome.manifest);
+  for (const p of placed) {
+    const label = `${p.sentinel} (element id at ${p.where})`;
+    if (outcome.output.includes(p.sentinel)) violations.push(`${label} survives in the output`);
+    if (manifest.includes(p.sentinel)) violations.push(`${label} is in the manifest`);
+  }
+  return violations;
+}
+
+/**
  * The number a `_`-sibling in the number form holds: twelve digits, from the case's sentinel, so no
  * ordinary content of a generated case can hold it by chance.
  */
@@ -444,6 +642,7 @@ export const caseArb = fc.record({
   stem: sentinelStem,
   placements: fc.array(placementArb, { minLength: 1, maxLength: 4 }),
   siblings: fc.array(siblingArb, { maxLength: 2 }),
+  elementIds: fc.array(elementIdArb, { maxLength: 2 }),
 });
 
 /** Set a value at a path of keys and indexes, creating objects and lists on the way. */
@@ -749,7 +948,13 @@ export function build(value: {
   placements: readonly FhirPlacement[];
   animalSpot?: number;
   siblings?: readonly SiblingPlacement[];
-}): { raw: string; placed: Placement[]; siblings: SiblingPlaced[] } {
+  elementIds?: readonly number[];
+}): {
+  raw: string;
+  placed: Placement[];
+  siblings: SiblingPlaced[];
+  elementIds: ElementIdPlaced[];
+} {
   const resource: JsonObject = {
     resourceType: value.type,
     status: "active",
@@ -773,10 +978,15 @@ export function build(value: {
     const sib = placeSibling(resource, p, sentinelAt(value.stem, offset + i));
     return { ...sib, where: `${value.type}.${sib.where}` };
   });
+  const idOffset = offset + siblings.length;
+  const elementIds = (value.elementIds ?? []).map((spot, i) => {
+    const placedId = placeElementId(resource, spot, sentinelAt(value.stem, idOffset + i));
+    return { ...placedId, where: `${value.type}.${placedId.where}` };
+  });
   const doc: JsonObject = value.inBundle
     ? { resourceType: "Bundle", type: "collection", entry: [{ resource }] }
     : resource;
-  return { raw: JSON.stringify(doc), placed, siblings };
+  return { raw: JSON.stringify(doc), placed, siblings, elementIds };
 }
 
 /** Every locus, as the adapter writes one, at which a string holding the sentinel sits. */
@@ -841,22 +1051,28 @@ export function checkCase(
     placements: readonly FhirPlacement[];
     animalSpot?: number;
     siblings?: readonly SiblingPlacement[];
+    elementIds?: readonly number[];
   },
   tally: LeakTally,
   options: FhirDeidOptions = {},
 ): string[] {
-  const { raw, placed, siblings } = build(value);
+  const { raw, placed, siblings, elementIds } = build(value);
   // A `_`-sibling the input does not hold (a later write replaced it) is not swept.
   const held = siblings.filter((s) => s.text === undefined || raw.includes(s.text));
+  // Likewise an element id a later write replaced.
+  const ids = elementIds.filter((p) => raw.includes(p.sentinel));
   // Non-vacuity: only a sentinel the input holds is swept, and a case must hold one. A later
   // placement can overwrite an earlier one at the same position.
   const present = placed.filter((p) => raw.includes(p.sentinel));
-  if (present.length === 0 && held.length === 0) return ["no sentinel reached the input"];
+  if (present.length === 0 && held.length === 0 && ids.length === 0) {
+    return ["no sentinel reached the input"];
+  }
   const outcome = pass(raw, options);
   return [
     ...sweep(present, outcome, tally),
     ...unknownExtensionKeyKept(present, outcome),
     ...siblingTextKept(held, outcome),
+    ...elementIdKept(ids, outcome),
   ];
 }
 
@@ -891,6 +1107,7 @@ export const animalCaseArb = fc.record({
   placements: fc.array(placementArb, { maxLength: 3 }),
   animalSpot: fc.nat({ max: ANIMAL_SPOTS - 1 }),
   siblings: fc.array(siblingArb, { maxLength: 2 }),
+  elementIds: fc.array(elementIdArb, { maxLength: 2 }),
 });
 
 describe("the generated leak property: FHIR R4", () => {
@@ -1055,5 +1272,65 @@ describe("the FHIR sweep reports a short name kept as a language", () => {
     const raw = JSON.stringify({ resourceType: "Patient", language: sentinel });
     const placed: Placement[] = [{ sentinel, shape: "qualifier-or-code", where: "language" }];
     expect(sweep(placed, pass(raw))).toEqual([]);
+  });
+});
+
+/**
+ * Each place an element `id` can sit, on a person and on a clinical resource, alone and in a Bundle
+ * entry, with the patient-animal option off and on, through the same check as a generated case, so
+ * every one is run on every pull request whatever the seed draws.
+ */
+describe("the FHIR sweep removes a sentinel written as an element id", () => {
+  const spots = ELEMENT_ID_SPOTS.map((spot, i) => [spot.where, i] as const);
+
+  it.each(spots)("%s", (_where, spot) => {
+    for (const type of ["Patient", "Observation"]) {
+      for (const inBundle of [false, true]) {
+        for (const keepPatientAnimal of [false, true]) {
+          const value = {
+            type,
+            inBundle,
+            filler: "abc",
+            stem: "ZQLKELID",
+            placements: [],
+            elementIds: [spot],
+          };
+          expect(checkCase(value, newTally(), { keepPatientAnimal })).toEqual([]);
+        }
+      }
+    }
+  });
+
+  it("the case holds what it placed: the sentinel is in the input", () => {
+    for (const [, spot] of spots) {
+      const { raw, elementIds } = build({
+        type: "Observation",
+        inBundle: false,
+        filler: "abc",
+        stem: "ZQLKELID",
+        placements: [],
+        elementIds: [spot],
+      });
+      expect(elementIds).toHaveLength(1);
+      expect(raw).toContain(elementIds[0]?.sentinel);
+    }
+  });
+
+  it("the stricter rule has teeth: an element id in the output or the manifest is caught", () => {
+    const placed: ElementIdPlaced[] = [{ where: "Observation.code.id", sentinel: "ZQLKTEETH02X" }];
+    const clean: PassOutcome = {
+      output: '{"resourceType":"Observation","code":{"id":"1"}}',
+      manifest: [],
+      unexaminedResiduals: [],
+      residualAt: () => true,
+      refused: false,
+    };
+    expect(elementIdKept(placed, clean)).toEqual([]);
+    expect(elementIdKept(placed, { ...clean, output: '{"code":{"id":"ZQLKTEETH02X"}}' })).toEqual([
+      "ZQLKTEETH02X (element id at Observation.code.id) survives in the output",
+    ]);
+    expect(elementIdKept(placed, { ...clean, manifest: [{ locus: "ZQLKTEETH02X" }] })).toEqual([
+      "ZQLKTEETH02X (element id at Observation.code.id) is in the manifest",
+    ]);
   });
 });

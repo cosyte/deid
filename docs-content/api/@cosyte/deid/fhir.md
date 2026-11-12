@@ -362,7 +362,7 @@ listed here.
 
 ### FhirEditKind
 
-> **FhirEditKind** = `"drop"` \| `"set-primitive"` \| `"address"` \| `"age"` \| `"reference"`
+> **FhirEditKind** = `"drop"` \| `"set-primitive"` \| `"address"` \| `"age"` \| `"reference"` \| `"primitive-id"`
 
 How the applier rewrites one extracted locus onto a fresh copy of the node it came from:
 
@@ -381,6 +381,9 @@ How the applier rewrites one extracted locus onto a fresh copy of the node it ca
   url or a response location). The id part is replaced by the transformed value and the structure
   around it is kept: the `#`, the resource type, the `urn:uuid:` or `urn:oid:` scheme, or the server
   base. A version suffix (`/_history/vid`) is dropped. A `null` transform result drops the literal.
+- `primitive-id`: the element id of a primitive the applier writes back (its `_`-sibling `id`). The
+  primitive keeps its value and takes the transformed value as its id; a `null` result writes it
+  with no id.
 
 ***
 
