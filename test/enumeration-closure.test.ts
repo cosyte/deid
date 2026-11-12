@@ -274,18 +274,19 @@ describe("closure: what a rebuilt FHIR address KEEPS is enumerated", () => {
   const wire = serializeResource(result.document);
   const loci = new Set(result.unexaminedResiduals.map((r) => r.locus));
 
-  it("the kept parts are re-emitted VERBATIM, metadata included; the rest is gone", () => {
+  it("the kept parts keep their element id, their extensions lose every value; the rest is gone", () => {
     expect(wire).not.toContain("ZZSTREET");
     expect(wire).not.toContain("ZZLINEID");
     expect(wire).not.toContain("ZZZIPID"); // postalCode is REPLACED by a fresh primitive
     expect(wire).toContain("ZZSTATEID");
-    expect(wire).toContain("ZZSTATEEXT");
+    expect(wire).toContain("http://zz.example"); // the extension's url is structure, and kept
+    expect(wire).not.toContain("ZZSTATEEXT"); // its value is blocked, as every extension value is
   });
 
-  it("counts the kept part's element id and every value inside its extension", () => {
+  it("counts the kept part's element id and the url of its extension, not the blocked value", () => {
     expect(loci.has("Patient.address[0]._state.id")).toBe(true);
     expect(loci.has("Patient.address[0]._state.extension[0].url")).toBe(true);
-    expect(loci.has("Patient.address[0]._state.extension[0].valueString")).toBe(true);
+    expect(loci.has("Patient.address[0]._state.extension[0].valueString")).toBe(false);
   });
 
   it("counts nothing from a dropped or replaced part, and not the kept values themselves", () => {

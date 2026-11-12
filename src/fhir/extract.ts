@@ -344,6 +344,7 @@ function handleAddresses(out: FhirLocusAccumulator, value: FhirNode, path: strin
       },
       { node: item, edit: "address" },
     );
+    blockKeptPartExtensions(out, item, itemPath);
   });
 }
 
@@ -431,10 +432,12 @@ function handleDemographic(
 
 /**
  * Fail closed on an `extension` / `modifierExtension` subtree: block every `value[x]` it carries at any
- * nesting, retaining the `url` and the nested `extension` skeleton. An extension can carry any of the 18
- * categories (an MRN in a local extension, a name in a `valueHumanName`, an address in a birthplace
- * extension), and the reader preserves unknown extensions verbatim, so the value is dropped
- * unconditionally: fail closed on an unknown extension carrying a value.
+ * nesting, and every other key, retaining only the `url`, the element `id` and the nested `extension`
+ * skeleton. An extension can carry any of the 18 categories (an MRN in a local extension, a name in a
+ * `valueHumanName`, an address in a birthplace extension), and the reader preserves unknown extensions
+ * verbatim, so the value is dropped unconditionally: fail closed on an unknown extension carrying a
+ * value. An extension is defined by its producer, so a key R4 does not give an extension (a `note`
+ * beside the `url`) is free content in the same place, and it is blocked the same way.
  */
 function blockExtension(out: FhirLocusAccumulator, value: FhirNode, path: string): void {
   if (isList(value)) {
@@ -449,17 +452,39 @@ function blockExtension(out: FhirLocusAccumulator, value: FhirNode, path: string
   }
   if (!isComplex(value)) return;
   value.properties.forEach((prop, i) => {
-    if (prop.name === "url") return; // structural: a definitional URI, never PHI
     if (prop.name === "extension" || prop.name === "modifierExtension") {
       blockExtension(out, prop.value, join(path, prop.name)); // nested extension: recurse
       return;
     }
-    if (prop.name.startsWith("value")) {
-      // `startsWith` is a prefix test, not an identifier check: a key of "value" followed by any
-      // number of arbitrary bytes satisfies it, so the name is bounded before it is interpolated.
-      blockNode(out, prop.value, join(path, elementSegment(prop.name, i))); // value[x]: the PHI payload, dropped
-    }
-    // any other extension child (id) is structural and retained
+    // Structural, and retained: the definitional `url` and the element `id`, each as R4 types it, a
+    // single string. Either one in any other shape is a structure no rule reads, and it goes.
+    if (EXTENSION_STRUCTURAL_KEYS.has(prop.name) && isPrimitive(prop.value)) return;
+    // Everything else is the payload or free content: a `value[x]`, or a key R4 does not define on an
+    // extension. The key is any JSON string, so it is bounded before it becomes a path segment.
+    blockNode(out, prop.value, join(path, elementSegment(prop.name, i)));
+  });
+}
+
+/** The two keys of an extension object that are structure rather than content: `url` and `id`. */
+const EXTENSION_STRUCTURAL_KEYS: ReadonlySet<string> = new Set(["url", "id"]);
+
+/**
+ * Block the extensions riding on the `_`-sibling of each primitive part an `Address` keeps
+ * (`_state.extension`, `_country.extension`): the applier re-emits a kept part with its metadata, so
+ * those extensions reach the output, and they are decided as every other extension is. A kept part
+ * that is not a primitive is left as it was.
+ */
+function blockKeptPartExtensions(
+  out: FhirLocusAccumulator,
+  address: FhirComplex,
+  path: string,
+): void {
+  address.properties.forEach((prop, i) => {
+    if (!FHIR_KEPT_ADDRESS_PARTS.has(prop.name) || !isPrimitive(prop.value)) return;
+    const meta = join(underscoreSibling(join(path, elementSegment(prop.name, i))), "extension");
+    (prop.value.extension ?? []).forEach((ext, j) => {
+      blockExtension(out, ext, idx(meta, j));
+    });
   });
 }
 
@@ -639,6 +664,7 @@ function emitSweptAddress(out: FhirLocusAccumulator, node: FhirComplex, path: st
     return;
   }
   push(out, { path, kind: "zip", category, value: zip }, { node, edit: "address" });
+  blockKeptPartExtensions(out, node, path);
 }
 
 /**

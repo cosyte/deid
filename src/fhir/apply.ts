@@ -112,12 +112,35 @@ function stripPrimitive(node: FhirPrimitive): FhirNode {
   return node.id === undefined ? primitive(node.value) : primitive(node.value, { id: node.id });
 }
 
+/**
+ * Re-emit a part an `Address` keeps. A primitive part keeps its value and its `id`, and each extension
+ * on its `_`-sibling is rebuilt through the same edits as every other node, so what the extractor
+ * blocked inside one (a `value[x]`, a key R4 does not define on an extension) is gone and the `url`
+ * skeleton stays. Any other shape is re-emitted as it arrived.
+ */
+function rebuildKeptPart(node: FhirNode, edits: ReadonlyMap<FhirNode, Edit>): FhirNode {
+  if (!isPrimitive(node) || node.extension === undefined) return node;
+  const extension: FhirComplex[] = [];
+  for (const ext of node.extension) {
+    const rebuilt = rebuildNode(ext, edits);
+    if (rebuilt !== REMOVE && isComplex(rebuilt)) extension.push(rebuilt);
+  }
+  return primitive(node.value, {
+    ...(node.id === undefined ? {} : { id: node.id }),
+    ...(extension.length === 0 ? {} : { extension }),
+  });
+}
+
 /** Rebuild an `Address` complex to the Safe Harbor residual: state / country + generalized 3-digit ZIP. */
-function rebuildAddress(node: FhirComplex, zip: string | null): Rebuilt {
+function rebuildAddress(
+  node: FhirComplex,
+  zip: string | null,
+  edits: ReadonlyMap<FhirNode, Edit>,
+): Rebuilt {
   const props: FhirProperty[] = [];
   for (const prop of node.properties) {
     if (FHIR_KEPT_ADDRESS_PARTS.has(prop.name)) {
-      props.push(prop);
+      props.push({ name: prop.name, value: rebuildKeptPart(prop.value, edits) });
     } else if (prop.name === "postalCode" && zip !== null) {
       props.push({ name: "postalCode", value: primitive(zip) });
     }
@@ -146,7 +169,7 @@ function writeFreeText(node: FhirNode, value: string): Rebuilt {
 }
 
 /** Apply the resolved edit for a node the map named. */
-function applyEdit(node: FhirNode, edit: Edit): Rebuilt {
+function applyEdit(node: FhirNode, edit: Edit, edits: ReadonlyMap<FhirNode, Edit>): Rebuilt {
   switch (edit.edit) {
     case "drop":
       // A BYO-redacted free-text locus with a non-null value → write the redacted prose back
@@ -159,7 +182,7 @@ function applyEdit(node: FhirNode, edit: Edit): Rebuilt {
     case "set-primitive":
       return edit.value === null ? REMOVE : primitive(edit.value);
     case "address":
-      return isComplex(node) ? rebuildAddress(node, edit.value) : REMOVE;
+      return isComplex(node) ? rebuildAddress(node, edit.value, edits) : REMOVE;
     case "age":
       // A kept age is the number exactly as it arrived, rebuilt like every primitive the pass
       // re-emits, so a decimal stays a decimal. Anything else goes: an age over 89, one the pass could
@@ -203,7 +226,7 @@ function isEmptied(rebuilt: Rebuilt): boolean {
 /** Rebuild any node: apply its edit if the map named it, else structurally reconstruct its children. */
 function rebuildNode(node: FhirNode, edits: ReadonlyMap<FhirNode, Edit>): Rebuilt {
   const edit = edits.get(node);
-  if (edit !== undefined) return applyEdit(node, edit);
+  if (edit !== undefined) return applyEdit(node, edit, edits);
 
   if (isPrimitive(node)) return stripPrimitive(node);
 
@@ -241,7 +264,7 @@ function rebuildLabeled(
 ): Rebuilt {
   const edit = edits.get(node);
   if (edit !== undefined) {
-    const rebuilt = applyEdit(node, edit);
+    const rebuilt = applyEdit(node, edit, edits);
     if (rebuilt === REMOVE || edit.disposition !== "retained") mark?.push(node);
     return rebuilt;
   }
