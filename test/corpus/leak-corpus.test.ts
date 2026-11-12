@@ -715,6 +715,8 @@ function ncpdpCase(): CorpusCase {
       "ZZUNKNOWNSEG",
       "ZZPATEMAIL",
       "ZZPRESCRIBERNAME",
+      "20251203", // 414-DE Date Prescription Written, generalized to its year
+      "20251104", // 457-EP Associated Prescription/Service Date, generalized to its year
     ],
     // Distinctive survivors only: the NDC and pharmacy IDs (bare 441/1985 could recur). The fixture's
     // other payer id is letters and digits, which the pass no longer keeps (only five or six digits).

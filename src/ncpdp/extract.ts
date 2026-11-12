@@ -6,8 +6,9 @@
  * and coordinates are produced in the same order, so `result.document.loci[i]` corresponds to `coords[i]`.
  *
  * PHI is located **structurally**, per the cited {@link "./locus-map.js"}: the Patient (`01`),
- * Prescriber (`03`), Insurance (`04`), and Coordination-of-Benefits (`05`) segment fields, plus the
- * header's Date of Service. A free-text field ({@link TELECOM_FREE_TEXT_FIELDS}) **fails closed**
+ * Prescriber (`03`), Insurance (`04`), and Coordination-of-Benefits (`05`) segment fields, the dated
+ * fields of a retained segment ({@link TELECOM_RETAINED_SEGMENT_RULES}), plus the header's Date of
+ * Service. A free-text field ({@link TELECOM_FREE_TEXT_FIELDS}) **fails closed**
  * wherever it appears; a recognized clinical / financial segment is retained untouched (the over-scrub
  * guard); an **unknown segment** fails closed (every field blocked).
  *
@@ -31,6 +32,7 @@ import {
   TELECOM_FREE_TEXT_FIELDS,
   TELECOM_LOCUS_MAP,
   TELECOM_RETAIN_SEGMENTS,
+  TELECOM_RETAINED_SEGMENT_RULES,
   TELECOM_SEGMENT_RETAIN_FIELDS,
   type TelecomFieldRule,
 } from "./locus-map.js";
@@ -165,7 +167,7 @@ function fitsRetainedFormat(id: string, value: string): boolean {
   const format = RETAINED_FIELD_FORMATS[id];
   // Every field the retain list names has a format above, so no input reaches this; a field added to
   // that list without one would keep nothing, which is the safe direction.
-  /* v8 ignore next */
+  /* v8 ignore next -- every field the retain list names has a format above, so this never runs */
   if (format === undefined) return false;
   return format.test(value.trimEnd());
 }
@@ -224,6 +226,7 @@ export function extractTelecomLoci(tx: TelecomTransaction): TelecomExtraction {
     const isMapped = fieldMap !== undefined;
     const isRetained = TELECOM_RETAIN_SEGMENTS.has(segId);
     const retainFields = TELECOM_SEGMENT_RETAIN_FIELDS[segId];
+    const retainedRules = TELECOM_RETAINED_SEGMENT_RULES[segId];
 
     enumerateOrFail(segPath, () =>
       seg.fields.forEach((field, fieldIndex) => {
@@ -266,8 +269,15 @@ export function extractTelecomLoci(tx: TelecomTransaction): TelecomExtraction {
           return;
         }
         if (isRetained) {
-          // Recognized clinical / financial segment: the STRUCTURE is retained, which names no field
-          // inside it, so every populated field of it is an unexamined residual and is measured as one.
+          // A dated field of a retained segment (the Claim segment's Date Prescription Written, say)
+          // is a date of the individual's care: its rule reaches it, as a date in a mapped segment.
+          const retainedRule = retainedRules?.[field.id];
+          if (retainedRule !== undefined) {
+            emitRule(out, segPath, fieldPath, field.value, retainedRule, coord);
+            return;
+          }
+          // Recognized clinical / financial segment: the STRUCTURE is retained, which names no other
+          // field inside it, so every other populated field is an unexamined residual, measured as one.
           residuals.record(`${segPath}/${fieldPath}`);
           return;
         }

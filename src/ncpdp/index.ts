@@ -11,7 +11,8 @@
  * codec: it never touches a third-party substrate.
  *
  * **What it covers (Telecom vD.0).** The Patient (`01`), Prescriber (`03`), Insurance (`04`), and
- * Coordination-of-Benefits (`05`) segments, plus the header's Date of Service:
+ * Coordination-of-Benefits (`05`) segments, the dates of the Claim segment (`07`), plus the header's
+ * Date of Service:
  * - **Patient (`01`)**: name (`CA`/`CB`) and phone (`CQ`) removed; street (`CM`) and city (`CN`)
  *   removed; ZIP (`CP`) generalized to its safe 3-digit form; date of birth (`C4`) generalized to year;
  *   patient id (`CY`) pseudonymized. Gender and state retained.
@@ -21,6 +22,8 @@
  *   NCPDP: the deliberate asymmetry with the X12 adapter, which retains provider identity).
  * - **Coordination of Benefits (`05`)**: the other-payer cardholder id (`NU`) and group id (`MJ`)
  *   pseudonymized; the other-payer date (`E8`) generalized to year.
+ * - **Claim (`07`)**: the Date Prescription Written (`DE`) and the Associated Prescription/Service Date
+ *   (`EP`) generalized to year; every other Claim field retained.
  * - **Header**: Date of Service generalized to year.
  *
  * **Fail closed.** A free-text field (`544-FY` DUR free text, `504-F4` response message) is blocked
@@ -164,6 +167,7 @@ export {
   TELECOM_SEGMENT_RETAIN_FIELDS,
   TELECOM_FREE_TEXT_FIELDS,
   TELECOM_RETAIN_SEGMENTS,
+  TELECOM_RETAINED_SEGMENT_RULES,
   type TelecomFieldMode,
   type TelecomFieldRule,
 } from "./locus-map.js";
