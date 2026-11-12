@@ -15,7 +15,7 @@
  * financial / pharmacy segments (`02`, `07`, `08`, `10`, `11`, `13`) and the adjudication response
  * segments carry NDC drug codes, quantities, days-supply, pricing, and DUR reason codes, and are
  * **retained** (the over-scrub guard), each for the reason {@link TELECOM_RETAIN_SEGMENT_REASONS} gives,
- * except a free-text field, which **fails closed**, and a dated field a rule names
+ * except a free-text field, which **fails closed**, and a field a rule names
  * ({@link TELECOM_RETAINED_SEGMENT_RULES}). A segment id that is neither mapped nor retained is blocked
  * field-by-field.
  *
@@ -229,9 +229,9 @@ export const TELECOM_FREE_TEXT_FIELDS: ReadonlySet<string> = new Set<string>(["F
  * the drug, quantity, pricing, clinical or adjudication values a released claim exists to keep, and
  * removing them would destroy what the output is for.
  *
- * Kept is not unexamined: a free-text field in any of them fails closed, a dated field
- * {@link TELECOM_RETAINED_SEGMENT_RULES} names is transformed, and every other populated field is counted
- * as an unexamined residual.
+ * Kept is not unexamined: a free-text field in any of them fails closed, a field
+ * {@link TELECOM_RETAINED_SEGMENT_RULES} names is transformed or removed, and every other populated field
+ * is counted as an unexamined residual.
  *
  * @example
  * ```ts
@@ -244,12 +244,14 @@ export const TELECOM_FREE_TEXT_FIELDS: ReadonlySet<string> = new Set<string>(["F
 export const TELECOM_RETAIN_SEGMENT_REASONS: Readonly<Record<string, string>> = Object.freeze({
   "02": "Pharmacy Provider: the dispensing pharmacy's own identifiers, not the patient's.",
   "07":
-    "Claim: the product, quantity, days supply and fill of the prescription; its dates are " +
-    "reached by a rule.",
+    "Claim: the product, quantity, days supply and fill of the prescription; its dates and " +
+    "its scheduled prescription and alternate ids are reached by a rule.",
   "08": "DUR / PPS: the reason, professional service and result of service codes; free text fails closed.",
   "10": "Compound: the ingredient product ids, quantities and costs.",
   "11": "Pricing: the amounts claimed and their qualifiers.",
-  "13": "Clinical: the diagnosis codes and measurements the claim carries.",
+  "13":
+    "Clinical: the diagnosis codes and measurements the claim carries; its measurement dates are " +
+    "reached by a rule.",
   "20": "Response Message: the payer's message, which fails closed as free text.",
   "21":
     "Response Status: the status, reject codes and the payer's authorization number; the " +
@@ -271,8 +273,10 @@ export const TELECOM_RETAIN_SEGMENT_REASONS: Readonly<Record<string, string>> = 
  * field-by-field. Prior Authorization (`12`) is mapped, not kept.
  *
  * A retained segment keeps every field but the ones {@link TELECOM_RETAINED_SEGMENT_RULES} names: the
- * Claim segment's dates of the individual's care (`414-DE`, `457-EP`) and the response DUR segment's
- * Previous Date Of Fill (`530-FU`) are generalized like any other date.
+ * Claim segment's dates of the individual's care (`414-DE`, `457-EP`), the Clinical segment's
+ * Measurement Date (`494-ZE`) and the response DUR segment's Previous Date Of Fill (`530-FU`) are
+ * generalized like any other date, and the Claim segment's Scheduled Prescription ID Number
+ * (`454-EK`) and Alternate ID (`330-CW`) are removed.
  *
  * **Documented limitation (mirrors the HL7 / X12 adapters).** A retained segment may carry a field the
  * field tables we hold do not place, or a per-prescription reference (`402-D2` Rx reference number).
@@ -293,11 +297,27 @@ export const TELECOM_RETAIN_SEGMENTS: ReadonlySet<string> = new Set<string>(
 
 /**
  * The **Claim segment (`07`)** fields a rule reaches although the segment is retained: its two dates of
- * the individual's care.
+ * the individual's care, and two identifiers public payer sheets place in the segment.
+ *
+ * `454-EK` Scheduled Prescription ID Number names one scheduled (controlled) drug prescription, and
+ * `330-CW` Alternate ID is an alternate claim or member reference (one sheet: Medicare's reference
+ * number on a crossover claim). No public sheet gives the length or picture of either, so a surrogate
+ * cannot be shaped to fit: each is removed and recorded, whatever the profile.
  */
-const CLAIM_07_DATES: Readonly<Record<string, TelecomFieldRule>> = Object.freeze({
+const CLAIM_07_RULES: Readonly<Record<string, TelecomFieldRule>> = Object.freeze({
   DE: { mode: "date", category: C.DATES }, // 414-DE Date Prescription Written → year
   EP: { mode: "date", category: C.DATES }, // 457-EP Associated Prescription/Service Date → year
+  EK: { mode: "block" }, // 454-EK Scheduled Prescription ID Number → removed
+  CW: { mode: "block" }, // 330-CW Alternate ID → removed
+});
+
+/**
+ * The **Clinical segment (`13`)** field a rule reaches although the segment is retained: the Measurement
+ * Date (`494-ZE`, `CCYYMMDD`), the day a measurement of the patient was taken. It may repeat, once per
+ * measurement, and every occurrence is reached.
+ */
+const CLINICAL_13_DATES: Readonly<Record<string, TelecomFieldRule>> = Object.freeze({
+  ZE: { mode: "date", category: C.DATES }, // 494-ZE Measurement Date → year
 });
 
 /**
@@ -309,10 +329,10 @@ const RESPONSE_DUR_24_DATES: Readonly<Record<string, TelecomFieldRule>> = Object
 });
 
 /**
- * The **dated fields of a retained segment**: the fields of a recognized clinical / financial segment
+ * The **ruled fields of a retained segment**: the fields of a recognized clinical / financial segment
  * ({@link TELECOM_RETAIN_SEGMENTS}) that a rule reaches although the segment itself is retained. Every
  * other field of such a segment is kept untouched and counted as an unexamined residual; a field named
- * here is located and transformed by its rule, the same way a date in a mapped segment is.
+ * here is located and transformed by its rule, the same way a field in a mapped segment is.
  *
  * The Claim segment (`07`) carries two dates of the individual's care, and Safe Harbor removes every
  * element of a date but the year from a date directly related to an individual:
@@ -321,12 +341,21 @@ const RESPONSE_DUR_24_DATES: Readonly<Record<string, TelecomFieldRule>> = Object
  * - `457-EP` Associated Prescription/Service Date, the date of the patient's earlier fill or service
  *   this claim is tied to (a partial fill's completion, say).
  *
+ * The Clinical segment (`13`) carries `494-ZE` Measurement Date, the day a measurement of the patient
+ * was taken, once per measurement. Public payer sheets place it there, in `CCYYMMDD` form.
+ *
  * The response DUR / PPS segment (`24`) carries one: `530-FU` Previous Date Of Fill, the day the
  * patient's earlier prescription that the alert is about was filled. `@cosyte/ncpdp` names it in its
  * field table and lifts it as the alert's previous date of fill.
  *
  * Each is treated as the header Date of Service (`401-D1`) and the other payer date (`443-E8`) are:
- * generalized to the year under Safe Harbor, shifted under a profile that shifts dates. The Pricing
+ * generalized to the year under Safe Harbor, shifted under a profile that shifts dates.
+ *
+ * The Claim segment also carries two identifiers that public payer sheets place there: `454-EK`
+ * Scheduled Prescription ID Number, which names one scheduled (controlled) drug prescription, and
+ * `330-CW` Alternate ID, an alternate claim or member reference. Each is removed and recorded under
+ * every profile: no public sheet gives its length or picture, so no surrogate can be shaped to it. The
+ * Pricing
  * segment (`11`) carries amounts and codes and no date, so it has no entry here; the Prescriber segment
  * (`03`) is a mapped segment, where every field but its id qualifier is removed.
  *
@@ -336,12 +365,15 @@ const RESPONSE_DUR_24_DATES: Readonly<Record<string, TelecomFieldRule>> = Object
  *
  * TELECOM_RETAINED_SEGMENT_RULES["07"]?.DE?.mode; // => "date"  (Date Prescription Written)
  * TELECOM_RETAINED_SEGMENT_RULES["07"]?.D7; // => undefined (the NDC, retained)
+ * TELECOM_RETAINED_SEGMENT_RULES["07"]?.EK?.mode; // => "block" (Scheduled Prescription ID Number)
+ * TELECOM_RETAINED_SEGMENT_RULES["13"]?.ZE?.mode; // => "date"  (Measurement Date)
  * TELECOM_RETAINED_SEGMENT_RULES["24"]?.FU?.mode; // => "date"  (Previous Date Of Fill)
  * ```
  */
 export const TELECOM_RETAINED_SEGMENT_RULES: Readonly<
   Record<string, Readonly<Record<string, TelecomFieldRule>>>
 > = Object.freeze({
-  "07": CLAIM_07_DATES,
+  "07": CLAIM_07_RULES,
+  "13": CLINICAL_13_DATES,
   "24": RESPONSE_DUR_24_DATES,
 });
