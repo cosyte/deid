@@ -45,6 +45,7 @@ import {
   isComplex,
   isList,
   isPrimitive,
+  primitive,
   resourceType,
   type FhirComplex,
   type FhirNode,
@@ -163,9 +164,9 @@ export interface FhirExtractOptions {
    * Keep the species, breed and gender status of an animal patient. On a `Patient`, the first
    * extension whose `url` is exactly {@link FHIR_PATIENT_ANIMAL_URL} keeps the `valueCodeableConcept`
    * of its first `species`, `breed` and `genderStatus` sub-extension, as codes only: each `Coding`'s
-   * `system`, `version`, `code`, `userSelected` and `display`. Everything else in it is blocked as
-   * before: the concept's `text`, any other `value[x]` (a `valueString` among them), any other
-   * sub-extension, and any nested extension. Every other extension stays blocked. Off by default, so
+   * `system`, `version`, `code`, `userSelected` (a boolean only) and `display`. Everything else in it
+   * is blocked as before: the concept's `text`, any other `value[x]` (a `valueString` among them), any
+   * other sub-extension, any nested extension, and any key R4 does not define there. Every other extension stays blocked. Off by default, so
    * the output is unchanged unless a caller asks.
    */
   readonly keepPatientAnimal?: boolean;
@@ -369,6 +370,7 @@ function handleAddresses(out: FhirLocusAccumulator, value: FhirNode, path: strin
       },
       { node: item, edit: "address" },
     );
+    blockKeptPartExtensions(out, item, itemPath);
   });
 }
 
@@ -456,10 +458,12 @@ function handleDemographic(
 
 /**
  * Fail closed on an `extension` / `modifierExtension` subtree: block every `value[x]` it carries at any
- * nesting, retaining the `url` and the nested `extension` skeleton. An extension can carry any of the 18
- * categories (an MRN in a local extension, a name in a `valueHumanName`, an address in a birthplace
- * extension), and the reader preserves unknown extensions verbatim, so the value is dropped
- * unconditionally: fail closed on an unknown extension carrying a value.
+ * nesting, and every other key, retaining only the `url`, the element `id` and the nested `extension`
+ * skeleton. An extension can carry any of the 18 categories (an MRN in a local extension, a name in a
+ * `valueHumanName`, an address in a birthplace extension), and the reader preserves unknown extensions
+ * verbatim, so the value is dropped unconditionally: fail closed on an unknown extension carrying a
+ * value. An extension is defined by its producer, so a key R4 does not give an extension (a `note`
+ * beside the `url`) is free content in the same place, and it is blocked the same way.
  */
 function blockExtension(out: FhirLocusAccumulator, value: FhirNode, path: string): void {
   if (isList(value)) {
@@ -479,8 +483,9 @@ function blockExtension(out: FhirLocusAccumulator, value: FhirNode, path: string
 }
 
 /**
- * The fail-closed rule for one property of an extension object: the `url` and any other structural
- * child (`id`) are retained, a nested extension is blocked in turn, and a `value[x]` is blocked.
+ * The fail-closed rule for one property of an extension object: the `url` and the element `id` are
+ * retained, a nested extension is blocked in turn, and everything else is blocked: a `value[x]`, and a
+ * key R4 does not define on an extension.
  */
 function blockExtensionProperty(
   out: FhirLocusAccumulator,
@@ -489,18 +494,55 @@ function blockExtensionProperty(
   position: number,
   path: string,
 ): void {
-  // The `url` needs no test of its own: it is neither a nested extension nor a `value[x]`, so it falls
-  // through to the end and is retained (structural: a definitional URI, never PHI).
   if (name === "extension" || name === "modifierExtension") {
     blockExtension(out, value, join(path, name)); // nested extension: recurse
     return;
   }
-  if (name.startsWith("value")) {
-    // `startsWith` is a prefix test, not an identifier check: a key of "value" followed by any
-    // number of arbitrary bytes satisfies it, so the name is bounded before it is interpolated.
-    blockNode(out, value, join(path, elementSegment(name, position))); // value[x]: the PHI payload, dropped
-  }
-  // any other extension child (id) is structural and retained
+  // Structural, and retained: the definitional `url` and the element `id`, each as R4 types it, a
+  // single string. Either one in any other shape (a number, a boolean, an object, a list) is a
+  // structure no rule reads, and it goes.
+  if (EXTENSION_STRUCTURAL_KEYS.has(name) && holdsString(value)) return;
+  // Everything else is the payload or free content: a `value[x]`, or a key R4 does not define on an
+  // extension. The key is any JSON string, so it is bounded before it becomes a path segment.
+  blockNode(out, value, join(path, elementSegment(name, position)));
+}
+
+/** The two keys of an extension object that are structure rather than content: `url` and `id`. */
+const EXTENSION_STRUCTURAL_KEYS: ReadonlySet<string> = new Set(["url", "id"]);
+
+/**
+ * `true` when the node is a primitive holding a string, empty or not: the one shape R4 gives an
+ * extension's `url` and `id` and an address's `state` and `country`.
+ */
+function holdsString(node: FhirNode): node is FhirPrimitive {
+  // Stryker disable next-line ConditionalExpression: only a primitive has a `value`, so with the first test always true a complex or a list still fails the second, and the mutant changes nothing a test can read
+  return isPrimitive(node) && typeof node.value === "string";
+}
+
+/**
+ * Decide the parts an `Address` keeps (`state`, `country`). The applier re-emits a kept part with its
+ * metadata, so a part that is not a single string (an object, a list, a number, a boolean) is a shape
+ * no rule reads and is blocked whole. The extensions riding on a string part's `_`-sibling
+ * (`_state.extension`, `_country.extension`) reach the output, and they are decided as every other
+ * extension is.
+ */
+function blockKeptPartExtensions(
+  out: FhirLocusAccumulator,
+  address: FhirComplex,
+  path: string,
+): void {
+  address.properties.forEach((prop, i) => {
+    if (!FHIR_KEPT_ADDRESS_PARTS.has(prop.name)) return;
+    const partPath = join(path, elementSegment(prop.name, i));
+    if (!holdsString(prop.value)) {
+      blockNode(out, prop.value, partPath);
+      return;
+    }
+    const meta = join(underscoreSibling(partPath), "extension");
+    prop.value.extension?.forEach((ext, j) => {
+      blockExtension(out, ext, idx(meta, j));
+    });
+  });
 }
 
 /**
@@ -584,8 +626,8 @@ function keepPatientAnimal(out: FhirLocusAccumulator, animal: FhirComplex, path:
 
 /**
  * Keep a `CodeableConcept` an animal sub-extension carries, as codes only: each `Coding` keeps its
- * `system`, `version`, `code`, `userSelected` and, beside a `code` or `system`, its `display`. The
- * concept's free `text`, an `id`, an extension and any property R4 does not define there are blocked,
+ * `system`, `version`, `code`, a boolean `userSelected` and, beside a `code` or `system`, its `display`.
+ * The concept's free `text`, an `id`, an extension and any property R4 does not define there are blocked,
  * and a shape other than a complex is blocked whole. What is kept is not examined: it is counted as an
  * unexamined residual, as a clinical code is.
  */
@@ -608,10 +650,12 @@ function keepAnimalConcept(out: FhirLocusAccumulator, concept: FhirNode, path: s
       }
       const isCoding = isCodingComplex(coding);
       coding.properties.forEach((field, k) => {
+        // R4 types `userSelected` as a boolean: a string or a number there is content, not a flag.
         const keeps =
           ANIMAL_CODING_PROPERTIES.has(field.name) &&
           isPrimitive(field.value) &&
-          (field.name !== "display" || isCoding);
+          (field.name !== "display" || isCoding) &&
+          (field.name !== "userSelected" || typeof field.value.value === "boolean");
         if (!keeps) blockNode(out, field.value, join(codingPath, elementSegment(field.name, k)));
       });
     });
@@ -764,9 +808,9 @@ function personalAction(node: FhirNode, position: SweepPosition): PersonalAction
  *   fragment of something that was never a zip code. An **absent or empty** `postalCode` is not that
  *   case: there is no zip code to misread, and the element is reduced exactly as a person resource's
  *   address carrying none is.
- * - **A part Safe Harbor lets the applier keep is not a plain primitive.** `state` and `country` are
- *   re-emitted verbatim, metadata included, so an unexpected JSON shape at one of them would carry
- *   content out of the pass unread.
+ * - **A part Safe Harbor lets the applier keep is not a string.** `state` and `country` are
+ *   re-emitted with their value and metadata, so an unexpected JSON shape at one of them (an object,
+ *   a list, a number, a boolean) would carry content out of the pass unread.
  */
 function sweptAddressZip(node: FhirComplex): string | null {
   const postal = getProperty(node, "postalCode");
@@ -777,7 +821,7 @@ function sweptAddressZip(node: FhirComplex): string | null {
     if (zip.length > 0 && !isRetainableZipCode(zip)) return null;
   }
   for (const prop of node.properties) {
-    if (FHIR_KEPT_ADDRESS_PARTS.has(prop.name) && !isPrimitive(prop.value)) return null;
+    if (FHIR_KEPT_ADDRESS_PARTS.has(prop.name) && !holdsString(prop.value)) return null;
   }
   return zip;
 }
@@ -794,6 +838,7 @@ function emitSweptAddress(out: FhirLocusAccumulator, node: FhirComplex, path: st
     return;
   }
   push(out, { path, kind: "zip", category, value: zip }, { node, edit: "address" });
+  blockKeptPartExtensions(out, node, path);
 }
 
 /**
@@ -1376,11 +1421,15 @@ export function extractFhirLoci(
   // in the manifest, so an unbounded one prefixes the whole audit with document content.
   const rt = safeLocusToken(resourceType(resource) ?? "", "fhirElementName");
   walkComplex(out, resource, rt, false, "");
+  const edits = new Map<FhirNode, FhirEditKind>();
+  for (const coord of out.coords) edits.set(coord.node, coord.edit);
+  // The same reach as the enumeration below, so a tree it cannot walk fails the same way.
+  enumerateOrFail(rt, () => {
+    blockSiblingTextBelow(out, resource, rt, edits);
+  });
 
   const residuals = new UnexaminedResidualBuilder();
   enumerateOrFail(rt, () => {
-    const edits = new Map<FhirNode, FhirEditKind>();
-    for (const coord of out.coords) edits.set(coord.node, coord.edit);
     recordUnexaminedFhirPositions(residuals, resource, rt, {
       edits,
       ruleReached: out.ruleReached,
@@ -1391,6 +1440,87 @@ export function extractFhirLoci(
 }
 
 /**
+ * Block the text a primitive's `_`-sibling carried when it arrived as something other than an object:
+ * a string, a number, a boolean or a `null` (`_status: "…"`), or a list where none belongs. FHIR JSON
+ * gives that channel an `Element` object and nothing else, so the reader models no metadata in it and
+ * keeps the text only so that its writer can hand it back. No rule can read it, and the applier never
+ * writes it: every primitive it writes is built from the value, the element `id` and the extensions it
+ * decided. So the text is recorded as a block at the `_`-sibling's own locus (`Observation._status`),
+ * and the manifest row carries no value.
+ *
+ * The coordinate names a stand-in primitive holding that text rather than the primitive itself, so it
+ * never displaces the edit the pass made to the primitive's value; the applier visits only the tree's
+ * own nodes, so the stand-in writes nothing.
+ */
+function blockSiblingText(out: FhirLocusAccumulator, node: FhirPrimitive, path: string): void {
+  const text = node.nonObjectMetaSource ?? node.nestedArrayMetaSource;
+  if (text !== undefined) blockNode(out, primitive(text), underscoreSibling(path));
+}
+
+/**
+ * Find every primitive the applier writes back and block the `_`-sibling text it carried
+ * ({@link blockSiblingText}). The walk follows the applier: it stops below a node an edit removes or
+ * replaces whole (whose row already covers all of it), it reads a primitive whose value an edit
+ * rewrites (the primitive is still written, with a new value), and in a reduced `Address` it reads
+ * only the parts the applier keeps and the extensions on their `_`-siblings. A single reduced
+ * `Address` is located without an index, as its other rows are.
+ */
+function blockSiblingTextBelow(
+  out: FhirLocusAccumulator,
+  node: FhirNode,
+  path: string,
+  edits: ReadonlyMap<FhirNode, FhirEditKind>,
+): void {
+  const edit = edits.get(node);
+  if (isPrimitive(node)) {
+    if (edit !== "drop") blockSiblingText(out, node, path);
+    return;
+  }
+  // Stryker disable next-line ConditionalExpression: only an `Address` complex carries the address edit, so the type test only narrows the type
+  if (edit === "address" && isComplex(node)) {
+    blockKeptPartSiblingText(out, node, path, edits);
+    return;
+  }
+  if (edit !== undefined) return;
+  if (isList(node)) {
+    const single = node.items.length === 1;
+    node.items.forEach((item, i) => {
+      const itemPath = single && edits.get(item) === "address" ? path : idx(path, i);
+      blockSiblingTextBelow(out, item, itemPath, edits);
+    });
+    return;
+  }
+  node.properties.forEach((prop, i) => {
+    blockSiblingTextBelow(out, prop.value, join(path, elementSegment(prop.name, i)), edits);
+  });
+}
+
+/**
+ * {@link blockSiblingTextBelow} for a reduced `Address`: each part it keeps, and every extension on
+ * that part's `_`-sibling, which the applier writes back as the pass decided it.
+ */
+function blockKeptPartSiblingText(
+  out: FhirLocusAccumulator,
+  address: FhirComplex,
+  path: string,
+  edits: ReadonlyMap<FhirNode, FhirEditKind>,
+): void {
+  address.properties.forEach((prop, i) => {
+    const part = prop.value;
+    if (!FHIR_KEPT_ADDRESS_PARTS.has(prop.name) || edits.has(part)) return;
+    // Stryker disable next-line ConditionalExpression: a part reached here is always a primitive, so the test only narrows the type
+    /* v8 ignore if -- every part that is not a string is blocked above; this guard narrows the type */
+    if (!isPrimitive(part)) return;
+    const partPath = join(path, elementSegment(prop.name, i));
+    blockSiblingText(out, part, partPath);
+    const meta = join(underscoreSibling(partPath), "extension");
+    part.extension?.forEach((ext, j) => {
+      blockSiblingTextBelow(out, ext, idx(meta, j), edits);
+    });
+  });
+}
+
+/**
  * What each of the applier's edits does to the node its coordinate names, which is the only thing that
  * lets the enumeration stop descending.
  *
@@ -1398,7 +1528,8 @@ export function extractFhirLoci(
  *   at or below it reaches the output - not its value, not its `_`-sibling metadata.
  * - `rebuilds-address`: the `Address` complex is rebuilt from its parts. The finer geographic parts are
  *   dropped and `postalCode` is replaced, but every part in {@link FHIR_KEPT_ADDRESS_PARTS} is re-emitted
- *   **verbatim**, so its metadata rides through and is enumerated.
+ *   with its value and its metadata, so what the pass did not block in that metadata rides through and
+ *   is enumerated.
  *
  * A `Record` keyed by {@link FhirEditKind} makes this **exhaustive**: a new edit cannot be added without
  * deciding here what it hands through, which is what keeps the enumeration closed rather than merely
@@ -1446,8 +1577,9 @@ function underscoreSibling(path: string): string {
  * - **`id` always rides through.** Every primitive the applier re-emits is rebuilt keeping its value and
  *   its `id`, so a primitive that survives at all survives with its element id, whatever the pass decided
  *   about the value beside it.
- * - **`extension` rides through only where the applier re-emits the primitive verbatim**, which is the
- *   kept part of a rebuilt `Address`. Everywhere else the applier's primitive-extension guard drops it,
+ * - **`extension` rides through only where the applier re-emits the primitive with its metadata**,
+ *   which is the kept part of a rebuilt `Address`, and there only what the pass did not block in it
+ *   (the `url` and the element `id`). Everywhere else the applier's primitive-extension guard drops it,
  *   and a position the pass removes is not one it hands through.
  */
 function recordPrimitiveMetadata(
@@ -1516,13 +1648,14 @@ function recordUnexaminedFhirPositions(
 
 /**
  * Enumerate what a rebuilt `Address` hands through: the parts Safe Harbor permits it to keep, which the
- * applier re-emits **verbatim** rather than rebuilding.
+ * applier re-emits with their value and metadata rather than rebuilding them.
  *
  * The rule decided about each part's VALUE - keep the state and the country, drop the line and the city,
- * generalize the ZIP - so no part's value is a residual. It decided nothing about the metadata riding
- * beside a kept value, and the applier's verbatim re-emission carries that metadata into the output, so
- * the `_`-sibling `id` and extensions of a kept part are exactly the positions this measures. A dropped
- * part and the replaced `postalCode` contribute nothing: they do not reach the output at all.
+ * generalize the ZIP - so no part's value is a residual. The pass blocked the value and every unknown
+ * key of each extension on a kept part's `_`-sibling, and the applier honours those edits, so what is
+ * left of that metadata (the element `id`, each extension's `url` and `id`) is exactly the positions
+ * this measures. A kept part that is not a string (blocked whole), a dropped part and the replaced
+ * `postalCode` contribute nothing: they do not reach the output at all.
  */
 function recordKeptAddressParts(
   residuals: UnexaminedResidualBuilder,
@@ -1532,16 +1665,13 @@ function recordKeptAddressParts(
 ): void {
   node.properties.forEach((prop, i) => {
     if (!FHIR_KEPT_ADDRESS_PARTS.has(prop.name)) return;
-    const partPath = join(path, elementSegment(prop.name, i));
-    if (isPrimitive(prop.value)) {
-      recordPrimitiveMetadata(residuals, prop.value, partPath, state, true);
-      return;
-    }
-    // Not a primitive: the whole part is re-emitted verbatim, so every value inside it is handed
-    // through and none of it was decided.
-    recordUnexaminedFhirPositions(residuals, prop.value, partPath, {
-      ...state,
-      valueDecided: false,
-    });
+    const part = prop.value;
+    // A part the pass blocked (any shape but a string) is removed whole: nothing of it is handed through.
+    if (state.edits.has(part)) return;
+    // Stryker disable ConditionalExpression: a part reached here is always a primitive, so the test only narrows the type
+    /* v8 ignore if -- every part that is not a string is blocked above; this guard narrows the type */
+    if (!isPrimitive(part)) return;
+    // Stryker restore ConditionalExpression
+    recordPrimitiveMetadata(residuals, part, join(path, elementSegment(prop.name, i)), state, true);
   });
 }

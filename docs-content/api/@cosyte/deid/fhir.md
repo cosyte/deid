@@ -341,9 +341,9 @@ const options: FhirExtractOptions = { keepPatientAnimal: true };
 Keep the species, breed and gender status of an animal patient. On a `Patient`, the first
 extension whose `url` is exactly [FHIR\_PATIENT\_ANIMAL\_URL](#fhir_patient_animal_url) keeps the `valueCodeableConcept`
 of its first `species`, `breed` and `genderStatus` sub-extension, as codes only: each `Coding`'s
-`system`, `version`, `code`, `userSelected` and `display`. Everything else in it is blocked as
-before: the concept's `text`, any other `value[x]` (a `valueString` among them), any other
-sub-extension, and any nested extension. Every other extension stays blocked. Off by default, so
+`system`, `version`, `code`, `userSelected` (a boolean only) and `display`. Everything else in it
+is blocked as before: the concept's `text`, any other `value[x]` (a `valueString` among them), any
+other sub-extension, any nested extension, and any key R4 does not define there. Every other extension stays blocked. Off by default, so
 the output is unchanged unless a caller asks.
 
 ## Type Aliases

@@ -225,6 +225,45 @@ describe("keepPatientAnimal: true still blocks", () => {
     for (const leak of ["ZZCODEEXT", "ZZNESTED", "ZZOWNERFAMILY"]) expect(out).not.toContain(leak);
   });
 
+  it("a userSelected that is not a boolean, keeping one that is", () => {
+    // R4 types `Coding.userSelected` as a boolean; a string or a number there is content in a field
+    // the keep would otherwise hand through.
+    for (const odd of ["ZZPETNAME", 7]) {
+      const species = {
+        url: "species",
+        valueCodeableConcept: { coding: [{ system: SYSTEM, code: "ZZSPC01", userSelected: odd }] },
+      };
+      const { json, manifest } = run(dog([{ url: ANIMAL_URL, extension: [species] }]), {
+        keepPatientAnimal: true,
+      });
+      expect(json).toContain("ZZSPC01");
+      expect(json).not.toContain("userSelected");
+      expect(manifest.map((row) => row.locus)).toContain(
+        "Patient.extension[0].extension[0].valueCodeableConcept.coding[0].userSelected",
+      );
+    }
+    const kept = {
+      url: "species",
+      valueCodeableConcept: { coding: [{ system: SYSTEM, code: "ZZSPC01", userSelected: false }] },
+    };
+    expect(onJson(dog([{ url: ANIMAL_URL, extension: [kept] }]))).toContain('"userSelected":false');
+  });
+
+  it("a key R4 does not define on the animal extension or on one of its parts", () => {
+    const species = { ...(SPECIES as Record<string, Json>), note: "ZZPARTNOTE" };
+    const animal = { url: ANIMAL_URL, comment: "ZZANIMALNOTE", extension: [species] };
+    const { json, manifest } = run(dog([animal]), { keepPatientAnimal: true });
+    expect(json).toContain("ZZSYNTH CANINE");
+    expect(json).not.toContain("ZZPARTNOTE");
+    expect(json).not.toContain("ZZANIMALNOTE");
+    expect(manifest.map((row) => row.locus)).toEqual(
+      expect.arrayContaining([
+        "Patient.extension[0].comment",
+        "Patient.extension[0].extension[0].note",
+      ]),
+    );
+  });
+
   it("a display with no code or system beside it, keeping the coding's other parts", () => {
     const breed = {
       url: "breed",

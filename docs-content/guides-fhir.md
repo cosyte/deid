@@ -220,10 +220,17 @@ the identifier rule), and an empty one as `{}`.
   Coding is identified positively (a `code`/`system` sibling), so `Coding.display` (a coded term) is
   retained; every other `display` fails closed.
 - Every **extension value** is dropped: a complex `valueAddress` / `valueHumanName` / `valueIdentifier`,
-  a `modifierExtension`, a deeply nested extension, and a primitive-level `_`-sibling extension alike.
-  Extensions are the FHIR leak frontier; the `url` skeleton is kept, the payload is not. The one
+  a `modifierExtension`, a deeply nested extension, and a primitive-level `_`-sibling extension alike,
+  the one on a `state` or `country` an `Address` keeps included. So is every key R4 does not define on
+  an extension: a `note` or `comment` beside the `url` is blocked and recorded at its own locus
+  (`Observation.extension[0].note`), as a value is. Extensions are the FHIR leak frontier; the `url`
+  skeleton and the element `id` are kept when each is a string, everything else is not. The one
   exception is opt-in: [`keepPatientAnimal`](#keep-an-animal-patients-species-opt-in) keeps the coded
   species, breed and gender status of the `patient-animal` extension.
+- A **`_`-sibling that is not an object** (`"_status": "..."`, a number, a boolean, a `null`, or a
+  list in a repeating primitive's slot) is never written back, beside any primitive in any resource.
+  Every primitive the pass writes is built from its value, its element `id` and the extensions it
+  kept. The sibling is recorded as a block at its own locus (`Observation._status`), with no value.
 - A **swept `Address` the pass cannot read faithfully** is removed **whole**, never partly retained: a
   `postalCode` that is not a whole zip code (a four-digit `0110` still has three leading digits, and
   keeping them would retain a fragment of something that was never a ZIP), or an unexpected JSON shape
@@ -320,7 +327,7 @@ changed inside it counts for the resource that contains it.
   option that is so everywhere; with it, the Data Absent Reason replaces it only where R4 requires
   the element and nothing else is left there, so an optional Reference, or one item of a list that
   keeps other items, is still `{}`.
-- An extension whose value the pass blocked keeps its `url` and nothing else.
+- An extension whose value the pass blocked keeps its `url` and its element `id`, and nothing else.
 - Security labels already on the input, such as Data Segmentation for Privacy labels, pass through
   unchanged: the pass neither reads nor enforces them, and `REDACTED` is added after them.
 
@@ -367,8 +374,8 @@ out.extension; // => [{ url: "http://hl7.org/fhir/StructureDefinition/patient-an
 **What it keeps, exactly.** On a `Patient` (alone, in a `Bundle` entry, or contained), the first
 extension in its own `extension` list whose `url` is exactly the `patient-animal` URL: the
 `valueCodeableConcept` of the first `species`, `breed` and `genderStatus` sub-extension in it, as
-codes. Each `Coding` keeps its `system`, `version`, `code`, `userSelected` and, beside a `code` or
-`system`, its `display`. `FHIR_PATIENT_ANIMAL_URL` exports the URL.
+codes. Each `Coding` keeps its `system`, `version`, `code`, a `userSelected` that is a boolean and,
+beside a `code` or `system`, its `display`. `FHIR_PATIENT_ANIMAL_URL` exports the URL.
 
 **What stays blocked.** Everything else, as without the option:
 
@@ -377,7 +384,9 @@ codes. Each `Coding` keeps its `system`, `version`, `code`, `userSelected` and, 
   `genderStatus`;
 - any other `value[x]` on a sub-extension, so a `valueString` holding the animal's name is blocked;
 - the concept's free `text`, an `id`, an extension and any property R4 does not define on the
-  concept or a `Coding`, and a `display` with no `code` or `system` beside it;
+  concept or a `Coding`, a `display` with no `code` or `system` beside it, and a `userSelected` that
+  is not a boolean (a string or a number);
+- a key R4 does not define on the `patient-animal` extension or on one of its sub-extensions;
 - a value or a `modifierExtension` on the `patient-animal` extension itself, a second
   `patient-animal` extension, and the extension anywhere but a `Patient`'s own `extension` list;
 - every other extension.
