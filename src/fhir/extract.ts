@@ -489,7 +489,8 @@ function blockExtensionProperty(
   position: number,
   path: string,
 ): void {
-  if (name === "url") return; // structural: a definitional URI, never PHI
+  // The `url` needs no test of its own: it is neither a nested extension nor a `value[x]`, so it falls
+  // through to the end and is retained (structural: a definitional URI, never PHI).
   if (name === "extension" || name === "modifierExtension") {
     blockExtension(out, value, join(path, name)); // nested extension: recurse
     return;
