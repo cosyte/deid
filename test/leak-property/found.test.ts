@@ -378,14 +378,18 @@ describe("FHIR: a conditional request header is removed", () => {
 });
 
 describe("FHIR: a person resource keeps a string only where R4 puts a code it can check", () => {
-  it.each(["link", "contact", "patient", "managingOrganization", "generalPractitioner"])(
-    "a plain string at %s, where R4 expects a structure, is removed",
-    (element) => {
-      const run = fhir({ resourceType: "Patient", [element]: "ZQLKSTRG00X" });
-      expect(run.wire).not.toContain("ZQLKSTRG00X");
-      expect(run.rows).toContain(`Patient.${element} ${D.DEID_LOCUS_BLOCKED}`);
-    },
-  );
+  // R4 gives a Patient no `patient`, so that key's row names its position rather than the key.
+  it.each([
+    ["link", "link"],
+    ["contact", "contact"],
+    ["patient", "<withheld>[1]"],
+    ["managingOrganization", "managingOrganization"],
+    ["generalPractitioner", "generalPractitioner"],
+  ])("a plain string at %s, where R4 expects a structure, is removed", (element, segment) => {
+    const run = fhir({ resourceType: "Patient", [element]: "ZQLKSTRG00X" });
+    expect(run.wire).not.toContain("ZQLKSTRG00X");
+    expect(run.rows).toContain(`Patient.${segment} ${D.DEID_LOCUS_BLOCKED}`);
+  });
 
   it.each(["Patient", "Practitioner", "RelatedPerson", "Person"])(
     "a gender outside the R4 value set is removed from a %s",

@@ -404,7 +404,8 @@ describe("the other five adapters produce the same manifests, in the same order"
 
   // The FHIR rows gained the logical ids on purpose: every resource id, every fullUrl and every
   // reference that names one is replaced by a stand-in and recorded at its own position. Every row that
-  // was here before is still here, in the same order relative to the others.
+  // was here before is still here, in the same order relative to the others. The row for the vendor key
+  // R4 does not define names its position, not the key the sender chose.
   it("FHIR", () => {
     const { resource } = parseResource(FIX("fhir", "bundle.json"));
     const { manifest } = deidentifyFhir(resource, options());
@@ -426,7 +427,7 @@ describe("the other five adapters produce the same manifests, in the same order"
         "Bundle.entry[0].resource.contact[0].address",
         "Bundle.entry[0].resource.extension[0].valueString",
         "Bundle.entry[0].resource.extension[1].extension[0].valueString",
-        "Bundle.entry[0].resource.vendorMotherMaidenName",
+        "Bundle.entry[0].resource.<withheld>[16]",
         "Bundle.entry[1].fullUrl",
         "Bundle.entry[1].resource.id",
         "Bundle.entry[1].resource.identifier.value",

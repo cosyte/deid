@@ -9,12 +9,14 @@
  * qualifier position (a `use`, a `system`, a `type` code, a `gender`), and nested structures: a
  * contained resource, a nested extension, a Bundle inside a Bundle.
  *
- * A sentinel under a key R4 does not define on an extension (in an `extension`, a `modifierExtension`,
- * a nested extension, a primitive's `_`-sibling extension, a kept address part's) is held to more than
- * the shared rule: it must be gone from the output, because an extension is blocked whatever it holds.
- * So is a sentinel inside a part a reduced `Address` keeps (`state`, `country`) that arrives as an
- * object or a list rather than a string. A sentinel under an unknown key anywhere else is held to the
- * shared rule.
+ * A sentinel under a key R4 does not define where it sits is held to more than the shared rule: it
+ * must be gone from the output and from the manifest, because such a key is blocked whatever it holds.
+ * That holds inside an extension (an `extension`, a `modifierExtension`, a nested extension, a
+ * primitive's `_`-sibling extension, a kept address part's) and everywhere else: at every kind of
+ * position (the top level, a datatype, a datatype inside one, a backbone, `meta`, the narrative, a
+ * structure where R4 puts a primitive, a contained resource, a Bundle entry and its request) on a
+ * person, a clinical and an infrastructure resource. So is a sentinel inside a part a reduced
+ * `Address` keeps (`state`, `country`) that arrives as an object or a list rather than a string.
  *
  * A primitive's `_`-sibling is held to the same stricter rule when it arrives as something other than
  * the `Element` object FHIR JSON gives it: a string, a number, a boolean, an object holding a key R4
@@ -40,6 +42,7 @@ import { parseResource, serializeResource } from "@cosyte/fhir";
 
 import { createDeidContext, DeidError, FATAL_CODES } from "../../src/index.js";
 import { deidentifyFhir, type FhirDeidOptions } from "../../src/fhir/index.js";
+import { fhirElementsOf } from "../../src/fhir/element-names.js";
 import {
   newTally,
   runLeakProperty,
@@ -72,6 +75,10 @@ const RESOURCE_TYPES = [
   "Coverage",
   "Claim",
   "DiagnosticReport",
+  "Device",
+  "Provenance",
+  "AuditEvent",
+  "Endpoint",
 ] as const;
 
 /** Elements typed as a datatype, where a plain string is the unexpected shape. */
@@ -509,6 +516,535 @@ const ELEMENT_ID_SPOTS: readonly {
 
 const elementIdArb: fc.Arbitrary<number> = fc.nat({ max: ELEMENT_ID_SPOTS.length - 1 });
 
+/**
+ * Each kind of position a key R4 does not define can sit at, each putting the case's sentinel under
+ * one: the top level (holding a string, a structure, a list), a datatype (`meta`, a `Coding` in
+ * `meta.tag`, the narrative, an `Identifier`), a datatype inside one (an identifier's `type` coding,
+ * `period` and `assigner`), a structure where R4 puts a primitive (`meta.versionId`), a backbone of
+ * the resource's own type, a contained resource's top level and a datatype in it, and a Bundle
+ * entry and its request (in a Bundle the resource contains).
+ *
+ * Then each kind of position a value of a shape R4 does not define can sit at, with the sentinel as
+ * that value: a scalar where a datatype (`meta`, the narrative), a `Reference` (on the resource's own
+ * type, and on a person, a clinical and an infrastructure resource it contains), a backbone or a
+ * resource (contained, in a Bundle entry) belongs; a structure where a primitive belongs; a list
+ * where one value belongs and one value where a list belongs; and a resource whose type is missing,
+ * is the sentinel itself, or is one R4 does not define, contained or in a Bundle entry.
+ *
+ * Then each kind of position a primitive of a JSON type R4 does not give it can sit at: the sentinel
+ * as a string where R4 puts a boolean, an integer or a decimal, and as a number
+ * ({@link numericSentinel}) where R4 puts a string, at the top level, in a datatype, in a datatype
+ * inside one, in a backbone, in a choice element and in a nested backbone, on a person, a clinical
+ * and an infrastructure resource. And the sentinel as a key R4 does not define, which no row may
+ * repeat: at the top level, in a datatype, in an extension and in a contained resource.
+ *
+ * A spot with a `text` places that text in place of the sentinel, and it is that text which must not
+ * come back.
+ */
+const UNKNOWN_KEY_SPOTS: readonly {
+  readonly where: string;
+  readonly put: (resource: JsonObject, sentinel: string) => void;
+  readonly text?: (sentinel: string) => string;
+}[] = [
+  { where: "zzTop", put: (r, s) => (r["zzTop"] = s) },
+  { where: "zzDetail", put: (r, s) => (r["zzDetail"] = { who: s, list: [s] }) },
+  { where: "zzItems", put: (r, s) => (r["zzItems"] = ["zz", s]) },
+  { where: "meta.zzOwner", put: (r, s) => (r["meta"] = { versionId: "1", zzOwner: s }) },
+  {
+    where: "meta.tag[0].zzNote",
+    put: (r, s) =>
+      (r["meta"] = { tag: [{ system: "http://example.org/t", code: "t", zzNote: s }] }),
+  },
+  { where: "meta.versionId.zz", put: (r, s) => (r["meta"] = { versionId: { zz: s } }) },
+  {
+    where: "text.zzNote",
+    put: (r, s) =>
+      (r["text"] = {
+        status: "generated",
+        div: '<div xmlns="http://www.w3.org/1999/xhtml">zz</div>',
+        zzNote: s,
+      }),
+  },
+  {
+    where: "identifier[].zzNote",
+    put: (r, s) => {
+      pushTo(r, "identifier", { system: "urn:oid:2.25.7", value: "zz1", zzNote: s });
+    },
+  },
+  {
+    where: "identifier[].type.coding[0].zzNote",
+    put: (r, s) => {
+      pushTo(r, "identifier", {
+        type: { coding: [{ system: "http://example.org/it", code: "MR", zzNote: s }] },
+        value: "zz1",
+      });
+    },
+  },
+  {
+    where: "identifier[].period.zzNote",
+    put: (r, s) => {
+      pushTo(r, "identifier", { value: "zz1", period: { start: "2020", zzNote: s } });
+    },
+  },
+  {
+    where: "identifier[].assigner.zzNote",
+    put: (r, s) => {
+      pushTo(r, "identifier", {
+        value: "zz1",
+        assigner: { reference: "Organization/zz1", zzNote: s },
+      });
+    },
+  },
+  {
+    where: "backbone.zzNote",
+    put: (r, s) => {
+      const type = typeof r["resourceType"] === "string" ? r["resourceType"] : "";
+      const [key, item] = BACKBONES[type] ?? ["zzBackbone", {}];
+      pushTo(r, key, { ...item, zzNote: s });
+    },
+  },
+  {
+    where: "contained[].zzNote",
+    put: (r, s) => {
+      pushTo(r, "contained", { resourceType: "Basic", id: "zzc", code: { text: "zz" }, zzNote: s });
+    },
+  },
+  {
+    where: "contained[].code.coding[0].zzNote",
+    put: (r, s) => {
+      pushTo(r, "contained", {
+        resourceType: "Patient",
+        id: "zzp",
+        maritalStatus: { coding: [{ code: "M", zzNote: s }] },
+      });
+    },
+  },
+  {
+    where: "contained[].entry[0].zzNote",
+    put: (r, s) => {
+      pushTo(r, "contained", {
+        resourceType: "Bundle",
+        type: "collection",
+        entry: [{ zzNote: s, resource: { resourceType: "Basic", code: { text: "zz" } } }],
+      });
+    },
+  },
+  {
+    where: "contained[].entry[0].request.zzNote",
+    put: (r, s) => {
+      pushTo(r, "contained", {
+        resourceType: "Bundle",
+        type: "transaction",
+        entry: [{ request: { method: "POST", url: "Basic", zzNote: s } }],
+      });
+    },
+  },
+  // A value of a shape R4 does not define where it sits: a scalar where a structure belongs, a
+  // structure where a primitive belongs, a list where one value belongs and the reverse.
+  { where: "meta as a scalar", put: (r, s) => (r["meta"] = s) },
+  { where: "text as a scalar", put: (r, s) => (r["text"] = s) },
+  {
+    where: "a Reference as a scalar",
+    put: (r, s) => {
+      const type = typeof r["resourceType"] === "string" ? r["resourceType"] : "";
+      (REFERENCES[type] ?? REFERENCES["Observation"])?.put(r, s);
+    },
+  },
+  { where: "meta.versionId as a structure", put: (r, s) => (r["meta"] = { versionId: { zz: s } }) },
+  { where: "meta.versionId as a list", put: (r, s) => (r["meta"] = { versionId: ["1", s] }) },
+  { where: "meta.tag as one coding", put: (r, s) => (r["meta"] = { tag: { code: s } }) },
+  {
+    where: "meta.security[0].code as a list",
+    put: (r, s) => (r["meta"] = { security: [{ system: "http://example.org/s", code: [s] }] }),
+  },
+  {
+    where: "contained[] as a scalar",
+    put: (r, s) => {
+      pushTo(r, "contained", s);
+    },
+  },
+  ...(
+    [
+      ["subject", (s: string): JsonObject => ({ subject: s })],
+      ["performer[]", (s: string): JsonObject => ({ performer: [s] })],
+      ["code", (s: string): JsonObject => ({ code: s })],
+      ["valueQuantity", (s: string): JsonObject => ({ valueQuantity: s })],
+      ["effectivePeriod", (s: string): JsonObject => ({ effectivePeriod: s })],
+      ["component", (s: string): JsonObject => ({ component: s })],
+      ["category as one concept", (s: string): JsonObject => ({ category: { text: s } })],
+      ["status as a list", (s: string): JsonObject => ({ status: [s] })],
+    ] as const
+  ).map(([where, fields]) => ({
+    where: `contained Observation ${where}`,
+    put: (r: JsonObject, s: string) => {
+      pushTo(r, "contained", { resourceType: "Observation", status: "final", ...fields(s) });
+    },
+  })),
+  {
+    where: "contained Patient generalPractitioner[] as a scalar",
+    put: (r, s) => {
+      pushTo(r, "contained", { resourceType: "Patient", generalPractitioner: [s] });
+    },
+  },
+  {
+    where: "contained Encounter participant[0].individual as a scalar",
+    put: (r, s) => {
+      pushTo(r, "contained", {
+        resourceType: "Encounter",
+        status: "finished",
+        participant: [{ individual: s }],
+      });
+    },
+  },
+  {
+    where: "contained Provenance agent as a scalar",
+    put: (r, s) => {
+      pushTo(r, "contained", { resourceType: "Provenance", recorded: "2024", agent: s });
+    },
+  },
+  {
+    where: "contained Provenance agent[0].who as a scalar",
+    put: (r, s) => {
+      pushTo(r, "contained", { resourceType: "Provenance", recorded: "2024", agent: [{ who: s }] });
+    },
+  },
+  {
+    where: "contained AuditEvent agent[0].who as a scalar",
+    put: (r, s) => {
+      pushTo(r, "contained", {
+        resourceType: "AuditEvent",
+        recorded: "2024-01-15T08:00:00Z",
+        agent: [{ requestor: true, who: s }],
+      });
+    },
+  },
+  {
+    where: "contained Device owner as a scalar",
+    put: (r, s) => {
+      pushTo(r, "contained", { resourceType: "Device", owner: s });
+    },
+  },
+  {
+    where: "contained Bundle entry[0].resource as a scalar",
+    put: (r, s) => {
+      pushTo(r, "contained", {
+        resourceType: "Bundle",
+        type: "collection",
+        entry: [{ resource: s }],
+      });
+    },
+  },
+  {
+    where: "contained Bundle entry[0].resource of a type R4 does not define",
+    put: (r, s) => {
+      pushTo(r, "contained", {
+        resourceType: "Bundle",
+        type: "collection",
+        entry: [{ resource: { resourceType: s, language: "en" } }],
+      });
+    },
+  },
+  {
+    where: "contained[] whose type is the sentinel",
+    put: (r, s) => {
+      pushTo(r, "contained", { resourceType: s, id: "zzt" });
+    },
+  },
+  {
+    where: "contained[] of a type R4 does not define, its base fields",
+    put: (r, s) => {
+      pushTo(r, "contained", { resourceType: "ZzThing", implicitRules: s, language: s });
+    },
+  },
+  {
+    where: "contained[] with no type",
+    put: (r, s) => {
+      pushTo(r, "contained", { id: "zzn", implicitRules: s, meta: { source: s } });
+    },
+  }, // A string where R4 puts a boolean, an integer or a decimal.
+  {
+    where: "meta.tag[0].userSelected as a string",
+    put: (r, s) => (r["meta"] = { tag: [{ code: "t", userSelected: s }] }),
+  },
+  ...(
+    [
+      ["valueBoolean", (s: string): JsonObject => ({ valueBoolean: s })],
+      ["valueInteger", (s: string): JsonObject => ({ valueInteger: s })],
+      ["valueQuantity.value", (s: string): JsonObject => ({ valueQuantity: { value: s } })],
+      ["valueRange.low.value", (s: string): JsonObject => ({ valueRange: { low: { value: s } } })],
+      [
+        "component[0].valueBoolean",
+        (s: string): JsonObject => ({ component: [{ code: { text: "zz" }, valueBoolean: s }] }),
+      ],
+      [
+        "component[0].valueInteger",
+        (s: string): JsonObject => ({ component: [{ code: { text: "zz" }, valueInteger: s }] }),
+      ],
+    ] as const
+  ).map(([where, fields]) => ({
+    where: `contained Observation ${where} as a string`,
+    put: (r: JsonObject, s: string) => {
+      pushTo(r, "contained", { resourceType: "Observation", status: "final", ...fields(s) });
+    },
+  })),
+  ...(["valueBoolean", "valueInteger", "valueDecimal"] as const).map((key) => ({
+    where: `contained QuestionnaireResponse item[0].answer[0].${key} as a string`,
+    put: (r: JsonObject, s: string) => {
+      pushTo(r, "contained", {
+        resourceType: "QuestionnaireResponse",
+        status: "completed",
+        item: [{ linkId: "1", answer: [{ [key]: s }] }],
+      });
+    },
+  })),
+  {
+    where: "contained Parameters parameter[0].valueBoolean as a string",
+    put: (r, s) => {
+      pushTo(r, "contained", {
+        resourceType: "Parameters",
+        parameter: [{ name: "a", valueBoolean: s }],
+      });
+    },
+  },
+  {
+    where: "contained Bundle total as a string",
+    put: (r, s) => {
+      pushTo(r, "contained", { resourceType: "Bundle", type: "searchset", total: s });
+    },
+  },
+  {
+    where: "contained Patient active as a string",
+    put: (r, s) => {
+      pushTo(r, "contained", { resourceType: "Patient", active: s });
+    },
+  },
+  {
+    where: "contained AuditEvent agent[0].requestor as a string",
+    put: (r, s) => {
+      pushTo(r, "contained", {
+        resourceType: "AuditEvent",
+        recorded: "2024-01-15T08:00:00Z",
+        agent: [{ requestor: s }],
+      });
+    },
+  },
+  // A number where R4 puts a string.
+  {
+    where: "meta.versionId as a number",
+    put: (r, s) => (r["meta"] = { versionId: numericSentinel(s) }),
+    text: numericText,
+  },
+  {
+    where: "meta.tag[0].display as a number",
+    put: (r, s) => (r["meta"] = { tag: [{ code: "t", display: numericSentinel(s) }] }),
+    text: numericText,
+  },
+  ...(
+    [
+      ["valueString", (n: number): JsonObject => ({ valueString: n })],
+      ["code.text", (n: number): JsonObject => ({ code: { text: n } })],
+      [
+        "component[0].valueString",
+        (n: number): JsonObject => ({ component: [{ code: { text: "zz" }, valueString: n }] }),
+      ],
+    ] as const
+  ).map(([where, fields]) => ({
+    where: `contained Observation ${where} as a number`,
+    put: (r: JsonObject, s: string) => {
+      pushTo(r, "contained", {
+        resourceType: "Observation",
+        status: "final",
+        ...fields(numericSentinel(s)),
+      });
+    },
+    text: numericText,
+  })),
+  {
+    where: "contained QuestionnaireResponse item[0].answer[0].valueString as a number",
+    put: (r, s) => {
+      pushTo(r, "contained", {
+        resourceType: "QuestionnaireResponse",
+        status: "completed",
+        item: [{ linkId: "1", answer: [{ valueString: numericSentinel(s) }] }],
+      });
+    },
+    text: numericText,
+  },
+  {
+    where: "contained Encounter reasonCode[0].text as a number",
+    put: (r, s) => {
+      pushTo(r, "contained", {
+        resourceType: "Encounter",
+        status: "finished",
+        reasonCode: [{ text: numericSentinel(s) }],
+      });
+    },
+    text: numericText,
+  },
+  {
+    where: "contained Patient name[0].family as a number",
+    put: (r, s) => {
+      pushTo(r, "contained", { resourceType: "Patient", name: [{ family: numericSentinel(s) }] });
+    },
+    text: numericText,
+  },
+  {
+    where: "contained Device deviceName[0].name as a number",
+    put: (r, s) => {
+      pushTo(r, "contained", {
+        resourceType: "Device",
+        deviceName: [{ name: numericSentinel(s), type: "user-friendly-name" }],
+      });
+    },
+    text: numericText,
+  },
+  // The sentinel as a key R4 does not define, which no row may repeat.
+  { where: "the sentinel as a top-level key", put: (r, s) => (r[s] = "zz") },
+  {
+    where: "the sentinel as a key in meta.tag[0]",
+    put: (r, s) => (r["meta"] = { tag: [{ code: "t", [s]: true }] }),
+  },
+  {
+    where: "the sentinel as a key in an extension",
+    put: (r, s) => {
+      pushTo(r, "extension", { url: "http://example.org/zz", [s]: "zz" });
+    },
+  },
+  {
+    where: "the sentinel as a key in a contained resource",
+    put: (r, s) => {
+      pushTo(r, "contained", { resourceType: "Basic", code: { text: "zz" }, [s]: { zz: "zz" } });
+    },
+  },
+];
+
+/** A backbone element R4 defines on each generated resource type: its key and an ordinary item. */
+const BACKBONES: Readonly<Record<string, readonly [string, JsonObject]>> = {
+  Patient: ["communication", { language: { text: "zz" } }],
+  RelatedPerson: ["communication", { language: { text: "zz" } }],
+  Practitioner: ["qualification", { code: { text: "zz" } }],
+  Person: ["link", { target: { reference: "Patient/zz1" } }],
+  Observation: ["component", { code: { text: "zz" } }],
+  Encounter: ["statusHistory", { status: "planned" }],
+  Condition: ["stage", { summary: { text: "zz" } }],
+  Organization: ["contact", { purpose: { text: "zz" } }],
+  Location: ["hoursOfOperation", { allDay: true }],
+  Coverage: ["class", { value: "zz" }],
+  Claim: ["supportingInfo", { sequence: 1 }],
+  DiagnosticReport: ["media", { link: { reference: "Media/zz1" } }],
+  Device: ["deviceName", { name: "zz pump", type: "user-friendly-name" }],
+  Provenance: ["agent", { who: { reference: "Device/zz1" } }],
+  AuditEvent: ["entity", { what: { reference: "Device/zz1" } }],
+  Endpoint: ["contact", { system: "url" }],
+};
+
+/** A `Reference` R4 defines: its key, the structure it sits in, and how a string is put there. */
+interface ReferenceSpot {
+  readonly key: string;
+  readonly in: string;
+  readonly put: (r: JsonObject, s: string) => void;
+}
+
+/**
+ * An element R4 types as a `Reference` on each generated resource type, each putting the sentinel
+ * there as a bare string: a repeating element as a list of one string, one in a backbone as an item.
+ */
+const REFERENCES: Readonly<Record<string, ReferenceSpot>> = {
+  Patient: {
+    key: "generalPractitioner",
+    in: "Patient",
+    put: (r, s) => (r["generalPractitioner"] = [s]),
+  },
+  RelatedPerson: { key: "patient", in: "RelatedPerson", put: (r, s) => (r["patient"] = s) },
+  Practitioner: {
+    key: "issuer",
+    in: "Practitioner.qualification",
+    put: (r, s) => {
+      pushTo(r, "qualification", { code: { text: "zz" }, issuer: s });
+    },
+  },
+  Person: {
+    key: "managingOrganization",
+    in: "Person",
+    put: (r, s) => (r["managingOrganization"] = s),
+  },
+  Observation: { key: "subject", in: "Observation", put: (r, s) => (r["subject"] = s) },
+  Encounter: { key: "subject", in: "Encounter", put: (r, s) => (r["subject"] = s) },
+  Condition: { key: "subject", in: "Condition", put: (r, s) => (r["subject"] = s) },
+  Organization: { key: "partOf", in: "Organization", put: (r, s) => (r["partOf"] = s) },
+  Location: {
+    key: "managingOrganization",
+    in: "Location",
+    put: (r, s) => (r["managingOrganization"] = s),
+  },
+  Coverage: { key: "beneficiary", in: "Coverage", put: (r, s) => (r["beneficiary"] = s) },
+  Claim: { key: "patient", in: "Claim", put: (r, s) => (r["patient"] = s) },
+  DiagnosticReport: { key: "subject", in: "DiagnosticReport", put: (r, s) => (r["subject"] = s) },
+  Device: { key: "owner", in: "Device", put: (r, s) => (r["owner"] = s) },
+  Provenance: { key: "target", in: "Provenance", put: (r, s) => (r["target"] = [s]) },
+  AuditEvent: {
+    key: "who",
+    in: "AuditEvent.agent",
+    put: (r, s) => {
+      pushTo(r, "agent", { requestor: true, who: s });
+    },
+  },
+  Endpoint: {
+    key: "managingOrganization",
+    in: "Endpoint",
+    put: (r, s) => (r["managingOrganization"] = s),
+  },
+};
+
+/**
+ * A number standing for a sentinel, for a position where the sentinel is placed as a JSON number: twelve
+ * digits read from the sentinel's own characters, so two sentinels of a case give two numbers.
+ */
+export function numericSentinel(sentinel: string): number {
+  let hash = 2166136261;
+  for (const ch of sentinel) hash = Math.imul(hash ^ (ch.codePointAt(0) ?? 0), 16777619) >>> 0;
+  return 800_000_000_000 + (hash % 100_000_000_000);
+}
+
+/** {@link numericSentinel} as the text it is written as. */
+function numericText(sentinel: string): string {
+  return String(numericSentinel(sentinel));
+}
+
+const unknownKeyArb: fc.Arbitrary<number> = fc.nat({ max: UNKNOWN_KEY_SPOTS.length - 1 });
+
+/** A sentinel under an unknown key as placed: where, and the sentinel that must not come back. */
+interface UnknownKeyPlaced {
+  readonly where: string;
+  readonly sentinel: string;
+}
+
+/** Write one sentinel under an unknown key into the resource. */
+function placeUnknownKey(resource: JsonObject, spot: number, sentinel: string): UnknownKeyPlaced {
+  const at = UNKNOWN_KEY_SPOTS[spot % UNKNOWN_KEY_SPOTS.length];
+  if (at === undefined) throw new Error("no unknown key spot");
+  at.put(resource, sentinel);
+  return { where: at.where, sentinel: at.text?.(sentinel) ?? sentinel };
+}
+
+/**
+ * The stricter rule for a key R4 does not define: the sentinel is gone from the output and from the
+ * manifest. Being named as a residual is not enough.
+ */
+export function unknownKeyKept(
+  placed: readonly UnknownKeyPlaced[],
+  outcome: PassOutcome,
+): string[] {
+  const violations: string[] = [];
+  const manifest = JSON.stringify(outcome.manifest);
+  for (const p of placed) {
+    const label = `${p.sentinel} (unknown key at ${p.where})`;
+    if (outcome.output.includes(p.sentinel)) violations.push(`${label} survives in the output`);
+    if (manifest.includes(p.sentinel)) violations.push(`${label} is in the manifest`);
+  }
+  return violations;
+}
+
 /** An element id as placed: where, and the sentinel that must not come back. */
 interface ElementIdPlaced {
   readonly where: string;
@@ -643,6 +1179,7 @@ export const caseArb = fc.record({
   placements: fc.array(placementArb, { minLength: 1, maxLength: 4 }),
   siblings: fc.array(siblingArb, { maxLength: 2 }),
   elementIds: fc.array(elementIdArb, { maxLength: 2 }),
+  unknownKeys: fc.array(unknownKeyArb, { maxLength: 2 }),
 });
 
 /** Set a value at a path of keys and indexes, creating objects and lists on the way. */
@@ -949,11 +1486,13 @@ export function build(value: {
   animalSpot?: number;
   siblings?: readonly SiblingPlacement[];
   elementIds?: readonly number[];
+  unknownKeys?: readonly number[];
 }): {
   raw: string;
   placed: Placement[];
   siblings: SiblingPlaced[];
   elementIds: ElementIdPlaced[];
+  unknownKeys: UnknownKeyPlaced[];
 } {
   const resource: JsonObject = {
     resourceType: value.type,
@@ -983,10 +1522,15 @@ export function build(value: {
     const placedId = placeElementId(resource, spot, sentinelAt(value.stem, idOffset + i));
     return { ...placedId, where: `${value.type}.${placedId.where}` };
   });
+  const keyOffset = idOffset + elementIds.length;
+  const unknownKeys = (value.unknownKeys ?? []).map((spot, i) => {
+    const placedKey = placeUnknownKey(resource, spot, sentinelAt(value.stem, keyOffset + i));
+    return { ...placedKey, where: `${value.type}.${placedKey.where}` };
+  });
   const doc: JsonObject = value.inBundle
     ? { resourceType: "Bundle", type: "collection", entry: [{ resource }] }
     : resource;
-  return { raw: JSON.stringify(doc), placed, siblings, elementIds };
+  return { raw: JSON.stringify(doc), placed, siblings, elementIds, unknownKeys };
 }
 
 /** Every locus, as the adapter writes one, at which a string holding the sentinel sits. */
@@ -1052,19 +1596,22 @@ export function checkCase(
     animalSpot?: number;
     siblings?: readonly SiblingPlacement[];
     elementIds?: readonly number[];
+    unknownKeys?: readonly number[];
   },
   tally: LeakTally,
   options: FhirDeidOptions = {},
 ): string[] {
-  const { raw, placed, siblings, elementIds } = build(value);
+  const { raw, placed, siblings, elementIds, unknownKeys } = build(value);
   // A `_`-sibling the input does not hold (a later write replaced it) is not swept.
   const held = siblings.filter((s) => s.text === undefined || raw.includes(s.text));
   // Likewise an element id a later write replaced.
   const ids = elementIds.filter((p) => raw.includes(p.sentinel));
+  // Likewise a sentinel under an unknown key.
+  const keys = unknownKeys.filter((p) => raw.includes(p.sentinel));
   // Non-vacuity: only a sentinel the input holds is swept, and a case must hold one. A later
   // placement can overwrite an earlier one at the same position.
   const present = placed.filter((p) => raw.includes(p.sentinel));
-  if (present.length === 0 && held.length === 0 && ids.length === 0) {
+  if (present.length === 0 && held.length === 0 && ids.length === 0 && keys.length === 0) {
     return ["no sentinel reached the input"];
   }
   const outcome = pass(raw, options);
@@ -1073,23 +1620,27 @@ export function checkCase(
     ...unknownExtensionKeyKept(present, outcome),
     ...siblingTextKept(held, outcome),
     ...elementIdKept(ids, outcome),
+    ...unknownKeyKept(keys, outcome),
   ];
 }
 
 /**
- * The stricter rule for a sentinel under a key R4 does not define on an extension, or inside a kept
- * address part that is not a string: it is gone from the output. Being named as a residual is not
- * enough there, because an extension is blocked whatever it holds and so is a part of that shape.
+ * The stricter rule for a sentinel under a key R4 does not define, on an extension or on a datatype
+ * (an extra component), or inside a kept address part that is not a string: it is gone from the
+ * output. Being named as a residual is not enough there, because such a key is blocked whatever it
+ * holds and so is a part of that shape.
  */
 export function unknownExtensionKeyKept(
   placed: readonly Placement[],
   outcome: PassOutcome,
 ): string[] {
   return placed
-    .filter((p) =>
-      [...UNKNOWN_EXTENSION_KEY_SPOTS, ...KEPT_ADDRESS_PART_SPOTS].some((spot) =>
-        p.where.endsWith(spot),
-      ),
+    .filter(
+      (p) =>
+        p.shape === "extra-component" ||
+        [...UNKNOWN_EXTENSION_KEY_SPOTS, ...KEPT_ADDRESS_PART_SPOTS].some((spot) =>
+          p.where.endsWith(spot),
+        ),
     )
     .filter((p) => outcome.output.includes(p.sentinel))
     .map((p) => `${p.sentinel} (${p.shape} at ${p.where}) survives where it must be removed`);
@@ -1108,6 +1659,7 @@ export const animalCaseArb = fc.record({
   animalSpot: fc.nat({ max: ANIMAL_SPOTS - 1 }),
   siblings: fc.array(siblingArb, { maxLength: 2 }),
   elementIds: fc.array(elementIdArb, { maxLength: 2 }),
+  unknownKeys: fc.array(unknownKeyArb, { maxLength: 2 }),
 });
 
 describe("the generated leak property: FHIR R4", () => {
@@ -1332,5 +1884,101 @@ describe("the FHIR sweep removes a sentinel written as an element id", () => {
     expect(elementIdKept(placed, { ...clean, manifest: [{ locus: "ZQLKTEETH02X" }] })).toEqual([
       "ZQLKTEETH02X (element id at Observation.code.id) is in the manifest",
     ]);
+  });
+});
+
+/**
+ * Each kind of position a key R4 does not define can sit at, on a person, a clinical and two
+ * infrastructure resources, alone and in a Bundle entry, through the same check as a generated case,
+ * so every one is run on every pull request whatever the seed draws. So is every extra component the
+ * generated placements use.
+ */
+describe("the FHIR sweep removes a sentinel under a key R4 does not define", () => {
+  const types = ["Patient", "Observation", "Device", "Provenance"];
+  const spots = UNKNOWN_KEY_SPOTS.map((spot, i) => [spot.where, i] as const);
+
+  it.each(spots)("%s", (_where, spot) => {
+    for (const type of types) {
+      for (const inBundle of [false, true]) {
+        const value = {
+          type,
+          inBundle,
+          filler: "abc",
+          stem: "ZQLKUKEY",
+          placements: [],
+          unknownKeys: [spot],
+        };
+        expect(checkCase(value, newTally())).toEqual([]);
+      }
+    }
+  });
+
+  it.each(EXTRA_PATHS.map((path) => [path.join(".")] as const))("extra component %s", (where) => {
+    const extra = EXTRA_PATHS.find((path) => path.join(".") === where) ?? [];
+    for (const type of types) {
+      const placement: FhirPlacement = {
+        shape: "extra-component",
+        element: "name",
+        code: ["status"],
+        extra,
+        nest: 0,
+      };
+      const value = {
+        type,
+        inBundle: false,
+        filler: "abc",
+        stem: "ZQLKXTRA",
+        placements: [placement],
+      };
+      expect(checkCase(value, newTally())).toEqual([]);
+    }
+  });
+
+  it("the case holds what it placed: the sentinel is in the input", () => {
+    for (const [, spot] of spots) {
+      for (const type of types) {
+        const { raw, unknownKeys } = build({
+          type,
+          inBundle: false,
+          filler: "abc",
+          stem: "ZQLKUKEY",
+          placements: [],
+          unknownKeys: [spot],
+        });
+        expect(unknownKeys).toHaveLength(1);
+        expect(raw).toContain(unknownKeys[0]?.sentinel);
+      }
+    }
+  });
+
+  it("each Reference spot names an element R4 types as a Reference, on every generated type", () => {
+    for (const [type, ref] of Object.entries(REFERENCES)) {
+      expect(fhirElementsOf(ref.in).get(ref.key), type).toBe("Reference");
+    }
+    for (const type of RESOURCE_TYPES) expect(REFERENCES[type], type).toBeDefined();
+  });
+
+  it("the stricter rule has teeth: a sentinel under an unknown key in the output or the manifest is caught", () => {
+    const placed: UnknownKeyPlaced[] = [{ where: "Observation.zzTop", sentinel: "ZQLKTEETH03X" }];
+    const clean: PassOutcome = {
+      output: '{"resourceType":"Observation"}',
+      manifest: [],
+      unexaminedResiduals: [],
+      residualAt: () => true,
+      refused: false,
+    };
+    expect(unknownKeyKept(placed, clean)).toEqual([]);
+    expect(unknownKeyKept(placed, { ...clean, output: '{"zzTop":"ZQLKTEETH03X"}' })).toEqual([
+      "ZQLKTEETH03X (unknown key at Observation.zzTop) survives in the output",
+    ]);
+    expect(unknownKeyKept(placed, { ...clean, manifest: [{ locus: "ZQLKTEETH03X" }] })).toEqual([
+      "ZQLKTEETH03X (unknown key at Observation.zzTop) is in the manifest",
+    ]);
+    const extra: Placement[] = [
+      { sentinel: "ZQLKTEETH04X", shape: "extra-component", where: "Observation.code.label" },
+    ];
+    expect(
+      unknownExtensionKeyKept(extra, { ...clean, output: '{"code":{"label":"ZQLKTEETH04X"}}' }),
+    ).toHaveLength(1);
   });
 });

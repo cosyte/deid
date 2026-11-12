@@ -425,7 +425,7 @@ counted as unexamined. Free-text **prose** loci
 redactor (see [Free text](#free-text-block-by-default--byo-redaction)); a **built-in** semantic (NLP)
 narrative scrub and `contentAttachment` binary content remain out of scope for this release.
 
-Five residual surfaces, the first three because FHIR types no person at the position:
+Three residual surfaces, because FHIR types no person at the position:
 
 - **A `ContactPoint` outside a person resource.** A phone or an email on an `Organization`, a
   `Location`, or an `Endpoint` is passed through. Widening to telecom here would put a payer's or a
@@ -436,20 +436,15 @@ Five residual surfaces, the first three because FHIR types no person at the posi
 - **The individual's employer carried as a separate `Organization` resource.** Unlike X12 and HL7 v2,
   FHIR types no employer role at the position, so reaching it would be a cross-resource role
   derivation rather than a typed read. The `Reference.display` that names it is blocked either way.
-- **A name or an address carrying a property R4 does not define, or carrying its only marker at a
-  value shape R4 does not give that marker, at an element name R4 does not type as one of the two
-  datatypes.** Positive classification is closed and shape-read, so an unrecognized sibling or the
-  wrong shape stops it, and the fail-closed block above is scoped to the typed element names. At any
-  other name the same evidence is routinely something else (`{ "prefix": "1." }` is a conformant `RequestGroup.action`, not a person), and blocking it would destroy conformant clinical and
-  structural content that no re-run restores. Such a value is passed through and counted as an
-  unexamined residual position, like anything else no rule names. At a **typed** element name neither
-  half is a residual: the standard promised a name or an address there, so whatever the classifier
-  declines is blocked whole.
-- **A name or an address INSIDE a person resource, at a property the demographic map does not list.**
-  The datatype sweep runs outside a person resource only, because inside one the map above has already
-  decided `name`, `telecom`, `photo`, and `address`. A vendor `Patient.alias` carrying
-  `{ family, given }` is therefore passed through, where the same bytes on an `Organization` are
-  removed. Counted as unexamined like the rest.
+
+A key R4 does not define where it sits, at any depth of any resource or datatype, is blocked whole
+with a row that names its position and not the key (`Observation.code.coding[0].<withheld>[2]`), and
+so is a value of a shape R4 does not define there: a primitive of another JSON type than R4 gives it
+(`"valueString": 987654321`, `"valueBoolean": "yes"`), a scalar where a structure belongs, a structure
+where a primitive belongs, and a list or a single value where R4 puts the other. So a name or an
+address under a property R4 does not define (a vendor `Patient.alias`) is blocked, and what reaches
+the output there is content whose every key R4 defines at its position (`{ "prefix": "1." }` on a
+`RequestGroup.action`, a numbered step and not a person), counted as unexamined.
 
 ### De-identify an X12 EDI interchange
 

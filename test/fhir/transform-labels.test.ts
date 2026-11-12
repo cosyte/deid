@@ -243,14 +243,17 @@ describe("the meta.security label", () => {
     ]);
   });
 
-  it("reads a single security coding sent without its array, and a coding with no system", () => {
+  it("keeps a coding with no system, and removes a single one sent without its array", () => {
     const other = { code: "zz-label" };
     const out = labeled({
       resourceType: "Patient",
-      meta: { security: other },
+      meta: { security: [other] },
       name: [{ family: "ZZFAMILY" }],
     });
     expect(out.meta).toEqual({ security: [other, SECURITY] });
+    // R4 puts a list there, so a single coding is blocked whole and the label stands alone.
+    const single = labeled({ resourceType: "Patient", meta: { security: other } });
+    expect(single.meta).toEqual({ security: [SECURITY] });
   });
 
   it("leaves a meta that is not an object as it arrived in a hand-built model", () => {

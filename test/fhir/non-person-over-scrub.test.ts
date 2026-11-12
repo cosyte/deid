@@ -156,7 +156,7 @@ function withoutLinks(wire: string): string {
 function pass(graph: unknown): {
   before: string;
   after: string;
-  manifest: readonly { locus: string }[];
+  manifest: readonly { locus: string; category: string }[];
   idRows: readonly { locus: string; code: string }[];
   residuals: string[];
 } {
@@ -338,7 +338,7 @@ describe("a conformant R4 element that merely shares a property NAME with an Add
       name: [
         {
           productName: "ZZORGOWNNAME",
-          namePart: [{ part: "ZZORGALIAS", type: { text: "invented" } }],
+          namePart: [{ part: "ZZORGALIAS", type: { code: "invented" } }],
         },
       ],
     });
@@ -427,9 +427,14 @@ const MARKER_SHAPES: readonly {
   { marker: "country", r4Shape: "US", otherShape: ["US"] },
 ];
 
-/** One marker at one shape, at an element name R4 types as NEITHER datatype: the classifier alone. */
+/**
+ * One marker at one shape, at an element name R4 types as NEITHER datatype: the classifier alone.
+ * `Encounter.location` is a backbone R4 defines, and the marker is a key it does not define there, so
+ * what the classifier does not claim as a datatype is blocked as an unknown key at the marker's own
+ * locus, and what it claims is acted on whole at the element: the two rows tell the two apart.
+ */
 function atUntypedName(marker: string, value: unknown): ReturnType<typeof pass> {
-  return pass({ resourceType: "Location", vendorValue: { [marker]: value } });
+  return pass({ resourceType: "Encounter", status: "finished", location: [{ [marker]: value }] });
 }
 
 describe("a marker property is evidence only at the value shape R4 gives that marker", () => {
@@ -509,9 +514,12 @@ describe("a marker property is evidence only at the value shape R4 gives that ma
   it.each(MARKER_SHAPES)(
     "`$marker` at the other shape is not evidence, at a name R4 types as neither datatype",
     ({ marker, otherShape }) => {
+      // Not claimed as a datatype: only the unknown key goes, with a row of its own that names its
+      // position, not the key.
       const run = atUntypedName(marker, otherShape);
-      expect(run.after).toBe(run.before);
-      expect(run.manifest).toEqual([]);
+      expect(run.manifest.map((m) => `${m.locus} ${m.category}`)).toEqual([
+        `Encounter.location[0].<withheld>[0] ${SAFE_HARBOR_CATEGORIES.OTHER_UNIQUE_ID}`,
+      ]);
     },
   );
 
@@ -521,7 +529,7 @@ describe("a marker property is evidence only at the value shape R4 gives that ma
       // The other half of every row above. Without this the table would pass on a classifier that
       // stopped classifying anything, which is the mirror defect and the one that leaks.
       const run = atUntypedName(marker, r4Shape);
-      expect(run.manifest.map((m) => m.locus)).toEqual(["Location.vendorValue"]);
+      expect(run.manifest.map((m) => m.locus)).toEqual(["Encounter.location"]);
     },
   );
 

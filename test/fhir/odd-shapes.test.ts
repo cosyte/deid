@@ -73,7 +73,7 @@ describe("primitive metadata and free text in an unexpected shape", () => {
     expect(out.json).toBe('{"resourceType":"Observation","status":"final"}');
   });
 
-  it("writes a BYO redaction back into a note sent as a single Annotation, dropping author and time", () => {
+  it("removes a note sent as a single Annotation whole, where R4 puts a list", () => {
     const out = run(
       {
         resourceType: "Observation",
@@ -82,15 +82,9 @@ describe("primitive metadata and free text in an unexpected shape", () => {
       },
       () => ({ text: "[REDACTED]" }),
     );
-    expect(out.json).toContain('"note":{"text":"[REDACTED]"}');
-    expect(out.json).not.toContain("ZZNOTE");
-    expect(out.json).not.toContain("2020-01-02");
+    expect(out.json).toBe('{"resourceType":"Observation","status":"final"}');
     expect(out.manifest).toEqual([
-      expect.objectContaining({
-        locus: "Observation.note",
-        code: "DEID_FREETEXT_CONSUMER_REDACTED",
-        disposition: "transformed",
-      }),
+      expect.objectContaining({ locus: "Observation.note", disposition: "blocked" }),
     ]);
   });
 
@@ -137,16 +131,17 @@ describe("identifiers and addresses in an unexpected shape", () => {
     ]);
   });
 
-  it("emits no locus for an Identifier with no readable value, and counts what it does carry", () => {
+  it("emits no locus for an Identifier with no readable value, and blocks a key R4 does not define", () => {
     const out = run({
       resourceType: "Patient",
       identifier: [{ system: "http://example.org/mrn" }, { value: { nested: "ZZNESTEDID" } }],
     });
-    expect(out.manifest).toEqual([]);
-    expect(loci(out)).toEqual([
-      "Patient.identifier[0].system",
-      "Patient.identifier[1].value.nested",
+    // A value held as an object where R4 puts a string is blocked whole at its own locus.
+    expect(out.json).not.toContain("ZZNESTEDID");
+    expect(out.manifest).toEqual([
+      expect.objectContaining({ locus: "Patient.identifier[1].value", disposition: "blocked" }),
     ]);
+    expect(loci(out)).toEqual(["Patient.identifier[0].system"]);
   });
 
   it("reduces an Address with no postalCode to its kept parts", () => {
@@ -161,15 +156,17 @@ describe("identifiers and addresses in an unexpected shape", () => {
 
   it("removes a swept Address whole when its postalCode is not a primitive", () => {
     const out = run({
-      resourceType: "Observation",
-      status: "final",
-      valueAddress: { city: "ZZSWEPTCITY", postalCode: { nested: "02139" } },
+      resourceType: "Claim",
+      status: "active",
+      accident: {
+        locationAddress: { city: "ZZSWEPTCITY", postalCode: { nested: "02139" } },
+      },
     });
     expect(out.json).not.toContain("ZZSWEPTCITY");
-    expect(out.json).not.toContain("valueAddress");
+    expect(out.json).not.toContain("locationAddress");
     expect(out.manifest).toEqual([
       expect.objectContaining({
-        locus: "Observation.valueAddress",
+        locus: "Claim.accident.locationAddress",
         category: C.GEOGRAPHIC,
         disposition: "blocked",
       }),
@@ -197,7 +194,7 @@ describe("a model built by hand", () => {
 });
 
 describe("a root that is not a complex", () => {
-  it("counts a root forged as a primitive and returns an empty resource rather than its value", () => {
+  it("blocks a root forged as a primitive and returns an empty resource rather than its value", () => {
     const forged = {
       kind: "primitive",
       value: "ZZFORGEDROOT",
@@ -206,10 +203,11 @@ describe("a root that is not a complex", () => {
     } as unknown as FhirComplex;
     const { document, manifest, unexaminedResiduals } = deidentifyFhir(forged, { context: ctx });
     expect(document).toEqual(complex([]));
-    // Its id at the root's `_`-sibling is replaced, as every element id is, and its value is counted.
-    expect(manifest.map((m) => m.locus)).toEqual(["_Patient.id"]);
+    // A primitive where a resource belongs is blocked whole, with one row and nothing left to count.
+    expect(manifest.map((m) => `${m.locus} ${m.disposition}`)).toEqual(["Patient blocked"]);
     expect(JSON.stringify(manifest)).not.toContain("r1");
-    expect(unexaminedResiduals.map((r) => r.locus)).toEqual(["Patient"]);
+    expect(JSON.stringify(manifest)).not.toContain("ZZFORGEDROOT");
+    expect(unexaminedResiduals).toEqual([]);
   });
 });
 

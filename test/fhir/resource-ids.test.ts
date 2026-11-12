@@ -414,7 +414,7 @@ describe("FHIR resource ids: fail closed on what the pass cannot read", () => {
     expect(at(run.out, "subject.reference")).toBeUndefined();
   });
 
-  it("a reference held as a list is read item by item", () => {
+  it("a reference held as a list, where R4 puts one, is removed whole", () => {
     const run = pass({
       resourceType: "Observation",
       status: "final",
@@ -422,9 +422,10 @@ describe("FHIR resource ids: fail closed on what the pass cannot read", () => {
       contained: [{ resourceType: "Patient", id: "ZZLISTREFID" }],
       subject: { reference: ["#ZZLISTREFID", "ZZLISTFREETEXT"] },
     });
-    expect(at(run.out, "subject.reference")).toEqual(["#1"]);
+    expect(at(run.out, "subject.reference")).toBeUndefined();
     expect(run.wire).not.toContain("ZZLISTFREETEXT");
-    expect(row(run.manifest, "Observation.subject.reference[1]")?.code).toBe(D.DEID_LOCUS_BLOCKED);
+    expect(run.wire).not.toContain("ZZLISTREFID");
+    expect(row(run.manifest, "Observation.subject.reference")?.code).toBe(D.DEID_LOCUS_BLOCKED);
   });
 
   it("a Reference datatype R4 names `reference` is walked, and its own reference read", () => {
@@ -593,10 +594,10 @@ describe("FHIR resource ids: the other transforms and shapes", () => {
   it("a `reference` string at a person resource's own top level is not a Reference: it is blocked", () => {
     const run = pass({ resourceType: "Patient", gender: "male", reference: "Patient/ZZTOPREF" });
     expect(run.wire).not.toContain("ZZTOPREF");
-    expect(row(run.manifest, "Patient.reference")?.code).toBe(D.DEID_LOCUS_BLOCKED);
+    expect(row(run.manifest, "Patient.<withheld>[2]")?.code).toBe(D.DEID_LOCUS_BLOCKED);
   });
 
-  it("a `reference` list holding a Reference object walks it and reads its own reference", () => {
+  it("a `reference` list holding a Reference object, where R4 puts one, is removed whole", () => {
     const run = pass({
       resourceType: "Consent",
       status: "active",
@@ -611,12 +612,15 @@ describe("FHIR resource ids: the other transforms and shapes", () => {
         ],
       },
     });
-    expect(at(run.out, "provision.data.0.reference.0")).toEqual({ reference: "Patient/1" });
+    expect(at(run.out, "provision.data.0.reference")).toBeUndefined();
+    expect(row(run.manifest, "Consent.provision.data[0].reference")?.code).toBe(
+      D.DEID_LOCUS_BLOCKED,
+    );
     expect(run.wire).not.toContain("ZZMIXEDA");
     expect(run.wire).not.toContain("ZZMIXEDB");
   });
 
-  it("a Bundle literal held as a list is read item by item, and an object item is removed", () => {
+  it("a Bundle literal held as a list, where R4 puts one, is removed whole", () => {
     // Built from the model directly: the reader does not hand an object through at a uri, but a model
     // a caller builds by hand can hold one, and the pass must not keep it.
     const str = (value: string) => primitive(value);
@@ -654,11 +658,11 @@ describe("FHIR resource ids: the other transforms and shapes", () => {
     const { document, manifest } = deidentifyFhir(bundle);
     const wire = serializeResource(document);
     expect(wire).not.toContain("ZZOBJECTITEM");
-    expect(wire).toContain('"url":["Basic"]');
-    expect(row(manifest, "Bundle.entry[0].request.url[1]")?.code).toBe(D.DEID_LOCUS_BLOCKED);
+    expect(wire).not.toContain('"url"');
+    expect(row(manifest, "Bundle.entry[0].request.url")?.code).toBe(D.DEID_LOCUS_BLOCKED);
   });
 
-  it("a Bundle whose entry is a single object, or holds a non-object, still has its bases read", () => {
+  it("a Bundle whose entry is a single object, or holds a non-object, has it removed whole", () => {
     const run = pass({
       resourceType: "Bundle",
       type: "collection",
@@ -671,11 +675,14 @@ describe("FHIR resource ids: the other transforms and shapes", () => {
         },
       },
     });
-    expect(at(run.out, "entry.resource.subject.reference")).toBe(
-      "https://fhir.example.org/r4/Patient/2",
-    );
+    // R4 puts a list of entries there, so a single entry is removed whole, with what it holds.
+    expect(at(run.out, "entry")).toBeUndefined();
+    expect(run.wire).not.toContain("ZZSINGLE");
+    expect(row(run.manifest, "Bundle.entry")?.code).toBe(D.DEID_LOCUS_BLOCKED);
     const odd = pass({ resourceType: "Bundle", type: "collection", entry: ["ZZSTRINGENTRY"] });
     expect(odd.out["resourceType"]).toBe("Bundle");
+    expect(odd.wire).not.toContain("ZZSTRINGENTRY");
+    expect(row(odd.manifest, "Bundle.entry[0]")?.code).toBe(D.DEID_LOCUS_BLOCKED);
     const empty = pass({ resourceType: "Bundle", type: "collection" });
     expect(empty.manifest).toEqual([]);
   });

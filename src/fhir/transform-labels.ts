@@ -169,6 +169,7 @@ export function withSecurityLabel(props: readonly FhirProperty[]): readonly Fhir
   if (!isComplex(meta)) return props;
 
   const security = getProperty(meta, "security");
+  /* v8 ignore next -- R4 puts a list there, and one coding alone is blocked before the rebuild */
   const codings = security === undefined ? [] : isList(security) ? security.items : [security];
   if (codings.some(isTheLabel)) return props;
   const labels: FhirProperty = { name: "security", value: list([...codings, securityCoding()]) };

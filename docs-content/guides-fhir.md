@@ -192,7 +192,7 @@ What the pass cannot read is **removed** and recorded as blocked (the (R) catch-
 - an **absolute reference to another server**: one whose base is not the base of a `fullUrl` in the
   same input. It cannot resolve inside the document, so a single resource carrying an absolute
   reference loses it too;
-- a resource `id` held as an object or a list.
+- a resource `id` held as an object, a list, a number or a boolean.
 
 A removed reference leaves the rest of its `Reference` in place (its `type`, its `identifier` under
 the identifier rule), and an empty one as `{}`.
@@ -206,8 +206,12 @@ and an extension at any depth, and a primitive's `_`-sibling `id`. The same id g
 replacement throughout the call, so the `actionId` of a `relatedAction` in a `RequestGroup` or a
 `PlanDefinition`, which names an action's element id, is replaced by the same value and still
 resolves. Each replacement is recorded at its own position (`Observation.code.id`,
-`Observation._status.id`). An element id held as an object or a list is removed. What this does not
-reach is in [Limitations](./limitations.md#fhir-element-ids).
+`Observation._status.id`). An element id held as an object, a list, a number or a boolean is
+removed. An id inside
+something the pass blocks whole (under a key R4 does not define, in a structure where R4 puts a
+primitive, in a resource of a type R4 does not define) is removed with it rather than replaced, under
+that block's one row. What this does not reach is in
+[Limitations](./limitations.md#fhir-element-ids).
 
 ```ts runnable
 import { deidentifyFhirJson } from "@cosyte/deid/fhir";
@@ -252,12 +256,29 @@ manifest.map((entry) => entry.locus); // => ["Observation._status.id", "Observat
 - Every **extension value** is dropped: a complex `valueAddress` / `valueHumanName` / `valueIdentifier`,
   a `modifierExtension`, a deeply nested extension, and a primitive-level `_`-sibling extension alike,
   the one on a `state` or `country` an `Address` keeps included. So is every key R4 does not define on
-  an extension: a `note` or `comment` beside the `url` is blocked and recorded at its own locus
-  (`Observation.extension[0].note`), as a value is. Extensions are the FHIR leak frontier; the `url`
+  an extension: a `note` or `comment` beside the `url` is blocked and recorded at its own position
+  (`Observation.extension[0].<withheld>[1]`, the key itself withheld), as a value is. Extensions are the FHIR leak frontier; the `url`
   skeleton is kept when it is a string, the element `id` is replaced as every element id is, and
   everything else is not. The one
   exception is opt-in: [`keepPatientAnimal`](#keep-an-animal-patients-species-opt-in) keeps the coded
   species, breed and gender status of the `patient-animal` extension.
+- Every **key R4 does not define** where it sits is **blocked** whole, whatever it holds, at any
+  depth of any resource or datatype: `Observation.zzNote`, `Observation.code.coding[0].zzNote`, a key
+  in an `Identifier`, in `meta`, in a backbone, in a contained resource or in a `Bundle` entry. It is
+  recorded at its own position with no value, and the row does not repeat the key, which is the
+  sender's text too: `<withheld>` and the key's place among its parent's keys stand in for it
+  (`Observation.code.coding[0].<withheld>[2]`). So is every value of a shape R4 does not define where
+  it sits: a primitive of another JSON type than R4 gives it (a number where R4 puts a string,
+  `"valueString": 987654321`; a string where it puts a boolean, an integer or a decimal,
+  `"valueBoolean": "yes"`), a string where a structure belongs (`"subject": "..."`,
+  `"contained": ["..."]`), a structure where a primitive belongs, a list where R4 puts one value and
+  one value where it puts a list. That row names the element, which R4 defines
+  (`Observation.valueString`). A resource whose `resourceType` is missing or not one R4 defines is removed whole, its type
+  and base fields included. The names and shapes come from the R4 (4.0.1) definitions, and no option
+  keeps such a value. See [keys R4 does not define](./limitations.md#fhir-unknown-keys).
+- An **extension on a primitive's `_`-sibling** that the output does not carry
+  (`_birthDate.extension`, `_code.extension`) is recorded as blocked at its own locus
+  (`Patient._birthDate.extension[0]`), one row each, so the manifest shows the drop.
 - A **`_`-sibling that is not an object** (`"_status": "..."`, a number, a boolean, a `null`, or a
   list in a repeating primitive's slot) is never written back, beside any primitive in any resource.
   Every primitive the pass writes is built from its value, the replacement of its element `id` and
@@ -460,20 +481,11 @@ The option is off by default, so a call without it returns exactly what it retur
   or an `Endpoint`), an **organization's own `name`** (a plain string, never a `HumanName`), and the
   **individual's employer carried as a separate `Organization` resource**, which would need a
   cross-resource role derivation rather than a typed read.
-- A fourth is the stated cost of the closed, shape-read classification: **a name or an address carrying
-  a property R4 does not define, or carrying its only marker at a value shape R4 does not give that
-  marker, at an element name R4 does not type as one of the two datatypes.** The unrecognized sibling
-  or the wrong shape stops the classifier, and the fail-closed block above is scoped to the typed
-  element names, because at any other name the same evidence is routinely something else:
-  `{ "prefix": "1." }` is a conformant `RequestGroup.action` and not a person. Blocking it there would
-  destroy conformant clinical and structural content, the mirror defect and the one no re-run restores.
-  At a **typed** element name neither half is a residual: whatever the classifier declines is blocked
-  whole.
-- A fifth is the scope of the datatype sweep: **a name or an address inside a person resource, at a
-  property the demographic map does not list.** The map has already decided `name`, `telecom`, `photo`,
-  and `address` there, so the sweep does not run inside a person resource, and a vendor
-  `Patient.alias` carrying `{ family, given }` is passed through where the same bytes on an
-  `Organization` are removed.
+- A name or an address can reach the output only as content whose every key R4 defines at its
+  position, which is the conformant element itself (`{ "prefix": "1." }` is a `RequestGroup.action`
+  and not a person). A `family` or a `line` where R4 does not define one is a key it does not define,
+  and is blocked, and so is a vendor `Patient.alias`. At an element name R4 **types** as one of the
+  two datatypes, whatever the classifier declines is blocked whole.
 
 The honesty line is unchanged: the output is **"Safe-Harbor-transformed per the configured policy,"**
 never "de-identified" and never "HIPAA-compliant."

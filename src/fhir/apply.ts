@@ -37,7 +37,9 @@
  * whose extensions the extractor walks and blocks like every other extension, and which are rebuilt
  * through the same edits. Nothing else the reader kept on a primitive reaches the output: a
  * `_`-sibling that arrived as a string, a number, a boolean, a `null` or a list rather than an object
- * is not written back (the extractor records it as a block at its own locus). Primitive extensions are
+ * is not written back (the extractor records it as a block at its own locus), and the extractor
+ * records each extension the applier does not write back as a block at its own locus too. Primitive
+ * extensions are
  * uncommon and demographic/annotative; dropping them guarantees no `_`-sibling leak, at the documented
  * cost of not preserving them (profile-aware retention is not offered).
  *
@@ -201,7 +203,9 @@ function textAnnotation(value: string): FhirComplex {
  */
 function writeFreeText(node: FhirNode, value: string): Rebuilt {
   if (isPrimitive(node)) return primitive(value);
+  /* v8 ignore else -- R4 puts a list of notes there, and one note alone is blocked before the walk */
   if (isList(node)) return list([textAnnotation(value)]);
+  /* v8 ignore next -- the same: a note alone never reaches here */
   return textAnnotation(value);
 }
 

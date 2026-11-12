@@ -31,6 +31,7 @@ import {
   SAFE_HARBOR_PROFILE,
 } from "../../src/index.js";
 import { deidentifyFhir, deidentifyFhirJson } from "../../src/fhir/index.js";
+import { fhirElementsOf } from "../../src/fhir/element-names.js";
 
 const C = SAFE_HARBOR_CATEGORIES;
 const ctx = createDeidContext({ key: "contact-names-key-synthetic-hmac", patientId: "p-contact" });
@@ -74,10 +75,8 @@ describe("the HumanName on an Organization's or an InsurancePlan's contact", () 
         expect(out.json).toContain("ZZORGOWNNAME");
         expect(out.json).not.toContain('"name":4');
         expect(out.json).not.toContain('"name":null');
-        const expected = Array.isArray(value)
-          ? [`${resourceType}.contact[0].name[0]`, `${resourceType}.contact[0].name[1]`]
-          : [`${resourceType}.contact[0].name`];
-        expect(out.manifest.map((m) => m.locus)).toEqual(expected);
+        // A list where R4 puts one name is blocked whole, like every other shape here.
+        expect(out.manifest.map((m) => m.locus)).toEqual([`${resourceType}.contact[0].name`]);
         for (const row of out.manifest) expect(row.disposition).toBe("blocked");
         // Nothing at the contact's name is left to count as unexamined.
         expect(loci(out).filter((l) => l.includes("contact"))).toEqual([
@@ -117,10 +116,10 @@ describe("the HumanName on an Organization's or an InsurancePlan's contact", () 
     expect(rows(contained)).toEqual(["Coverage.contained[0].contact[0].name blocked"]);
   });
 
-  it("removes a string name on a contact that arrives as one object rather than a list", () => {
+  it("removes a contact that arrives as one object rather than a list, whole", () => {
     const out = run({ resourceType: "Organization", contact: { name: "ZZCONTACTNAME" } });
     expect(out.json).not.toContain("ZZCONTACTNAME");
-    expect(rows(out)).toEqual(["Organization.contact.name blocked"]);
+    expect(rows(out)).toEqual(["Organization.contact blocked"]);
   });
 
   it("removes one in a model built by hand", () => {
@@ -192,9 +191,12 @@ describe("the name on every ContactDetail element R4 defines", () => {
 
   for (const [resourceType, element] of CONTACT_DETAIL_ELEMENTS) {
     it(`removes a string name at ${resourceType}.${element}.name as a name`, () => {
+      // The resource's own string, at `name` where R4 defines one and at `title` where it does not
+      // (`ChargeItemDefinition`, `ResearchStudy`): a key R4 does not define would be blocked.
+      const own = fhirElementsOf(resourceType)?.has("name") === true ? "name" : "title";
       const out = run({
         resourceType,
-        name: "ZZOWNCOMPUTERNAME",
+        [own]: "ZZOWNCOMPUTERNAME",
         [element]: [{ name: "ZZCONTACTNAME" }],
       });
       expect(out.json).not.toContain("ZZCONTACTNAME");
@@ -206,7 +208,7 @@ describe("the name on every ContactDetail element R4 defines", () => {
           disposition: "removed",
         }),
       ]);
-      expect(loci(out)).toEqual([`${resourceType}.name`]);
+      expect(loci(out)).toEqual([`${resourceType}.${own}`]);
     });
   }
 
@@ -221,25 +223,38 @@ describe("the name on every ContactDetail element R4 defines", () => {
     });
   }
 
-  it("removes a list of strings at a ContactDetail's name item by item, each as a name", () => {
+  it("blocks a ContactDetail's name that carries only a `_`-sibling, its extension with it", () => {
+    // A name with no value of its own is no string the pass can remove as a name, so it goes whole.
+    const out = run({
+      resourceType: "ValueSet",
+      status: "draft",
+      contact: [
+        {
+          _name: { extension: [{ url: "http://example.org/zz", valueString: "ZZCONTACTEXT" }] },
+        },
+      ],
+    });
+    expect(out.json).not.toContain("ZZCONTACTEXT");
+    expect(rows(out)).toEqual(["ValueSet.contact[0].name blocked"]);
+  });
+
+  it("removes a list of strings at a ContactDetail's name whole", () => {
     const out = run({
       resourceType: "Measure",
       author: [{ name: ["ZZCONTACTNAME", "ZZCONTACTOTHER"] }],
     });
     expect(out.json).not.toContain("ZZCONTACT");
-    expect(categories(out)).toEqual([
-      "Measure.author[0].name[0] NAMES",
-      "Measure.author[0].name[1] NAMES",
-    ]);
+    expect(rows(out)).toEqual(["Measure.author[0].name blocked"]);
   });
 
-  it("removes a HumanName sent at a ContactDetail's name, and blocks any other object there", () => {
+  it("blocks a HumanName sent at a ContactDetail's name, and any other object there", () => {
     const named = run({
       resourceType: "ValueSet",
       contact: [{ name: { family: "ZZORGCONTACTFAM", given: ["ZZORGCONTACTGIV"] } }],
     });
     expect(named.json).not.toContain("ZZORGCONTACT");
-    expect(categories(named)).toEqual(["ValueSet.contact[0].name NAMES"]);
+    // R4 puts a string there, so a structure is blocked whole, a HumanName among them.
+    expect(rows(named)).toEqual(["ValueSet.contact[0].name blocked"]);
 
     // `{ name }` is the shape of a substance's name backbone where R4 types one at `name`. At a
     // contact's name it is a name the pass cannot read, so it goes whole rather than being descended.
@@ -250,11 +265,10 @@ describe("the name on every ContactDetail element R4 defines", () => {
     expect(nested.json).not.toContain("ZZCONTACTNAME");
     expect(rows(nested)).toEqual(["ValueSet.contact[0].name blocked"]);
 
-    // An empty object carries nothing to release, so it is left as it arrived and nothing is recorded.
-    const empty = { resourceType: "ValueSet", contact: [{ name: {} }] };
-    const kept = run(empty);
-    expect(kept.json).toBe(JSON.stringify(empty));
-    expect(kept.manifest).toEqual([]);
+    // An empty object is a structure where R4 puts a string too, so it goes the same way.
+    const empty = run({ resourceType: "ValueSet", contact: [{ name: {} }] });
+    expect(empty.json).toBe('{"resourceType":"ValueSet","contact":[{}]}');
+    expect(rows(empty)).toEqual(["ValueSet.contact[0].name blocked"]);
   });
 
   it("removes a contact that arrives as a bare string where the ContactDetail belongs", () => {
@@ -468,9 +482,10 @@ describe("a name that is not a contact's, kept as it arrived", () => {
     }
   });
 
-  it("keeps a name on a backbone R4 does not type as a contact, and an Endpoint's ContactPoint", () => {
-    // `Endpoint.contact` is a ContactPoint, not a ContactDetail; a `name` R4 never put there is not a
-    // contact's name either, so it is counted as unexamined like any other unnamed position.
+  it("keeps an Endpoint's ContactPoint, and blocks a contact R4 does not define", () => {
+    // `Endpoint.contact` is a ContactPoint, not a ContactDetail, and is kept. A `contact` R4 never put
+    // on an Observation is a key it does not define there, so it is blocked whole, not read as one, and
+    // its row names its position, not the key.
     const endpoint = {
       resourceType: "Endpoint",
       status: "active",
@@ -485,9 +500,9 @@ describe("a name that is not a contact's, kept as it arrived", () => {
       status: "final",
       contact: [{ name: "ZZOWNCOMPUTERNAME" }],
     };
-    const kept = run(lookalike);
-    expect(kept.json).toBe(JSON.stringify(lookalike));
-    expect(kept.manifest).toEqual([]);
-    expect(loci(kept)).toEqual(["Observation.status", "Observation.contact[0].name"]);
+    const blocked = run(lookalike);
+    expect(blocked.json).toBe('{"resourceType":"Observation","status":"final"}');
+    expect(rows(blocked)).toEqual(["Observation.<withheld>[2] blocked"]);
+    expect(loci(blocked)).toEqual(["Observation.status"]);
   });
 });

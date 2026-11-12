@@ -29,17 +29,28 @@ describe("deidentifyFhir, edge branches", () => {
     expect(manifest.find((m) => m.locus.includes("address"))?.disposition).toBe("blocked");
   });
 
-  it("handles a single (non-list) identifier, address, and telecom occurrence", () => {
+  it("removes a single (non-list) identifier, address, and telecom occurrence whole", () => {
+    // R4 puts a list at each, so a single object there is a shape the pass blocks whole.
     const { json, manifest } = run({
       resourceType: "Patient",
       identifier: { system: "http://h/mrn", value: "ZZSINGLEMRN" },
       address: { state: "MA", postalCode: "90210" },
       telecom: { system: "phone", value: "555-000-9999" },
     });
-    expect(json).not.toContain("ZZSINGLEMRN");
-    expect(json).not.toContain("555-000-9999");
-    expect(json).toContain('"postalCode":"902"');
-    expect(manifest.find((m) => m.locus.includes("identifier"))?.category).toBe(C.MRN);
+    expect(json).toBe('{"resourceType":"Patient"}');
+    expect(manifest.map((m) => `${m.locus} ${m.disposition}`)).toEqual([
+      "Patient.identifier blocked",
+      "Patient.address blocked",
+      "Patient.telecom blocked",
+    ]);
+    const listed = run({
+      resourceType: "Patient",
+      identifier: [{ system: "http://h/mrn", value: "ZZSINGLEMRN" }],
+      address: [{ state: "MA", postalCode: "90210" }],
+    });
+    expect(listed.json).not.toContain("ZZSINGLEMRN");
+    expect(listed.json).toContain('"postalCode":"902"');
+    expect(listed.manifest.find((m) => m.locus.includes("identifier"))?.category).toBe(C.MRN);
   });
 
   it("blocks a modifierExtension value while keeping its url", () => {
@@ -62,13 +73,15 @@ describe("deidentifyFhir, edge branches", () => {
     expect(json).toContain("ZZKEEPCCTEXT"); // CodeableConcept.text is a coded label, retained
   });
 
-  it("de-identifies a resource that carries no resourceType (rootless generic complex)", () => {
-    const { json } = run({
+  it("removes a resource that carries no resourceType (rootless generic complex) whole", () => {
+    // With no type to read it by, nothing in it is read: it goes whole, with one row.
+    const { json, manifest } = run({
+      language: "en",
       identifier: [{ system: "http://h/mrn", value: "ZZROOTLESSMRN" }],
       effectiveDateTime: "2019-03-14",
     });
-    expect(json).not.toContain("ZZROOTLESSMRN");
-    expect(json).toContain('"effectiveDateTime":"2019"');
+    expect(json).toBe("{}");
+    expect(manifest.map((m) => `${m.locus} ${m.disposition}`)).toEqual(["<withheld> blocked"]);
   });
 
   it("generalizes a person date carried in a list of dates", () => {

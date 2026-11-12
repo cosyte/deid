@@ -270,11 +270,13 @@ describe("deidentifyFhir, fail closed on narrative, extensions, and unknown stru
   it("fails closed on an unknown bare-string property at a person resource top level", () => {
     const { wire, manifest } = deid("bundle");
     expect(wire).not.toContain("ZZVENDORMAIDEN");
+    // the row names the key's position: the key is the sender's text too
     expect(
       manifest.some(
-        (m) => m.locus.endsWith("vendorMotherMaidenName") && m.disposition === "blocked",
+        (m) => m.locus === "Bundle.entry[0].resource.<withheld>[16]" && m.disposition === "blocked",
       ),
     ).toBe(true);
+    expect(JSON.stringify(manifest)).not.toContain("vendorMotherMaidenName");
   });
 
   it("walks a contained resource and de-identifies its person PHI", () => {
