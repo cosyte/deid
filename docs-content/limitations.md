@@ -308,8 +308,9 @@ Two things follow, and the second is the one that surprises people:
   server, is kept verbatim: it names the server, and a base that carries anything else carries it out.
   An **id written anywhere else** is passed through and counted as an unexamined position:
   `meta.versionId`, `meta.source`, a `Bundle.link.url` (a search link can carry a query on an
-  identifier), an `Attachment.url`, and any other uri, url or canonical, when it fits the format R4
-  gives its type (one that does not is blocked, as [the item on primitive
+  identifier), and any other uri, url or canonical, when it fits the format R4
+  gives its type (an `Attachment.url` is removed by default, as [the item on primitive
+  formats](#fhir-primitive-formats) says under embedded content) (one that does not is blocked, as [the item on primitive
   formats](#fhir-primitive-formats) says). An element's own `id` is
   replaced, as the next item says. Under
   the Safe Harbor default the stand-ins are **per call**, so the same resource transformed in two
@@ -455,19 +456,28 @@ Two things follow, and the second is the one that surprises people:
   codes against the code systems its recipient expects (a terminology server, or the value sets of
   the profile it sends), before or after the pass, or removes the elements it does not need.
 
-  **A `base64Binary` is not read, and it can carry a whole document.** R4's format for a
-  `base64Binary` admits any valid base64, and valid base64 decodes to any bytes at all. So a valid
-  value at an `Attachment.data` (in `DocumentReference.content`, `Media.content`,
-  `Communication.payload`, a `QuestionnaireResponse` answer, and the other places an `Attachment`
-  is kept), at `Binary.data`, at `Signature.data`, or in a `Parameters` value is kept verbatim and
-  unread, under Safe Harbor and the Limited Data Set alike, and it can hold a whole clinical note, a
-  scanned form or an image with every identifier in it. Such a value gets no manifest row: it shows
-  only in `unexaminedResiduals`, as a position the pass handed through unexamined. The output is
-  still labelled transformed per the configured policy, and nothing in such a value was transformed.
-  Two places differ: a `Patient.photo` is removed whole, and a `base64Binary` in an extension's value
-  is blocked, as every extension value is. Removing embedded content by default is planned as its own
-  change. Until then, a caller must remove those elements, or decode and review what they hold, before
-  releasing the output.
+  **Embedded content is not read, so it is removed by default.** R4's format for a `base64Binary`
+  admits any valid base64, and valid base64 decodes to any bytes at all, so such a value can hold a
+  whole clinical note, a scanned form, a PDF, a C-CDA or an image with every identifier in it. The
+  pass does not decode it. Under Safe Harbor and the Limited Data Set alike it removes, with a
+  `DEID_LOCUS_BLOCKED` row that carries no value: every `Attachment.data` (in
+  `DocumentReference.content`, `Media.content`, `DiagnosticReport.presentedForm`,
+  `Communication.payload`, a `QuestionnaireResponse` answer, and every other place R4 types an
+  `Attachment`), every `Attachment.url` (a link to that content, or a `data:` url that carries it),
+  `Binary.data`, `Signature.data`, and every other element R4 types as `base64Binary` (an
+  `Attachment.hash`, `Device.udiCarrier.carrierAIDC`, `AuditEvent.entity.query`, a
+  `valueBase64Binary` in a `Parameters` value or a backbone). A `Patient.photo` is removed whole, an
+  extension's value (a `valueBase64Binary` or a `valueAttachment` among them) is blocked as every
+  extension value is, and the narrative `div` is blocked as it always was.
+
+  A caller who knows the content is safe can keep it, one kind of element at a time:
+  `keepEmbeddedContent` takes any of `attachment-data`, `attachment-url`, `binary-data`,
+  `signature-data` and `base64-binary` (`FHIR_EMBEDDED_CONTENT_KINDS`). A kept element is passed
+  through verbatim and unread, still held to its R4 format, and recorded at its locus as
+  `DEID_EMBEDDED_CONTENT_RETAINED` (category (R), no value). The output is still labelled transformed
+  per the configured policy, and nothing in a kept element was transformed: keeping one is the
+  caller's own decision that it carries nothing that identifies a person. No kind keeps an extension's
+  value or the narrative.
 
   The check itself reads each value once, in time linear in its length. R4 writes each format as a
   regular expression, and a backtracking engine runs some of them (the `base64Binary` one among

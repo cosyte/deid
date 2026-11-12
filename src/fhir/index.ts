@@ -18,7 +18,10 @@
  * - **Every resource (the universal vectors that leak from any type):** `identifier` pseudonymized by
  *   `system` (a US-SSN system removed); PHI-bearing **dates** → year; the narrative **`text.div`** blocked
  *   at any depth; **extension** values blocked (the fail-closed frontier, an unknown extension can carry
- *   any PHI, incl. an MRN in a local extension); a `Reference.display` (a person label) blocked.
+ *   any PHI, incl. an MRN in a local extension); a `Reference.display` (a person label) blocked;
+ *   **embedded content** the pass does not read (an `Attachment.data` or `Attachment.url`, a
+ *   `Binary.data`, a `Signature.data`, every other `base64Binary`) removed, unless the caller keeps
+ *   its kind (below).
  * - **Every resource, by DATATYPE:** outside a person resource a `HumanName` is removed and an
  *   `Address` is reduced to the safe 3-digit ZIP **wherever the graph puts it**, so
  *   `Organization.contact.name` and `Location.address` are treated exactly as `Patient.name` and
@@ -75,8 +78,7 @@
  * are kept.
  * Resource ids are replaced and the reference wiring is kept, with what that does not reach stated:
  * the server base of a `fullUrl`, and of an absolute reference to it, is kept verbatim; and an id
- * written anywhere else (`meta.versionId`, `meta.source`, `Bundle.link.url`, an `Attachment.url`, any
- * other uri) that fits the format R4 gives its type is passed through and counted as unexamined. Under the Safe
+ * written anywhere else (`meta.versionId`, `meta.source`, `Bundle.link.url`, any other uri) that fits the format R4 gives its type is passed through and counted as unexamined. Under the Safe
  * Harbor default the stand-ins are per call, so the same resource transformed in two calls gets two
  * unrelated ids; linkage across calls needs a keyed policy, which does not claim Safe Harbor.
  * Free text is blocked, not retained. A `note` (`Annotation` text, author and time, as one unit), a
@@ -108,6 +110,13 @@
  * never labeled (R4 `dom-5`); its container is. The label says that some content was filtered out,
  * never that the resource is de-identified. Off by default.
  *
+ * **Embedded content, opt-in.** An `Attachment.data`, an `Attachment.url`, a `Binary.data`, a
+ * `Signature.data` and every other `base64Binary` outside an extension can hold a whole document (a
+ * scanned form, a PDF, a C-CDA) that the pass does not read, so each is removed by default with a
+ * blocked row that carries no value. `keepEmbeddedContent` names the kinds to keep
+ * ({@link FHIR_EMBEDDED_CONTENT_KINDS}); each kept element is kept unread and recorded as
+ * `DEID_EMBEDDED_CONTENT_RETAINED`. An extension's value stays blocked whatever its type.
+ *
  * **Animal patients, opt-in.** With `keepPatientAnimal: true` a `Patient`'s `patient-animal`
  * extension keeps the coded `valueCodeableConcept` of its `species`, `breed` and `genderStatus`
  * sub-extensions. Only that exact URL and those three parts: a look-alike URL, another sub-extension,
@@ -123,6 +132,7 @@ import { deidentify, type DeidOptions } from "../deidentify.js";
 import { type DeidManifestEntry } from "../manifest.js";
 import { type UnexaminedResidual } from "../residual.js";
 import { applyFhir } from "./apply.js";
+import { type FhirEmbeddedContentKind } from "./embedded-content.js";
 import { extractFhirLoci } from "./extract.js";
 import { FHIR_DATA_ABSENT_REASON, FHIR_TRANSFORMED_SECURITY_LABEL } from "./transform-labels.js";
 
@@ -159,7 +169,8 @@ export interface FhirDeidResult {
 
 /**
  * Options for {@link deidentifyFhir} and {@link deidentifyFhirJson}: the core's
- * {@link "@cosyte/deid".DeidOptions} plus the FHIR-only `transformLabels` and `keepPatientAnimal`.
+ * {@link "@cosyte/deid".DeidOptions} plus the FHIR-only `transformLabels`, `keepPatientAnimal` and
+ * `keepEmbeddedContent`.
  *
  * @example
  * ```ts
@@ -195,6 +206,15 @@ export interface FhirDeidOptions extends DeidOptions {
    * {@link FhirExtractOptions}.
    */
   readonly parseIssues?: readonly FhirIssue[];
+  /**
+   * The kinds of embedded content to keep, from {@link FHIR_EMBEDDED_CONTENT_KINDS}. Content the pass
+   * does not read (an `Attachment.data`, an `Attachment.url`, a `Binary.data`, a `Signature.data`, any
+   * other `base64Binary` outside an extension) can hold a whole document, so it is removed by default,
+   * with a blocked row that carries no value. A kind named here is kept as it arrived, unread, and each
+   * kept element gets a `DEID_EMBEDDED_CONTENT_RETAINED` row at its locus. Name a kind only for content
+   * you know carries nothing that identifies a person. Empty by default. See {@link FhirExtractOptions}.
+   */
+  readonly keepEmbeddedContent?: readonly FhirEmbeddedContentKind[];
 }
 
 /**
@@ -237,6 +257,8 @@ export function deidentifyFhir(
     keepPatientAnimal: options.keepPatientAnimal === true,
     // Stryker disable next-line ArrayDeclaration: an issue that is not a misplaced sibling is passed over, so a filled default records the same nothing
     parseIssues: options.parseIssues ?? [],
+    // Stryker disable next-line ArrayDeclaration: a filled default holds no kind, so it keeps the same nothing
+    keepEmbeddedContent: options.keepEmbeddedContent ?? [],
   });
   const { document, manifest } = deidentify({ loci }, options);
   const deidentified = applyFhir(resource, document.loci, coords, {
@@ -292,6 +314,7 @@ export {
   type FhirEditKind,
 } from "./extract.js";
 export { applyFhir, type FhirApplyOptions } from "./apply.js";
+export { FHIR_EMBEDDED_CONTENT_KINDS, type FhirEmbeddedContentKind } from "./embedded-content.js";
 export { FHIR_DATA_ABSENT_REASON, FHIR_TRANSFORMED_SECURITY_LABEL };
 export { type UnexaminedResidual } from "../residual.js";
 export { SAFE_HARBOR_CATEGORIES, type SafeHarborCategory } from "../categories.js";

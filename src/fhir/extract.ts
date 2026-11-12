@@ -112,6 +112,7 @@ import {
   isFhirDateValue,
   locationMayBeResidence,
 } from "./locus-map.js";
+import { embeddedContentKind, type FhirEmbeddedContentKind } from "./embedded-content.js";
 import { fitsFhirFormat } from "./primitive-format.js";
 import { readFhirLiteral } from "./reference.js";
 
@@ -195,6 +196,14 @@ interface FhirLocusAccumulator {
    * ({@link propertySegment}).
    */
   readonly unknownNames: ReadonlySet<FhirNode>;
+  /**
+   * The values at an element that embeds content the pass does not read, each with its kind, found
+   * before the walk ({@link findUnknownKeys}). The walk removes each one it reaches, or records it
+   * kept when its kind is in {@link keepEmbedded} ({@link handleEmbeddedContent}).
+   */
+  readonly embedded: ReadonlyMap<FhirNode, FhirEmbeddedContentKind>;
+  /** {@link FhirExtractOptions.keepEmbeddedContent}: the kinds the caller asked to keep. */
+  readonly keepEmbedded: ReadonlySet<FhirEmbeddedContentKind>;
 }
 
 /**
@@ -228,6 +237,16 @@ export interface FhirExtractOptions {
    * else changes.
    */
   readonly parseIssues?: readonly FhirIssue[];
+  /**
+   * The kinds of embedded content to keep ({@link FhirEmbeddedContentKind}). An element that embeds
+   * content the pass does not read (an `Attachment.data`, an `Attachment.url`, a `Binary.data`, a
+   * `Signature.data`, any other `base64Binary` outside an extension) is removed by default, with a
+   * blocked row that carries no value. Naming its kind here keeps it as it arrived, unread, and
+   * records the keep at its locus as `DEID_EMBEDDED_CONTENT_RETAINED`. Name a kind only for content
+   * you know carries nothing that identifies a person. Empty by default, so nothing is kept unless a
+   * caller asks.
+   */
+  readonly keepEmbeddedContent?: readonly FhirEmbeddedContentKind[];
 }
 
 /** Append a locus + its coordinate to the accumulator. */
@@ -771,6 +790,31 @@ function blockNarrativeDiv(out: FhirLocusAccumulator, narrative: FhirComplex, pa
   if (div !== undefined && isPrimitive(div)) {
     blockNode(out, div, join(path, "div"));
   }
+}
+
+/**
+ * Decide an element that embeds content the pass does not read: remove it whole with a blocked row
+ * that carries no value, or, when the caller named its kind
+ * ({@link FhirExtractOptions.keepEmbeddedContent}), keep it as it arrived and record the keep at its
+ * locus. The record names a stand-in primitive, which the applier never visits, so it writes nothing,
+ * and the kept value is a position a rule decided, so it is not counted as unexamined.
+ */
+function handleEmbeddedContent(
+  out: FhirLocusAccumulator,
+  kind: FhirEmbeddedContentKind,
+  value: FhirNode,
+  path: string,
+): void {
+  if (!out.keepEmbedded.has(kind)) {
+    blockNode(out, value, path);
+    return;
+  }
+  push(
+    out,
+    { path, kind: "unknown", embeddedContentKept: true, value: "" },
+    { node: primitive(undefined), edit: "drop" },
+  );
+  out.ruleReached.add(value);
 }
 
 /** Recurse into a list value, applying the property rules to each item in document order. */
@@ -1348,6 +1392,11 @@ function handleProperty(
     out.ruleReached.add(value);
     return;
   }
+  const embedded = out.embedded.get(value);
+  if (embedded !== undefined) {
+    handleEmbeddedContent(out, embedded, value, path);
+    return;
+  }
   if (handleLogicalIds(out, name, value, path, personCtx, isPersonTop, parent, elementPath)) return;
   if (out.keepPatientAnimal && elementPath === "Patient.extension") {
     handlePatientExtensions(out, value, path);
@@ -1570,6 +1619,7 @@ export function extractFhirLoci(
 ): FhirExtraction {
   const unknownKeys = new Set<FhirNode>();
   const unknownNames = new Set<FhirNode>();
+  const embedded = new Map<FhirNode, FhirEmbeddedContentKind>();
   const out: FhirLocusAccumulator = {
     loci: [],
     coords: [],
@@ -1578,6 +1628,10 @@ export function extractFhirLoci(
     keepPatientAnimal: options.keepPatientAnimal === true,
     unknownKeys,
     unknownNames,
+    embedded,
+    // A value that is not a kind (from a caller that does not type-check) matches no element, so it
+    // keeps nothing.
+    keepEmbedded: new Set(options.keepEmbeddedContent),
   };
   // `resourceType` is a JSON string VALUE, not a checked identifier, and it is the ROOT of every path
   // in the manifest, so an unbounded one prefixes the whole audit with document content. Only a type
@@ -1586,7 +1640,7 @@ export function extractFhirLoci(
   const rt = fhirResourceStructure(resourceType(resource)) ?? WITHHELD_LOCUS_TOKEN;
   // The same reach as the enumeration below, so a tree it cannot walk fails the same way.
   enumerateOrFail(rt, () => {
-    findUnknownKeys(resource, unknownKeys, unknownNames);
+    findUnknownKeys(resource, unknownKeys, unknownNames, embedded);
   });
   // A resource of a type R4 does not define is removed whole: its type and every field it carries
   // are the sender's text, and no rule here reads them.
@@ -1694,6 +1748,9 @@ function recordMisplacedSiblings(
  * - a resource whose `resourceType` is missing or not one R4 defines (an abstract resource, a
  *   datatype's name), wherever a resource sits.
  *
+ * The same reading adds to `embedded` every value at an element that embeds content the pass does
+ * not read ({@link embeddedContentKind}), with its kind, whatever shape it arrived in.
+ *
  * An extension is left to its own rule ({@link blockExtension}), which already keeps only its `url`,
  * its `id` and its nested extensions. Every value named here is text a sender chose, so it is blocked
  * whole whatever it holds ({@link blockUnknownKeysBelow}).
@@ -1702,6 +1759,7 @@ function findUnknownKeys(
   resource: FhirComplex,
   unknown: Set<FhirNode>,
   unknownNames: Set<FhirNode>,
+  embedded: Map<FhirNode, FhirEmbeddedContentKind>,
 ): void {
   /** One element's value, which R4 writes as an array when it repeats and as one value otherwise. */
   const visitElement = (
@@ -1762,6 +1820,9 @@ function findUnknownKeys(
         unknown.add(prop.value);
         unknownNames.add(prop.value);
       } else if (prop.name !== "extension" && prop.name !== "modifierExtension") {
+        const kind = embeddedContentKind(own, prop.name, type);
+        // Stryker disable next-line ConditionalExpression: an element that embeds nothing would be stored as undefined, which the walk reads as absent, so the test only keeps the map small
+        if (kind !== undefined) embedded.set(prop.value, kind);
         visitElement(prop.value, type, repeating.has(prop.name), `${own}.${prop.name}`);
       }
     }

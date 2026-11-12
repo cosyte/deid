@@ -151,6 +151,26 @@ function partyRoleRetained(locus: GenericLocus, roleCode: string): LocusOutcome 
   };
 }
 
+/**
+ * Build the outcome for an **embedded-content record**: an adapter kept content it does not read (a
+ * FHIR `Attachment.data`, say) because the caller opted in for that kind of element, and records the
+ * keep at the element's own locus. Nothing is written back (the record carries no value). The category
+ * is the catch-all (R): the pass read nothing inside the content, so it established no category.
+ */
+function embeddedContentRetained(locus: GenericLocus): LocusOutcome {
+  return {
+    value: locus.value,
+    disposition: "retained",
+    manifest: {
+      category: SAFE_HARBOR_CATEGORIES.OTHER_UNIQUE_ID,
+      transform: "retain",
+      locus: locus.path,
+      disposition: "retained",
+      code: DEID_DISPOSITION_CODES.DEID_EMBEDDED_CONTENT_RETAINED,
+    },
+  };
+}
+
 /** Choose the right generalization for a locus from its kind, then its category. `null` = can't. */
 function generalizeLocus(
   locus: GenericLocus,
@@ -540,6 +560,19 @@ function handleLocus(
       );
     }
     return partyRoleRetained(locus, locus.partyRole);
+  }
+  // An EMBEDDED-CONTENT RECORD: the caller opted in to keep content the adapter does not read, and
+  // the adapter records the keep here. Like a party-role record it carries NO value, and a marked
+  // locus that carries one is blocked rather than kept.
+  if (locus.embeddedContentKept === true) {
+    if (locus.value.length > 0) {
+      return blocked(
+        locus.path,
+        SAFE_HARBOR_CATEGORIES.OTHER_UNIQUE_ID,
+        DEID_DISPOSITION_CODES.DEID_LOCUS_BLOCKED,
+      );
+    }
+    return embeddedContentRetained(locus);
   }
   // Fail closed: an unrecognized structure or an unclassified PHI-bearing locus is category (R).
   if (locus.category === undefined || locus.kind === "unknown") {

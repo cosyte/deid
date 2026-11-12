@@ -419,11 +419,14 @@ positions on purpose; the residual it leaves is stated below.
 `us-core-*` demographic extension is dropped). Reference
 _wiring_ is kept with the resource ids in it replaced, but the server base of a `fullUrl` (and of an
 absolute reference to it) is kept verbatim, and an id written anywhere else (`meta.versionId`,
-`meta.source`, `Bundle.link.url`, an `Attachment.url`, an element's own `id`) is passed through and
+`meta.source`, `Bundle.link.url`) is passed through and
 counted as unexamined. Free-text **prose** loci
 (`note`, `contentString`, uncoded `valueString`) fail closed by default, or run through an opt-in BYO
 redactor (see [Free text](#free-text-block-by-default--byo-redaction)); a **built-in** semantic (NLP)
-narrative scrub and `contentAttachment` binary content remain out of scope for this release.
+narrative scrub remains out of scope for this release. Embedded content the pass does not read (an
+`Attachment.data` or `Attachment.url`, `Binary.data`, `Signature.data`, any other `base64Binary`) is
+removed by default; `keepEmbeddedContent` keeps the kinds a caller names, each recorded as
+`DEID_EMBEDDED_CONTENT_RETAINED`.
 
 Three residual surfaces, because FHIR types no person at the position:
 

@@ -401,6 +401,56 @@ The option is off by default, so a call without it returns exactly what it retur
 `FHIR_TRANSFORMED_SECURITY_LABEL` and `FHIR_DATA_ABSENT_REASON` export the two codes for a caller
 that reads them back.
 
+## Embedded content: removed by default, kept on request
+
+An `Attachment.data`, a `Binary.data`, a `Signature.data` or any other `base64Binary` can hold a whole
+document in valid base64 (a scanned form, a PDF, a C-CDA), and an `Attachment.url` points at such
+content or, as a `data:` url, carries it. The pass does not read any of it. So under Safe Harbor and
+the Limited Data Set each one is **removed by default**, at any depth and in every place R4 types one,
+with a `DEID_LOCUS_BLOCKED` row that carries no value. The rest of the `Attachment` (its
+`contentType`, `title`, `size`, `creation`) is kept. An extension's value (a `valueBase64Binary`, a
+`valueAttachment`) is blocked as every extension value is, and the narrative `div` is blocked as it
+always was.
+
+If you know the content is safe for your recipient, name the kinds to keep in `keepEmbeddedContent`:
+
+| Kind              | Elements                                                                                                 |
+| ----------------- | -------------------------------------------------------------------------------------------------------- |
+| `attachment-data` | `Attachment.data`, wherever R4 types an `Attachment`                                                     |
+| `attachment-url`  | `Attachment.url`                                                                                         |
+| `binary-data`     | `Binary.data`                                                                                            |
+| `signature-data`  | `Signature.data`                                                                                         |
+| `base64-binary`   | every other `base64Binary` outside an extension: `Attachment.hash`, `Device.udiCarrier.carrierAIDC`, ... |
+
+```ts runnable
+import { deidentifyFhirJson } from "@cosyte/deid/fhir";
+
+const input = JSON.stringify({
+  resourceType: "DocumentReference",
+  status: "current",
+  content: [
+    {
+      attachment: {
+        contentType: "text/plain",
+        url: "http://example.org/fhir/Binary/zz-1",
+        data: "WlpTWU5USEVUSUM=",
+      },
+    },
+  ],
+});
+
+const removed = deidentifyFhirJson(input);
+removed.json; // => '{"resourceType":"DocumentReference","status":"current","content":[{"attachment":{"contentType":"text/plain"}}]}'
+
+const kept = deidentifyFhirJson(input, { keepEmbeddedContent: ["attachment-data"] });
+kept.manifest.map((e) => e.code); // => ["DEID_LOCUS_BLOCKED", "DEID_EMBEDDED_CONTENT_RETAINED"]
+```
+
+A kept element is passed through verbatim and unread (still held to its R4 format) and recorded at
+its locus as `DEID_EMBEDDED_CONTENT_RETAINED`, so the manifest shows every keep. Keeping a kind is
+your decision that what it holds identifies no one: the pass checks nothing inside it. No kind keeps
+an extension's value or the narrative. `FHIR_EMBEDDED_CONTENT_KINDS` exports the five kinds.
+
 ## Keep an animal patient's species (opt-in)
 
 R4 records what kind of animal a `Patient` is in the `patient-animal` extension
@@ -483,16 +533,17 @@ The option is off by default, so a call without it returns exactly what it retur
   `fullUrl`, and of an absolute reference to that server, is kept verbatim: it names the server, and
   a base that carries anything else carries it out. An id written anywhere else is passed through and
   counted as an unexamined position: `meta.versionId`, `meta.source`, `Bundle.link.url` (a search
-  link), an `Attachment.url`, any other uri, and an element's own `id`.
+  link), and any other uri. An element's own `id` is replaced, and an `Attachment.url` is removed by
+  default (see [Embedded content](#embedded-content-removed-by-default-kept-on-request)).
 - Under the Safe Harbor default the stand-ins are **per call**: the same resource transformed in two
   calls gets two unrelated ids, and a reference from one call's output does not resolve in another's.
   Linkage across documents needs a keyed policy, which does not claim Safe Harbor.
 - Free-text **prose** loci (`note`, `contentString`, uncoded `valueString`) fail closed by default; a
-  semantic (NLP) narrative scrub and `contentAttachment` binary content remain out of scope. A valid
-  `base64Binary` (an `Attachment.data`, `Binary.data`, `Signature.data`) is kept verbatim and unread,
-  counted only in `unexaminedResiduals`, and it can hold a whole document: remove or review those
-  elements before you release the output. See
-  [primitive formats](./limitations.md#fhir-primitive-formats).
+  semantic (NLP) narrative scrub remains out of scope. Embedded content (an `Attachment.data` or
+  `Attachment.url`, `Binary.data`, `Signature.data`, any other `base64Binary`) is never read: it is
+  removed by default, and a kind you keep with `keepEmbeddedContent` is passed through unread, so
+  review it yourself first. See
+  [Embedded content](#embedded-content-removed-by-default-kept-on-request).
 - Three surfaces are still not reached because FHIR types no person at the position: a
   **`ContactPoint` outside a person resource** (a phone or an email on an `Organization`, a `Location`,
   or an `Endpoint`), an **organization's own `name`** (a plain string, never a `HumanName`), and the

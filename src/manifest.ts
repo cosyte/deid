@@ -49,7 +49,7 @@ export interface DeidManifestEntry {
   /** How many values at this locus/category/disposition were acted on. */
   readonly count: number;
   /**
-   * The disposition. `retained` is the honest fourth outcome, and it covers two different kept things,
+   * The disposition. `retained` is the honest fourth outcome, and it covers three different kept things,
    * told apart by the entry's `code`:
    *
    * - an **identifying** locus the configured profile's retention set deliberately kept unchanged,
@@ -57,7 +57,9 @@ export interface DeidManifestEntry {
    *   inventory rather than being invisible;
    * - a **party** whose role places it outside §164.514(b)(2)(i)'s scope clause, paired with
    *   `DEID_PARTY_ROLE_RETAINED` and the {@link partyRole} code that placed it there. That is not a
-   *   residual of the individual's identity and does not join the residual inventory.
+   *   residual of the individual's identity and does not join the residual inventory;
+   * - **embedded content** the pass does not read (a FHIR `Attachment.data`, say), kept because the
+   *   caller opted in for that kind of element, paired with `DEID_EMBEDDED_CONTENT_RETAINED`.
    *
    * (Clinical values kept by the over-scrub guard are **not** identifiers and are not manifest entries
    * at all.)

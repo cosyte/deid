@@ -92,6 +92,17 @@ export interface GenericLocus {
    */
   readonly partyRole?: string;
   /**
+   * `true` at a locus that records **embedded content kept on the caller's opt-in**: content the
+   * adapter does not read (a FHIR `Attachment.data`, say), which it removes by default and kept here
+   * because the caller named that kind of element. The engine records the row at this locus
+   * (`DEID_EMBEDDED_CONTENT_RETAINED`, category (R)) and writes nothing back.
+   *
+   * Like {@link partyRole} it is a record, never a value: a locus carrying it must carry an empty
+   * {@link value}. A non-empty one **fails closed** (blocked) rather than being kept, so this marker can
+   * never become a route for passing a value through.
+   */
+  readonly embeddedContentKept?: boolean;
+  /**
    * `true` when this `date` locus is a **date of birth**. §164.514(b)(2)(i)(C) lets a date keep its
    * year, except a year indicative of an age over 89. So when the configured transform generalizes
    * the date to its year and that year is **90 or more years before the year of the call**, the year

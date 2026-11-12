@@ -511,7 +511,7 @@ How many values at this locus/category/disposition were acted on.
 
 > `readonly` **disposition**: `"transformed"` \| `"removed"` \| `"blocked"` \| `"retained"`
 
-The disposition. `retained` is the honest fourth outcome, and it covers two different kept things,
+The disposition. `retained` is the honest fourth outcome, and it covers three different kept things,
 told apart by the entry's `code`:
 
 - an **identifying** locus the configured profile's retention set deliberately kept unchanged,
@@ -519,7 +519,9 @@ told apart by the entry's `code`:
   inventory rather than being invisible;
 - a **party** whose role places it outside §164.514(b)(2)(i)'s scope clause, paired with
   `DEID_PARTY_ROLE_RETAINED` and the [partyRole](#partyrole) code that placed it there. That is not a
-  residual of the individual's identity and does not join the residual inventory.
+  residual of the individual's identity and does not join the residual inventory;
+- **embedded content** the pass does not read (a FHIR `Attachment.data`, say), kept because the
+  caller opted in for that kind of element, paired with `DEID_EMBEDDED_CONTENT_RETAINED`.
 
 (Clinical values kept by the over-scrub guard are **not** identifiers and are not manifest entries
 at all.)
@@ -1268,6 +1270,19 @@ residual. The comparison is by year alone, so a person who may already be 90 is 
 
 Absent (the default) a date keeps its year however old it is. The format adapters set it on the
 birth dates they locate; a caller building loci by hand sets it on its own.
+
+##### embeddedContentKept?
+
+> `readonly` `optional` **embeddedContentKept?**: `boolean`
+
+`true` at a locus that records **embedded content kept on the caller's opt-in**: content the
+adapter does not read (a FHIR `Attachment.data`, say), which it removes by default and kept here
+because the caller named that kind of element. The engine records the row at this locus
+(`DEID_EMBEDDED_CONTENT_RETAINED`, category (R)) and writes nothing back.
+
+Like [partyRole](#partyrole-1) it is a record, never a value: a locus carrying it must carry an empty
+[value](#value-1). A non-empty one **fails closed** (blocked) rather than being kept, so this marker can
+never become a route for passing a value through.
 
 ##### kind
 
@@ -2048,6 +2063,18 @@ A category was replaced by a consistent keyed-HMAC surrogate (pseudonymization).
 > `readonly` **DEID\_CATEGORY\_REMOVED**: `"DEID_CATEGORY_REMOVED"` = `"DEID_CATEGORY_REMOVED"`
 
 A category was removed outright (redaction).
+
+##### DEID\_EMBEDDED\_CONTENT\_RETAINED
+
+> `readonly` **DEID\_EMBEDDED\_CONTENT\_RETAINED**: `"DEID_EMBEDDED_CONTENT_RETAINED"` = `"DEID_EMBEDDED_CONTENT_RETAINED"`
+
+**Embedded content** the pass does not read (a FHIR `Attachment.data`, `Binary.data` or
+`Signature.data`, another `base64Binary`, an `Attachment.url`) was **kept as it arrived because
+the caller asked for that kind of element to be kept**. Such content can hold a whole document (a
+scanned form, a PDF, a C-CDA), and by default it is removed and recorded as
+`DEID_LOCUS_BLOCKED`; this row records, at the element's own locus, that the caller's opt-in kept
+it instead. The pass read nothing inside it, so its category is the catch-all (R) and it is not a
+residual the pass examined. The row carries no value. The disposition-code set is additions-only.
 
 ##### DEID\_FREETEXT\_BLOCKED
 

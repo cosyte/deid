@@ -56,6 +56,10 @@ describe("code surface stability", () => {
   // records a referenced identifier whose value was withheld and a per-call stand-in written in its
   // place, which no existing code described: the value is gone, as under `DEID_CATEGORY_REMOVED`, but
   // something not derived from it stands at the position.
+  //
+  // `DEID_EMBEDDED_CONTENT_RETAINED` is an ADDITION too: no existing code changed name or meaning. It
+  // records embedded content the pass does not read, kept because the caller named its kind, which
+  // no existing code described: it is not a residual the pass examined, nor a party out of scope.
   it("disposition codes are stable", () => {
     expect(sortedCodeSet(DEID_DISPOSITION_CODES)).toMatchInlineSnapshot(`
       [
@@ -64,6 +68,7 @@ describe("code surface stability", () => {
         "DEID_CATEGORY_HASHED",
         "DEID_CATEGORY_PSEUDONYMIZED",
         "DEID_CATEGORY_REMOVED",
+        "DEID_EMBEDDED_CONTENT_RETAINED",
         "DEID_FREETEXT_BLOCKED",
         "DEID_FREETEXT_CONSUMER_REDACTED",
         "DEID_IDENTIFIER_SUBSTITUTED",
